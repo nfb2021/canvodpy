@@ -63,7 +63,7 @@ Instead of:
 
 ### Test ESA Only (Default)
 ```python
-from canvod.aux.ephemeris.reader import Sp3File
+from canvod.auxiliary.ephemeris.reader import Sp3File
 import datetime
 
 # No CDDIS_MAIL set - uses ESA only

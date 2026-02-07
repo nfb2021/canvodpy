@@ -112,7 +112,7 @@ workflow = VODWorkflow(
 - Example: Tau-omega, ML models, custom algorithms
 
 **AugmentationFactory** - For preprocessing steps
-- Must inherit: `canvod.aux.augmentation.AugmentationStep`
+- Must inherit: `canvod.auxiliary.augmentation.AugmentationStep`
 - Example: Filtering, interpolation, outlier removal
 
 ---

@@ -152,7 +152,7 @@ build-all:
     @rm -rf dist/
     @mkdir -p dist/
     cd packages/canvod-readers && uv build
-    cd packages/canvod-aux && uv build
+    cd packages/canvod-auxiliary && uv build
     cd packages/canvod-grids && uv build
     cd packages/canvod-store && uv build
     cd packages/canvod-utils && uv build

@@ -53,7 +53,7 @@ uv pip install -e .
 
 ```python
 from pathlib import Path
-from canvod.aux import Sp3File
+from canvod.auxiliary import Sp3File
 
 # Load SP3 ephemeris file
 sp3 = Sp3File.from_file(Path("COD0MGXFIN_20240150000_01D_05M_ORB.SP3"))
@@ -70,7 +70,7 @@ print(strategy.config)  # Sp3Config(use_velocities=True)
 ### Pipeline Usage
 
 ```python
-from canvod.aux import AuxDataPipeline
+from canvod.auxiliary import AuxDataPipeline
 from pathlib import Path
 
 # Create pipeline
@@ -91,7 +91,7 @@ augmented_ds = pipeline.get_or_create_aux_data(
 ### Custom Interpolation
 
 ```python
-from canvod.aux import Sp3Config, Sp3InterpolationStrategy
+from canvod.auxiliary import Sp3Config, Sp3InterpolationStrategy
 import numpy as np
 
 # Configure interpolation
@@ -157,7 +157,7 @@ pre-commit install
 pytest
 
 # With coverage
-pytest --cov=canvod.aux --cov-report=html
+pytest --cov=canvod.auxiliary --cov-report=html
 
 # Lint and format
 ruff check .

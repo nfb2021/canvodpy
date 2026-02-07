@@ -190,12 +190,12 @@ class MyFormatReader(BaseModel, GNSSDataReader):
         freq_center = np.array([
             mapper.get_band_frequency(sid.split('|')[1])
             for sid in sids
-        ], dtype=np.float64)
+        ], dtype=np.float32)
 
         bandwidth = np.array([
             mapper.get_band_bandwidth(sid.split('|')[1])
             for sid in sids
-        ], dtype=np.float64)
+        ], dtype=np.float32)
 
         freq_min = freq_center - (bandwidth / 2.0)
         freq_max = freq_center + (bandwidth / 2.0)
@@ -465,9 +465,9 @@ required_coords = {
     "system": "object",
     "band": "object",
     "code": "object",
-    "freq_center": "float64",  # NOT float32
-    "freq_min": "float64",
-    "freq_max": "float64",
+    "freq_center": "float32",
+    "freq_min": "float32",
+    "freq_max": "float32",
 }
 ```
 
@@ -610,11 +610,11 @@ def _detect_format(fpath: Path) -> str:
 ### 1. Wrong dtype for frequencies
 
 ```python
-# ❌ Wrong: float32
-freq_center = np.array([...], dtype=np.float32)
-
-# ✅ Correct: float64
+# ❌ Wrong: float64
 freq_center = np.array([...], dtype=np.float64)
+
+# ✅ Correct: float32
+freq_center = np.array([...], dtype=np.float32)
 ```
 
 ### 2. Missing validation

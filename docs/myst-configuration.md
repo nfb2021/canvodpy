@@ -5,10 +5,10 @@
 canVODpy uses a custom dark theme optimized for documentation. See [THEME.md](THEME.md) for complete details.
 
 **Quick facts:**
-- **Colors**: Dark mode palette (#000000, #007449, #53585F, #C9DABC, #CCD9BF, #2A2338)
-- **Font**: Space Grotesk
+- **Colors**: Nordic Green palette (#E1E6B9, #C4D7A4, #ABC8A4, #375D3B, #183128)
+- **Font**: Space Grotesk + Fira Code (monospace)
 - **Logo**: TU Wien (white version)
-- **File**: `docs/assets/canvod-style.css`
+- **File**: `docs/assets/canvod-nordic.css`
 
 ---
 

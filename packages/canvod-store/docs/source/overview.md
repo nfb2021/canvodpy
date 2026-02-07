@@ -28,9 +28,9 @@ graph LR
 ### Storage Manager
 Handles store creation, dataset writing, and reading:
 ```python
-from canvod.store import IcechunkStore
+from canvod.store import MyIcechunkStore
 
-store = IcechunkStore(store_path, strategy="append")
+store = MyIcechunkStore(store_path, strategy="append")
 store.write(dataset)
 ```
 
@@ -45,9 +45,9 @@ preprocessed = IcechunkPreprocessor.prep_aux_ds(raw_dataset)
 ### Reader Interface
 Queries stored data:
 ```python
-from canvod.store.reader import IcechunkReader
+from canvod.store import IcechunkDataReader
 
-reader = IcechunkReader(store_path)
+reader = IcechunkDataReader(store_path)
 ds = reader.read(time_range=("2024-01-01", "2024-12-31"))
 ```
 

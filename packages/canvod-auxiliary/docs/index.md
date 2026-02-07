@@ -69,7 +69,7 @@ This package is for:
 ### ✨ SP3 File Support
 
 ```python
-from canvod.aux import Sp3File
+from canvod.auxiliary import Sp3File
 
 # Load and parse
 sp3 = Sp3File.from_file("orbit.SP3")
@@ -89,7 +89,7 @@ interpolated = strategy.interpolate(data, target_epochs)
 ### ✨ Clock Corrections
 
 ```python
-from canvod.aux import ClkFile
+from canvod.auxiliary import ClkFile
 
 # Load clock file
 clk = ClkFile.from_file("clock.CLK")
@@ -109,7 +109,7 @@ interpolated = strategy.interpolate(data, target_epochs)
 ### ✨ Flexible Pipeline
 
 ```python
-from canvod.aux import AuxDataPipeline
+from canvod.auxiliary import AuxDataPipeline
 
 # Create pipeline
 pipeline = AuxDataPipeline(
@@ -134,7 +134,7 @@ augmented = pipeline.get_or_create_aux_data(
 ### ✨ Augmentation Framework
 
 ```python
-from canvod.aux import AuxDataAugmenter, SphericalCoordinateAugmentation
+from canvod.auxiliary import AuxDataAugmenter, SphericalCoordinateAugmentation
 
 # Configure augmentation
 augmenter = AuxDataAugmenter(
@@ -176,7 +176,7 @@ See **[Installation Guide →](installation.md)** for detailed instructions.
 
 ```python
 from pathlib import Path
-from canvod.aux import Sp3File
+from canvod.auxiliary import Sp3File
 
 # Load file
 sp3 = Sp3File.from_file(Path("COD0MGXFIN_20240150000_01D_05M_ORB.SP3"))
@@ -201,7 +201,7 @@ print(sp3.data)
 
 ```python
 import numpy as np
-from canvod.aux import Sp3InterpolationStrategy, Sp3Config
+from canvod.auxiliary import Sp3InterpolationStrategy, Sp3Config
 
 # Configure strategy
 config = Sp3Config(use_velocities=True)
@@ -221,7 +221,7 @@ interpolated = strategy.interpolate(sp3.data, target_epochs)
 ### 3. Pipeline Workflow
 
 ```python
-from canvod.aux import AuxDataPipeline
+from canvod.auxiliary import AuxDataPipeline
 from pathlib import Path
 
 # Create pipeline
@@ -246,7 +246,7 @@ See **[Quick Start Guide →](quickstart.md)** for more examples.
 ### Package Structure
 
 ```
-canvod.aux
+canvod.auxiliary
 ├── _internal          # Internal utilities (UREG, YYYYDOY, logger)
 ├── reader             # AuxFile ABC base class
 ├── container          # FTP downloader, data containers

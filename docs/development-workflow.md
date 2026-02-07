@@ -348,8 +348,8 @@ On every push, GitHub Actions runs:
 ### Build a Single Package
 
 ```bash
-cd packages/canvod-readers
-just build
+# From the repository root:
+just build-package canvod-readers
 
 # Creates:
 # dist/canvod_readers-0.1.0-py3-none-any.whl

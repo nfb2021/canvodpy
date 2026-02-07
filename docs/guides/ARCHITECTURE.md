@@ -156,7 +156,7 @@ class GridFactory(ComponentFactory[BaseGridBuilder]):
     """Factory for grid builders."""
     pass
 
-class VODFactory(ComponentFactory[BaseVODMethod]):
+class VODFactory(ComponentFactory):
     """Factory for VOD calculation methods."""
     pass
 ```
@@ -175,8 +175,8 @@ def _register_builtins():
     ReaderFactory.register("rinex_v3", Rnxv3Obs)
 
     # Grids
-    from canvod.grids import EqualAreaGridBuilder
-    GridFactory.register("equal_area", EqualAreaGridBuilder)
+    from canvod.grids import EqualAreaBuilder
+    GridFactory.register("equal_area", EqualAreaBuilder)
 
     # VOD methods
     from canvod.vod import TauOmegaZerothOrder
@@ -288,7 +288,7 @@ canvodpy uses namespace packages for modular distribution:
 
 ```
 canvod.readers      → canvod-readers package
-canvod.aux          → canvod-auxiliary package
+canvod.auxiliary          → canvod-auxiliary package
 canvod.grids        → canvod-grids package
 canvod.store        → canvod-store package
 canvod.utils        → canvod-utils package
@@ -488,7 +488,7 @@ Factory registration happens on module import, ensuring each Airflow worker has 
 def _register_builtins():
     """Register built-in implementations."""
     ReaderFactory.register("rinex_v3", Rnxv3Obs)
-    GridFactory.register("equal_area", EqualAreaGridBuilder)
+    GridFactory.register("equal_area", EqualAreaBuilder)
     # ...
 
 # Runs when module imported (happens in every worker)

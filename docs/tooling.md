@@ -168,16 +168,23 @@ Ruff implements **700+ linting rules** from many different tools:
 **Our configuration:**
 
 ```toml
-[tool.ty]
+[tool.ruff]
 line-length = 88
-target-version = "py313"
 
-[tool.ty.lint]
-select = ["ALL"]  # Enable ALL rules
-ignore = [
-    "D",      # pydocstyle (we'll add docstrings later)
-    "ANN",    # flake8-annotations
-    "COM812", # trailing comma (conflicts with formatter)
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+    "RUF", # ruff-specific
+    "PIE", # flake8-pie
+    "PT",  # flake8-pytest-style
 ]
 ```
 
@@ -257,10 +264,7 @@ add("a", "b")   # ✗ Error: expected int, got str
 
 **Configuration:**
 
-```toml
-[tool.ty]
-strict = false  # Start relaxed, become strict later
-```
+ty requires minimal configuration. It is still in early development (alpha stage) and is installed as a dev dependency (`ty>=0.0.1a27`).
 
 **Common commands:**
 

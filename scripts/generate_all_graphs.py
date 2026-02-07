@@ -46,7 +46,7 @@ class DependencyGraphGenerator:
 
         print(f"📦 Generating internal dependencies for {package_name}...")
 
-        # Find the main module (canvod.readers, canvod.aux, etc.)
+        # Find the main module (canvod.readers, canvod.auxiliary, etc.)
         module_path = None
         for path in src_dir.glob("canvod/*"):
             if path.is_dir() and not path.name.startswith("_"):

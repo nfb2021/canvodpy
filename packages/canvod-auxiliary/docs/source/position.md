@@ -14,7 +14,7 @@ canvod-auxiliary supports three coordinate systems:
 Earth-Centered, Earth-Fixed Cartesian coordinates.
 
 ```python
-from canvod.aux import ECEFPosition
+from canvod.auxiliary import ECEFPosition
 
 # Create from coordinates
 ecef = ECEFPosition(x=4075539.8, y=931735.3, z=4801629.6)
@@ -31,7 +31,7 @@ lat, lon, alt = ecef.to_geodetic()
 WGS84 latitude, longitude, altitude.
 
 ```python
-from canvod.aux import GeodeticPosition
+from canvod.auxiliary import GeodeticPosition
 
 # Create
 geo = GeodeticPosition(lat=48.2, lon=16.4, alt=200.0)
@@ -45,7 +45,7 @@ x, y, z = geo.to_ecef()
 Physics convention: (r, θ, φ) relative to receiver position.
 
 ```python
-from canvod.aux import compute_spherical_coordinates
+from canvod.auxiliary import compute_spherical_coordinates
 
 # Compute from satellite and receiver positions
 r, theta, phi = compute_spherical_coordinates(
@@ -64,7 +64,7 @@ r, theta, phi = compute_spherical_coordinates(
 ## Add to Dataset
 
 ```python
-from canvod.aux import add_spherical_coords_to_dataset
+from canvod.auxiliary import add_spherical_coords_to_dataset
 
 # Augment RINEX dataset with spherical coordinates
 augmented_ds = add_spherical_coords_to_dataset(

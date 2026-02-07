@@ -304,19 +304,19 @@ done
 **Detect Circular Imports**
 
 ```bash
-uv run pydeps canvod.aux --show-cycles -o cycles.svg
+uv run pydeps canvod.auxiliary --show-cycles -o cycles.svg
 ```
 
 **Compare Before/After Refactoring**
 
 ```bash
 # Before refactoring
-uv run pydeps canvod.aux -o before.svg
+uv run pydeps canvod.auxiliary -o before.svg
 
 # ... make changes ...
 
 # After refactoring
-uv run pydeps canvod.aux -o after.svg
+uv run pydeps canvod.auxiliary -o after.svg
 
 # Compare visually
 open before.svg after.svg
@@ -336,10 +336,7 @@ just test
 just test-package canvod-readers
 
 # With coverage
-just test-cov
-
-# Fast (skip slow tests)
-just test-fast
+just test-coverage
 ```
 
 ### Test Organization
@@ -356,7 +353,7 @@ packages/canvod-grids/tests/
 
 ```bash
 # Generate coverage report
-just test-cov
+just test-coverage
 
 # View HTML report
 open _coverage/index.html
@@ -429,14 +426,8 @@ just test
 # Build docs
 just docs
 
-# Format code
-just format
-
-# Lint code
-just lint
-
-# Type check
-just typecheck
+# Run all quality checks (lint + format + types)
+just check
 ```
 
 ### Build & Release
@@ -533,14 +524,8 @@ Add tests in `packages/<package>/tests/`
 ### 4. Run Quality Checks
 
 ```bash
-# Format code
-just format
-
-# Run linter
-just lint
-
-# Type check
-just typecheck
+# Run all quality checks (lint + format + types)
+just check
 
 # Run tests
 just test
@@ -610,10 +595,10 @@ just docs-build
 **Solution:** Reduce scope:
 ```bash
 # Lower bacon number
-uv run pydeps canvod.aux --max-bacon=1 -o output.svg
+uv run pydeps canvod.auxiliary --max-bacon=1 -o output.svg
 
 # Focus on one module
-uv run pydeps canvod.aux.preprocessing -o output.svg
+uv run pydeps canvod.auxiliary.preprocessing -o output.svg
 ```
 
 ---

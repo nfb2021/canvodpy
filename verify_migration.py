@@ -16,7 +16,7 @@ def test_imports():
         ("canvodpy.logging", "Umbrella: logging"),
         ("canvodpy.utils", "Umbrella: utils"),
         ("canvod.readers", "Phase 1: canvod-readers"),
-        ("canvod.aux", "Phase 2: canvod-aux"),
+        ("canvod.auxiliary", "Phase 2: canvod-aux"),
         ("canvod.store", "Phase 5: canvod-store"),
         ("canvod.vod", "Phase 4: canvod-vod"),
     ]
@@ -75,7 +75,7 @@ def test_package_versions():
 
     packages = [
         "canvod.readers",
-        "canvod.aux",
+        "canvod.auxiliary",
         "canvod.store",
         "canvod.vod",
     ]

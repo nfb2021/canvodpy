@@ -7,7 +7,7 @@ Complete API documentation for canvod-auxiliary.
 ### Sp3File
 
 ```{eval-rst}
-.. autoclass:: canvod.aux.Sp3File
+.. autoclass:: canvod.auxiliary.Sp3File
    :members:
    :undoc-members:
    :show-inheritance:
@@ -16,7 +16,7 @@ Complete API documentation for canvod-auxiliary.
 ### ClkFile
 
 ```{eval-rst}
-.. autoclass:: canvod.aux.ClkFile
+.. autoclass:: canvod.auxiliary.ClkFile
    :members:
    :undoc-members:
    :show-inheritance:
@@ -27,37 +27,37 @@ Complete API documentation for canvod-auxiliary.
 ### preprocess_aux_for_interpolation
 
 ```{eval-rst}
-.. autofunction:: canvod.aux.preprocessing.preprocess_aux_for_interpolation
+.. autofunction:: canvod.auxiliary.preprocessing.preprocess_aux_for_interpolation
 ```
 
 ### prep_aux_ds
 
 ```{eval-rst}
-.. autofunction:: canvod.aux.preprocessing.prep_aux_ds
+.. autofunction:: canvod.auxiliary.preprocessing.prep_aux_ds
 ```
 
 ### map_aux_sv_to_sid
 
 ```{eval-rst}
-.. autofunction:: canvod.aux.preprocessing.map_aux_sv_to_sid
+.. autofunction:: canvod.auxiliary.preprocessing.map_aux_sv_to_sid
 ```
 
 ### pad_to_global_sid
 
 ```{eval-rst}
-.. autofunction:: canvod.aux.preprocessing.pad_to_global_sid
+.. autofunction:: canvod.auxiliary.preprocessing.pad_to_global_sid
 ```
 
 ### normalize_sid_dtype
 
 ```{eval-rst}
-.. autofunction:: canvod.aux.preprocessing.normalize_sid_dtype
+.. autofunction:: canvod.auxiliary.preprocessing.normalize_sid_dtype
 ```
 
 ### strip_fillvalue
 
 ```{eval-rst}
-.. autofunction:: canvod.aux.preprocessing.strip_fillvalue
+.. autofunction:: canvod.auxiliary.preprocessing.strip_fillvalue
 ```
 
 ## Interpolation
@@ -65,7 +65,7 @@ Complete API documentation for canvod-auxiliary.
 ### Sp3InterpolationStrategy
 
 ```{eval-rst}
-.. autoclass:: canvod.aux.interpolation.Sp3InterpolationStrategy
+.. autoclass:: canvod.auxiliary.interpolation.Sp3InterpolationStrategy
    :members:
    :undoc-members:
    :show-inheritance:
@@ -74,7 +74,7 @@ Complete API documentation for canvod-auxiliary.
 ### ClockInterpolationStrategy
 
 ```{eval-rst}
-.. autoclass:: canvod.aux.interpolation.ClockInterpolationStrategy
+.. autoclass:: canvod.auxiliary.interpolation.ClockInterpolationStrategy
    :members:
    :undoc-members:
    :show-inheritance:
@@ -83,7 +83,7 @@ Complete API documentation for canvod-auxiliary.
 ### Sp3Config
 
 ```{eval-rst}
-.. autoclass:: canvod.aux.interpolation.Sp3Config
+.. autoclass:: canvod.auxiliary.interpolation.Sp3Config
    :members:
    :undoc-members:
 ```
@@ -91,7 +91,7 @@ Complete API documentation for canvod-auxiliary.
 ### ClockConfig
 
 ```{eval-rst}
-.. autoclass:: canvod.aux.interpolation.ClockConfig
+.. autoclass:: canvod.auxiliary.interpolation.ClockConfig
    :members:
    :undoc-members:
 ```
@@ -101,7 +101,7 @@ Complete API documentation for canvod-auxiliary.
 ### ECEFPosition
 
 ```{eval-rst}
-.. autoclass:: canvod.aux.ECEFPosition
+.. autoclass:: canvod.auxiliary.ECEFPosition
    :members:
    :undoc-members:
    :show-inheritance:
@@ -110,7 +110,7 @@ Complete API documentation for canvod-auxiliary.
 ### GeodeticPosition
 
 ```{eval-rst}
-.. autoclass:: canvod.aux.GeodeticPosition
+.. autoclass:: canvod.auxiliary.GeodeticPosition
    :members:
    :undoc-members:
    :show-inheritance:
@@ -119,13 +119,13 @@ Complete API documentation for canvod-auxiliary.
 ### compute_spherical_coordinates
 
 ```{eval-rst}
-.. autofunction:: canvod.aux.position.compute_spherical_coordinates
+.. autofunction:: canvod.auxiliary.position.compute_spherical_coordinates
 ```
 
 ### add_spherical_coords_to_dataset
 
 ```{eval-rst}
-.. autofunction:: canvod.aux.position.add_spherical_coords_to_dataset
+.. autofunction:: canvod.auxiliary.position.add_spherical_coords_to_dataset
 ```
 
 ## Products
@@ -133,25 +133,25 @@ Complete API documentation for canvod-auxiliary.
 ### get_product_spec
 
 ```{eval-rst}
-.. autofunction:: canvod.aux.products.get_product_spec
+.. autofunction:: canvod.auxiliary.products.get_product_spec
 ```
 
 ### list_available_products
 
 ```{eval-rst}
-.. autofunction:: canvod.aux.products.list_available_products
+.. autofunction:: canvod.auxiliary.products.list_available_products
 ```
 
 ### list_agencies
 
 ```{eval-rst}
-.. autofunction:: canvod.aux.products.list_agencies
+.. autofunction:: canvod.auxiliary.products.list_agencies
 ```
 
 ### ProductSpec
 
 ```{eval-rst}
-.. autoclass:: canvod.aux.products.ProductSpec
+.. autoclass:: canvod.auxiliary.products.ProductSpec
    :members:
    :undoc-members:
 ```
@@ -161,7 +161,7 @@ Complete API documentation for canvod-auxiliary.
 ### DatasetMatcher
 
 ```{eval-rst}
-.. autoclass:: canvod.aux.DatasetMatcher
+.. autoclass:: canvod.auxiliary.DatasetMatcher
    :members:
    :undoc-members:
    :show-inheritance:

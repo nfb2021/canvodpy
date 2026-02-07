@@ -201,8 +201,8 @@ class GridFactory(ComponentFactory):
 
     Examples
     --------
-    >>> from canvod.grids import EqualAreaGridBuilder
-    >>> GridFactory.register("equal_area", EqualAreaGridBuilder)
+    >>> from canvod.grids import EqualAreaBuilder
+    >>> GridFactory.register("equal_area", EqualAreaBuilder)
     >>> grid = GridFactory.create(
     ...     "equal_area",
     ...     angular_resolution=5.0,

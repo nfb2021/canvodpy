@@ -1,6 +1,6 @@
 # Product Registry
 
-39 validated GNSS products from 17 agencies.
+37 validated GNSS products from 17 agencies.
 
 ## Overview
 
@@ -15,18 +15,18 @@ The product registry provides declarative configuration for SP3 and CLK file loc
 - **JPL** (Jet Propulsion Laboratory): Final
 - **IGS** (International GNSS Service): Final, Rapid, Ultra-rapid
 
-**Total:** 39 products from 17 agencies
+**Total:** 37 products from 17 agencies
 
 ## Usage
 
 ```python
-from canvod.aux import list_available_products, get_product_spec, Sp3File
+from canvod.auxiliary import PRODUCT_REGISTRY, ProductSpec, Sp3File
 
 # List all products
 products = list_available_products()  # Returns dict of all products
 
 # List agencies
-from canvod.aux import list_agencies
+from canvod.auxiliary import list_agencies
 agencies = list_agencies()  # ['CODE', 'GFZ', 'ESA', ...]
 
 # Get specific product

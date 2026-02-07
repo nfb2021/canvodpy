@@ -2,24 +2,24 @@
 
 ## Package
 
-::: canvod.aux
+::: canvod.auxiliary
 
 ## Preprocessing
 
-::: canvod.aux.preprocessing
+::: canvod.auxiliary.preprocessing
 
 ## Interpolation
 
-::: canvod.aux.interpolation
+::: canvod.auxiliary.interpolation
 
 ## Ephemeris
 
-::: canvod.aux.ephemeris
+::: canvod.auxiliary.ephemeris
 
 ## Clock
 
-::: canvod.aux.clock
+::: canvod.auxiliary.clock
 
 ## Products
 
-::: canvod.aux.products
+::: canvod.auxiliary.products

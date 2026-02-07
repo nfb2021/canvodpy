@@ -36,7 +36,7 @@ Extend canvodpy with custom components using factories:
 Package Structure
 -----------------
 - canvod.readers - RINEX file parsing
-- canvod.aux - Auxiliary data (ephemeris, clocks)
+- canvod.auxiliary - Auxiliary data (ephemeris, clocks)
 - canvod.grids - Hemisphere grid structures
 - canvod.vod - VOD calculation algorithms
 - canvod.viz - 2D/3D visualization
@@ -112,7 +112,7 @@ from canvodpy.workflow import VODWorkflow
 def __getattr__(name: str):
     """Lazy import subpackages when accessed."""
     _subpackages = {
-        "aux": "canvod.aux",
+        "auxiliary": "canvod.auxiliary",
         "grids": "canvod.grids",
         "readers": "canvod.readers",
         "store": "canvod.store",

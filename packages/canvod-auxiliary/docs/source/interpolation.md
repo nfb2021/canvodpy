@@ -18,7 +18,7 @@ Interpolation increases temporal resolution from SP3/CLK sampling (15 min, 5 min
 
 **Configuration:**
 ```python
-from canvod.aux.interpolation import Sp3Config, Sp3InterpolationStrategy
+from canvod.auxiliary.interpolation import Sp3Config, Sp3InterpolationStrategy
 
 config = Sp3Config(
     use_velocities=True,  # Use VX, VY, VZ
@@ -38,7 +38,7 @@ interpolator = Sp3InterpolationStrategy(config=config)
 
 **Configuration:**
 ```python
-from canvod.aux.interpolation import ClockConfig, ClockInterpolationStrategy
+from canvod.auxiliary.interpolation import ClockConfig, ClockInterpolationStrategy
 
 config = ClockConfig(
     window_size=9,

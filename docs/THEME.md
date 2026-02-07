@@ -6,23 +6,22 @@ The canVODpy documentation uses a custom dark theme optimized for readability an
 
 ## Color Scheme
 
-The theme is built around a dark mode color palette inspired by the project's visual identity:
+The theme uses a Nordic Green palette built from 5 colors:
 
-| Color | Hex Code | Usage |
+| Token | Hex Code | Usage |
 |-------|----------|-------|
-| Black | `#000000` | Background |
-| Green | `#007449` | Primary (headings, links, accents) |
-| Gray | `#53585F` | Secondary text, borders |
-| Light Green 1 | `#C9DABC` | Main text, code |
-| Light Green 2 | `#CCD9BF` | Accents, highlights |
-| Purple | `#2A2338` | Cards, code blocks, surfaces |
+| g1 | `#E1E6B9` | Light background, dark-mode muted text |
+| g2 | `#C4D7A4` | Surface, dark-mode main text |
+| g3 | `#ABC8A4` | Borders, code borders |
+| g4 | `#375D3B` | Links, muted text, UI actions |
+| g5 | `#183128` | Dark background, main text |
 
 ### Color Psychology
 
-- **Black background**: Reduces eye strain in dark mode
-- **Green accents**: Vegetation/nature theme (VOD)
-- **Light green text**: High contrast on dark background
-- **Purple surfaces**: Subtle differentiation for content blocks
+- **Green palette**: Vegetation/nature theme (VOD = Vegetation Optical Depth)
+- **No blue anywhere**: Deliberate constraint for visual consistency
+- **Light/dark mode**: Tokens swap roles between modes
+- **5-color constraint**: Every UI element uses only these 5 colors
 
 ## Typography
 
@@ -44,17 +43,16 @@ Space Grotesk is a modern, geometric sans-serif font that provides:
 
 ### Changing Colors
 
-Edit `docs/assets/canvod-style.css`:
+Edit `docs/assets/canvod-nordic.css`:
 
 ```css
 :root {
   /* Update these variables */
-  --canvod-black: #000000;
-  --canvod-green: #007449;
-  --canvod-gray: #53585F;
-  --canvod-light-green-1: #C9DABC;
-  --canvod-light-green-2: #CCD9BF;
-  --canvod-purple: #2A2338;
+  --g1: #E1E6B9;  /* light */
+  --g2: #C4D7A4;
+  --g3: #ABC8A4;
+  --g4: #375D3B;
+  --g5: #183128;  /* dark */
 }
 ```
 
@@ -72,7 +70,7 @@ Replace the Google Fonts import:
 
 ### Adding Custom Styles
 
-Add new rules to the bottom of `canvod-style.css`:
+Add new rules to the bottom of `canvod-nordic.css`:
 
 ```css
 /* Custom additions */

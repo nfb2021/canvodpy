@@ -45,7 +45,7 @@ uv run pytest -v
 
 ### Run with coverage
 ```bash
-uv run pytest --cov=canvod.aux --cov-report=html
+uv run pytest --cov=canvod.auxiliary --cov-report=html
 ```
 
 ### Exclude slow tests
@@ -156,7 +156,7 @@ Current coverage by module:
 
 Run coverage report:
 ```bash
-uv run pytest --cov=canvod.aux --cov-report=term-missing
+uv run pytest --cov=canvod.auxiliary --cov-report=term-missing
 ```
 
 ## Test Conventions
@@ -202,7 +202,7 @@ Example:
 """Tests for new feature."""
 
 import pytest
-from canvod.aux import new_feature
+from canvod.auxiliary import new_feature
 
 
 class TestNewFeature:

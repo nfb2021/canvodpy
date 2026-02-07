@@ -34,7 +34,7 @@ CDDIS_MAIL=your.email@example.com
 ### Without CDDIS (Default)
 
 ```python
-from canvod.aux.ephemeris.reader import Sp3File
+from canvod.auxiliary.ephemeris.reader import Sp3File
 import datetime
 
 # Works out-of-the-box, no configuration needed
@@ -59,8 +59,8 @@ After setting `CDDIS_MAIL` in `.env`:
 
 ```python
 import os
-from canvod.aux.ephemeris.reader import Sp3File
-from canvod.aux.core.downloader import FtpDownloader
+from canvod.auxiliary.ephemeris.reader import Sp3File
+from canvod.auxiliary.core.downloader import FtpDownloader
 
 # Load from environment
 user_email = os.environ.get("CDDIS_MAIL")

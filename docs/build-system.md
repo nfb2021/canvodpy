@@ -95,11 +95,13 @@ A **build backend** is a tool that knows how to:
 - `flit` (simple, lightweight)
 - `poetry-core` (used by Poetry)
 
-**We use `uv_build` because:**
+**We use `uv_build` for most packages because:**
 - Native namespace package support
 - Extremely fast (Rust)
 - Simple configuration
 - Part of the uv ecosystem
+
+Note: `canvod-utils` uses `hatchling` as its build backend instead.
 
 ---
 
@@ -200,15 +202,18 @@ unzip -l dist/canvod_readers-0.1.0-py3-none-any.whl
 canvod/                           # Namespace directory
   readers/                        # Module directory
     __init__.py
-    rinex_v3.py
-    rinex_v4.py
-    utils.py
+    base.py
+    rinex/
+      __init__.py
+      v3_04.py
+    gnss_specs/
+      ...
+    matching/
+      ...
 canvod_readers-0.1.0.dist-info/   # Metadata
   METADATA                        # Package metadata
   WHEEL                           # Wheel format metadata
   RECORD                          # File checksums
-  entry_points.txt                # CLI scripts (if any)
-  top_level.txt                   # Top-level imports
 ```
 
 **Key observations:**

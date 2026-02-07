@@ -44,8 +44,8 @@ graph LR
 **Step-by-step:**
 
 ```python
-from canvod.aux import Sp3File, preprocess_aux_for_interpolation
-from canvod.aux.interpolation import Sp3InterpolationStrategy, Sp3Config
+from canvod.auxiliary import Sp3File, preprocess_aux_for_interpolation
+from canvod.auxiliary.interpolation import Sp3InterpolationStrategy, Sp3Config
 
 # 1. Load raw SP3 data (sv dimension)
 sp3_file = Sp3File.from_url(date, "CODE", "final")
@@ -91,7 +91,7 @@ sp3_interp = interpolator.interpolate(sp3_sid, target_epochs)  # ✅ Works!
 
 **Example:**
 ```python
-from canvod.aux import preprocess_aux_for_interpolation
+from canvod.auxiliary import preprocess_aux_for_interpolation
 
 sp3_data = sp3_file.to_dataset()  # {'epoch': 96, 'sv': 32}
 sp3_sid = preprocess_aux_for_interpolation(sp3_data)  # {'epoch': 96, 'sid': 384}
@@ -102,7 +102,7 @@ sp3_interp = interpolator.interpolate(sp3_sid, target_epochs)
 
 ### prep_aux_ds()
 
-**Purpose:** Full 4-step preprocessing matching gnssvodpy exactly.
+**Purpose:** Full 4-step preprocessing pipeline.
 
 **What it does:**
 1. Convert sv → sid
@@ -113,11 +113,11 @@ sp3_interp = interpolator.interpolate(sp3_sid, target_epochs)
 **When to use:**
 - Before Icechunk storage
 - When you need global sid alignment
-- Matching gnssvodpy behavior exactly
+- When matching the standard preprocessing pipeline
 
 **Example:**
 ```python
-from canvod.aux import prep_aux_ds
+from canvod.auxiliary import prep_aux_ds
 
 sp3_data = sp3_file.to_dataset()  # {'epoch': 96, 'sv': 32}
 sp3_prep = prep_aux_ds(sp3_data)  # {'epoch': 96, 'sid': ~2000}
@@ -143,7 +143,7 @@ sp3_prep.dims  # {'epoch': 96, 'sid': 1987}  # All possible sids
 **Expand each satellite to all its signal IDs.**
 
 ```python
-from canvod.aux.preprocessing import map_aux_sv_to_sid
+from canvod.auxiliary.preprocessing import map_aux_sv_to_sid
 
 # Input: One position per satellite
 sp3_data['X'].sel(sv='G01')  # Single X value: 12345678.9 m
@@ -173,7 +173,7 @@ sp3_sid['X'].sel(sid='G01|L5|I')  # 12345678.9 m (same!)
 **Pad to include all possible signal IDs across all constellations.**
 
 ```python
-from canvod.aux.preprocessing import pad_to_global_sid
+from canvod.auxiliary.preprocessing import pad_to_global_sid
 
 # Before: Only sids present in SP3 file
 sp3_sid.dims  # {'epoch': 96, 'sid': 384}  (32 svs × ~12 sids each)
@@ -205,7 +205,7 @@ sp3_padded['X'].sel(sid='C42|B1|I')  # NaN (BeiDou not in file)
 **Convert sid coordinate to object dtype for Zarr/Icechunk compatibility.**
 
 ```python
-from canvod.aux.preprocessing import normalize_sid_dtype
+from canvod.auxiliary.preprocessing import normalize_sid_dtype
 
 # Before: Fixed-length Unicode string
 sp3_padded.sid.dtype  # dtype('<U9')  (Unicode, 9 chars)
@@ -219,14 +219,14 @@ sp3_normalized.sid.dtype  # dtype('O')  (Object)
 - Zarr struggles with fixed-length string types (`<U9`)
 - Object arrays handle variable-length strings better
 - Prevents dtype conflicts when appending to Icechunk
-- Matches gnssvodpy preprocessing exactly
+- Ensures consistent preprocessing across the pipeline
 
 ### Step 4: strip_fillvalue()
 
 **Remove `_FillValue` attributes that conflict with Icechunk.**
 
 ```python
-from canvod.aux.preprocessing import strip_fillvalue
+from canvod.auxiliary.preprocessing import strip_fillvalue
 
 # Before: _FillValue attributes present
 sp3_normalized['X'].attrs  # {'_FillValue': -999.0, ...}
@@ -242,7 +242,7 @@ sp3_clean['X'].encoding  # {} (no _FillValue)
 - Icechunk handles missing data internally
 - Conflicting _FillValue definitions cause errors
 - NaN is the standard missing value marker
-- Matches gnssvodpy preprocessing exactly
+- Ensures consistent preprocessing across the pipeline
 
 ## Scientific Accuracy
 
@@ -267,31 +267,6 @@ sids_g01 = [sid for sid in sp3_sid.sid.values if sid.startswith('G01|')]
 positions = [sp3_sid['X'].sel(sid=sid, epoch=epoch).values for sid in sids_g01]
 assert all(pos == positions[0] for pos in positions)  # ✅ All identical
 ```
-
-### Comparison with gnssvodpy
-
-**canvod-auxiliary preprocessing EXACTLY matches gnssvodpy:**
-
-```python
-# gnssvodpy
-from gnssvodpy.icechunk_manager.preprocessing import IcechunkPreprocessor
-gnss_result = IcechunkPreprocessor.prep_aux_ds(aux_ds)
-
-# canvodpy
-from canvod.aux import prep_aux_ds
-canv_result = prep_aux_ds(aux_ds)
-
-# Identical output
-assert gnss_result.equals(canv_result)  # ✅ True
-```
-
-**Tested scenarios:**
-- ✅ GPS-only files
-- ✅ Multi-GNSS files (GPS + GLONASS + Galileo + BeiDou)
-- ✅ Sparse files (missing satellites)
-- ✅ Full 24h files (2880 epochs)
-
-**See:** `PREPROCESSING_COMPARISON.md` for function-by-function verification.
 
 ## Performance
 
@@ -371,20 +346,6 @@ sp3_sid = preprocess_aux_for_interpolation(sp3_data)  # Only 384 sids
 # Or filter to specific systems
 sp3_data = sp3_data.where(sp3_data.sv.str.startswith('G'), drop=True)  # GPS only
 sp3_prep = prep_aux_ds(sp3_data)
-```
-
-## Migration from gnssvodpy
-
-Direct replacement:
-
-```python
-# Old (gnssvodpy)
-from gnssvodpy.icechunk_manager.preprocessing import IcechunkPreprocessor
-preprocessed = IcechunkPreprocessor.prep_aux_ds(aux_ds)
-
-# New (canvodpy)
-from canvod.aux import prep_aux_ds
-preprocessed = prep_aux_ds(aux_ds)  # Identical!
 ```
 
 ## API Reference

@@ -31,9 +31,9 @@ GNSS VOD analysis requires combining two data sources with different characteris
 
 ✅ **Dimension alignment**: Converts sv → sid with proper signal replication
 ✅ **Temporal alignment**: Hermite splines (ephemeris) + piecewise linear (clock)
-✅ **Unified interface**: 39 products from 17 agencies through single API
+✅ **Unified interface**: 37 products from 17 agencies through single API
 ✅ **Coordinate pipeline**: ECEF → Geodetic → Spherical (r, θ, φ)
-✅ **Validated accuracy**: Matches gnssvodpy preprocessing exactly
+✅ **Validated accuracy**: Comprehensive test suite verifying preprocessing correctness
 
 ## Design Philosophy
 
@@ -137,7 +137,7 @@ graph TD
 Every configuration uses Pydantic for validation:
 
 ```python
-from canvod.aux.interpolation import Sp3Config, ClockConfig
+from canvod.auxiliary.interpolation import Sp3Config, ClockConfig
 
 # Type-checked at instantiation
 config = Sp3Config(
@@ -166,7 +166,7 @@ bad_config = Sp3Config(
 Add satellite positions and spherical coordinates to RINEX observations:
 
 ```python
-from canvod.aux import (
+from canvod.auxiliary import (
     Sp3File, ClkFile,
     preprocess_aux_for_interpolation,
     Sp3InterpolationStrategy, Sp3Config,
@@ -194,7 +194,7 @@ r, theta, phi = compute_spherical_coordinates(
 )
 
 # Augment RINEX data
-from canvod.aux import add_spherical_coords_to_dataset
+from canvod.auxiliary import add_spherical_coords_to_dataset
 augmented_ds = add_spherical_coords_to_dataset(rinex_ds, r, theta, phi)
 ```
 
@@ -203,7 +203,7 @@ augmented_ds = add_spherical_coords_to_dataset(rinex_ds, r, theta, phi)
 Prepare auxiliary data for Icechunk with full preprocessing:
 
 ```python
-from canvod.aux import prep_aux_ds
+from canvod.auxiliary import prep_aux_ds
 
 # Load raw auxiliary data
 sp3_data = Sp3File(...).to_dataset()  # {'epoch': 96, 'sv': 32}
@@ -225,7 +225,7 @@ clk_prep = prep_aux_ds(clk_data)  # {'epoch': 288, 'sid': ~2000}
 Compare products from different agencies:
 
 ```python
-from canvod.aux import get_product_spec, Sp3File
+from canvod.auxiliary import get_product_spec, Sp3File
 from datetime import date
 
 agencies = ["CODE", "GFZ", "JPL", "ESA"]
@@ -245,7 +245,7 @@ for agency in agencies:
 Convert between ECEF, geodetic, and spherical coordinates:
 
 ```python
-from canvod.aux import ECEFPosition, GeodeticPosition
+from canvod.auxiliary import ECEFPosition, GeodeticPosition
 
 # From RINEX metadata (ECEF)
 ecef = ECEFPosition(x=4075539.8, y=931735.3, z=4801629.6)
@@ -271,7 +271,7 @@ r, theta, phi = compute_spherical_coordinates(
 Implement your own interpolation strategy:
 
 ```python
-from canvod.aux.interpolation import InterpolationStrategy, InterpolatorConfig
+from canvod.auxiliary.interpolation import InterpolationStrategy, InterpolatorConfig
 from dataclasses import dataclass
 
 @dataclass
@@ -321,10 +321,10 @@ result = interpolator.interpolate(aux_data, target_epochs)
 
 ### Preprocessing Pipeline
 
-Four-step preprocessing matching gnssvodpy exactly:
+Four-step preprocessing pipeline:
 
 ```python
-from canvod.aux.preprocessing import (
+from canvod.auxiliary.preprocessing import (
     map_aux_sv_to_sid,      # Step 1: sv → sid
     pad_to_global_sid,       # Step 2: pad to all sids
     normalize_sid_dtype,     # Step 3: object dtype
@@ -346,7 +346,7 @@ ds = prep_aux_ds(aux_ds)  # Same result
 
 **Sp3InterpolationStrategy**:
 ```python
-from canvod.aux.interpolation import Sp3InterpolationStrategy, Sp3Config
+from canvod.auxiliary.interpolation import Sp3InterpolationStrategy, Sp3Config
 
 config = Sp3Config(
     use_velocities=True,           # Use VX, VY, VZ if available
@@ -360,7 +360,7 @@ sp3_interp = interpolator.interpolate(sp3_data, target_epochs)
 
 **ClockInterpolationStrategy**:
 ```python
-from canvod.aux.interpolation import ClockInterpolationStrategy, ClockConfig
+from canvod.auxiliary.interpolation import ClockInterpolationStrategy, ClockConfig
 
 config = ClockConfig(
     window_size=9,           # Look at ±4 points
@@ -510,7 +510,7 @@ Typical timings (Intel i7-1165G7 @ 2.8GHz):
 | sv→sid conversion | ✅ | ❌ | ❌ | ❌ |
 | Hermite interpolation | ✅ | ❌ | ❌ | ❌ |
 | Clock interpolation | ✅ | ❌ | ❌ | ❌ |
-| Product registry | ✅ 39 products | ❌ | ❌ | ❌ |
+| Product registry | ✅ 37 products | ❌ | ❌ | ❌ |
 | Coordinate transforms | ✅ ECEF/Geo/Sph | ⚠️ Partial | ❌ | ❌ |
 | Type safety | ✅ Pydantic | ❌ | ❌ | ❌ |
 | Icechunk ready | ✅ | ❌ | ❌ | ❌ |

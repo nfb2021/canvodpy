@@ -48,7 +48,7 @@ uv pip install canvod-auxiliary
 
 **Verify installation:**
 ```bash
-python -c "from canvod.aux import Sp3File, ClkFile; print('✓ Works!')"
+python -c "from canvod.auxiliary import Sp3File, ClkFile; print('✓ Works!')"
 ```
 
 ### Method 2: Development Install
@@ -69,7 +69,7 @@ pip install -e .
 
 **Verify:**
 ```bash
-python -c "import canvod.aux; print(canvod.aux.__version__)"
+python -c "import canvod.auxiliary; print(canvod.auxiliary.__version__)"
 ```
 
 ### Method 3: With Development Dependencies
@@ -190,8 +190,8 @@ pip install canvod-auxiliary
 ### Quick Test
 
 ```python
-from canvod.aux import Sp3File, ClkFile, AuxDataPipeline
-from canvod.aux._internal import UREG, YYYYDOY, get_logger
+from canvod.auxiliary import Sp3File, ClkFile, AuxDataPipeline
+from canvod.auxiliary._internal import UREG, YYYYDOY, get_logger
 
 print("✓ All imports successful!")
 ```
@@ -212,8 +212,8 @@ pytest
 ### Check Version
 
 ```python
-import canvod.aux
-print(canvod.aux.__version__)  # Should show: 0.1.0
+import canvod.auxiliary
+print(canvod.auxiliary.__version__)  # Should show: 0.1.0
 ```
 
 ---

@@ -39,12 +39,12 @@ Notice the pattern: `mycompany.{subpackage}`. This creates a **professional, hie
 In canVODpy, we have seven packages that all share the `canvod` namespace:
 
 ```python
-from canvod.readers import Rnxv3Obs      # canvod-readers package
-from canvod.aux import AuxData            # canvod-auxiliary package
-from canvod.grids import HemiGrid         # canvod-grids package
-from canvod.vod import calculate_vod      # canvod-vod package
-from canvod.store import IcechunkStore    # canvod-store package
-from canvod.viz import plot_hemisphere    # canvod-viz package
+from canvod.readers import Rnxv3Obs              # canvod-readers package
+from canvod.auxiliary import Sp3File              # canvod-auxiliary package
+from canvod.grids import EqualAreaBuilder         # canvod-grids package
+from canvod.vod import VODCalculator              # canvod-vod package
+from canvod.store import MyIcechunkStore          # canvod-store package
+from canvod.viz import HemisphereVisualizer       # canvod-viz package
 ```
 
 Each import comes from a **different package**, but they all use the `canvod.*` namespace.
@@ -148,7 +148,7 @@ If you have both `canvod-readers` and `canvod-grids` installed:
 
 ```python
 from canvod.readers import Rnxv3Obs    # From canvod-readers package
-from canvod.grids import HemiGrid       # From canvod-grids package
+from canvod.grids import EqualAreaBuilder       # From canvod-grids package
 ```
 
 Python finds both because:
@@ -158,18 +158,18 @@ Python finds both because:
 
 ---
 
-## PEP 420: Implicit Namespace Packages
+## Implicit Namespace Packages
 
-Our approach follows [PEP 420](https://peps.python.org/pep-0420/) "Implicit Namespace Packages" (Python 3.3+).
+Our approach uses Python 3.3+ implicit namespace packages.
 
-**Before PEP 420 (Python 2):**
+**Before Python 3.3 (Python 2):**
 You needed special code in `__init__.py`:
 ```python
 # canvod/__init__.py (OLD WAY - DON'T DO THIS)
 __path__ = __import__('pkgutil').extend_path(__path__, __name__)
 ```
 
-**After PEP 420 (Python 3.3+):**
+**After Python 3.3+:**
 Just... don't create `__init__.py` in the namespace directory. That's it!
 
 ```
@@ -235,9 +235,9 @@ wheel: canvod_readers-0.1.0.whl
 
 **Package: canvod-auxiliary**
 ```
-wheel: canvod_aux-0.1.0.whl
+wheel: canvod_auxiliary-0.1.0.whl
 └── canvod/
-    └── aux/
+    └── auxiliary/
         └── __init__.py
 ```
 
@@ -254,7 +254,7 @@ wheel: canvod_grids-0.1.0.whl
 site-packages/
 └── canvod/
     ├── readers/      # From canvod-readers
-    ├── aux/          # From canvod-auxiliary
+    ├── auxiliary/    # From canvod-auxiliary
     ├── grids/        # From canvod-grids
     ├── vod/          # From canvod-vod
     ├── store/        # From canvod-store
@@ -304,7 +304,7 @@ You can verify namespace packages work:
 ```python
 # Test that imports work
 from canvod.readers import Rnxv3Obs
-from canvod.grids import HemiGrid
+from canvod.grids import EqualAreaBuilder
 
 # Test that canvod is a namespace (has no __file__)
 import canvod
@@ -359,7 +359,7 @@ In canVODpy:
 ```python
 # Users import from a unified namespace
 from canvod.readers import Rnxv3Obs
-from canvod.grids import HemiGrid
+from canvod.grids import EqualAreaBuilder
 
 # But behind the scenes, these are separate packages!
 ```

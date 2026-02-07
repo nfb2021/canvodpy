@@ -65,7 +65,7 @@ if my_state.value is not None:
 ```python
 @app.cell
 def _(mo):
-    from canvod.aux.ephemeris.reader import Sp3File
+    from canvod.auxiliary.ephemeris.reader import Sp3File
 
     # State container - always exists, starts as None
     sp3_state = mo.state(None)

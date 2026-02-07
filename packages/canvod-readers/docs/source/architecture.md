@@ -352,9 +352,9 @@ class DatasetStructureValidator(BaseModel):
             "system": "object",
             "band": "object",
             "code": "object",
-            "freq_center": "float64",
-            "freq_min": "float64",
-            "freq_max": "float64",
+            "freq_center": "float32",
+            "freq_min": "float32",
+            "freq_max": "float32",
         }
 
         for coord, expected_dtype in required_coords.items():

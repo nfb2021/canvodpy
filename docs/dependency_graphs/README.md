@@ -50,7 +50,7 @@ This directory contains automatically generated dependency graphs for the canVOD
 
 ### 4. Individual Package Graphs
 
-#### canvod.aux
+#### canvod.auxiliary
 **`canvod_aux.svg`** (992B)
 - Dependencies on: canvod.readers, canvod.utils, canvodpy.settings, canvodpy.globals
 - Key exports: AuxDataPipeline, Sp3File, ClkFile
@@ -62,7 +62,7 @@ This directory contains automatically generated dependency graphs for the canVOD
 
 #### canvod.store
 **`canvod_store.svg`** (992B)
-- Dependencies on: canvod.grids, canvod.readers, canvod.utils, canvod.aux
+- Dependencies on: canvod.grids, canvod.readers, canvod.utils, canvod.auxiliary
 - Key exports: GnssResearchSite, IcechunkDataReader
 
 #### Orchestrator
@@ -116,7 +116,7 @@ canvodpy (Umbrella)
 ├── settings.py → .env, processing.yaml
 └── globals.py → Default constants
 
-canvod.aux
+canvod.auxiliary
 ├── → canvod.readers
 ├── → canvod.utils
 ├── → canvod.store (optional)
@@ -127,7 +127,7 @@ canvod.store
 ├── → canvod.grids
 ├── → canvod.readers
 ├── → canvod.utils
-├── → canvod.aux (optional)
+├── → canvod.auxiliary (optional)
 ├── → canvod.vod
 └── → canvodpy.* (globals, logging, research_sites_config)
 
@@ -152,7 +152,7 @@ canvod.grids
 ## Key Findings
 
 ### 1. Circular Dependencies
-**Identified:** `canvod.aux` ↔ `canvod.store`
+**Identified:** `canvod.auxiliary` ↔ `canvod.store`
 
 **Visible in:** canvodpy_overview graph (look for cycle between aux and store clusters)
 
@@ -168,7 +168,7 @@ canvod.grids
 - canvod.readers → utils
 
 **Layer 2 (Mid-tier):**
-- canvod.aux → readers, utils, store
+- canvod.auxiliary → readers, utils, store
 - canvod.store → grids, readers, utils, aux
 - canvod.viz → grids
 
@@ -244,7 +244,7 @@ uv run pydeps canvodpy/src/canvodpy \
 
 ### Generate Individual Package Graph
 ```bash
-# Example: canvod.aux
+# Example: canvod.auxiliary
 uv run pydeps packages/canvod-auxiliary/src/canvod/aux \
     --only canvodpy canvod \
     -T svg \
@@ -314,7 +314,7 @@ pydeps canvodpy/src/canvodpy -o docs/dependency_graphs/output.svg
 
 ### Circular Dependency Warnings
 **Issue:** pydeps reports circular imports
-**Expected:** canvod.aux ↔ canvod.store (by design, using lazy imports)
+**Expected:** canvod.auxiliary ↔ canvod.store (by design, using lazy imports)
 **Action:** Document in graph README, verify lazy import pattern
 
 ---

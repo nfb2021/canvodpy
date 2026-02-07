@@ -53,7 +53,7 @@ Config-Based Registry Verification
 ## 3. Usage Example
 
 ```python
-from canvod.aux.products.registry_config import get_product_spec
+from canvod.auxiliary.products.registry_config import get_product_spec
 
 # Get COD rapid product (ESA primary, NASA fallback)
 spec = get_product_spec("COD", "rapid")

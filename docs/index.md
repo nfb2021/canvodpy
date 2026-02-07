@@ -57,7 +57,7 @@ Understand the `canvod.*` namespace:
 - How do they work in Python?
 - Why use them vs. regular packages?
 - How does `canvod.readers` differ from `canvod_readers`?
-- The role of PEP 420
+- The role of implicit namespace packages
 
 **Start here if:** You're confused about namespace packages or the project structure.
 
@@ -138,9 +138,9 @@ canvodpy/                    # Single repository
 
 ```python
 # All from different PyPI packages, same namespace:
-from canvod.readers import Rnxv3Obs      # canvod-readers
-from canvod.grids import HemiGrid         # canvod-grids
-from canvod.vod import calculate_vod      # canvod-vod
+from canvod.readers import Rnxv3Obs        # canvod-readers
+from canvod.grids import EqualAreaBuilder  # canvod-grids
+from canvod.vod import VODCalculator       # canvod-vod
 ```
 
 **Benefits:**
@@ -166,22 +166,27 @@ canvodpy/
 - Guaranteed compatible versions
 - Fast iteration
 
-## The Seven Packages
+## The Eight Packages
 
 ```
-canvod-readers    → Read GNSS data (RINEX, etc.)
-canvod-auxiliary        → Handle auxiliary data (meteorology, orbit)
-canvod-grids      → Spatial grids (HEALPix, hemispheric)
-canvod-vod        → Calculate vegetation optical depth
+canvod-readers    → Read GNSS data (RINEX v3.04)
+canvod-auxiliary   → Auxiliary data (SP3 ephemeris, CLK clock corrections)
+canvod-grids      → Spatial grids (HEALPix, HTM, equal-area, etc.)
+canvod-vod        → Calculate vegetation optical depth (tau-omega)
 canvod-store      → Store data (Icechunk, Zarr)
-canvod-viz        → Visualize results (plots, maps)
+canvod-viz        → Visualize results (2D/3D hemisphere plots)
+canvod-utils      → Configuration, CLI tools, shared utilities
 canvodpy          → Umbrella (imports everything)
 ```
 
-**Dependency flow:**
+**Declared inter-package dependencies:**
 ```
-readers → aux → grids → vod → store → viz → canvodpy
+readers ←── auxiliary
+grids ←── store
+grids ←── viz
+canvodpy depends on all packages
 ```
+`readers`, `grids`, `vod`, and `utils` have no inter-package dependencies.
 
 ## Technology Stack
 
@@ -189,7 +194,7 @@ readers → aux → grids → vod → store → viz → canvodpy
 - **Language:** Python 3.13+
 - **Package Manager:** uv (Astral)
 - **Build Backend:** uv_build (Astral)
-- **Namespace:** PEP 420 implicit namespace packages
+- **Namespace:** Python 3.3+ implicit namespace packages
 
 ### Development Tools
 - **Linter/Formatter:** ruff (Astral)
@@ -228,7 +233,7 @@ We use **modern tools** (uv, ruff, ty) over legacy equivalents (pip, flake8, myp
 Following **TU Wien GEO** standards:
 - uv-based workflow
 - Comprehensive testing
-- Quality checks (ruff ALL rules)
+- Quality checks (ruff with curated rule set)
 - Proper documentation
 
 ### 4. Documentation First

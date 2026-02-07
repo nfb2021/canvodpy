@@ -44,7 +44,7 @@ Learn about Hermite splines and clock correction strategies
 :link: products
 :link-type: doc
 
-Explore 39 validated GNSS products across 17 agencies
+Explore 37 validated GNSS products across 17 agencies
 :::
 
 ::::
@@ -55,8 +55,8 @@ Explore 39 validated GNSS products across 17 agencies
 
 ### Key Features
 
-- **🛰️ Multi-Agency Support**: 39 validated products from 17 agencies (CODE, GFZ, ESA, NASA CDDIS, etc.)
-- **🔄 Smart Preprocessing**: Complete sv→sid conversion matching gnssvodpy exactly
+- **🛰️ Multi-Agency Support**: 37 validated products from 17 agencies (CODE, GFZ, ESA, NASA CDDIS, etc.)
+- **🔄 Smart Preprocessing**: Complete sv→sid conversion pipeline
 - **📈 Advanced Interpolation**: Hermite cubic splines for ephemerides, piecewise linear for clocks
 - **🌐 Position Handling**: ECEF, geodetic, and spherical coordinate transformations
 - **💾 Icechunk Ready**: Full 4-step preprocessing for Icechunk storage
@@ -105,8 +105,8 @@ pip install canvod-auxiliary
 ## Quick Example
 
 ```python
-from canvod.aux import Sp3File, ClkFile, preprocess_aux_for_interpolation
-from canvod.aux.interpolation import Sp3InterpolationStrategy, Sp3Config
+from canvod.auxiliary import Sp3File, ClkFile, preprocess_aux_for_interpolation
+from canvod.auxiliary.interpolation import Sp3InterpolationStrategy, Sp3Config
 from datetime import date
 
 # 1. Download/load auxiliary files
@@ -128,7 +128,7 @@ target_epochs = rinex_ds.epoch.values
 sp3_interp = interpolator.interpolate(sp3_sid, target_epochs)
 
 # 4. Compute spherical coordinates
-from canvod.aux import compute_spherical_coordinates, ECEFPosition
+from canvod.auxiliary import compute_spherical_coordinates, ECEFPosition
 
 receiver_pos = ECEFPosition.from_ds_metadata(rinex_ds)
 r, theta, phi = compute_spherical_coordinates(
@@ -174,10 +174,10 @@ Two scientifically-validated strategies:
 
 ### Product Registry
 
-39 validated products across 17 agencies:
+37 validated products across 17 agencies:
 
 ```python
-from canvod.aux import list_available_products, get_product_spec
+from canvod.auxiliary import list_available_products, get_product_spec
 
 # List all agencies
 agencies = list_agencies()  # ['CODE', 'GFZ', 'ESA', 'JPL', ...]
@@ -198,7 +198,7 @@ Three coordinate systems supported:
 3. **Spherical** (Physics convention): (r, θ, φ) relative to receiver
 
 ```python
-from canvod.aux import ECEFPosition, GeodeticPosition
+from canvod.auxiliary import ECEFPosition, GeodeticPosition
 
 # From RINEX metadata
 ecef = ECEFPosition.from_ds_metadata(rinex_ds)
@@ -221,9 +221,9 @@ canvod-auxiliary/
 ├── core/              # Base classes (AuxFile, FileDownloader)
 ├── ephemeris/         # SP3 file handler
 ├── clock/             # CLK file handler
-├── products/          # Product registry (39 products)
+├── products/          # Product registry (37 products)
 ├── interpolation/     # Hermite splines, piecewise linear
-├── preprocessing/     # sv→sid conversion (matches gnssvodpy)
+├── preprocessing/     # sv→sid conversion pipeline
 ├── position/          # ECEF, geodetic, spherical
 ├── matching/          # Dataset temporal alignment
 └── container/         # GnssData convenience wrapper
@@ -248,32 +248,6 @@ graph TD
 - `pydantic>=2.5.0`: Configuration validation
 - `xarray>=2023.12.0`: Dataset operations
 - `pymap3d>=3.0.0`: Geodetic transformations
-
-## Comparison with gnssvodpy
-
-canvod-auxiliary **exactly matches** gnssvodpy's preprocessing:
-
-| Feature | gnssvodpy | canvod-auxiliary | Status |
-|---------|-----------|------------|--------|
-| sv→sid mapping | ✅ | ✅ | Identical |
-| Global sid padding | ✅ | ✅ | Identical |
-| sid dtype normalization | ✅ | ✅ | Identical |
-| _FillValue stripping | ✅ | ✅ | Identical |
-| Hermite interpolation | ✅ | ✅ | Identical |
-| Clock interpolation | ✅ | ✅ | Identical |
-| Product registry | ❌ | ✅ | **New!** |
-| Type safety | ⚠️ Partial | ✅ Full | **Improved** |
-
-**Migration from gnssvodpy:**
-```python
-# Old (gnssvodpy)
-from gnssvodpy.icechunk_manager.preprocessing import IcechunkPreprocessor
-preprocessed = IcechunkPreprocessor.prep_aux_ds(aux_ds)
-
-# New (canvodpy)
-from canvod.aux import prep_aux_ds
-preprocessed = prep_aux_ds(aux_ds)  # Identical output!
-```
 
 ## Performance
 
@@ -318,7 +292,7 @@ Learn about Hermite splines and clock strategies
 :link: products
 :link-type: doc
 
-Explore all 39 available products
+Explore all 37 available products
 :::
 
 ::::

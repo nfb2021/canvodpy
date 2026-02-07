@@ -13,7 +13,7 @@
 ### Skip Strategy
 
 ```python
-store = IcechunkStore(store_path, strategy="skip")
+store = MyIcechunkStore(store_path, strategy="skip")
 store.write(dataset)  # Skips if data exists
 ```
 
@@ -30,7 +30,7 @@ store.write(dataset)  # Skips if data exists
 ### Overwrite Strategy
 
 ```python
-store = IcechunkStore(store_path, strategy="overwrite")
+store = MyIcechunkStore(store_path, strategy="overwrite")
 store.write(dataset)  # Replaces existing data
 ```
 
@@ -47,7 +47,7 @@ store.write(dataset)  # Replaces existing data
 ### Append Strategy
 
 ```python
-store = IcechunkStore(store_path, strategy="append")
+store = MyIcechunkStore(store_path, strategy="append")
 store.write(dataset)  # Adds to existing data
 ```
 
@@ -67,7 +67,7 @@ Configure strategy via:
 
 **1. Constructor parameter:**
 ```python
-store = IcechunkStore(store_path, strategy="append")
+store = MyIcechunkStore(store_path, strategy="append")
 ```
 
 **2. Configuration file:**
@@ -88,7 +88,7 @@ export CANVOD_STORE_STRATEGY=append
 ### For RINEX Data (Raw Observations)
 ```python
 # Use skip strategy - raw data shouldn't change
-rinex_store = IcechunkStore(
+rinex_store = MyIcechunkStore(
     rinex_path,
     strategy="skip"
 )
@@ -97,7 +97,7 @@ rinex_store = IcechunkStore(
 ### For VOD Data (Processed Results)
 ```python
 # Use overwrite - recompute as algorithms improve
-vod_store = IcechunkStore(
+vod_store = MyIcechunkStore(
     vod_path,
     strategy="overwrite"
 )
@@ -106,7 +106,7 @@ vod_store = IcechunkStore(
 ### For Continuous Monitoring
 ```python
 # Use append - add new observations daily
-monitor_store = IcechunkStore(
+monitor_store = MyIcechunkStore(
     monitor_path,
     strategy="append"
 )

@@ -11,7 +11,7 @@ canVODpy is a **monorepo** containing multiple Python packages for GNSS (Global 
 
 ## The Problem We're Solving
 
-Previously, the GNSS VOD analysis code existed as a single large package (`gnssvodpy`). This created several problems:
+Previously, the GNSS VOD analysis code existed as a single monolithic package. This created several problems:
 
 1. **Tight coupling**: All features were interdependent
 2. **Large dependencies**: Installing one feature meant installing all dependencies
@@ -20,16 +20,17 @@ Previously, the GNSS VOD analysis code existed as a single large package (`gnssv
 
 ## Our Solution: Modular Monorepo
 
-We split the functionality into **seven independent packages** that work together:
+We split the functionality into **eight independent packages** that work together:
 
 ```
 canVODpy Monorepo
-├── canvod-readers    → Read GNSS data formats (RINEX, etc.)
-├── canvod-auxiliary        → Handle auxiliary data
-├── canvod-grids      → Manage spatial grids (HEALPix)
-├── canvod-vod        → Calculate vegetation optical depth
+├── canvod-readers    → Read GNSS data formats (RINEX v3.04)
+├── canvod-auxiliary   → Auxiliary data (SP3 ephemeris, CLK clock corrections)
+├── canvod-grids      → Spatial grids (HEALPix, HTM, equal-area, etc.)
+├── canvod-vod        → Calculate vegetation optical depth (tau-omega)
 ├── canvod-store      → Store data (Icechunk, Zarr)
-├── canvod-viz        → Visualize results
+├── canvod-viz        → Visualize results (2D/3D hemisphere plots)
+├── canvod-utils      → Configuration, CLI tools, shared utilities
 └── canvodpy          → Umbrella package (imports everything)
 ```
 
@@ -42,8 +43,8 @@ Instead of seven separate top-level packages, we use **namespace packages** so a
 ```python
 # All packages share the "canvod" namespace
 from canvod.readers import Rnxv3Obs
-from canvod.grids import HemiGrid
-from canvod.vod import calculate_vod
+from canvod.grids import EqualAreaBuilder
+from canvod.vod import VODCalculator
 ```
 
 **Why?** This creates a unified, professional API while keeping packages technically independent.
@@ -130,23 +131,20 @@ Each package gets its own PyPI page:
 
 ## Dependency Flow
 
-Packages can depend on each other:
+Packages declare explicit inter-package dependencies:
 
 ```
-canvod-readers (no dependencies)
-    ↓
-canvod-auxiliary (needs readers)
-    ↓
-canvod-grids (needs aux)
-    ↓
-canvod-vod (needs grids)
-    ↓
-canvod-store (needs vod)
-    ↓
-canvod-viz (needs store)
-    ↓
-canvodpy (imports all)
+canvod-readers    (no inter-package dependencies)
+canvod-grids      (no inter-package dependencies)
+canvod-vod        (no inter-package dependencies)
+canvod-utils      (no inter-package dependencies)
+canvod-auxiliary   → depends on canvod-readers
+canvod-store      → depends on canvod-grids
+canvod-viz        → depends on canvod-grids
+canvodpy          → depends on all packages
 ```
+
+The dependency graph is intentionally flat — most packages are independent, with only three declared inter-package edges.
 
 **During development:** All packages are installed in "editable mode" so changes to one package immediately affect packages that depend on it.
 
@@ -173,25 +171,15 @@ We believe the advantages far outweigh the trade-offs for a project of this size
 
 ## Real-World Example
 
-**Before (monolith):**
 ```python
-# Everything in one package
-import gnssvodpy
-
-# Unclear what's what
-reader = gnssvodpy.Rnxv3Obs()
-grid = gnssvodpy.HemiGrid()
-```
-
-**After (modular):**
-```python
-# Clear, explicit imports
+# Clear, explicit imports from separate packages
 from canvod.readers import Rnxv3Obs
-from canvod.grids import HemiGrid
+from canvod.grids import EqualAreaBuilder
+from canvod.vod import VODCalculator
 
-# Or use the umbrella
+# Or use the umbrella package
 import canvodpy
-reader = canvodpy.readers.Rnxv3Obs()
+reader = canvodpy.readers.Rnxv3Obs(fpath="data.rnx")
 ```
 
 ## Next Steps

@@ -54,7 +54,7 @@ for date, datasets in pipeline.process_range("2025001", "2025007"):
 
 ```python
 from canvod.readers import Rnxv3Obs
-from canvod.aux import Sp3File, ClkFile
+from canvod.auxiliary import Sp3File, ClkFile
 from canvod.store import GnssResearchSite
 from canvodpy.orchestrator import PipelineOrchestrator
 
@@ -69,7 +69,7 @@ orchestrator = PipelineOrchestrator(site, n_max_workers=12)
 Installing canvodpy gives you access to all 7 packages:
 
 - 📖 **canvod.readers** - RINEX file parsing (v3.04)
-- 🛰️ **canvod.aux** - Auxiliary data (SP3, CLK) handling
+- 🛰️ **canvod.auxiliary** - Auxiliary data (SP3, CLK) handling
 - 🌐 **canvod.grids** - Hemisphere grid structures
 - 💾 **canvod.store** - Icechunk data storage
 - 📊 **canvod.vod** - VOD calculation algorithms
@@ -84,7 +84,7 @@ Installing canvodpy gives you access to all 7 packages:
 - ✅ Icechunk integration for efficient storage
 - ✅ Multi-agency support (CODE, ESA, GFZ, JPL)
 - ✅ Lazy imports (no circular dependencies)
-- ✅ Built on battle-tested gnssvodpy logic
+- ✅ Comprehensive test suite with validated preprocessing
 
 ## Platform Support
 

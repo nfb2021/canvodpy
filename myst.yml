@@ -9,7 +9,7 @@ site:
     logo: https://www.tuwien.at/index.php?eID=dumpFile&t=f&f=180467&token=e453d11c91e8a351710deaee2883b768e8bd1057
     logo_url: https://github.com/nfb2021/canvodpy
     favicon: https://github.com/TUW-GEO/cookiecutter-docs-config/raw/main/logos/favicon/favicon.ico
-    style: docs/assets/canvod-style.css
+    style: docs/assets/canvod-nordic.css
     folders: true
 
 project:
@@ -30,25 +30,21 @@ project:
     - file: README.md
       title: Overview
 
-    - title: Documentation
+    - title: Architecture & Concepts
       children:
         - file: docs/index.md
-          title: Documentation Home
+          title: Introduction
         - file: docs/architecture.md
           title: Architecture Overview
-        - file: docs/dependencies.md
-          title: Package Dependencies
-        - file: docs/tooling.md
-          title: Development Tooling
         - file: docs/namespace-packages.md
           title: Namespace Packages
-        - file: docs/development-workflow.md
-          title: Development Workflow
-        - file: docs/build-system.md
-          title: Build System
+        - file: docs/dependencies.md
+          title: Package Dependencies
 
     - title: Packages
       children:
+        - file: canvodpy/README.md
+          title: canvodpy (umbrella)
         - file: packages/canvod-readers/README.md
           title: canvod-readers
         - file: packages/canvod-auxiliary/README.md
@@ -61,8 +57,8 @@ project:
           title: canvod-store
         - file: packages/canvod-viz/README.md
           title: canvod-viz
-        - file: canvodpy/README.md
-          title: canvodpy (umbrella)
+        - file: packages/canvod-utils/README.md
+          title: canvod-utils
 
     - title: Development
       children:
@@ -72,6 +68,12 @@ project:
           title: Development Guide
         - file: docs/guides/ARCHITECTURE.md
           title: Architecture & Design
+        - file: docs/development-workflow.md
+          title: Development Workflow
+        - file: docs/build-system.md
+          title: Build System
+        - file: docs/tooling.md
+          title: Tooling
 
     - title: Release & Publishing
       children:

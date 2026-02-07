@@ -78,7 +78,7 @@ def _(Path, Sp3File, datetime):
     # dsout.to_netcdf('/tmp/tmpfiles/orbit.nc')
 
     # sp3_path = Path(
-    #     '/Users/work/Developer/GNSS/gnssvodpy/.data/00_aux_files/01_SP3/COD0MGXFIN_20250010000_01D_05M_ORB.SP3'
+    #     '/path/to/aux_files/01_SP3/COD0MGXFIN_20250010000_01D_05M_ORB.SP3'
     # )
 
     # sp31 = Sp3File.from_file(sp3_path)
