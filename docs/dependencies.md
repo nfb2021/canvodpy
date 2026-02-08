@@ -1,6 +1,6 @@
 # Package Dependencies
 
-This document shows the dependency relationships between canVODpy packages and provides metrics to help maintain independence (Sollbruchstellen).
+Inter-package dependency relationships and independence metrics for the canVODpy monorepo.
 
 ## Dependency Graph
 
@@ -8,7 +8,6 @@ This document shows the dependency relationships between canVODpy packages and p
 graph TD
     classDef stable fill:#90EE90,stroke:#2E8B57,stroke-width:2px
     classDef unstable fill:#FFB6C1,stroke:#DC143C,stroke-width:2px
-    classDef balanced fill:#87CEEB,stroke:#4682B4,stroke-width:2px
 
     canvod_readers["canvod-readers<br/>GNSS data format readers"]
     canvod_aux["canvod-auxiliary<br/>Auxiliary data augmentation"]
@@ -32,178 +31,69 @@ graph TD
 ```
 
 **Legend:**
-- 🟢 **Green (Stable)** - No dependencies, used by others
-- 🔴 **Pink (Unstable)** - Has dependencies, not used by others (leaf packages)
-- 🔵 **Blue (Balanced)** - Mix of dependencies and dependents
+- Green (Stable): No dependencies, used by other packages
+- Pink (Leaf): Has dependencies, not depended upon by others
 
 ## Independence Metrics
 
-| Package | Dependencies | Dependents | Instability | Independence | Status |
-|---------|--------------|------------|-------------|--------------|--------|
-| canvod-readers | 0 | 1 | 0.00 | 1.00 | 🟢 Stable |
-| canvod-grids | 0 | 2 | 0.00 | 1.00 | 🟢 Stable |
-| canvod-vod | 0 | 0 | 0.00 | 1.00 | 🟢 Stable |
-| canvod-utils | 0 | 0 | 0.00 | 1.00 | 🟢 Stable |
-| canvod-auxiliary | 1 | 0 | 1.00 | 0.83 | 🔴 Leaf |
-| canvod-viz | 1 | 0 | 1.00 | 0.83 | 🔴 Leaf |
-| canvod-store | 1 | 0 | 1.00 | 0.83 | 🔴 Leaf |
+| Package | Dependencies | Dependents | Instability | Independence |
+|---------|--------------|------------|-------------|--------------|
+| canvod-readers | 0 | 1 | 0.00 | 1.00 |
+| canvod-grids | 0 | 2 | 0.00 | 1.00 |
+| canvod-vod | 0 | 0 | 0.00 | 1.00 |
+| canvod-utils | 0 | 0 | 0.00 | 1.00 |
+| canvod-auxiliary | 1 | 0 | 1.00 | 0.83 |
+| canvod-viz | 1 | 0 | 1.00 | 0.83 |
+| canvod-store | 1 | 0 | 1.00 | 0.83 |
 
-### Metrics Explained
+### Metric Definitions
 
-**Efferent Coupling (Ce):** Number of packages this package depends on
-- Lower is better for independence
+- **Efferent coupling (Ce)**: Number of packages this package depends on. Lower values indicate greater independence.
+- **Afferent coupling (Ca)**: Number of packages that depend on this package. Higher values indicate greater reusability.
+- **Instability (I)**: `Ce / (Ce + Ca)`. 0.0 = maximally stable (foundation), 1.0 = maximally unstable (leaf).
+- **Independence**: `1 - (Ce / total_packages)`. 1.0 = no inter-package dependencies.
 
-**Afferent Coupling (Ca):** Number of packages that depend on this package
-- Higher means more reusable
+## Architecture Summary
 
-**Instability (I):** `Ce / (Ce + Ca)`
-- 0.00 = Maximally stable (foundation packages)
-- 1.00 = Maximally unstable (leaf packages)
-- Neither is bad - depends on role!
-
-**Independence:** `1 - (Ce / total_packages)`
-- How independent this package is from others
-- 1.00 = Perfect independence
-
-## Architecture Analysis
-
-### ✅ Excellent Independence!
-
-Your architecture has:
-- **No circular dependencies** ✅
-- **4 packages with zero dependencies** (57%)
-- **Only 3 total internal dependencies**
-- **Maximum dependency depth: 1** (very shallow!)
-
-### Foundation Packages (0 dependencies)
-
-These packages form the **stable core** and can be used independently:
-
-1. **canvod-readers** - RINEX and data format readers
-   - Used by: canvod-auxiliary
-   - Role: Data ingestion foundation
-
-2. **canvod-grids** - Grid operations (HEALPix, hemispheric)
-   - Used by: canvod-viz, canvod-store
-   - Role: Spatial foundation
-
-3. **canvod-vod** - VOD calculations
-   - Used by: (none - ready for use by umbrella package)
-   - Role: Core algorithm
-
-4. **canvod-utils** - Configuration and utilities
-   - Used by: (none - ready for cross-package use)
-   - Role: Shared utilities
-
-### Leaf Packages (No dependents)
-
-These packages **consume** foundation packages but aren't used by others:
-
-1. **canvod-auxiliary** → canvod-readers
-2. **canvod-viz** → canvod-grids
-3. **canvod-store** → canvod-grids
-
-**This is good!** Leaf packages are easy to extract and can evolve independently.
-
-## Sollbruchstellen (Breaking Points)
-
-Your packages have **excellent breaking points**:
-
-### Easy to Extract
-
-All 7 packages can be extracted to independent repositories with **zero or minimal changes**:
-
-```bash
-# Each package is already independent
-packages/canvod-readers/  → github.com/you/canvod-readers
-packages/canvod-grids/    → github.com/you/canvod-grids
-packages/canvod-vod/      → github.com/you/canvod-vod
-packages/canvod-utils/    → github.com/you/canvod-utils
-
-# These need their single dependency:
-packages/canvod-auxiliary/      → github.com/you/canvod-auxiliary (+ canvod-readers)
-packages/canvod-viz/      → github.com/you/canvod-viz (+ canvod-grids)
-packages/canvod-store/    → github.com/you/canvod-store (+ canvod-grids)
-```
+- No circular dependencies
+- 4 packages with zero inter-package dependencies (57%)
+- 3 total internal dependency edges
+- Maximum dependency depth: 1
 
 ### Dependency Layers
 
 ```
-Layer 0 (Foundation - 4 packages):
+Layer 0 (Foundation, 0 dependencies):
   canvod-readers, canvod-grids, canvod-vod, canvod-utils
 
-Layer 1 (Consumers - 3 packages):
-  canvod-auxiliary, canvod-viz, canvod-store
+Layer 1 (Consumers, 1 dependency each):
+  canvod-auxiliary (depends on canvod-readers)
+  canvod-viz (depends on canvod-grids)
+  canvod-store (depends on canvod-grids)
 ```
 
-Only **2 layers**! This is excellent for:
-- ✅ Testing (test layer 0 first, then layer 1)
-- ✅ Versioning (changes in layer 0 don't affect siblings)
-- ✅ Extraction (clean separation)
+The two-layer structure simplifies testing (test Layer 0 first, then Layer 1) and ensures that changes to foundation packages do not cascade between siblings.
 
-## Recommendations
+## Extractability
 
-### Current State: 🟢 Excellent
-
-Your dependency architecture is **very good**. You've achieved:
-- Minimal coupling
-- No circular dependencies
-- Clear foundation vs. consumer separation
-- Easy extraction points
-
-### Potential Improvements
-
-#### 1. Consider Making canvod-utils a Universal Dependency
-
-Currently, `canvod-utils` has zero dependents. Consider if other packages should use it for:
-- Configuration loading
-- Metadata management
-- Shared constants
-
-**Trade-off:**
-- ✅ Reduced duplication
-- ⚠️ Increased coupling
-
-#### 2. Future: Orchestrator Package
-
-When you create the high-level API (orchestrator), it will naturally depend on multiple packages. Plan for:
+All packages can be extracted to independent repositories with zero or minimal changes:
 
 ```
-canvodpy (umbrella)
-  ├── canvod-readers
-  ├── canvod-auxiliary
-  ├── canvod-grids
-  ├── canvod-vod
-  ├── canvod-store
-  └── canvod-viz
+# Foundation packages: extract directly
+packages/canvod-readers/  -> independent repo
+packages/canvod-grids/    -> independent repo
+packages/canvod-vod/      -> independent repo
+packages/canvod-utils/    -> independent repo
+
+# Consumer packages: extract with one PyPI dependency
+packages/canvod-auxiliary/ -> independent repo (+ canvod-readers)
+packages/canvod-viz/      -> independent repo (+ canvod-grids)
+packages/canvod-store/    -> independent repo (+ canvod-grids)
 ```
 
-This is **expected and good** - the umbrella package should coordinate all others.
-
-#### 3. Monitor Future Dependencies
-
-As packages evolve, watch for:
-- Circular dependencies (currently: 0 ✅)
-- Deep dependency chains (currently: max depth 1 ✅)
-- High coupling (currently: max 1 dependency per package ✅)
-
-## Updating This Document
-
-Regenerate the dependency analysis anytime:
+## Regeneration
 
 ```bash
-# Generate full report
-just deps-report
-
-# Generate Mermaid diagram only
-just deps-graph
-
-# Generate detailed metrics
-python scripts/analyze_dependencies.py --format report > DEPENDENCIES.md
+just deps-report    # Full metrics report
+just deps-graph     # Mermaid diagram
 ```
-
-## See Also
-
-- [Architecture Overview](architecture.md) - Overall system design
-- [Development Workflow](development-workflow.md) - How to work with packages
-- [Namespace Packages](namespace-packages.md) - Package structure

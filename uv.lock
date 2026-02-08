@@ -489,6 +489,7 @@ dependencies = [
     { name = "canvod-vod" },
     { name = "dask" },
     { name = "docker" },
+    { name = "howfairis" },
     { name = "marimo" },
     { name = "matplotlib" },
     { name = "mystmd" },
@@ -520,6 +521,7 @@ requires-dist = [
     { name = "canvod-vod", editable = "packages/canvod-vod" },
     { name = "dask", specifier = ">=2026.1.1" },
     { name = "docker", specifier = ">=7.1.0" },
+    { name = "howfairis", specifier = ">=0.13.0" },
     { name = "marimo", specifier = ">=0.9.0" },
     { name = "matplotlib", specifier = ">=3.8.0" },
     { name = "mystmd", specifier = ">=1.8.0" },
@@ -1262,6 +1264,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e4/e4/40c001bae370f9e89bbcda71c6fb75bd5baa4ec8d5004369a591cfaa0d5d/holoviews-1.22.1.tar.gz", hash = "sha256:7dde3a10bb77aff0982e21786b4f5249c6a9d70c463f5604a49fcf30c0247756", size = 5509590, upload-time = "2025-12-05T14:54:20.928Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4f/ab/a6aa43d45ceb88adc0e8c1358fa6935c6e6a5895537431dec67524ca2ccd/holoviews-1.22.1-py3-none-any.whl", hash = "sha256:6f4f0656336035cde1d8103ac6461d7c8ac9a60c4a6d883785cc81f2cc5b8702", size = 5946246, upload-time = "2025-12-05T14:54:19.191Z" },
+]
+
+[[package]]
+name = "howfairis"
+version = "0.13.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "beautifulsoup4" },
+    { name = "click" },
+    { name = "colorama" },
+    { name = "requests" },
+    { name = "ruamel-yaml" },
+    { name = "voluptuous" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9a/5b/37cf3c3584baa1ea43209a8292ac2bce4dea2a143516e64a893744a6847a/howfairis-0.13.0.tar.gz", hash = "sha256:d6cf7031e15e45f2a1b9d8a111e34daf7af87c434406ba46b20ca18e512e5e39", size = 25410, upload-time = "2021-02-18T14:16:30.453Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4f/de/e755e6c9a62874752972ce1d4678a049022ad5e37a5a7d1a4becfbdb574a/howfairis-0.13.0-py3-none-any.whl", hash = "sha256:30dd11d27ec226659b46be09192f5b10590ed4eb58e5d9ec46741482fd7cf1a4", size = 27929, upload-time = "2021-02-18T14:16:28.812Z" },
 ]
 
 [[package]]
@@ -3147,6 +3166,15 @@ wheels = [
 ]
 
 [[package]]
+name = "ruamel-yaml"
+version = "0.19.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c7/3b/ebda527b56beb90cb7652cb1c7e4f91f48649fbcd8d2eb2fb6e77cd3329b/ruamel_yaml-0.19.1.tar.gz", hash = "sha256:53eb66cd27849eff968ebf8f0bf61f46cdac2da1d1f3576dd4ccee9b25c31993", size = 142709, upload-time = "2026-01-02T16:50:31.84Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/0c/51f6841f1d84f404f92463fc2b1ba0da357ca1e3db6b7fbda26956c3b82a/ruamel_yaml-0.19.1-py3-none-any.whl", hash = "sha256:27592957fedf6e0b62f281e96effd28043345e0e66001f97683aa9a40c667c93", size = 118102, upload-time = "2026-01-02T16:50:29.201Z" },
+]
+
+[[package]]
 name = "ruff"
 version = "0.14.14"
 source = { registry = "https://pypi.org/simple" }
@@ -3517,6 +3545,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c3/d1/8f3c683c9561a4e6689dd3b1d345c815f10f86acd044ee1fb9a4dcd0b8c5/uvicorn-0.40.0.tar.gz", hash = "sha256:839676675e87e73694518b5574fd0f24c9d97b46bea16df7b8c05ea1a51071ea", size = 81761, upload-time = "2025-12-21T14:16:22.45Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3d/d8/2083a1daa7439a66f3a48589a57d576aa117726762618f6bb09fe3798796/uvicorn-0.40.0-py3-none-any.whl", hash = "sha256:c6c8f55bc8bf13eb6fa9ff87ad62308bbbc33d0b67f84293151efe87e0d5f2ee", size = 68502, upload-time = "2025-12-21T14:16:21.041Z" },
+]
+
+[[package]]
+name = "voluptuous"
+version = "0.16.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/92/f4/0738e6849858deae22218be3bbb8207ba83a96e9d0ec7e8e8cd67b30e5ca/voluptuous-0.16.0.tar.gz", hash = "sha256:006535e22fed944aec17bef6e8725472476194743c87bd233e912eb463f8ff05", size = 54238, upload-time = "2025-12-18T23:18:46.08Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d1/00/0e0da784245c93cf346150ab67634177bf277f93b7a162bb56c928c39c04/voluptuous-0.16.0-py3-none-any.whl", hash = "sha256:ee342095263e1b5afbd4d418cb5adc92810eebfd07696bb033a261210df33db4", size = 31931, upload-time = "2025-12-18T23:18:44.694Z" },
 ]
 
 [[package]]

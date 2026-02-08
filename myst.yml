@@ -14,7 +14,7 @@ site:
 
 project:
   title: canVODpy
-  subtitle: Modern GNSS Vegetation Optical Depth Analysis
+  subtitle: GNSS Transmissometry (GNSS-T) Analysis
   authors:
     - name: Nicolas Bader
       email: nicolas.bader@geo.tuwien.ac.at
@@ -30,12 +30,12 @@ project:
     - file: README.md
       title: Overview
 
-    - title: Architecture & Concepts
+    - title: Architecture
       children:
         - file: docs/index.md
           title: Introduction
         - file: docs/architecture.md
-          title: Architecture Overview
+          title: Monorepo Structure
         - file: docs/namespace-packages.md
           title: Namespace Packages
         - file: docs/dependencies.md
@@ -43,33 +43,61 @@ project:
 
     - title: Packages
       children:
-        - file: canvodpy/README.md
-          title: canvodpy (umbrella)
-        - file: packages/canvod-readers/README.md
-          title: canvod-readers
-        - file: packages/canvod-auxiliary/README.md
-          title: canvod-auxiliary
-        - file: packages/canvod-grids/README.md
-          title: canvod-grids
-        - file: packages/canvod-vod/README.md
-          title: canvod-vod
-        - file: packages/canvod-store/README.md
-          title: canvod-store
-        - file: packages/canvod-viz/README.md
-          title: canvod-viz
-        - file: packages/canvod-utils/README.md
-          title: canvod-utils
+        - title: canvod-readers
+          children:
+            - file: docs/packages/readers/overview.md
+              title: Overview
+            - file: docs/packages/readers/rinex-format.md
+              title: RINEX v3.04 Format
+            - file: docs/packages/readers/architecture.md
+              title: Reader Architecture
+            - file: docs/packages/readers/extending.md
+              title: Extending Readers
+        - title: canvod-auxiliary
+          children:
+            - file: docs/packages/auxiliary/overview.md
+              title: Overview
+            - file: docs/packages/auxiliary/preprocessing.md
+              title: Preprocessing Pipeline
+            - file: docs/packages/auxiliary/interpolation.md
+              title: Interpolation Methods
+            - file: docs/packages/auxiliary/coordinates.md
+              title: Coordinate Systems
+            - file: docs/packages/auxiliary/products.md
+              title: Product Registry
+        - title: canvod-grids
+          children:
+            - file: docs/packages/grids/overview.md
+              title: Overview
+        - title: canvod-vod
+          children:
+            - file: docs/packages/vod/overview.md
+              title: Overview
+        - title: canvod-store
+          children:
+            - file: docs/packages/store/overview.md
+              title: Overview
+            - file: docs/packages/store/icechunk.md
+              title: Icechunk Storage
+            - file: docs/packages/store/storage-strategies.md
+              title: Storage Strategies
+        - title: canvod-viz
+          children:
+            - file: docs/packages/viz/overview.md
+              title: Overview
+        - title: canvod-utils
+          children:
+            - file: docs/packages/utils/overview.md
+              title: Overview
 
     - title: Development
       children:
         - file: CONTRIBUTING.md
-          title: Contributing Guide
-        - file: docs/guides/DEVELOPMENT.md
+          title: Contributing
+        - file: docs/guides/development.md
           title: Development Guide
-        - file: docs/guides/ARCHITECTURE.md
-          title: Architecture & Design
-        - file: docs/development-workflow.md
-          title: Development Workflow
+        - file: docs/guides/architecture-design.md
+          title: Architecture & Design Patterns
         - file: docs/build-system.md
           title: Build System
         - file: docs/tooling.md
@@ -78,17 +106,36 @@ project:
     - title: Release & Publishing
       children:
         - file: VERSIONING.md
-          title: Versioning Strategy
+          title: Versioning
         - file: RELEASING.md
           title: Release Process
         - file: docs/guides/PYPI_SETUP.md
           title: PyPI Setup
         - file: docs/guides/ZENODO_SETUP.md
-          title: Zenodo DOI Setup
+          title: Zenodo DOI
         - file: docs/guides/OIDC_EXPLAINED.md
           title: OIDC Authentication
         - file: docs/guides/HOW_RELEASE_WORKS.md
-          title: How Releases Work
+          title: Release Internals
+
+    - title: API Reference
+      children:
+        - file: docs/api/canvodpy.md
+          title: canvodpy
+        - file: docs/api/canvod-readers.md
+          title: canvod.readers
+        - file: docs/api/canvod-auxiliary.md
+          title: canvod.auxiliary
+        - file: docs/api/canvod-grids.md
+          title: canvod.grids
+        - file: docs/api/canvod-vod.md
+          title: canvod.vod
+        - file: docs/api/canvod-store.md
+          title: canvod.store
+        - file: docs/api/canvod-viz.md
+          title: canvod.viz
+        - file: docs/api/canvod-utils.md
+          title: canvod.utils
 
   error_rules:
     - rule: image-downloads

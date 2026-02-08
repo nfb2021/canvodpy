@@ -38,6 +38,7 @@ dependencies = [
     "dask>=2026.1.1",
     "mystmd>=1.8.0",
     "docker>=7.1.0",
+    "howfairis>=0.13.0",
 ]
 
 [dependency-groups]

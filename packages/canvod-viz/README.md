@@ -288,6 +288,10 @@ Unified styling for both 2D and 3D.
 - `to_polar_style()`: Convert to 2D style
 - `to_plotly_layout()`: Convert to 3D layout
 
+## Documentation
+
+[Centralized documentation](../../docs/packages/viz/overview.md)
+
 ## Examples
 
 See `docs/` for Jupyter notebook examples:
@@ -346,9 +350,9 @@ If you use this package in your research, please cite:
 
 ```bibtex
 @software{canvod_viz,
-  title = {canvod-viz: Visualization Tools for GNSS VOD Analysis},
+  title = {canvod-viz: Visualization Tools for GNSS-T Analysis},
   author = {Bader, Nicolas F.},
-  year = {2025},
+  year = {2026},
   institution = {TU Wien},
   url = {https://github.com/nfb2021/canvodpy}
 }

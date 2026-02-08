@@ -2,7 +2,7 @@
 
 VOD calculation for GNSS vegetation analysis.
 
-Part of the [canVODpy](https://github.com/yourusername/canvodpy) ecosystem.
+Part of the [canVODpy](https://github.com/nfb2021/canvodpy) ecosystem.
 
 ## Overview
 
@@ -43,7 +43,7 @@ vod_ds = TauOmegaZerothOrder.from_datasets(
 
 ## Documentation
 
-Full documentation: [canvodpy.readthedocs.io](https://canvodpy.readthedocs.io)
+[Centralized documentation](../../docs/packages/vod/overview.md)
 
 ## Reference
 

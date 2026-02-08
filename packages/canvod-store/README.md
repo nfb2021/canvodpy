@@ -2,7 +2,7 @@
 
 Icechunk storage for GNSS VOD data.
 
-Part of the [canVODpy](https://github.com/yourusername/canvodpy) ecosystem.
+Part of the [canVODpy](https://github.com/nfb2021/canvodpy) ecosystem.
 
 ## Overview
 
@@ -41,7 +41,7 @@ site = GnssResearchSite(site_name="Rosalia")
 
 ## Documentation
 
-Full documentation: [canvodpy.readthedocs.io](https://canvodpy.readthedocs.io)
+[Centralized documentation](../../docs/packages/store/overview.md)
 
 ## License
 

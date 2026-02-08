@@ -1,12 +1,11 @@
 # canvodpy
 
-**Umbrella Package for Unified GNSS VOD Analysis**
+Umbrella package for unified GNSS VOD analysis.
 
-## What is canvodpy?
+## Overview
 
-`canvodpy` is the unified entry point for the canVOD ecosystem - a modern
-Python package for analyzing GNSS signals to estimate vegetation optical
-depth (VOD). It provides three levels of API to match your needs:
+`canvodpy` is the unified entry point for the canVOD ecosystem. It provides
+three levels of API:
 
 - **Level 1:** One-line convenience functions (fastest path to results)
 - **Level 2:** Object-oriented classes (structured workflows)
@@ -15,7 +14,7 @@ depth (VOD). It provides three levels of API to match your needs:
 ## Installation
 
 ```bash
-# One command installs canvodpy + all 7 sub-packages
+# Installs canvodpy + all 7 sub-packages
 uv pip install canvodpy
 ```
 
@@ -64,45 +63,25 @@ orchestrator = PipelineOrchestrator(site, n_max_workers=12)
 # ... custom processing ...
 ```
 
-## What's Included?
+## Included Packages
 
-Installing canvodpy gives you access to all 7 packages:
+Installing canvodpy provides access to all 7 packages:
 
-- 📖 **canvod.readers** - RINEX file parsing (v3.04)
-- 🛰️ **canvod.auxiliary** - Auxiliary data (SP3, CLK) handling
-- 🌐 **canvod.grids** - Hemisphere grid structures
-- 💾 **canvod.store** - Icechunk data storage
-- 📊 **canvod.vod** - VOD calculation algorithms
-- 🎨 **canvod.viz** - 2D/3D visualization
-- 🔧 **canvod.utils** - Shared utilities
-
-## Key Features
-
-- ✅ Three-level API (simple → structured → advanced)
-- ✅ Multi-receiver, multi-date orchestration
-- ✅ Parallel processing (12+ workers default)
-- ✅ Icechunk integration for efficient storage
-- ✅ Multi-agency support (CODE, ESA, GFZ, JPL)
-- ✅ Lazy imports (no circular dependencies)
-- ✅ Comprehensive test suite with validated preprocessing
+- **canvod.readers** -- RINEX file parsing (v3.04)
+- **canvod.auxiliary** -- Auxiliary data (SP3, CLK) handling
+- **canvod.grids** -- Hemisphere grid structures
+- **canvod.store** -- Icechunk data storage
+- **canvod.vod** -- VOD calculation algorithms
+- **canvod.viz** -- 2D/3D visualization
+- **canvod.utils** -- Shared utilities
 
 ## Platform Support
 
 | Platform | Status | Notes |
 |----------|--------|-------|
-| Linux | ✅ Full support | Recommended |
-| macOS | ✅ Full support | Fully tested |
-| Windows | ⚠️ WSL only | Native not supported (reserved `aux` name) |
-
-## Documentation
-
-📚 **Full documentation:** [docs-site/packages/canvodpy/](../docs-site/packages/canvodpy/)
-
-- [Overview](../docs-site/packages/canvodpy/overview.md) - Getting started
-- [API Levels](../docs-site/packages/canvodpy/api-levels.md) - Understanding the 3 levels
-- [Configuration](../docs-site/packages/canvodpy/configuration.md) - Sites & settings
-- [Examples](../docs-site/packages/canvodpy/examples.md) - Real-world usage
-- [Orchestrator](../docs-site/packages/canvodpy/orchestrator.md) - Internals
+| Linux | Full support | Recommended |
+| macOS | Full support | Fully tested |
+| Windows | WSL only | Native not supported (reserved `aux` name) |
 
 ## Configuration
 
@@ -116,7 +95,11 @@ CDDIS_MAIL=your.email@example.com
 GNSS_ROOT_DIR=/path/to/your/data
 ```
 
-Without `.env`, canvodpy works in **ESA-only mode** (COD, GFZ, ESA products).
+Without `.env`, canvodpy operates in ESA-only mode (COD, GFZ, ESA products).
+
+## Documentation
+
+[Centralized documentation](../docs/index.md)
 
 ## Development
 
@@ -124,4 +107,4 @@ See the [main repository README](../README.md) for workspace development setup.
 
 ## License
 
-MIT License - see LICENSE file for details.
+Apache License 2.0

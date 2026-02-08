@@ -16,6 +16,10 @@ uv pip install canvod-grids
 from canvod.grids import ...
 ```
 
+## Documentation
+
+[Centralized documentation](../../docs/packages/grids/overview.md)
+
 ## Development
 
 See the [main repository README](../../README.md) for workspace development setup.

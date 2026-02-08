@@ -1,0 +1,27 @@
+{
+  "creators": [
+    {
+      "affiliation": "TU Wien, Department of Geodesy and Geoinformation",
+      "name": "Bader, Nicolas François",
+      "orcid": "0000-0002-9932-1925"
+    }
+  ],
+  "description": "canvodpy is a Python package for calculating Vegetation Optical Depth (VOD) from GNSS (Global Navigation Satellite System) signal-to-noise ratio (SNR) data. It provides tools for GNSS data reading, auxiliary data handling, grid operations, storage, visualization, and VOD calculation algorithms.\n",
+  "keywords": [
+    "GNSS",
+    "GPS",
+    "vegetation optical depth",
+    "VOD",
+    "remote sensing",
+    "geodesy",
+    "RINEX",
+    "signal-to-noise ratio",
+    "SNR"
+  ],
+  "license": {
+    "id": "Apache-2.0"
+  },
+  "publication_date": "2026-02-05",
+  "title": "canvodpy: GNSS Vegetation Optical Depth Analysis",
+  "version": "0.1.0"
+}

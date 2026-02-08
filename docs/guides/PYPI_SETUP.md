@@ -42,13 +42,13 @@ git tag v0.1.0 && git push --tags
 
 ---
 
-## Phase 1: TestPyPI Setup (COMPLETED ✅)
+## Phase 1: TestPyPI Setup (Completed)
 
-### Step 1: Create TestPyPI Account ✅
+### Step 1: Create TestPyPI Account (Done)
 
 Already done! Account created at https://test.pypi.org
 
-### Step 2: Manual First Publish ✅
+### Step 2: Manual First Publish (Done)
 
 Already completed with `twine upload --repository testpypi dist/*`
 
@@ -62,7 +62,7 @@ All 8 packages published:
 - https://test.pypi.org/project/canvod-vod/
 - https://test.pypi.org/project/canvodpy/
 
-### Step 3: Set Up OIDC Automation ✅
+### Step 3: Set Up OIDC Automation (Done)
 
 **3.1: Create GitHub Environment**
 
@@ -164,8 +164,8 @@ Uploading canvodpy-0.1.0-py3-none-any.whl
    - Click "Configure environment"
 
 4. **Add protection rules (optional):**
-   - ☑ Required reviewers: Add yourself
-   - ☑ Wait timer: 0 minutes (it's just testing)
+   - Required reviewers: Add yourself
+   - Wait timer: 0 minutes (it's just testing)
 
 5. **Save**
 
@@ -260,7 +260,7 @@ deactivate
 rm -rf test-env
 ```
 
-**If it works: 🎉 You're ready for real PyPI!**
+**If it works, you are ready for real PyPI.**
 
 ---
 
@@ -319,8 +319,8 @@ password: your_pypi_password
 1. **Settings → Environments → New**
 2. **Name:** `release`
 3. **Protection rules (IMPORTANT!):**
-   - ☑ Required reviewers: Add all maintainers
-   - ☑ Wait timer: 5 minutes (think before publishing!)
+   - Required reviewers: Add all maintainers
+   - Wait timer: 5 minutes (think before publishing)
 4. **Save**
 
 ### Step 11: Create Production Workflow
@@ -401,7 +401,7 @@ python -c "import canvodpy; print(canvodpy.__version__)"
 # Should print: 0.1.0
 ```
 
-**Celebrate! 🎉 Your package is now on PyPI!**
+**Your package is now on PyPI.**
 
 ---
 

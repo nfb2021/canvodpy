@@ -22,7 +22,7 @@
 [![CLIMERS @ TU Wien](https://img.shields.io/badge/CLIMERS-TU_Wien-006699)](https://www.tuwien.at/en/mg/geo/climers)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-GNSS Vegetation Optical Depth (VOD) analysis package - Modern monorepo architecture.
+GNSS Transmissometry (GNSS-T) analysis framework.
 
 > [!IMPORTANT]
 > This project uses `uv` for package management and `Just` for task automation.
@@ -31,7 +31,7 @@ GNSS Vegetation Optical Depth (VOD) analysis package - Modern monorepo architect
 
 ## Overview
 
-canVODpy is a modular ecosystem for GNSS-T-based vegetation optical depth analysis, organized as a monorepo with independent packages:
+canVODpy is a modular ecosystem for GNSS Transmissometry, organized as a monorepo with independent packages:
 
 - **canvod-readers** - RINEX and GNSS data format readers
 - **canvod-auxiliary** - Auxiliary data handling
@@ -69,7 +69,7 @@ This project requires two tools that need to be installed separately:
    brew install uv  # macOS
    ```
 
-2. **just** - Command runner (like make, but better)
+2. **just** - Command runner
    ```bash
    # macOS/Linux
    curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash
@@ -119,13 +119,11 @@ Common commands:
 
 ## Documentation
 
-- **[docs/guides/HOW_RELEASE_WORKS.md](docs/guides/HOW_RELEASE_WORKS.md)** - Complete guide to the release system
-- **[docs/guides/PYPI_SETUP.md](docs/guides/PYPI_SETUP.md)** - PyPI publishing setup
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
 - **[VERSIONING.md](VERSIONING.md)** - Versioning strategy
 - **[RELEASING.md](RELEASING.md)** - Release process
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
-- `just clean` - Clean build artifacts
-- `just docs` - Preview documentation
+- **[docs/guides/HOW_RELEASE_WORKS.md](docs/guides/HOW_RELEASE_WORKS.md)** - Release system internals
+- **[docs/guides/PYPI_SETUP.md](docs/guides/PYPI_SETUP.md)** - PyPI publishing setup
 
 ## Usage
 
@@ -154,17 +152,6 @@ canvodpy/                    # Monorepo root
 ├── .github/                # CI/CD workflows
 ├── docs/                   # Documentation
 └── pyproject.toml          # Workspace configuration
-```
-
-## Available Commands
-
-```bash
-just                # List all commands
-just check          # Lint + format + type check
-just test           # Run all tests
-just sync           # Install/update dependencies
-just clean          # Remove build artifacts
-just hooks          # Install pre-commit hooks
 ```
 
 ## Contributing

@@ -15,23 +15,23 @@ Part of the [canVODpy](https://github.com/nfb2021/canvodpy) ecosystem.
 
 ## Features
 
-✨ **SP3 File Handling**
+**SP3 File Handling**
 - Download from ESA or NASA CDDIS servers
 - Parse SP3 format (positions + velocities)
 - Cubic Hermite interpolation using velocities
 - Fallback to linear interpolation
 
-✨ **Clock Corrections**
+**Clock Corrections**
 - CLK file download and parsing
 - Jump-aware interpolation
 - Segment-based processing
 
-✨ **Flexible Pipeline**
+**Flexible Pipeline**
 - Automatic file discovery and caching
 - Thread-safe downloading
 - Configurable FTP servers and agencies
 
-✨ **Augmentation System**
+**Augmentation System**
 - Spherical coordinate calculation (φ, θ, r)
 - Clock correction application
 - Extensible via ABC pattern
@@ -105,12 +105,7 @@ interpolated = strategy.interpolate(sp3_dataset, target_epochs)
 
 ## Documentation
 
-📚 **[Full Documentation →](docs/index.md)**
-
-- [Installation Guide](docs/installation.md)
-- [Quick Start Tutorial](docs/quickstart.md)
-- [API Reference](docs/api-reference.md)
-- [Architecture Overview](docs/architecture.md)
+[Centralized documentation](../../docs/packages/auxiliary/overview.md)
 
 ## Package Structure
 
@@ -224,10 +219,10 @@ Part of the canVODpy ecosystem:
 If you use canvod-auxiliary in your research, please cite:
 
 ```bibtex
-@software{canvodpy2025,
+@software{canvodpy2026,
   author = {Bader, Nicolas F.},
-  title = {canVODpy: GNSS Vegetation Optical Depth Analysis},
-  year = {2025},
+  title = {canVODpy: GNSS Transmissometry Analysis},
+  year = {2026},
   publisher = {TU Wien},
   url = {https://github.com/nfb2021/canvodpy}
 }

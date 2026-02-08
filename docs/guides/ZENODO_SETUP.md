@@ -11,17 +11,17 @@ description: Make canvodpy citable with DOI for FAIR science
 
 ---
 
-## What Is Zenodo?
+## Zenodo
 
 [Zenodo](https://zenodo.org) is a research data repository operated by CERN:
 
-✅ **Free for open source**
-✅ **Automatic DOI** for each GitHub release
-✅ **Permanent archival** (CERN guarantees 20+ years)
-✅ **FAIR compliant** (Findable, Accessible, Interoperable, Reusable)
-✅ **Integrates with GitHub** (fully automated)
-✅ **Searchable** by researchers worldwide
-✅ **Version-specific DOIs** (each release gets unique DOI)
+- **Free for open source**
+- **Automatic DOI** for each GitHub release
+- **Permanent archival** (CERN guarantees 20+ years)
+- **FAIR compliant** (Findable, Accessible, Interoperable, Reusable)
+- **Integrates with GitHub** (fully automated)
+- **Searchable** by researchers worldwide
+- **Version-specific DOIs** (each release gets unique DOI)
 
 ---
 
@@ -62,15 +62,15 @@ Zenodo. https://doi.org/10.5281/zenodo.XXXXX
 
 ---
 
-## Step 1: Create CITATION.cff ✅ DONE
+## Step 1: Create CITATION.cff (Done)
 
 **File created:** `CITATION.cff`
 
 This enables:
-- ✅ "Cite this repository" button on GitHub
-- ✅ Machine-readable citation metadata
-- ✅ Export to BibTeX, APA, EndNote, etc.
-- ✅ Zenodo reads this for metadata
+- "Cite this repository" button on GitHub
+- Machine-readable citation metadata
+- Export to BibTeX, APA, EndNote, etc.
+- Zenodo reads this for metadata
 
 **TODO:** Add your ORCID iD to `CITATION.cff` (line 14)
 - Get ORCID: https://orcid.org/register
@@ -227,24 +227,24 @@ Researchers cite specific versions:
 
 ### Academic Recognition
 
-✅ **Citable software** = recognized academic output
-✅ **DOI** = trackable impact (who cites your work)
-✅ **ORCID integration** = links to your researcher profile
-✅ **Searchable** = increases discoverability
+- **Citable software** = recognized academic output
+- **DOI** = trackable impact (who cites your work)
+- **ORCID integration** = links to your researcher profile
+- **Searchable** = increases discoverability
 
 ### FAIR Compliance
 
-✅ **Findable:** DOI, Zenodo indexing, GitHub
-✅ **Accessible:** Open access, permanent archival
-✅ **Interoperable:** Standard metadata formats
-✅ **Reusable:** Clear license, version tracking
+- **Findable:** DOI, Zenodo indexing, GitHub
+- **Accessible:** Open access, permanent archival
+- **Interoperable:** Standard metadata formats
+- **Reusable:** Clear license, version tracking
 
 ### Professional Standards
 
-✅ **Permanent archival** (CERN guarantees preservation)
-✅ **Version tracking** (every release archived)
-✅ **Metadata standards** (Dublin Core, DataCite)
-✅ **Trusted repository** (used by CERN, NASA, ESA)
+- **Permanent archival** (CERN guarantees preservation)
+- **Version tracking** (every release archived)
+- **Metadata standards** (Dublin Core, DataCite)
+- **Trusted repository** (used by CERN, NASA, ESA)
 
 ---
 

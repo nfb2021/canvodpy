@@ -44,14 +44,14 @@ git commit -m "feat(readers): add RINEX 4.0 support"
 
 **Step 3: Hook validates or rejects**
 
-✅ **Valid commit - allowed:**
+**Valid commit - allowed:**
 ```
 feat(readers): add RINEX 4.0 support
 fix(vod): correct tau calculation
 docs: update installation guide
 ```
 
-❌ **Invalid commit - rejected:**
+**Invalid commit - rejected:**
 ```
 Added new feature
 WIP
@@ -239,12 +239,12 @@ just bump 0.2.0
 - canvod-readers: 1.2.0
 - canvod-vod: 0.5.3
 - canvod-store: 2.1.0
-- User installs... which versions work together? 😵
+- User installs... which versions work together?
 
 **Solution with unified versioning:**
 - All packages: 0.2.0
 - User installs canvodpy 0.2.0
-- All components guaranteed compatible ✅
+- All components guaranteed compatible
 
 ---
 
@@ -340,7 +340,7 @@ Developer                    GitHub Actions                 GitHub
 
 ## 5. PyPI Publishing Setup
 
-### What Is PyPI?
+### PyPI
 
 **PyPI** (Python Package Index) is where Python packages live.
 
@@ -399,25 +399,25 @@ python -c "import canvodpy; print(canvodpy.__version__)"
 
 ## 6. Trusted Publishing with OIDC
 
-### What Is OIDC?
+### OIDC
 
-**OIDC** = OpenID Connect = Modern authentication without passwords/tokens
+**OIDC** (OpenID Connect) provides authentication without passwords or API tokens.
 
 **Old way (API tokens):**
 ```
 GitHub Actions → API Token → PyPI
-❌ Token in GitHub Secrets (can leak)
-❌ Token expires
-❌ Manual rotation needed
+Token in GitHub Secrets (can leak)
+Token expires
+Manual rotation needed
 ```
 
 **New way (Trusted Publishing with OIDC):**
 ```
 GitHub Actions → OIDC JWT → PyPI
-✅ No tokens to store
-✅ Never expires
-✅ Cryptographically secure
-✅ GitHub identity proves it's really you
+No tokens to store
+Never expires
+Cryptographically secure
+GitHub identity proves it's really you
 ```
 
 ### How OIDC Works (Simplified)
@@ -433,7 +433,7 @@ GitHub Actions → OIDC JWT → PyPI
 3. **PyPI verifies JWT**
    - Checks signature (is it really from GitHub?)
    - Checks claims (is it the right repo?)
-   - Allows upload ✅
+   - Allows upload
 
 ### Setup Process (Detailed)
 
@@ -456,7 +456,7 @@ GitHub Actions → OIDC JWT → PyPI
 
 4. **Click "Add"**
 
-5. **That's it!** PyPI now trusts GitHub Actions from that repo/workflow.
+5. PyPI now trusts GitHub Actions from that repo/workflow.
 
 #### Part B: Create GitHub Workflow
 
@@ -503,8 +503,8 @@ jobs:
 2. **Name it:** `release` (must match workflow!)
 
 3. **Add protection rules (optional but recommended):**
-   - ✅ Required reviewers: Add yourself
-   - ✅ Wait timer: 5 minutes (think before publishing!)
+   - Required reviewers: Add yourself
+   - Wait timer: 5 minutes (think before publishing)
 
 4. **Save**
 
@@ -536,16 +536,16 @@ jobs:
 ### Security Benefits
 
 **Traditional API Tokens:**
-- ❌ Must be stored in GitHub Secrets
-- ❌ Can be leaked if workflow compromised
-- ❌ Have broad permissions
-- ❌ Need manual rotation
+- Must be stored in GitHub Secrets
+- Can be leaked if workflow compromised
+- Have broad permissions
+- Need manual rotation
 
 **OIDC Trusted Publishing:**
-- ✅ No secrets to store
-- ✅ JWT valid for ~10 minutes only
-- ✅ Scoped to specific repo + workflow
-- ✅ Automatic, no maintenance
+- No secrets to store
+- JWT valid for ~10 minutes only
+- Scoped to specific repo + workflow
+- Automatic, no maintenance
 
 ### Testing with TestPyPI
 
@@ -604,11 +604,11 @@ git push origin main
 just release 0.2.0
 
 # Output:
-✅ Tests passed
-📝 CHANGELOG.md updated
-🔄 Version bumped to 0.2.0
-🏷️  Tag v0.2.0 created
-✅ Release ready!
+Tests passed
+CHANGELOG.md updated
+Version bumped to 0.2.0
+Tag v0.2.0 created
+Release ready
 
 Next: git push && git push --tags
 ```
@@ -647,7 +647,7 @@ git push origin --tags
 **Step 7: Users Install**
 ```bash
 pip install canvodpy==0.2.0
-# Works! 🎉
+# Works
 ```
 
 ---
@@ -704,11 +704,11 @@ git commit --amend -m "fix(vod): correct tau calculation"
 
 You now have a **production-grade release system**:
 
-1. ✅ **Conventional commits** enforce standard format
-2. ✅ **Git-changelog** auto-generates CHANGELOG.md
-3. ✅ **Commitizen** manages unified versioning
-4. ✅ **GitHub Actions** automates releases
-5. ✅ **OIDC** enables secure PyPI publishing
+1. **Conventional commits** enforce standard format
+2. **Git-changelog** auto-generates CHANGELOG.md
+3. **Commitizen** manages unified versioning
+4. **GitHub Actions** automates releases
+5. **OIDC** enables secure PyPI publishing
 
 **Result:** One command creates a professional release!
 
@@ -716,4 +716,4 @@ You now have a **production-grade release system**:
 just release 0.2.0
 ```
 
-That's it! 🚀
+That's it.

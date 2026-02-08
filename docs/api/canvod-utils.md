@@ -1,15 +1,29 @@
-# canvod-utils API Reference
+# canvod.utils API Reference
 
-## Package
+Shared utilities: configuration management, date handling, and CLI tools.
 
-::: canvod.utils
-
-## Config
+## Configuration
 
 ::: canvod.utils.config
-
-::: canvod.utils.config.models
+    options:
+      members:
+        - load_config
+        - CanvodConfig
+        - MetadataConfig
+        - ProcessingConfig
+        - SiteConfig
+        - SitesConfig
+        - SidsConfig
 
 ## Tools
 
 ::: canvod.utils.tools
+    options:
+      members:
+        - YYYYDOY
+        - YYDOY
+        - get_gps_week_from_filename
+        - gpsweekday
+        - isfloat
+        - rinex_file_hash
+        - get_version_from_pyproject

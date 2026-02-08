@@ -9,22 +9,22 @@ description: Deep dive into how OIDC authentication works for PyPI publishing
 
 ---
 
-## The Traditional Way (API Tokens) ❌
+## The Traditional Way (API Tokens)
 
 ```
 You → Generate API token on PyPI → Store in GitHub Secrets → Workflow uses token
 ```
 
 **Problems:**
-- ❌ Long-lived tokens (months/years)
-- ❌ If GitHub is compromised, token leaks
-- ❌ Token has broad permissions (all packages)
-- ❌ Need manual rotation
-- ❌ Can be accidentally committed to git
+- Long-lived tokens (months/years)
+- If GitHub is compromised, token leaks
+- Token has broad permissions (all packages)
+- Need manual rotation
+- Can be accidentally committed to git
 
 ---
 
-## The OIDC Way (2026 Standard) ✅
+## The OIDC Way (2026 Standard)
 
 ### Overview
 
@@ -62,8 +62,8 @@ OIDC (OpenID Connect) is an authentication protocol built on OAuth 2.0. Instead 
 │     • environment: testpypi ✓                          │
 │     • package name: canvod-readers ✓                    │
 │                                                         │
-│ All match? → PUBLISH! 🎉                               │
-│ Mismatch?   → REJECT! ❌                               │
+│ All match? → PUBLISH                                    │
+│ Mismatch?   → REJECT                                    │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -149,7 +149,7 @@ PyPI receives the request and validates:
 ✓ Does the publisher have permission for this package?
 ```
 
-**All pass?** → Package published! 🎉
+**All pass?** → Package published.
 **Any fail?** → `403 Forbidden` with detailed error
 
 ---
@@ -195,12 +195,12 @@ Each trust relationship is scoped to:
 
 **Example attack prevention:**
 
-❌ Can't use JWT from different repo
-❌ Can't use JWT from different workflow
-❌ Can't use JWT from different environment
-❌ Can't publish to different package
-❌ Can't replay expired JWT
-❌ Can't modify JWT claims (signature breaks)
+- Can't use JWT from different repo
+- Can't use JWT from different workflow
+- Can't use JWT from different environment
+- Can't publish to different package
+- Can't replay expired JWT
+- Can't modify JWT claims (signature breaks)
 
 ### Audit Trail
 
@@ -314,7 +314,7 @@ Workflow: publish_testpypi.yml  # ← Note the underscore!
 
 You set up OIDC for `canvodpy` but forgot `canvod-readers`.
 
-**Result:** `canvodpy` publishes ✅, `canvod-readers` fails ❌
+**Result:** `canvodpy` publishes successfully, `canvod-readers` fails
 
 ---
 

@@ -1,0 +1,8 @@
+@misc{YourReferenceHere,
+author = {Bader, Nicolas François},
+doi = {10.5281/zenodo.18496234},
+month = {2},
+title = {canvodpy: GNSS Vegetation Optical Depth Analysis},
+url = {https://github.com/nfb2021/canvodpy},
+year = {2026}
+}

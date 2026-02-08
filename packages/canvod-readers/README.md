@@ -75,25 +75,8 @@ just check
 ## Documentation
 
 - Interactive examples: `docs/examples.py` (marimo notebook)
-- API documentation: See source code docstrings
-- Project documentation: See main canVODpy docs
+- [Centralized documentation](../../docs/packages/readers/overview.md)
 
 ## License
 
 Apache License 2.0
-
-## Installation
-
-```bash
-uv pip install canvod-readers
-```
-
-## Usage
-
-```python
-from canvod.readers import ...
-```
-
-## Development
-
-See the [main repository README](../../README.md) for workspace development setup.

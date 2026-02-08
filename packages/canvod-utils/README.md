@@ -158,6 +158,10 @@ def process(config: CanvodConfig):
     return processor.run(config)
 ```
 
+## Documentation
+
+[Centralized documentation](../../docs/packages/utils/overview.md)
+
 ## Development
 
 ```bash

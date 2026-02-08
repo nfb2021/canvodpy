@@ -41,8 +41,8 @@
   --ui-action-hover: var(--g5);
 
   /* Typography scale */
-  --base-font-size: 20px;
-  --base-line-height: 1.65;
+  --base-font-size: 16px;
+  --base-line-height: 1.6;
 }
 
 /* Dark mode tokens */
@@ -109,14 +109,21 @@ main{
   margin: 0 0 1rem 1.25rem;
 }
 
-/* Details/summary (Quick Start, Notes, etc.) */
+/* Details/summary */
 .md-typeset details{
-  font-size: 1.03rem;
+  font-size: 0.9rem;
 }
 
 .md-typeset details summary{
-  font-size: 1.15rem;
+  font-size: 0.95rem;
   font-weight: 600;
+}
+
+/* Sticky header — ensure header stays pinned on scroll */
+.md-header{
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 4 !important;
 }
 
 /* UI chrome: nav, header, sidebar, footer */
@@ -139,14 +146,14 @@ main{
 .md-footer__direction,
 .md-breadcrumbs,
 .md-breadcrumbs__link{
-  font-size: 1rem;
+  font-size: 0.8rem;
 }
 
-/* Slightly larger menu items for readability */
+/* Nav menu items */
 .md-nav__link,
 .md-tabs__link,
 .md-footer__link{
-  font-size: 1.05rem;
+  font-size: 0.85rem;
 }
 
 /* Headings */
@@ -156,13 +163,13 @@ h1,h2,h3,h4,h5,h6,
   letter-spacing: -0.01em;
 }
 
-/* Tame heading scale for API pages */
-.md-typeset h1{ font-size: 2.1rem; }
-.md-typeset h2{ font-size: 1.7rem; }
-.md-typeset h3{ font-size: 1.35rem; }
-.md-typeset h4{ font-size: 1.2rem; }
-.md-typeset h5{ font-size: 1.05rem; }
-.md-typeset h6{ font-size: 1rem; }
+/* Heading scale */
+.md-typeset h1{ font-size: 1.8rem; }
+.md-typeset h2{ font-size: 1.4rem; }
+.md-typeset h3{ font-size: 1.2rem; }
+.md-typeset h4{ font-size: 1.05rem; }
+.md-typeset h5{ font-size: 0.95rem; }
+.md-typeset h6{ font-size: 0.9rem; }
 
 /* If the theme injects pure-white text, normalize it */
 .md-typeset, .md-typeset p, .md-typeset li, .md-typeset td, .md-typeset th,
@@ -309,10 +316,10 @@ code, pre, kbd, samp{
 .md-typeset :not(pre) > code{
   background: color-mix(in srgb, var(--code-bg) 85%, transparent) !important;
   border: 1px solid color-mix(in srgb, var(--code-border) 75%, transparent) !important;
-  border-radius: 8px;
-  padding: 0.08rem 0.35rem;
+  border-radius: 6px;
+  padding: 0.1rem 0.3rem;
   color: var(--text) !important; /* force: no purple */
-  font-size: 1.05rem;
+  font-size: 0.85em;
 }
 
 /* Code blocks container */
@@ -320,11 +327,11 @@ pre, .highlight pre, .md-typeset pre{
   background: var(--code-bg) !important;
   border: 1px solid var(--code-border) !important;
   border-radius: var(--radius) !important;
-  padding: 0.9rem 1rem !important;
+  padding: 0.8rem 1rem !important;
   overflow-x: auto;
   box-shadow: none !important;
   color: var(--text) !important;
-  font-size: 1.05rem;
+  font-size: 0.85rem;
 }
 
 /* MkDocs Material wraps code like: pre > code.md-code__content > span#__span-x-y */
@@ -536,4 +543,87 @@ body{
   background: transparent !important;
   margin: 0 !important;
   border: 0 !important;
+}
+
+/* =========================================================
+   Landing page hero
+   ========================================================= */
+.hero{
+  text-align: center;
+  padding: 3rem 1rem 2rem;
+}
+
+.hero h1{
+  font-size: 2.8rem !important;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.5rem;
+}
+
+.hero p:first-of-type{
+  font-size: 1.15rem;
+  color: var(--muted);
+  margin-bottom: 1.5rem;
+}
+
+.hero .md-button{
+  display: inline-block;
+  margin: 0.3rem;
+  padding: 0.6rem 1.4rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none !important;
+  border: 2px solid var(--link);
+  color: var(--text) !important;
+  transition: all 0.15s ease;
+}
+
+.hero .md-button--primary{
+  background: var(--link);
+  color: var(--bg) !important;
+}
+
+.hero .md-button:hover{
+  background: var(--link-hover);
+  border-color: var(--link-hover);
+  color: var(--bg) !important;
+}
+
+/* Badges row */
+.hero p:has(a > img){
+  margin-bottom: 1.5rem;
+}
+
+/* =========================================================
+   Mermaid diagram styling
+   ========================================================= */
+.mermaid{
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+/* Theme the mermaid diagrams with our palette */
+.mermaid .node rect,
+.mermaid .node polygon,
+.mermaid .node circle{
+  fill: var(--surface) !important;
+  stroke: var(--border) !important;
+}
+
+.mermaid .edgePath .path{
+  stroke: var(--muted) !important;
+}
+
+.mermaid .edgeLabel{
+  background: var(--bg) !important;
+  color: var(--text) !important;
+}
+
+.mermaid text,
+.mermaid .nodeLabel,
+.mermaid .label{
+  color: var(--text) !important;
+  fill: var(--text) !important;
+  font-family: "Space Grotesk", system-ui, sans-serif !important;
 }
