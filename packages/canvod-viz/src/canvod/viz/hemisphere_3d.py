@@ -130,9 +130,7 @@ class HemisphereVisualizer3D:
                 data, colorscale, opacity, show_colorbar
             )
         elif grid_type == "healpix":
-            trace = self._render_healpix_cells(
-                data, colorscale, opacity, show_colorbar
-            )
+            trace = self._render_healpix_cells(data, colorscale, opacity, show_colorbar)
         elif grid_type == "fibonacci":
             trace = self._render_fibonacci_cells(
                 data, colorscale, opacity, show_colorbar
