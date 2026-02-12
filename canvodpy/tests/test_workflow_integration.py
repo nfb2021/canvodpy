@@ -2,7 +2,10 @@
 Integration tests for VODWorkflow.
 
 Tests workflow orchestration, factory integration, and logging.
+Uses a mock Site to avoid filesystem dependencies (external drives, store paths).
 """
+
+from unittest.mock import patch
 
 import pytest
 from canvodpy.factories import GridFactory, ReaderFactory
@@ -10,51 +13,47 @@ from canvodpy.factories import GridFactory, ReaderFactory
 from canvodpy import VODWorkflow
 
 
+class _FakeSite:
+    """Minimal stand-in for :class:`canvodpy.api.Site` (no I/O)."""
+
+    def __init__(self, name: str = "Rosalia"):
+        self.name = name
+
+
+def _make_workflow(**kwargs) -> VODWorkflow:
+    """Create a VODWorkflow with a fake Site (no I/O)."""
+    return VODWorkflow(site=_FakeSite(), **kwargs)
+
+
 class TestWorkflowInitialization:
     """Test VODWorkflow initialization."""
 
-    def test_workflow_creates_with_site_name(self):
-        """Should create workflow from site name."""
-        # Note: Requires Rosalia in config
-        try:
-            workflow = VODWorkflow(site="Rosalia")
-            assert workflow.site.name == "Rosalia"
-        except Exception as e:
-            pytest.skip(f"Site not configured: {e}")
-
     def test_workflow_creates_with_site_object(self):
-        """Should create workflow from Site object."""
-        from canvodpy import Site
+        """Should create workflow from a Site-like object."""
+        workflow = _make_workflow()
+        assert workflow.site.name == "Rosalia"
 
-        try:
-            site = Site("Rosalia")
-            workflow = VODWorkflow(site=site)
-            assert workflow.site.name == "Rosalia"
-        except Exception as e:
-            pytest.skip(f"Site not configured: {e}")
+    def test_workflow_creates_with_site_name(self):
+        """Should create workflow from site name string."""
+        with patch("canvodpy.workflow.Site", side_effect=lambda n: _FakeSite(n)):
+            workflow = VODWorkflow(site="Rosalia")
+        assert workflow.site.name == "Rosalia"
 
     def test_workflow_uses_default_components(self):
         """Should use default component names."""
-        try:
-            workflow = VODWorkflow(site="Rosalia")
-            assert workflow.reader_name == "rinex3"
-            assert workflow.grid_name == "equal_area"
-            assert workflow.vod_calculator_name == "tau_omega"
-        except Exception as e:
-            pytest.skip(f"Site not configured: {e}")
+        workflow = _make_workflow()
+        assert workflow.reader_name == "rinex3"
+        assert workflow.grid_name == "equal_area"
+        assert workflow.vod_calculator_name == "tau_omega"
 
     def test_workflow_accepts_custom_components(self):
         """Should accept custom component names."""
-        try:
-            workflow = VODWorkflow(
-                site="Rosalia",
-                reader="rinex3",
-                grid="equal_area",
-                vod_calculator="tau_omega",
-            )
-            assert workflow.reader_name == "rinex3"
-        except Exception as e:
-            pytest.skip(f"Site not configured: {e}")
+        workflow = _make_workflow(
+            reader="rinex3",
+            grid="equal_area",
+            vod_calculator="tau_omega",
+        )
+        assert workflow.reader_name == "rinex3"
 
 
 class TestWorkflowGridCreation:
@@ -62,35 +61,23 @@ class TestWorkflowGridCreation:
 
     def test_workflow_creates_grid(self):
         """Should create and cache grid on init."""
-        try:
-            workflow = VODWorkflow(site="Rosalia")
-            assert workflow.grid is not None
-            assert hasattr(workflow.grid, "ncells")
-            assert workflow.grid.ncells > 0
-        except Exception as e:
-            pytest.skip(f"Site not configured: {e}")
+        workflow = _make_workflow()
+        assert workflow.grid is not None
+        assert hasattr(workflow.grid, "ncells")
+        assert workflow.grid.ncells > 0
 
     def test_workflow_grid_with_custom_params(self):
         """Should pass custom parameters to grid."""
-        try:
-            workflow = VODWorkflow(
-                site="Rosalia",
-                grid_params={"angular_resolution": 5.0},
-            )
-            # 5° resolution should have more cells than 10° default
-            assert workflow.grid.ncells > 240
-        except Exception as e:
-            pytest.skip(f"Site not configured: {e}")
+        workflow = _make_workflow(grid_params={"angular_resolution": 5.0})
+        # 5deg resolution should have more cells than 10deg default
+        assert workflow.grid.ncells > 240
 
     def test_workflow_grid_is_built(self):
         """Grid should be built (not builder) on init."""
-        try:
-            workflow = VODWorkflow(site="Rosalia")
-            # Should be GridData, not GridBuilder
-            assert not hasattr(workflow.grid, "build")
-            assert hasattr(workflow.grid, "ncells")
-        except Exception as e:
-            pytest.skip(f"Site not configured: {e}")
+        workflow = _make_workflow()
+        # Should be GridData, not GridBuilder
+        assert not hasattr(workflow.grid, "build")
+        assert hasattr(workflow.grid, "ncells")
 
 
 class TestWorkflowLogging:
@@ -98,22 +85,14 @@ class TestWorkflowLogging:
 
     def test_workflow_has_logger(self):
         """Should have structured logger."""
-        try:
-            workflow = VODWorkflow(site="Rosalia")
-            assert hasattr(workflow, "log")
-            assert hasattr(workflow.log, "info")
-        except Exception as e:
-            pytest.skip(f"Site not configured: {e}")
+        workflow = _make_workflow()
+        assert hasattr(workflow, "log")
+        assert hasattr(workflow.log, "info")
 
     def test_workflow_logger_has_site_context(self):
         """Logger should be bound to site context."""
-        try:
-            workflow = VODWorkflow(site="Rosalia")
-            # Logger should be bound, but checking internal state
-            # is implementation-dependent
-            assert workflow.log is not None
-        except Exception as e:
-            pytest.skip(f"Site not configured: {e}")
+        workflow = _make_workflow()
+        assert workflow.log is not None
 
 
 class TestWorkflowRepr:
@@ -121,15 +100,12 @@ class TestWorkflowRepr:
 
     def test_workflow_repr(self):
         """Should have informative __repr__."""
-        try:
-            workflow = VODWorkflow(site="Rosalia")
-            repr_str = repr(workflow)
-            assert "VODWorkflow" in repr_str
-            assert "Rosalia" in repr_str
-            assert "equal_area" in repr_str
-            assert "rinex3" in repr_str
-        except Exception as e:
-            pytest.skip(f"Site not configured: {e}")
+        workflow = _make_workflow()
+        repr_str = repr(workflow)
+        assert "VODWorkflow" in repr_str
+        assert "Rosalia" in repr_str
+        assert "equal_area" in repr_str
+        assert "rinex3" in repr_str
 
 
 class TestWorkflowFactoryIntegration:
@@ -137,13 +113,9 @@ class TestWorkflowFactoryIntegration:
 
     def test_workflow_uses_grid_factory(self):
         """Should create grid via GridFactory."""
-        try:
-            workflow = VODWorkflow(site="Rosalia")
-            # Grid should be created via factory
-            available = GridFactory.list_available()
-            assert workflow.grid_name in available
-        except Exception as e:
-            pytest.skip(f"Site not configured: {e}")
+        workflow = _make_workflow()
+        available = GridFactory.list_available()
+        assert workflow.grid_name in available
 
     def test_workflow_respects_factory_registration(self):
         """Should use registered factories."""
@@ -155,47 +127,30 @@ class TestWorkflowErrorHandling:
     """Test workflow error handling."""
 
     def test_workflow_invalid_site_fails(self):
-        """Should fail gracefully with invalid site."""
-        # This test validates invalid site error - but requires config to exist
-        # If config doesn't exist, FileNotFoundError comes before the site
-        # validation, so we skip
-        try:
-            # Try to create a workflow to check if config exists
-            from canvodpy import Site
+        """Should fail gracefully with invalid site name."""
+        from canvodpy.research_sites_config import RESEARCH_SITES
 
-            _ = Site("Rosalia")  # Will raise if config missing
-        except FileNotFoundError as e:
-            pytest.skip(f"Site not configured: {e}")
-            return
+        assert "NonexistentSite123" not in RESEARCH_SITES
 
-        # Now test that invalid site fails appropriately
-        with pytest.raises(Exception, match=r"NonexistentSite123|not found"):
-            VODWorkflow(site="NonexistentSite123")
+        # VODWorkflow passes the string to Site(), which calls GnssResearchSite()
+        # which raises KeyError for unknown sites. Mock Site to simulate this.
+        with patch(
+            "canvodpy.workflow.Site",
+            side_effect=KeyError("NonexistentSite123"),
+        ):
+            with pytest.raises(KeyError, match="NonexistentSite123"):
+                VODWorkflow(site="NonexistentSite123")
 
     def test_workflow_invalid_grid_type_fails(self):
         """Should fail with invalid grid type."""
-        # This test validates invalid grid error - but requires Site config
-        # If config doesn't exist, FileNotFoundError comes before grid
-        # validation, so we skip
-        try:
-            # Try to create a workflow to check if config exists
-            from canvodpy import Site
-
-            _ = Site("Rosalia")  # Will raise if config missing
-        except FileNotFoundError as e:
-            pytest.skip(f"Site not configured: {e}")
-            return
-
-        # Now test that invalid grid type fails appropriately
         with pytest.raises(ValueError, match="nonexistent_grid"):
-            VODWorkflow(site="Rosalia", grid="nonexistent_grid")
+            _make_workflow(grid="nonexistent_grid")
 
     def test_workflow_invalid_reader_fails(self):
         """Should fail with invalid reader type during creation."""
         # Invalid reader is only caught when factory.create() is called
         # This happens during process_date(), not during __init__
-        # Since this requires integration testing, we'll just verify
-        # that invalid readers aren't in the registry
+        # Verify that invalid readers aren't in the registry
         assert "nonexistent_reader" not in ReaderFactory.list_available()
 
 

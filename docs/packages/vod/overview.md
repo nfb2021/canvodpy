@@ -15,17 +15,53 @@ The zeroth-order model assumes:
 
 ## Usage
 
-```python
-from canvod.vod import VODCalculator
+### Direct instantiation
 
-calculator = VODCalculator(canopy_ds, reference_ds)
-vod_result = calculator.compute()
+```python
+from canvod.vod import TauOmegaZerothOrder
+
+calculator = TauOmegaZerothOrder(canopy_ds=canopy_ds, sky_ds=sky_ds)
+vod_result = calculator.calculate_vod()
+```
+
+### From aligned datasets
+
+```python
+from canvod.vod import TauOmegaZerothOrder
+
+vod_result = TauOmegaZerothOrder.from_datasets(
+    canopy_ds=canopy_ds,
+    sky_ds=sky_ds,
+    align=True,
+)
+```
+
+### From Icechunk store
+
+```python
+from canvod.vod import TauOmegaZerothOrder
+
+vod_result = TauOmegaZerothOrder.from_icechunkstore(
+    icechunk_store_pth="path/to/store",
+    canopy_group="canopy_01",
+    sky_group="reference_01",
+)
 ```
 
 The calculator requires:
-- **Canopy dataset**: RINEX observations from a receiver beneath vegetation
-- **Reference dataset**: RINEX observations from a nearby open-sky receiver
-- Both datasets must be augmented with spherical coordinates (from canvod-auxiliary) and assigned to grid cells (from canvod-grids)
+
+- **Canopy dataset** (`canopy_ds`): RINEX observations from a receiver beneath vegetation
+- **Sky dataset** (`sky_ds`): RINEX observations from a nearby open-sky receiver
+- Both datasets must contain an `SNR` data variable
+- Both datasets should be augmented with spherical coordinates (from canvod-auxiliary) and assigned to grid cells (from canvod-grids)
+
+## Output
+
+`calculate_vod()` returns an `xr.Dataset` containing:
+
+- `VOD` — vegetation optical depth values
+- `phi` — azimuth angles (from canopy dataset)
+- `theta` — polar angles from zenith (from canopy dataset)
 
 ## References
 

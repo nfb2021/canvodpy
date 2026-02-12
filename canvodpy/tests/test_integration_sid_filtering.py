@@ -8,15 +8,19 @@ from pathlib import Path
 
 import pytest
 
-# Check if config files exist
+# Check if config files and store paths are available
 CONFIG_DIR = Path.cwd() / "config"
 HAS_CONFIG = (CONFIG_DIR / "sites.yaml").exists()
+
+# Store root from processing.yaml — guard against missing external drives
+_STORE_ROOT = Path("/Volumes/SanDisk/GNSS/ComparedStores/canvodpy_new_API")
+HAS_STORE = _STORE_ROOT.exists()
 
 
 @pytest.mark.integration
 @pytest.mark.skipif(
-    not HAS_CONFIG,
-    reason="Integration test requires config files (not available in CI)",
+    not (HAS_CONFIG and HAS_STORE),
+    reason="Integration test requires config files and store directory",
 )
 def test_sid_filtering_integration():
     """Test SID filtering with full orchestrator."""

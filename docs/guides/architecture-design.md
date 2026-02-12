@@ -125,15 +125,66 @@ ReaderFactory.register("mylab_v1", MyLabReader)
 
 ## Unified API Surface
 
-The umbrella package provides simplified top-level functions:
+canvodpy provides four API levels, all accessing the same underlying packages:
+
+### Level 1 — Convenience Functions
 
 ```python
-# Direct package access
-from canvod.readers import Rnxv3Obs
+from canvodpy import process_date, calculate_vod
 
-# Or simplified API
-from canvodpy import read_rinex
-data = read_rinex(file_path, date)
+data = process_date("Rosalia", "2025001")
+vod  = calculate_vod("Rosalia", "canopy_01", "reference_01", "2025001")
+```
+
+### Level 2 — Fluent Workflow (Deferred Execution)
+
+Steps are recorded but not executed until a terminal method is called.
+Powered by `@step` and `@terminal` decorators.
+
+```python
+import canvodpy
+
+result = (canvodpy.workflow("Rosalia")
+    .read("2025001")
+    .preprocess()
+    .grid("equal_area", angular_resolution=5.0)
+    .vod("canopy_01", "reference_01")
+    .result())
+
+# Preview without executing:
+plan = canvodpy.workflow("Rosalia").read("2025001").preprocess().explain()
+```
+
+The `@step` decorator appends `(method, args, kwargs)` to an internal plan
+list and returns `self` for chaining. The `@terminal` decorator replays all
+recorded steps, clears the plan, then runs the terminal method.
+
+### Level 3 — VODWorkflow (Eager Execution)
+
+```python
+from canvodpy import VODWorkflow
+
+wf = VODWorkflow(site="Rosalia", grid="equal_area")
+datasets = wf.process_date("2025001")
+vod = wf.calculate_vod("canopy_01", "reference_01", "2025001")
+```
+
+### Level 4 — Functional API
+
+```python
+from canvodpy import read_rinex, create_grid, assign_grid_cells
+
+ds   = read_rinex(path, reader="rinex3")
+grid = create_grid(grid_type="equal_area", angular_resolution=5.0)
+ds   = assign_grid_cells(ds, grid)
+```
+
+### Direct Package Access
+
+```python
+from canvod.readers import Rnxv3Obs
+from canvod.grids import EqualAreaBuilder
+from canvod.vod import VODCalculator
 ```
 
 ## Configuration Management

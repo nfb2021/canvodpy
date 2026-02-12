@@ -185,15 +185,16 @@ class HemisphereVisualizer2D:
 
         grid_type = self.grid.grid_type.lower()
 
-        if "equal_area" in grid_type or "rectangular" in grid_type:
+        _rectangular_types = {"equal_area", "equal_angle", "equirectangular"}
+        if grid_type in _rectangular_types:
             patches, indices = self._extract_rectangular_patches()
-        elif "htm" in grid_type:
+        elif grid_type == "htm":
             patches, indices = self._extract_htm_patches()
-        elif "geodesic" in grid_type:
+        elif grid_type == "geodesic":
             patches, indices = self._extract_geodesic_patches()
-        elif "healpix" in grid_type:
+        elif grid_type == "healpix":
             patches, indices = self._extract_healpix_patches()
-        elif "fibonacci" in grid_type:
+        elif grid_type == "fibonacci":
             patches, indices = self._extract_fibonacci_patches()
         else:
             raise ValueError(f"Unsupported grid type: {grid_type}")
@@ -288,92 +289,134 @@ class HemisphereVisualizer2D:
         return patches, np.array(cell_indices)
 
     def _extract_geodesic_patches(self) -> tuple[list[Polygon], np.ndarray]:
-        """Extract patches from geodesic grid."""
+        """Extract triangular patches from geodesic grid.
+
+        The ``geodesic_vertices`` column stores vertex **indices** into the
+        shared ``grid.vertices`` coordinate array (shape ``(n_vertices, 3)``).
+        """
         patches = []
         cell_indices = []
 
         grid_df = self.grid.grid
+        shared_vertices = self.grid.vertices  # (n_vertices, 3) or None
 
-        # Check if grid has geodesic vertex data
-        if "geodesic_vertices" in grid_df.columns:
-            # Vertices stored as list/array in grid
-            for idx, row in enumerate(grid_df.iter_rows(named=True)):
-                try:
-                    vertices_3d = np.array(row["geodesic_vertices"], dtype=float)
+        if shared_vertices is None or "geodesic_vertices" not in grid_df.columns:
+            # No vertex data — fall back to bounding-box rectangles
+            return self._extract_rectangular_patches()
 
-                    if len(vertices_3d) < 3:
-                        continue
-
-                    x, y, z = vertices_3d[:, 0], vertices_3d[:, 1], vertices_3d[:, 2]
-
-                    # Convert to spherical
-                    r = np.sqrt(x**2 + y**2 + z**2)
-                    theta = np.arccos(np.clip(z / r, -1, 1))
-                    phi = np.arctan2(y, x)
-                    phi = np.mod(phi, 2 * np.pi)
-
-                    # Skip if beyond hemisphere
-                    if np.all(theta > np.pi / 2):
-                        continue
-
-                    # Convert theta to rho
-                    rho = np.sin(theta)
-
-                    vertices_2d = np.column_stack([phi, rho])
-                    patches.append(Polygon(vertices_2d, closed=True))
-                    cell_indices.append(idx)
-
-                except (KeyError, TypeError, ValueError):
+        for idx, row in enumerate(grid_df.iter_rows(named=True)):
+            try:
+                v_indices = np.array(row["geodesic_vertices"], dtype=int)
+                if len(v_indices) < 3:
                     continue
 
-        elif self.grid.vertices is not None:
-            # Separate vertices DataFrame (from GridData)
-            vertices_3d = self.grid.vertices
-            n_cells = len(grid_df)
+                # Look up actual 3D coordinates from shared vertex array
+                verts_3d = shared_vertices[v_indices]  # (3, 3)
+                x, y, z = verts_3d[:, 0], verts_3d[:, 1], verts_3d[:, 2]
 
-            # Assume vertices are arranged per cell
-            # This is a simplified approach - adjust based on actual storage
-            for cell_id in range(n_cells):
-                try:
-                    # Extract cell vertices (implementation depends on vertex storage)
-                    # This is a placeholder - needs actual implementation
-                    cell_verts_3d = vertices_3d[cell_id * 3 : (cell_id + 1) * 3]
+                r = np.sqrt(x**2 + y**2 + z**2)
+                theta = np.arccos(np.clip(z / r, -1, 1))
+                phi = np.arctan2(y, x)
+                phi = np.mod(phi, 2 * np.pi)
 
-                    if len(cell_verts_3d) < 3:
-                        continue
-
-                    x, y, z = (
-                        cell_verts_3d[:, 0],
-                        cell_verts_3d[:, 1],
-                        cell_verts_3d[:, 2],
-                    )
-                    r = np.sqrt(x**2 + y**2 + z**2)
-                    theta = np.arccos(np.clip(z / r, -1, 1))
-                    phi = np.arctan2(y, x)
-                    phi = np.mod(phi, 2 * np.pi)
-
-                    rho = np.sin(theta)
-                    vertices_2d = np.column_stack([phi, rho])
-                    patches.append(Polygon(vertices_2d, closed=True))
-                    cell_indices.append(cell_id)
-
-                except (IndexError, ValueError):
+                if np.all(theta > np.pi / 2):
                     continue
-        else:
-            # Fallback: use HTM-like approach if no vertex data
-            return self._extract_htm_patches()
+
+                rho = np.sin(theta)
+                vertices_2d = np.column_stack([phi, rho])
+                patches.append(Polygon(vertices_2d, closed=True))
+                cell_indices.append(idx)
+
+            except (IndexError, KeyError, TypeError, ValueError):
+                continue
 
         return patches, np.array(cell_indices)
 
     def _extract_healpix_patches(self) -> tuple[list[Polygon], np.ndarray]:
-        """Extract patches from HEALPix grid (placeholder)."""
-        # HEALPix requires special handling
-        raise NotImplementedError("HEALPix 2D visualization not yet implemented")
+        """Extract patches from HEALPix grid via ``healpy.boundaries``."""
+        try:
+            import healpy as hp
+        except ImportError:
+            raise ImportError(
+                "healpy is required for HEALPix 2D visualization. "
+                "Install with: pip install healpy"
+            )
+
+        patches = []
+        cell_indices = []
+        grid_df = self.grid.grid
+        nside = int(grid_df["healpix_nside"][0])
+
+        for idx, row in enumerate(grid_df.iter_rows(named=True)):
+            ipix = int(row["healpix_ipix"])
+            # boundaries returns shape (3, n_vertices) in Cartesian
+            boundary = hp.boundaries(nside, ipix, step=4)
+            x, y, z = boundary[0], boundary[1], boundary[2]
+
+            # Skip pixels entirely below horizon
+            if np.all(z < -0.01):
+                continue
+
+            r = np.sqrt(x**2 + y**2 + z**2)
+            theta = np.arccos(np.clip(z / r, -1, 1))
+            phi = np.arctan2(y, x)
+            phi = np.mod(phi, 2 * np.pi)
+
+            # Keep only vertices in upper hemisphere
+            mask = theta <= np.pi / 2 + 0.01
+            if not np.any(mask):
+                continue
+
+            rho = np.sin(theta)
+            vertices_2d = np.column_stack([phi, rho])
+            patches.append(Polygon(vertices_2d, closed=True))
+            cell_indices.append(idx)
+
+        return patches, np.array(cell_indices)
 
     def _extract_fibonacci_patches(self) -> tuple[list[Polygon], np.ndarray]:
-        """Extract patches from Fibonacci grid (placeholder)."""
-        # Fibonacci grid uses point-based representation
-        raise NotImplementedError("Fibonacci 2D visualization not yet implemented")
+        """Extract patches from Fibonacci grid using Voronoi regions."""
+        patches = []
+        cell_indices = []
+        grid_df = self.grid.grid
+        voronoi = self.grid.voronoi  # scipy.spatial.SphericalVoronoi or None
+
+        if voronoi is None or "voronoi_region" not in grid_df.columns:
+            # No Voronoi data — fall back to bounding-box rectangles
+            return self._extract_rectangular_patches()
+
+        for idx, row in enumerate(grid_df.iter_rows(named=True)):
+            try:
+                region_indices = row["voronoi_region"]
+                if region_indices is None or len(region_indices) < 3:
+                    continue
+
+                verts_3d = voronoi.vertices[region_indices]
+                x, y, z = verts_3d[:, 0], verts_3d[:, 1], verts_3d[:, 2]
+
+                # Skip cells entirely below horizon
+                if np.all(z < -0.01):
+                    continue
+
+                r = np.sqrt(x**2 + y**2 + z**2)
+                theta = np.arccos(np.clip(z / r, -1, 1))
+                phi = np.arctan2(y, x)
+                phi = np.mod(phi, 2 * np.pi)
+
+                # Sort vertices by azimuth to form a proper polygon
+                order = np.argsort(phi)
+                phi = phi[order]
+                theta = theta[order]
+
+                rho = np.sin(theta)
+                vertices_2d = np.column_stack([phi, rho])
+                patches.append(Polygon(vertices_2d, closed=True))
+                cell_indices.append(idx)
+
+            except (IndexError, KeyError, TypeError, ValueError):
+                continue
+
+        return patches, np.array(cell_indices)
 
     def _map_data_to_patches(
         self,

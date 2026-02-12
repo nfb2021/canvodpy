@@ -25,7 +25,7 @@ class EquirectangularBuilder(BaseGridBuilder):
 
     Coordinate convention (physics / GNSS)
     ---------------------------------------
-    * phi  ∈ [0, 2π)  – azimuthal angle from East, counter-clockwise
+    * phi  ∈ [0, 2π)  – azimuthal angle from North, clockwise (navigation convention)
     * theta ∈ [0, π/2] – polar angle from zenith (0 = straight up,
       π/2 = horizon)
 

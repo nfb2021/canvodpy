@@ -23,7 +23,7 @@
 [![CLIMERS @ TU Wien](https://img.shields.io/badge/CLIMERS-TU_Wien-006699)](https://www.tuwien.at/en/mg/geo/climers)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-GNSS Transmissometry (GNSS-T) analysis framework.
+canVODpy aims to become the central ecosystem to process, obtain and analyze GNSS Transmissometry (GNSS-T) derived canopy VOD, implemented in python.
 
 > [!IMPORTANT]
 > This project uses `uv` for package management and `Just` for task automation.

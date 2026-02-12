@@ -143,9 +143,9 @@ def create_hemigrid(
 
     Notes
     -----
-    Grid coordinates use standard spherical convention:
-    - phi: azimuth angle, 0 to 2π (0 = East, π/2 = North)
-    - theta: elevation angle, 0 to π/2 (0 = zenith, π/2 = horizon)
+    Grid coordinates use navigation convention:
+    - phi: azimuth angle, 0 to 2π (0 = North, π/2 = East, clockwise)
+    - theta: polar angle from zenith, 0 to π/2 (0 = zenith, π/2 = horizon)
 
     """
     grid_type_lower = grid_type.lower()

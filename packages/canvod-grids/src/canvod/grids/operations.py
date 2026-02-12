@@ -381,14 +381,31 @@ def _extract_rectangular_vertices(
 def _extract_geodesic_vertices(
     grid: GridData,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Extract vertices from geodesic grid (cell centres as proxy)."""
+    """Extract vertices from geodesic grid triangles.
+
+    Uses the shared vertex array and per-cell index column to return
+    actual triangle vertices.  Falls back to cell centres if the shared
+    vertex data is unavailable.
+    """
+    shared = grid.vertices  # (n_vertices, 3) from extra_kwargs
+    if shared is not None and "geodesic_vertices" in grid.grid.columns:
+        all_x, all_y, all_z = [], [], []
+        for row in grid.grid.iter_rows(named=True):
+            v_indices = np.array(row["geodesic_vertices"], dtype=int)
+            for vi in v_indices:
+                v = shared[vi]
+                if v[2] >= -0.01:
+                    all_x.append(v[0])
+                    all_y.append(v[1])
+                    all_z.append(max(v[2], 0.0))
+        return np.array(all_x), np.array(all_y), np.array(all_z)
+
+    # Fallback: cell centres
     phi_vals = grid.grid["phi"].to_numpy()
     theta_vals = grid.grid["theta"].to_numpy()
-
     x = np.sin(theta_vals) * np.cos(phi_vals)
     y = np.sin(theta_vals) * np.sin(phi_vals)
     z = np.cos(theta_vals)
-
     return x, y, z
 
 
@@ -422,14 +439,33 @@ def _extract_healpix_vertices(
 def _extract_fibonacci_vertices(
     grid: GridData,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Extract vertices from Fibonacci grid (point-based, centres only)."""
+    """Extract vertices from Fibonacci grid Voronoi regions.
+
+    Uses per-cell ``voronoi_region`` indices and the
+    :class:`~scipy.spatial.SphericalVoronoi` stored on *grid*.
+    Falls back to cell centres if Voronoi data is unavailable.
+    """
+    voronoi = grid.voronoi
+    if voronoi is not None and "voronoi_region" in grid.grid.columns:
+        all_x, all_y, all_z = [], [], []
+        for row in grid.grid.iter_rows(named=True):
+            region = row["voronoi_region"]
+            if region is None:
+                continue
+            verts = voronoi.vertices[np.array(region, dtype=int)]
+            for v in verts:
+                if v[2] >= -0.01:
+                    all_x.append(v[0])
+                    all_y.append(v[1])
+                    all_z.append(max(v[2], 0.0))
+        return np.array(all_x), np.array(all_y), np.array(all_z)
+
+    # Fallback: cell centres
     phi_vals = grid.grid["phi"].to_numpy()
     theta_vals = grid.grid["theta"].to_numpy()
-
     x = np.sin(theta_vals) * np.cos(phi_vals)
     y = np.sin(theta_vals) * np.sin(phi_vals)
     z = np.cos(theta_vals)
-
     return x, y, z
 
 

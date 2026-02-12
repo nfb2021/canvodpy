@@ -103,6 +103,36 @@ from canvodpy.research_sites_config import DEFAULT_RESEARCH_SITE, RESEARCH_SITES
 # New workflow API
 from canvodpy.workflow import VODWorkflow
 
+# Fluent workflow API (deferred execution)
+from canvodpy.fluent import FluentWorkflow
+
+
+def workflow(site: str, **kwargs) -> FluentWorkflow:
+    """Create a fluent workflow with deferred execution.
+
+    Parameters
+    ----------
+    site : str
+        Site name (e.g. ``"Rosalia"``).
+    **kwargs
+        Forwarded to :class:`FluentWorkflow`.
+
+    Returns
+    -------
+    FluentWorkflow
+
+    Examples
+    --------
+    >>> import canvodpy
+    >>> result = (canvodpy.workflow("Rosalia")
+    ...     .read("2025001")
+    ...     .preprocess()
+    ...     .grid()
+    ...     .vod("canopy_01", "reference_01")
+    ...     .result())
+    """
+    return FluentWorkflow(site, **kwargs)
+
 # ============================================================================
 # Level 3 API: Re-export subpackages for advanced users
 # ============================================================================
@@ -153,6 +183,9 @@ __all__ = [  # noqa: RUF022
     "preview_processing",
     # New workflow API
     "VODWorkflow",
+    # Fluent workflow API
+    "FluentWorkflow",
+    "workflow",
     # Functional API (notebooks & Airflow)
     "read_rinex",
     "read_rinex_to_file",

@@ -138,7 +138,7 @@ class GridData:
 
     def _compute_geodesic_solid_angles(self) -> np.ndarray:
         """Compute solid angles for geodesic triangular cells."""
-        vertices = (self.metadata or {}).get("vertices")
+        vertices = self.vertices
         if vertices is None:
             return self._geometric_solid_angles()
 

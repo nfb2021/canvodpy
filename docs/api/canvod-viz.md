@@ -10,10 +10,17 @@
         - HemisphereVisualizer
         - HemisphereVisualizer2D
         - HemisphereVisualizer3D
+        - visualize_grid
+        - visualize_grid_3d
+        - add_tissot_indicatrix
         - PlotStyle
         - PolarPlotStyle
         - create_publication_style
         - create_interactive_style
+
+## Unified Visualizer
+
+::: canvod.viz.visualizer
 
 ## 2D Visualization
 

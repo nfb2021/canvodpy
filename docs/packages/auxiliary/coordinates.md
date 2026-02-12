@@ -34,11 +34,11 @@ x, y, z = geo.to_ecef()
 
 ## Spherical Coordinates
 
-Spherical coordinates relative to the receiver position, following the physics convention:
+Spherical coordinates relative to the receiver position, following the navigation convention:
 
 - **r**: Slant range from receiver to satellite (meters)
 - **theta**: Polar angle from zenith [0, pi] radians (0 = zenith, pi/2 = horizon)
-- **phi**: Azimuthal angle from East [0, 2*pi) radians
+- **phi**: Azimuthal angle from North, clockwise [0, 2*pi) radians (0 = North, pi/2 = East)
 
 ```python
 from canvod.auxiliary import compute_spherical_coordinates

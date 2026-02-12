@@ -172,14 +172,15 @@ class AugmentationStep(ABC):
 
 
 class SphericalCoordinateAugmentation(AugmentationStep):
-    """Compute spherical coordinates (phi, theta, r) in physics convention.
+    """Compute spherical coordinates (phi, theta, r) in navigation convention.
 
     Computes:
-    - φ (phi): Azimuthal angle from +x (East) in radians [0, 2π), counter-clockwise
-    - θ (theta): Polar angle from +z axis (zenith) in radians [0, π]
+    - φ (phi): Azimuthal angle from North, clockwise [0, 2π) radians
+    - θ (theta): Polar angle from zenith [0, π] radians
     - r: Distance from receiver to satellite in meters
 
-    Uses local ENU (East-North-Up) topocentric frame following physics convention.
+    Uses local ENU (East-North-Up) topocentric frame with navigation convention
+    (0 = North, π/2 = East).
     """
 
     def __init__(self):

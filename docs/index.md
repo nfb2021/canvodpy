@@ -54,10 +54,45 @@ graph LR
 pip install canvodpy
 ```
 
+### Level 1 — Convenience (two lines)
+
 ```python
-from canvod.readers import Rnxv3Obs
-from canvod.grids import EqualAreaBuilder
-from canvod.vod import VODCalculator
+from canvodpy import process_date, calculate_vod
+
+data = process_date("Rosalia", "2025001")
+vod  = calculate_vod("Rosalia", "canopy_01", "reference_01", "2025001")
+```
+
+### Level 2 — Fluent workflow (deferred execution)
+
+```python
+import canvodpy
+
+result = (canvodpy.workflow("Rosalia")
+    .read("2025001")
+    .preprocess()
+    .grid("equal_area", angular_resolution=5.0)
+    .vod("canopy_01", "reference_01")
+    .result())
+```
+
+### Level 3 — VODWorkflow (eager, with logging)
+
+```python
+from canvodpy import VODWorkflow
+
+wf  = VODWorkflow(site="Rosalia", grid="equal_area")
+vod = wf.calculate_vod("canopy_01", "reference_01", "2025001")
+```
+
+### Level 4 — Functional (stateless, Airflow-ready)
+
+```python
+from canvodpy import read_rinex, create_grid, assign_grid_cells
+
+ds   = read_rinex(path, reader="rinex3")
+grid = create_grid(grid_type="equal_area", angular_resolution=5.0)
+ds   = assign_grid_cells(ds, grid)
 ```
 
 ## Technology
