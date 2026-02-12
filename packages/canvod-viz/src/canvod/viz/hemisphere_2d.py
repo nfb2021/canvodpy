@@ -403,11 +403,8 @@ class HemisphereVisualizer2D:
                 phi = np.arctan2(y, x)
                 phi = np.mod(phi, 2 * np.pi)
 
-                # Sort vertices by azimuth to form a proper polygon
-                order = np.argsort(phi)
-                phi = phi[order]
-                theta = theta[order]
-
+                # Vertices are already in polygon winding order from
+                # sort_vertices_of_regions() — use directly.
                 rho = np.sin(theta)
                 vertices_2d = np.column_stack([phi, rho])
                 patches.append(Polygon(vertices_2d, closed=True))

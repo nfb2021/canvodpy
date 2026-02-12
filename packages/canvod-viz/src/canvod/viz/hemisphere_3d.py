@@ -125,8 +125,20 @@ class HemisphereVisualizer3D:
             )
         elif grid_type == "htm":
             trace = self._render_htm_cells(data, colorscale, opacity, show_colorbar)
+        elif grid_type == "geodesic":
+            trace = self._render_geodesic_cells(
+                data, colorscale, opacity, show_colorbar
+            )
+        elif grid_type == "healpix":
+            trace = self._render_healpix_cells(
+                data, colorscale, opacity, show_colorbar
+            )
+        elif grid_type == "fibonacci":
+            trace = self._render_fibonacci_cells(
+                data, colorscale, opacity, show_colorbar
+            )
         else:
-            # Fallback to scatter for unsupported types
+            # Fallback to scatter for unknown types
             trace = self._render_scatter_fallback(
                 data,
                 colorscale,
@@ -288,6 +300,228 @@ class HemisphereVisualizer3D:
             opacity=opacity,
             flatshading=True,
             name=f"{self.grid.grid_type.title()} Grid",
+        )
+
+    def _render_geodesic_cells(
+        self,
+        data: np.ndarray | None,
+        colorscale: str,
+        opacity: float,
+        show_colorbar: bool,
+    ) -> go.Mesh3d:
+        """Render geodesic triangular cells as 3D mesh.
+
+        Reads ``geodesic_vertices`` (3 vertex indices per cell) and looks up
+        3D Cartesian coordinates from the shared ``grid.vertices`` array.
+        """
+        grid_df = self.grid.grid
+        shared_vertices = self.grid.vertices
+
+        if shared_vertices is None or "geodesic_vertices" not in grid_df.columns:
+            return self._render_scatter_fallback(
+                data, colorscale, opacity, show_colorbar
+            )
+
+        all_x, all_y, all_z = [], [], []
+        all_i, all_j, all_k = [], [], []
+        all_colors = []
+        vertex_count = 0
+
+        for i, row in enumerate(grid_df.iter_rows(named=True)):
+            try:
+                v_indices = np.array(row["geodesic_vertices"], dtype=int)
+                if len(v_indices) < 3:
+                    continue
+
+                verts = shared_vertices[v_indices]  # (3, 3)
+
+                if np.all(verts[:, 2] < 0):
+                    continue
+
+                all_x.extend(verts[:, 0].tolist())
+                all_y.extend(verts[:, 1].tolist())
+                all_z.extend(verts[:, 2].tolist())
+
+                color_val = data[i] if data is not None else 0.5
+                all_colors.extend([color_val] * 3)
+
+                all_i.append(vertex_count)
+                all_j.append(vertex_count + 1)
+                all_k.append(vertex_count + 2)
+                vertex_count += 3
+
+            except (KeyError, IndexError, TypeError, ValueError):
+                continue
+
+        return go.Mesh3d(
+            x=all_x,
+            y=all_y,
+            z=all_z,
+            i=all_i,
+            j=all_j,
+            k=all_k,
+            intensity=all_colors,
+            colorscale=colorscale,
+            showscale=show_colorbar,
+            colorbar=dict(title="Value") if show_colorbar else None,
+            opacity=opacity,
+            flatshading=True,
+            name="Geodesic Grid",
+        )
+
+    def _render_healpix_cells(
+        self,
+        data: np.ndarray | None,
+        colorscale: str,
+        opacity: float,
+        show_colorbar: bool,
+    ) -> go.Mesh3d:
+        """Render HEALPix curvilinear cells as 3D mesh.
+
+        Uses ``healpy.boundaries()`` to obtain true pixel boundaries,
+        then fan-triangulates each quadrilateral pixel.
+        """
+        try:
+            import healpy as hp
+        except ImportError:
+            return self._render_scatter_fallback(
+                data, colorscale, opacity, show_colorbar
+            )
+
+        grid_df = self.grid.grid
+        if "healpix_ipix" not in grid_df.columns:
+            return self._render_scatter_fallback(
+                data, colorscale, opacity, show_colorbar
+            )
+
+        nside = int(grid_df["healpix_nside"][0])
+        step = 4  # 4 sub-points per edge → 16 boundary vertices
+
+        all_x, all_y, all_z = [], [], []
+        all_i, all_j, all_k = [], [], []
+        all_colors = []
+        vertex_count = 0
+
+        for i, row in enumerate(grid_df.iter_rows(named=True)):
+            try:
+                ipix = int(row["healpix_ipix"])
+                boundary = hp.boundaries(nside, ipix, step=step)
+                x, y, z = boundary[0], boundary[1], boundary[2]
+
+                if np.all(z < -0.01):
+                    continue
+
+                n_verts = len(x)
+                all_x.extend(x.tolist())
+                all_y.extend(y.tolist())
+                all_z.extend(z.tolist())
+
+                color_val = data[i] if data is not None else 0.5
+                all_colors.extend([color_val] * n_verts)
+
+                # Fan triangulation from first vertex
+                for j in range(1, n_verts - 1):
+                    all_i.append(vertex_count)
+                    all_j.append(vertex_count + j)
+                    all_k.append(vertex_count + j + 1)
+
+                vertex_count += n_verts
+
+            except (KeyError, IndexError, TypeError, ValueError):
+                continue
+
+        return go.Mesh3d(
+            x=all_x,
+            y=all_y,
+            z=all_z,
+            i=all_i,
+            j=all_j,
+            k=all_k,
+            intensity=all_colors,
+            colorscale=colorscale,
+            showscale=show_colorbar,
+            colorbar=dict(title="Value") if show_colorbar else None,
+            opacity=opacity,
+            flatshading=True,
+            name="HEALPix Grid",
+        )
+
+    def _render_fibonacci_cells(
+        self,
+        data: np.ndarray | None,
+        colorscale: str,
+        opacity: float,
+        show_colorbar: bool,
+    ) -> go.Mesh3d:
+        """Render Fibonacci Voronoi cells as 3D mesh.
+
+        Reads ``voronoi_region`` (variable-length vertex index list) and
+        looks up 3D coordinates from ``grid.voronoi.vertices``.  The
+        vertex indices are already in correct polygon winding order
+        (``SphericalVoronoi.sort_vertices_of_regions()`` was called
+        during grid construction), so no re-sorting is needed.
+        Fan-triangulates each polygon for ``go.Mesh3d``.
+        """
+        grid_df = self.grid.grid
+        voronoi = self.grid.voronoi
+
+        if voronoi is None or "voronoi_region" not in grid_df.columns:
+            return self._render_scatter_fallback(
+                data, colorscale, opacity, show_colorbar
+            )
+
+        all_x, all_y, all_z = [], [], []
+        all_i, all_j, all_k = [], [], []
+        all_colors = []
+        vertex_count = 0
+
+        for i, row in enumerate(grid_df.iter_rows(named=True)):
+            try:
+                region_indices = row["voronoi_region"]
+                if region_indices is None or len(region_indices) < 3:
+                    continue
+
+                verts = voronoi.vertices[region_indices]
+
+                if np.all(verts[:, 2] < -0.01):
+                    continue
+
+                # Vertices are already in polygon winding order from
+                # sort_vertices_of_regions() — use directly.
+                n_verts = len(verts)
+
+                all_x.extend(verts[:, 0].tolist())
+                all_y.extend(verts[:, 1].tolist())
+                all_z.extend(verts[:, 2].tolist())
+
+                color_val = data[i] if data is not None else 0.5
+                all_colors.extend([color_val] * n_verts)
+
+                # Fan triangulation from first vertex
+                for j in range(1, n_verts - 1):
+                    all_i.append(vertex_count)
+                    all_j.append(vertex_count + j)
+                    all_k.append(vertex_count + j + 1)
+
+                vertex_count += n_verts
+
+            except (KeyError, IndexError, TypeError, ValueError):
+                continue
+
+        return go.Mesh3d(
+            x=all_x,
+            y=all_y,
+            z=all_z,
+            i=all_i,
+            j=all_j,
+            k=all_k,
+            intensity=all_colors,
+            colorscale=colorscale,
+            showscale=show_colorbar,
+            colorbar=dict(title="Value") if show_colorbar else None,
+            opacity=opacity,
+            flatshading=True,
+            name="Fibonacci Grid",
         )
 
     def _render_scatter_fallback(
