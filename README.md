@@ -91,7 +91,7 @@
 | packages/canvod-readers/src/canvod/readers/gnss\_specs/\_\_init\_\_.py       |        0 |        0 |    100% |           |
 | packages/canvod-readers/src/canvod/readers/gnss\_specs/bands.py              |      126 |       97 |     23% |171-420, 424-430 |
 | packages/canvod-readers/src/canvod/readers/gnss\_specs/constants.py          |       12 |        0 |    100% |           |
-| packages/canvod-readers/src/canvod/readers/gnss\_specs/constellations.py     |      248 |       87 |     65% |85-87, 103-115, 131-142, 177-255, 260, 347-350, 481-487, 674-680, 780-781, 883-889, 902-912, 971-977, 1040-1046, 1121-1127, 1131-1140 |
+| packages/canvod-readers/src/canvod/readers/gnss\_specs/constellations.py     |      248 |       87 |     65% |84-86, 102-114, 130-141, 176-256, 261, 348-351, 482-488, 665-671, 770-771, 874-883, 896-906, 961-967, 1018-1024, 1091-1097, 1101-1110 |
 | packages/canvod-readers/src/canvod/readers/gnss\_specs/exceptions.py         |       19 |        3 |     84% |54, 100, 162 |
 | packages/canvod-readers/src/canvod/readers/gnss\_specs/metadata.py           |       21 |       11 |     48% |   247-262 |
 | packages/canvod-readers/src/canvod/readers/gnss\_specs/models.py             |      287 |      164 |     43% |94-95, 99-100, 131-137, 160-163, 246, 269, 304, 320, 336, 357-363, 443, 477-480, 520-528, 554-563, 585-608, 653-689, 720-737, 753, 790-823, 873-921, 944-969, 986-995, 1018, 1033-1044, 1087-1103, 1120-1137 |
