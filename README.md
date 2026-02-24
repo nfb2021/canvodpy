@@ -14,11 +14,11 @@
 | canvodpy/src/canvodpy/workflow.py                                            |       92 |       63 |     32% |132-134, 193-226, 280-317, 341-363, 386-398, 420-431, 454-460 |
 | canvodpy/tests/test\_backward\_compatibility.py                              |      135 |       14 |     90% |25, 35-36, 46, 66-67, 77, 87-88, 137-139, 152, 196-197 |
 | canvodpy/tests/test\_factory\_validation.py                                  |       77 |        3 |     96% |88, 91, 142 |
-| canvodpy/tests/test\_fluent\_workflow.py                                     |      129 |        0 |    100% |           |
+| canvodpy/tests/test\_fluent\_workflow.py                                     |      128 |        0 |    100% |           |
 | canvodpy/tests/test\_integration\_aux\_sid\_filtering.py                     |       45 |       43 |      4% |     13-93 |
 | canvodpy/tests/test\_integration\_sid\_filtering.py                          |       44 |       29 |     34% |59-87, 91-106 |
 | canvodpy/tests/test\_umbrella\_meta.py                                       |        4 |        0 |    100% |           |
-| canvodpy/tests/test\_workflow\_integration.py                                |       79 |        0 |    100% |           |
+| canvodpy/tests/test\_workflow\_integration.py                                |       78 |        0 |    100% |           |
 | conftest.py                                                                  |      109 |       65 |     40% |25-30, 36, 42, 48, 54-65, 71-82, 88, 94, 100, 106-112, 118-124, 146-150, 156, 162, 168, 174-185, 191-202, 208-211, 217-220 |
 | packages/canvod-auxiliary/src/canvod/auxiliary/\_\_init\_\_.py               |       26 |        4 |     85% |117-118, 140-141 |
 | packages/canvod-auxiliary/src/canvod/auxiliary/\_internal/\_\_init\_\_.py    |        4 |        0 |    100% |           |
@@ -127,9 +127,9 @@
 | packages/canvod-utils/src/canvod/utils/tools/hashing.py                      |        9 |        6 |     33% |     32-37 |
 | packages/canvod-utils/src/canvod/utils/tools/validation.py                   |        7 |        5 |     29% |     29-33 |
 | packages/canvod-utils/src/canvod/utils/tools/version.py                      |       16 |       13 |     19% |     28-45 |
-| packages/canvod-utils/tests/test\_config.py                                  |       38 |        8 |     79% |24-26, 58-63 |
+| packages/canvod-utils/tests/test\_config.py                                  |       37 |        8 |     78% |23-25, 57-62 |
 | packages/canvod-utils/tests/test\_config\_from\_anywhere.py                  |       56 |       38 |     32% |18, 40-74, 80-113 |
-| packages/canvod-utils/tests/test\_configuration.py                           |       39 |       12 |     69% |30-34, 45-50, 61-65, 89 |
+| packages/canvod-utils/tests/test\_configuration.py                           |       37 |       12 |     68% |29-33, 44-49, 60-64, 83 |
 | packages/canvod-viz/src/canvod/viz/\_\_init\_\_.py                           |        6 |        0 |    100% |           |
 | packages/canvod-viz/src/canvod/viz/hemisphere\_2d.py                         |      267 |      184 |     31% |106-107, 115, 184, 191-200, 224, 247-289, 297-333, 337-375, 379-416, 481, 527-528, 579-705 |
 | packages/canvod-viz/src/canvod/viz/hemisphere\_3d.py                         |      275 |      210 |     24% |126-140, 194, 225-226, 252-287, 315-354, 382-431, 463-509, 533-555, 661-753, 784-827, 856-921, 979-990 |
@@ -146,7 +146,7 @@
 | packages/canvod-vod/tests/test\_vod\_calculator.py                           |      113 |        1 |     99% |       359 |
 | packages/canvod-vod/tests/test\_vod\_meta.py                                 |        3 |        0 |    100% |           |
 | packages/canvod-vod/tests/test\_vod\_properties.py                           |      138 |        9 |     93% |27, 36, 45, 183, 235, 299, 466, 469, 481 |
-| **TOTAL**                                                                    | **12212** | **5268** | **57%** |           |
+| **TOTAL**                                                                    | **12207** | **5268** | **57%** |           |
 
 
 ## Setup coverage badge
