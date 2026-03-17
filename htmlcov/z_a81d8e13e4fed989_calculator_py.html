@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for packages/canvod-vod/src/canvod/vod/calculator.py: 76%</title>
+    <title>Coverage for packages/canvod-vod/src/canvod/vod/calculator.py: 90%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_9ff733b0.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>packages&#8201;/&#8201;canvod-vod&#8201;/&#8201;src&#8201;/&#8201;canvod&#8201;/&#8201;vod&#8201;/&#8201;calculator.py</b>:
-            <span class="pc_cov">76%</span>
+            <span class="pc_cov">90%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,17 +55,17 @@
         </aside>
         <h2>
             <span class="text">67 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">51<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">16<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">60<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">7<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
             <a id="prevFileLink" class="nav" href="z_acc4a0596e4d28a3_logger_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
-            <a id="nextFileLink" class="nav" href="z_7a837ea3600cea5b_test_vod_basic_py.html">&#xbb; next</a>
+            <a id="nextFileLink" class="nav" href="index.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-02-24 21:52 +0000
+            created at 2026-03-17 09:20 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -177,13 +177,13 @@
     <p class="pln"><span class="n"><a id="t95" href="#t95">95</a></span><span class="t"><span class="str">        -----</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t96" href="#t96">96</a></span><span class="t"><span class="str">        Requires canvod-store to be installed.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t97" href="#t97">97</a></span><span class="t"><span class="str">        """</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t98" href="#t98">98</a></span><span class="t">        <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t99" href="#t99">99</a></span><span class="t">            <span class="key">from</span> <span class="nam">canvod</span><span class="op">.</span><span class="nam">store</span> <span class="key">import</span> <span class="nam">MyIcechunkStore</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t100" href="#t100">100</a></span><span class="t">        <span class="key">except</span> <span class="nam">ImportError</span> <span class="key">as</span> <span class="nam">e</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t101" href="#t101">101</a></span><span class="t">            <span class="key">raise</span> <span class="nam">ImportError</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t102" href="#t102">102</a></span><span class="t">                <span class="str">"canvod-store package required for from_icechunkstore(). "</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t103" href="#t103">103</a></span><span class="t">                <span class="str">"Install with: pip install canvod-store"</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t104" href="#t104">104</a></span><span class="t">            <span class="op">)</span> <span class="key">from</span> <span class="nam">e</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t98" href="#t98">98</a></span><span class="t">        <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t99" href="#t99">99</a></span><span class="t">            <span class="key">from</span> <span class="nam">canvod</span><span class="op">.</span><span class="nam">store</span> <span class="key">import</span> <span class="nam">MyIcechunkStore</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t100" href="#t100">100</a></span><span class="t">        <span class="key">except</span> <span class="nam">ImportError</span> <span class="key">as</span> <span class="nam">e</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t101" href="#t101">101</a></span><span class="t">            <span class="key">raise</span> <span class="nam">ImportError</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t102" href="#t102">102</a></span><span class="t">                <span class="str">"canvod-store package required for from_icechunkstore(). "</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t103" href="#t103">103</a></span><span class="t">                <span class="str">"Install with: pip install canvod-store"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t104" href="#t104">104</a></span><span class="t">            <span class="op">)</span> <span class="key">from</span> <span class="nam">e</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t105" href="#t105">105</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t106" href="#t106">106</a></span><span class="t">        <span class="nam">store</span> <span class="op">=</span> <span class="nam">MyIcechunkStore</span><span class="op">(</span><span class="nam">icechunk_store_pth</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t107" href="#t107">107</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -298,18 +298,18 @@
     <p class="run"><span class="n"><a id="t216" href="#t216">216</a></span><span class="t">        <span class="nam">canopy_transmissivity</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">decibel2linear</span><span class="op">(</span><span class="nam">delta_snr</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t217" href="#t217">217</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t218" href="#t218">218</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="nam">_lazy</span> <span class="key">and</span> <span class="op">(</span><span class="nam">canopy_transmissivity</span> <span class="op">&lt;=</span> <span class="num">0</span><span class="op">)</span><span class="op">.</span><span class="nam">any</span><span class="op">(</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t219" href="#t219">219</a></span><span class="t">            <span class="nam">n_invalid</span> <span class="op">=</span> <span class="nam">int</span><span class="op">(</span><span class="op">(</span><span class="nam">canopy_transmissivity</span> <span class="op">&lt;=</span> <span class="num">0</span><span class="op">)</span><span class="op">.</span><span class="nam">sum</span><span class="op">(</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t220" href="#t220">220</a></span><span class="t">            <span class="nam">total</span> <span class="op">=</span> <span class="nam">canopy_transmissivity</span><span class="op">.</span><span class="nam">size</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t221" href="#t221">221</a></span><span class="t">            <span class="nam">print</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t222" href="#t222">222</a></span><span class="t">                <span class="fst">f"</span><span class="fst">Warning: </span><span class="op">{</span><span class="nam">n_invalid</span><span class="op">}</span><span class="fst">/</span><span class="op">{</span><span class="nam">total</span><span class="op">}</span><span class="fst"> transmissivity values &lt;= 0 </span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t223" href="#t223">223</a></span><span class="t">                <span class="str">"(will produce NaN)"</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t224" href="#t224">224</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t225" href="#t225">225</a></span><span class="t">            <span class="nam">log</span><span class="op">.</span><span class="nam">warning</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t226" href="#t226">226</a></span><span class="t">                <span class="str">"invalid_transmissivity"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t227" href="#t227">227</a></span><span class="t">                <span class="nam">invalid_count</span><span class="op">=</span><span class="nam">n_invalid</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t228" href="#t228">228</a></span><span class="t">                <span class="nam">total_count</span><span class="op">=</span><span class="nam">total</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t229" href="#t229">229</a></span><span class="t">                <span class="nam">percent</span><span class="op">=</span><span class="nam">round</span><span class="op">(</span><span class="num">100</span> <span class="op">*</span> <span class="nam">n_invalid</span> <span class="op">/</span> <span class="nam">total</span><span class="op">,</span> <span class="num">2</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t230" href="#t230">230</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t219" href="#t219">219</a></span><span class="t">            <span class="nam">n_invalid</span> <span class="op">=</span> <span class="nam">int</span><span class="op">(</span><span class="op">(</span><span class="nam">canopy_transmissivity</span> <span class="op">&lt;=</span> <span class="num">0</span><span class="op">)</span><span class="op">.</span><span class="nam">sum</span><span class="op">(</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t220" href="#t220">220</a></span><span class="t">            <span class="nam">total</span> <span class="op">=</span> <span class="nam">canopy_transmissivity</span><span class="op">.</span><span class="nam">size</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t221" href="#t221">221</a></span><span class="t">            <span class="nam">print</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t222" href="#t222">222</a></span><span class="t">                <span class="fst">f"</span><span class="fst">Warning: </span><span class="op">{</span><span class="nam">n_invalid</span><span class="op">}</span><span class="fst">/</span><span class="op">{</span><span class="nam">total</span><span class="op">}</span><span class="fst"> transmissivity values &lt;= 0 </span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t223" href="#t223">223</a></span><span class="t">                <span class="str">"(will produce NaN)"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t224" href="#t224">224</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t225" href="#t225">225</a></span><span class="t">            <span class="nam">log</span><span class="op">.</span><span class="nam">warning</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t226" href="#t226">226</a></span><span class="t">                <span class="str">"invalid_transmissivity"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t227" href="#t227">227</a></span><span class="t">                <span class="nam">invalid_count</span><span class="op">=</span><span class="nam">n_invalid</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t228" href="#t228">228</a></span><span class="t">                <span class="nam">total_count</span><span class="op">=</span><span class="nam">total</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t229" href="#t229">229</a></span><span class="t">                <span class="nam">percent</span><span class="op">=</span><span class="nam">round</span><span class="op">(</span><span class="num">100</span> <span class="op">*</span> <span class="nam">n_invalid</span> <span class="op">/</span> <span class="nam">total</span><span class="op">,</span> <span class="num">2</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t230" href="#t230">230</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t231" href="#t231">231</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t232" href="#t232">232</a></span><span class="t">        <span class="nam">theta</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">canopy_ds</span><span class="op">[</span><span class="str">"theta"</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t233" href="#t233">233</a></span><span class="t">        <span class="nam">vod</span> <span class="op">=</span> <span class="op">-</span><span class="nam">np</span><span class="op">.</span><span class="nam">log</span><span class="op">(</span><span class="nam">canopy_transmissivity</span><span class="op">)</span> <span class="op">*</span> <span class="nam">np</span><span class="op">.</span><span class="nam">cos</span><span class="op">(</span><span class="nam">theta</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -334,12 +334,12 @@
     <p class="run run2"><span class="n"><a id="t252" href="#t252">252</a></span><span class="t">                <span class="nam">valid_percent</span><span class="op">=</span><span class="nam">round</span><span class="op">(</span><span class="num">100</span> <span class="op">*</span> <span class="nam">n_valid</span> <span class="op">/</span> <span class="nam">vod</span><span class="op">.</span><span class="nam">size</span><span class="op">,</span> <span class="num">2</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t253" href="#t253">253</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t254" href="#t254">254</a></span><span class="t">        <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t255" href="#t255">255</a></span><span class="t">            <span class="nam">log</span><span class="op">.</span><span class="nam">info</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t256" href="#t256">256</a></span><span class="t">                <span class="str">"vod_calculation_complete"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t257" href="#t257">257</a></span><span class="t">                <span class="nam">duration_seconds</span><span class="op">=</span><span class="nam">round</span><span class="op">(</span><span class="nam">duration</span><span class="op">,</span> <span class="num">2</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t258" href="#t258">258</a></span><span class="t">                <span class="nam">vod_values</span><span class="op">=</span><span class="nam">vod</span><span class="op">.</span><span class="nam">size</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t259" href="#t259">259</a></span><span class="t">                <span class="nam">note</span><span class="op">=</span><span class="str">"lazy graph built; compute deferred to write"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t260" href="#t260">260</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t255" href="#t255">255</a></span><span class="t">            <span class="nam">log</span><span class="op">.</span><span class="nam">info</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t256" href="#t256">256</a></span><span class="t">                <span class="str">"vod_calculation_complete"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t257" href="#t257">257</a></span><span class="t">                <span class="nam">duration_seconds</span><span class="op">=</span><span class="nam">round</span><span class="op">(</span><span class="nam">duration</span><span class="op">,</span> <span class="num">2</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t258" href="#t258">258</a></span><span class="t">                <span class="nam">vod_values</span><span class="op">=</span><span class="nam">vod</span><span class="op">.</span><span class="nam">size</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t259" href="#t259">259</a></span><span class="t">                <span class="nam">note</span><span class="op">=</span><span class="str">"lazy graph built; compute deferred to write"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t260" href="#t260">260</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t261" href="#t261">261</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t262" href="#t262">262</a></span><span class="t">        <span class="key">return</span> <span class="nam">vod_ds</span>&nbsp;</span><span class="r"></span></p>
 </main>
@@ -348,10 +348,10 @@
         <p>
             <a class="nav" href="z_acc4a0596e4d28a3_logger_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
-            <a class="nav" href="z_7a837ea3600cea5b_test_vod_basic_py.html">&#xbb; next</a>
+            <a class="nav" href="index.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-02-24 21:52 +0000
+            created at 2026-03-17 09:20 +0000
         </p>
     </div>
 </footer>
