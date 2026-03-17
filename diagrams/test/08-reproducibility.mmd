@@ -1,0 +1,41 @@
+flowchart TD
+    subgraph CONFIG[Configuration]
+        PROC["processing.yaml"]
+        SITES["sites.yaml"]
+        SIDS["sids.yaml"]
+        DEFAULTS["Package Defaults"]
+    end
+
+    MERGE["Deep Merge"]
+    PYDANTIC["Pydantic Validation"]
+
+    subgraph VALIDATED[CanvodConfig]
+        PC["ProcessingConfig"]
+        SC["SitesConfig"]
+        SIC["SidsConfig"]
+    end
+
+    subgraph VERSIONED[Versioned Storage]
+        IC_WRITE["Icechunk Write"]
+        SNAPSHOT["Snapshot ID"]
+        BRANCH["Branch Management"]
+        METADATA["Metadata Parquet"]
+    end
+
+    TRACE["Provenance<br/>Config · Hash · Snapshot · Timestamp"]
+
+    PROC --> MERGE
+    SITES --> MERGE
+    SIDS --> MERGE
+    DEFAULTS --> MERGE
+    MERGE --> PYDANTIC
+    PYDANTIC --> PC
+    PYDANTIC --> SC
+    PYDANTIC --> SIC
+
+    PC --> IC_WRITE
+    IC_WRITE --> SNAPSHOT
+    SNAPSHOT --> METADATA
+    BRANCH --> SNAPSHOT
+    METADATA --> TRACE
+    SC --> TRACE

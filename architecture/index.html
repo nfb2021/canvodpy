@@ -15,7 +15,7 @@
         <link rel="canonical" href="https://nfb2021.github.io/canvodpy/architecture/">
       
       
-        <link rel="prev" href="./..">
+        <link rel="prev" href="../principles/">
       
       
         <link rel="next" href="../namespace-packages/">
@@ -25,7 +25,7 @@
       
       
       <link rel="icon" href="../assets/logo.svg">
-      <meta name="generator" content="zensical-0.0.23">
+      <meta name="generator" content="zensical-0.0.24">
     
     
       
@@ -36,7 +36,7 @@
       
         
       
-      <link rel="stylesheet" href="../assets/stylesheets/modern/main.1e989742.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/modern/main.28978c9b.min.css">
       
         
           
@@ -48,8 +48,54 @@
 
     
     
+  <script>
+    // Patch mermaid to use "base" theme instead of "default" (blue).
+    // Material dynamically imports mermaid and calls initialize() —
+    // we intercept the import to patch the module before Material uses it.
+    (function() {
+      var _origImport = window.__import__ || null;
+
+      // Material uses dynamic import() for mermaid. We can't intercept
+      // native import(), but we CAN define a getter on window.mermaid
+      // that patches initialize() the moment it's assigned.
+      var _mermaid = undefined;
+      var _patched = false;
+      Object.defineProperty(window, "mermaid", {
+        configurable: true,
+        enumerable: true,
+        get: function() { return _mermaid; },
+        set: function(val) {
+          _mermaid = val;
+          if (val && val.initialize && !_patched) {
+            _patched = true;
+            var _origInit = val.initialize.bind(val);
+            val.initialize = function(config) {
+              var isDark = document.body && document.body.getAttribute("data-md-color-scheme") === "slate";
+            config = Object.assign({}, config, {
+              theme: "base",
+              themeVariables: isDark
+                ? { primaryColor: "#2a2a2a", primaryTextColor: "#E1E6B9", primaryBorderColor: "#555",
+                    lineColor: "#666", secondaryColor: "#1a1a1a", tertiaryColor: "#1e1e1e",
+                    mainBkg: "#2a2a2a", nodeBorder: "#555", clusterBkg: "#1a1a1a", clusterBorder: "#444",
+                    titleColor: "#E1E6B9", edgeLabelBackground: "#0d0d0d", nodeTextColor: "#E1E6B9",
+                    textColor: "#E1E6B9", fontFamily: '"Space Grotesk", system-ui, sans-serif' }
+                : { primaryColor: "#C4D7A4", primaryTextColor: "#183128", primaryBorderColor: "#5D7D5B",
+                    lineColor: "#5D7D5B", secondaryColor: "#E1E6B9", tertiaryColor: "#ABC8A4",
+                    mainBkg: "#C4D7A4", nodeBorder: "#5D7D5B", clusterBkg: "#E1E6B9", clusterBorder: "#6B8B69",
+                    titleColor: "#183128", edgeLabelBackground: "#E1E6B9", nodeTextColor: "#183128",
+                    textColor: "#183128", fontFamily: '"Space Grotesk", system-ui, sans-serif' }
+            });
+              return _origInit(config);
+            };
+          }
+        }
+      });
+    })();
+  </script>
+  
       
     
+
     
       
         
@@ -218,6 +264,22 @@
   
   
   
+  
+    <li class="md-tabs__item">
+      <a href="../principles/" class="md-tabs__link">
+        
+  
+  Conventions & Defaults
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
     
   
   
@@ -295,6 +357,25 @@
           
   
   Release & Publishing
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../impressum/" class="md-tabs__link">
+          
+  
+  Legal
 
         </a>
       </li>
@@ -396,6 +477,33 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../principles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conventions & Defaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -425,10 +533,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
             
   
   
@@ -446,8 +554,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_2">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -696,6 +804,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -709,10 +825,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
             
   
   
@@ -730,8 +846,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -758,6 +874,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -771,10 +893,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1" >
         
           
-          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_1" id="__nav_4_1_label" tabindex="0">
             
   
   
@@ -792,8 +914,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_1">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -846,6 +968,90 @@
     
   
     RINEX v3.04 Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../packages/readers/sbf/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SBF Reader
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../packages/readers/ephemeris-sources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ephemeris Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../packages/readers/satellite-catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Satellite Catalog (IGS SINEX)
   
 
     
@@ -955,10 +1161,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" >
         
           
-          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
             
   
   
@@ -976,8 +1182,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_2">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1159,10 +1365,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
         
           
-          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
             
   
   
@@ -1180,8 +1386,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1251,10 +1457,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
         
           
-          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
             
   
   
@@ -1272,8 +1478,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1347,10 +1553,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
         
           
-          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
             
   
   
@@ -1368,8 +1574,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1495,10 +1701,102 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" >
         
           
-          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod-store-metadata
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    canvod-store-metadata
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../packages/store-metadata/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
             
   
   
@@ -1516,8 +1814,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1587,10 +1885,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_8" >
         
           
-          <label class="md-nav__link" for="__nav_3_7" id="__nav_3_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_8" id="__nav_4_8_label" tabindex="0">
             
   
   
@@ -1608,8 +1906,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1627,6 +1925,282 @@
   
     <li class="md-nav__item">
       <a href="../packages/utils/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_9" id="__nav_4_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod-ops
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    canvod-ops
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../packages/ops/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_10" id="__nav_4_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod-virtualiconvname
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    canvod-virtualiconvname
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../packages/naming/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_11" id="__nav_4_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod-audit
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    canvod-audit
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../packages/audit/overview/" class="md-nav__link">
         
   
   
@@ -1683,6 +2257,18 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -1696,10 +2282,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
             
   
   
@@ -1717,8 +2303,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1791,7 +2377,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guides/development.md" class="md-nav__link">
+      <a href="../guides/DEVELOPMENT/" class="md-nav__link">
         
   
   
@@ -1827,6 +2413,34 @@
     
   
     Architecture & Design Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/ai-development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developing with Claude Code
   
 
     
@@ -1896,6 +2510,146 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/dask-resources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dask & Resource Management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/api-levels/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/airflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Airflow Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/diagnostics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diagnostics & Monitoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1937,10 +2691,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -1958,8 +2712,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2155,6 +2909,105 @@
       
         
       
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Legal
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Legal
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../impressum/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Impressum & AI Disclosure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
         
       
         
@@ -2182,10 +3035,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
             
   
   
@@ -2203,8 +3056,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2389,6 +3242,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../api/canvod-store-metadata/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod.store_metadata
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/canvod-viz/" class="md-nav__link">
         
   
@@ -2425,6 +3306,90 @@
     
   
     canvod.utils
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/canvod-ops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod.ops
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/canvod-virtualiconvname/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod.virtualiconvname
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/canvod-audit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod.audit
   
 
     
@@ -2617,51 +3582,90 @@
 
 <h1 id="monorepo-structure">Monorepo Structure<a class="headerlink" href="#monorepo-structure" title="Permanent link">&para;</a></h1>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>canVODpy is organized as a monorepo containing eight Python packages for GNSS vegetation optical depth analysis. All packages reside in a single repository while maintaining technical independence: each can be developed, tested, and published separately.</p>
+<p>canVODpy is organized as a monorepo containing ten Python packages for <abbr title="Global Navigation Satellite System — umbrella term for GPS, Galileo, GLONASS, BeiDou, etc. (Navipedia: GNSS)">GNSS</abbr> vegetation optical depth analysis. All packages reside in a single repository while maintaining technical independence: each can be developed, tested, and published separately.</p>
 <hr />
 <h2 id="package-layers">Package Layers<a class="headerlink" href="#package-layers" title="Permanent link">&para;</a></h2>
-<pre class="mermaid"><code>graph LR
-    subgraph FOUNDATION["Foundation Layer"]
-        UTILS["canvod-utils\nConfiguration (Pydantic)\nDate utilities (YYYYDOY)\nShared tooling"]
+<pre class="mermaid"><code>graph TD
+    subgraph ORCHESTRATION["Orchestration"]
+        CANVODPY["canvodpy"]
     end
 
-    subgraph DATAIO["Data I/O Layer"]
-        READERS["canvod-readers\nRINEX v3.04 (Rnxv3Obs)\nSignal ID mapping"]
-        AUX["canvod-auxiliary\nSP3/CLK retrieval\nHermite interpolation\nFTP download management"]
+    subgraph COMPUTE["Computation"]
+        VOD["canvod-vod"]
+        GRIDS["canvod-grids"]
+        OPS["canvod-ops"]
     end
 
-    subgraph STORE_LAYER["Persistence Layer"]
-        STORE["canvod-store\nIcechunk versioned storage\nHash deduplication\nSite/receiver management"]
+    subgraph STORE_LAYER["Persistence"]
+        STORE["canvod-store"]
+        STOREMETA["canvod-store-metadata"]
     end
 
-    subgraph COMPUTE["Computation Layer"]
-        VOD["canvod-vod\nTau-Omega inversion\nVODCalculator ABC"]
-        GRIDS["canvod-grids\n7 hemispheric grid types\nKDTree cell assignment"]
+    subgraph DATAIO["Data I/O"]
+        READERS["canvod-readers"]
+        AUX["canvod-auxiliary"]
+        NAMING["canvod-virtualiconvname"]
     end
 
-    subgraph PRESENT["Presentation Layer"]
-        VIZ["canvod-viz\n2D polar projections\n3D interactive surfaces"]
+    subgraph PRESENT["Presentation"]
+        VIZ["canvod-viz"]
     end
 
-    subgraph ORCHESTRATION["Orchestration Layer"]
-        CANVODPY["canvodpy\nPipeline orchestrator\nFactory system\n4-level public API"]
+    subgraph FOUNDATION["Foundation"]
+        UTILS["canvod-utils"]
     end
 
-    READERS -.-&gt; UTILS
-    AUX -.-&gt; READERS
-    AUX -.-&gt; UTILS
-    STORE -.-&gt; AUX
-    STORE -.-&gt; READERS
-    STORE -.-&gt; UTILS
-    GRIDS -.-&gt; UTILS
+    CANVODPY --&gt; READERS &amp; AUX &amp; NAMING
+    CANVODPY --&gt; STORE &amp; STOREMETA
+    CANVODPY --&gt; VOD &amp; GRIDS &amp; OPS &amp; VIZ
+
+    OPS -.-&gt; GRIDS
+    OPS -.-&gt; UTILS
     VIZ -.-&gt; GRIDS
-
-    CANVODPY ==&gt; READERS
-    CANVODPY ==&gt; AUX
-    CANVODPY ==&gt; STORE
-    CANVODPY ==&gt; VOD
-    CANVODPY ==&gt; GRIDS
-    CANVODPY ==&gt; VIZ</code></pre>
+    AUX -.-&gt; READERS
+    STORE -.-&gt; GRIDS
+    STOREMETA -.-&gt; UTILS</code></pre>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Packages</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Orchestration</strong></td>
+<td>canvodpy</td>
+<td>Pipeline orchestrator, <abbr title="Parallel computing library for Python — scales NumPy/pandas/xarray to multi-core and distributed clusters">Dask</abbr> batch processing, 4-level public API</td>
+</tr>
+<tr>
+<td><strong>Computation</strong></td>
+<td>canvod-vod, canvod-grids, canvod-ops</td>
+<td><abbr title="Vegetation Optical Depth — dimensionless measure of microwave attenuation through vegetation canopy (τ = −ln(T)·cos θ)">VOD</abbr> retrieval, hemispheric grids, preprocessing pipeline</td>
+</tr>
+<tr>
+<td><strong>Persistence</strong></td>
+<td>canvod-store, canvod-store-metadata</td>
+<td><abbr title="Version-controlled cloud-native tensor storage engine — git-like snapshots over Zarr v3 chunks">Icechunk</abbr> versioned storage, hash deduplication, provenance metadata (<abbr title="DataCite Metadata Schema — required metadata for DOI registration of research datasets">DataCite</abbr>/<abbr title="Attribute Convention for Dataset Discovery — NetCDF/CF metadata convention for self-describing datasets">ACDD</abbr>/<abbr title="SpatioTemporal Asset Catalog — open specification for geospatial metadata and search">STAC</abbr>)</td>
+</tr>
+<tr>
+<td><strong>Data I/O</strong></td>
+<td>canvod-readers, canvod-auxiliary, canvod-virtualiconvname</td>
+<td><abbr title="Receiver Independent Exchange Format — standard ASCII format for GNSS observations, defined by IGS (Navipedia: RINEX)">RINEX</abbr>/<abbr title="Septentrio Binary Format — proprietary binary telemetry from Septentrio receivers; embeds satellite geometry">SBF</abbr> parsing, <abbr title="Standard Product 3 — precise satellite orbit (position ± ~2 cm) file format, produced by IGS analysis centres (Navipedia: SP3)">SP3</abbr>/<abbr title="Clock — precise satellite and station clock correction file (30 s intervals), companion to SP3 orbits">CLK</abbr> retrieval, filename mapping</td>
+</tr>
+<tr>
+<td><strong>Presentation</strong></td>
+<td>canvod-viz</td>
+<td>2D polar projections, 3D interactive surfaces</td>
+</tr>
+<tr>
+<td><strong>Foundation</strong></td>
+<td>canvod-utils</td>
+<td>Pydantic configuration, date utilities, shared tooling</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="key-design-decisions">Key Design Decisions<a class="headerlink" href="#key-design-decisions" title="Permanent link">&para;</a></h2>
 <div class="grid cards">
@@ -2672,6 +3676,7 @@
 <p>All packages share the <code>canvod.*</code> namespace — a coherent import API
 backed by separate installable packages:</p>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rnxv3Obs</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.sbf</span><span class="w"> </span><span class="kn">import</span> <span class="n">SbfReader</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">canvod.grids</span><span class="w"> </span><span class="kn">import</span> <span class="n">EqualAreaBuilder</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">canvod.vod</span><span class="w"> </span><span class="kn">import</span> <span class="n">TauOmegaZerothOrder</span>
 </code></pre></div>
@@ -2682,7 +3687,7 @@ backed by separate installable packages:</p>
 <hr />
 <p>One <code>uv sync</code> installs all packages in editable mode with a shared lockfile.
 Dependencies are resolved together — no version conflicts possible.</p>
-<p>Each package keeps its own <code>pyproject.toml</code> for independent PyPI publishing.</p>
+<p>Each package keeps its own <code>pyproject.toml</code> for independent <abbr title="Python Package Index — public Python package repository">PyPI</abbr> publishing.</p>
 </li>
 <li>
 <p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M128-32c17.7 0 32 14.3 32 32v96h128V0c0-17.7 14.3-32 32-32s32 14.3 32 32v96h64c17.7 0 32 14.3 32 32s-14.3 32-32 32v64c0 95.1-69.2 174.1-160 189.3V480c0 17.7-14.3 32-32 32s-32-14.3-32-32v-66.7C101.2 398.1 32 319.1 32 224v-64c-17.7 0-32-14.3-32-32s14.3-32 32-32h64V0c0-17.7 14.3-32 32-32"/></svg></span> &nbsp; <strong>Independent Install</strong></p>
@@ -2697,8 +3702,8 @@ pip<span class="w"> </span>install<span class="w"> </span>canvodpy<span class="w
 <p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M192 64c0-17.7 14.3-32 32-32h64c17.7 0 32 14.3 32 32v64c0 17.7-14.3 32-32 32h-8v64h120c39.8 0 72 32.2 72 72v56h8c17.7 0 32 14.3 32 32v64c0 17.7-14.3 32-32 32h-64c-17.7 0-32-14.3-32-32v-64c0-17.7 14.3-32 32-32h8v-56c0-13.3-10.7-24-24-24H280v80h8c17.7 0 32 14.3 32 32v64c0 17.7-14.3 32-32 32h-64c-17.7 0-32-14.3-32-32v-64c0-17.7 14.3-32 32-32h8v-80H112c-13.3 0-24 10.7-24 24v56h8c17.7 0 32 14.3 32 32v64c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32v-64c0-17.7 14.3-32 32-32h8v-56c0-39.8 32.2-72 72-72h120v-64h-8c-17.7 0-32-14.3-32-32z"/></svg></span> &nbsp; <strong>Flat Dependency Graph</strong></p>
 <hr />
 <p>Maximum depth = 1. Four foundation packages have zero inter-package
-dependencies. Three consumer packages each depend on exactly one
-foundation package.</p>
+dependencies. Six consumer packages depend on one or two foundation
+packages each.</p>
 </li>
 </ul>
 </div>
@@ -2718,8 +3723,11 @@ foundation package.</p>
     canvod-grids/
     canvod-vod/
     canvod-store/
+    canvod-store-metadata/
     canvod-viz/
     canvod-utils/
+    canvod-ops/
+    canvod-virtualiconvname/
   canvodpy/                         # Umbrella package
     src/
       canvodpy/
@@ -2737,14 +3745,18 @@ canvod-vod        ──── no inter-package deps
 canvod-utils      ──── no inter-package deps
 canvod-auxiliary   ─── depends on canvod-readers
 canvod-store      ──── depends on canvod-grids
+canvod-store-metadata ── depends on canvod-utils
 canvod-viz        ──── depends on canvod-grids
+canvod-ops        ──── depends on canvod-grids, canvod-utils
+canvod-virtualiconvname ── no inter-package deps
 canvodpy          ──── depends on all packages
 </code></pre></div>
 <hr />
 <h2 id="complete-processing-flow">Complete Processing Flow<a class="headerlink" href="#complete-processing-flow" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>flowchart TD
     subgraph CFG["Configuration"]
-        YAML["YAML Config\n(processing · sites · sids)"]
+        YAML["`**YAML Config**
+        processing, sites, sids`"]
         PYDANTIC["Pydantic Validation"]
         CONFIG["CanvodConfig"]
     end
@@ -2756,42 +3768,53 @@ canvodpy          ──── depends on all packages
     end
 
     subgraph DISCOVERY["Data Discovery"]
-        MATCHER["PairDataDirMatcher"]
-        EXPAND["SCS Expansion"]
+        VALIDATOR["`**DataDirectoryValidator**
+        pre-flight gate`"]
+        MAPPER["`**FilenameMapper**
+        VirtualFiles`"]
         SCHEDULE["Processing Schedule"]
     end
 
     subgraph AUX["Auxiliary Pipeline (RINEX only)"]
-        FTP["FTP Download\nESA / NASA fallback"]
-        HERMITE["Hermite Interpolation\n(SP3 ephemerides)"]
-        LINEAR["Piecewise Linear\n(CLK corrections)"]
+        FTP["`**FTP Download**
+        ESA / NASA fallback`"]
+        HERMITE["`**Hermite Interpolation**
+        SP3 ephemerides`"]
+        LINEAR["`**Piecewise Linear**
+        CLK corrections`"]
         AUX_ZARR["Auxiliary Zarr Cache"]
     end
 
-    subgraph PARALLEL["Parallel Processing"]
-        READ_R["Read RINEX (Rnxv3Obs)"]
-        SPHERICAL["Spherical Coords\n(ECEF → r, θ, φ)"]
+    subgraph PARALLEL["Parallel Processing (Dask Distributed)"]
+        READ_R["`**Read GNSS file**
+        ReaderFactory`"]
+        SPHERICAL["`**Spherical Coords**
+        ECEF to r, theta, phi
+        or SBF embedded geometry`"]
     end
 
     subgraph WRITE["Icechunk Storage"]
-        HASH_CHECK["RINEX File Hash Check\n(skip duplicates)"]
+        HASH_CHECK["`**File Hash Check**
+        skip duplicates`"]
         APPEND["Append + Commit"]
     end
 
     subgraph GRID["Grid Assignment"]
-        BUILD_GRID["Build Grid\n(equal-area / HEALPix / …)"]
-        KDTREE["KDTree Assign\nO(n log m)"]
+        BUILD_GRID["`**Build Grid**
+        equal-area / geodesic / ...`"]
+        KDTREE["`**KDTree Assign**
+        O(n log m)`"]
     end
 
     subgraph VOD["VOD Retrieval"]
-        DELTA["ΔSNRcanopy − ref"]
-        TAU["VOD = −ln(T) · cos(θ)"]
+        DELTA["delta SNR canopy - ref"]
+        TAU["VOD = -ln(T) cos(theta)"]
     end
 
     YAML --&gt; PYDANTIC --&gt; CONFIG --&gt; SITE
     SITE --&gt; RINEX_STORE &amp; VOD_STORE
 
-    CONFIG --&gt; MATCHER --&gt; EXPAND --&gt; SCHEDULE
+    CONFIG --&gt; VALIDATOR --&gt; MAPPER --&gt; SCHEDULE
 
     SCHEDULE --&gt; FTP --&gt; HERMITE &amp; LINEAR --&gt; AUX_ZARR
 
@@ -2821,6 +3844,20 @@ canvodpy          ──── depends on all packages
 <li>Coordinated releases required for consistent versioning</li>
 </ul>
 </div>
+<hr />
+<p><strong>Next in the trail:</strong> <a href="../principles/">Design Principles</a> · <a href="../guides/api-levels/">API Levels</a> · <a href="../guides/getting-started/">Getting Started</a> · <a href="../guides/ai-development/">AI Development</a></p>
+<!-- Glossary: hover any abbreviation to see its definition -->
+
+<!-- GNSS fundamentals — see Navipedia (navipedia.net) for detailed articles -->
+<!-- Satellite identifiers -->
+<!-- Observation data -->
+<!-- VOD and transmissometry -->
+<!-- Ephemerides and orbits -->
+<!-- Data standards -->
+<!-- Infrastructure -->
+<!-- Coordinate systems -->
+<!-- Signal bands -->
+<!-- Software tools -->
 
 
 
@@ -2843,6 +3880,8 @@ canvodpy          ──── depends on all packages
             </div>
           
           
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
@@ -2861,7 +3900,7 @@ canvodpy          ──── depends on all packages
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="./.." class="md-footer__link md-footer__link--prev" aria-label="Previous: Home">
+          <a href="../principles/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Conventions &amp; Defaults">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7M19 12H5"/></svg>
@@ -2871,7 +3910,7 @@ canvodpy          ──── depends on all packages
                 Previous
               </span>
               <div class="md-ellipsis">
-                Home
+                Conventions & Defaults
               </div>
             </div>
           </a>
@@ -2901,7 +3940,7 @@ canvodpy          ──── depends on all packages
       <div class="md-copyright">
   
     <div class="md-copyright__highlight">
-      Copyright &copy; 2026 Nicolas Bader, TU Wien
+      Copyright &copy; 2026 Nicolas François Bader, TU Wien. This documentation is provided &ldquo;as is&rdquo; without warranty of any kind, express or implied, including but not limited to warranties of correctness, completeness, or fitness for a particular purpose.
     </div>
   
   
@@ -2948,17 +3987,17 @@ canvodpy          ──── depends on all packages
       <div class="md-dialog__inner md-typeset"></div>
     </div>
     
+      <div class="md-progress" data-md-component="progress" role="progressbar"></div>
+    
     
     
       
       
       
-      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":["content.code.copy","content.code.annotate","navigation.footer","navigation.indexes","navigation.instant","navigation.instant.prefetch","navigation.path","navigation.sections","navigation.tabs","navigation.top","navigation.tracking","search.highlight"],"search":"../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":["content.code.copy","content.code.annotate","content.tooltips","content.tabs.link","navigation.footer","navigation.indexes","navigation.instant","navigation.instant.prefetch","navigation.instant.progress","navigation.path","navigation.sections","navigation.tabs","navigation.top","navigation.tracking","search.highlight","search.suggest","toc.follow"],"search":"../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
     
     
-      <script src="../assets/javascripts/bundle.5fcf0de6.min.js"></script>
-      
-        <script src="https://unpkg.com/beautiful-mermaid/dist/beautiful-mermaid.browser.global.js"></script>
+      <script src="../assets/javascripts/bundle.16f8adc2.min.js"></script>
       
         <script src="../assets/mermaid-init.js"></script>
       

@@ -1,52 +1,37 @@
-graph LR
-    subgraph Foundation[🔧 Foundation Layer]
-        Utils["canvod-utils<br/>━━━━━━━━<br/>• Config<br/>• YYYYDOY<br/>• Tools"]
+graph TD
+    subgraph Foundation["Foundation Layer (0 inter-package deps)"]
+        Utils["canvod-utils"]
+        Readers["canvod-readers"]
+        Grids["canvod-grids"]
+        VOD["canvod-vod"]
+        NAMING["canvod-virtualiconvname"]
     end
 
-    subgraph DataIO[📥 Data IO Layer]
-        Readers["canvod-readers<br/>━━━━━━━━<br/>• Rnxv3Obs<br/>• SignalID<br/>• DataDir"]
-        Aux["canvod-aux<br/>━━━━━━━━<br/>• SP3<br/>• CLK<br/>• Interpolator"]
+    subgraph Consumers["Consumer Layer"]
+        Aux["canvod-auxiliary"]
+        Store["canvod-store"]
+        StoreMeta["canvod-store-metadata"]
+        Viz["canvod-viz"]
+        OPS["canvod-ops"]
     end
 
-    subgraph Storage[💾 Storage Layer]
-        Store["canvod-store<br/>━━━━━━━━<br/>• Icechunk<br/>• ResearchSite<br/>• Reader"]
+    subgraph Orchestration["Orchestration Layer"]
+        Canvodpy["canvodpy"]
     end
 
-    subgraph Computation[🧮 Computation Layer]
-        VOD["canvod-vod<br/>━━━━━━━━<br/>• VODCalculator<br/>• TauOmega"]
-        Grids["canvod-grids<br/>━━━━━━━━<br/>• HEALPix<br/>• Geodesic<br/>• Fibonacci"]
-    end
+    Canvodpy ==> Readers
+    Canvodpy ==> Aux
+    Canvodpy ==> Store
+    Canvodpy ==> VOD
+    Canvodpy ==> Grids
+    Canvodpy ==> Viz
+    Canvodpy ==> OPS
+    Canvodpy ==> NAMING
+    Canvodpy ==> StoreMeta
 
-    subgraph Presentation[📊 Presentation Layer]
-        Viz["canvod-viz<br/>━━━━━━━━<br/>• 2D Plots<br/>• 3D Surface<br/>• Styles"]
-    end
-
-    subgraph Orchestration[🎯 Orchestration Layer]
-        Canvodpy["canvodpy<br/>━━━━━━━━<br/>• Pipeline<br/>• Processor<br/>• API"]
-    end
-
-    Readers -.->|uses| Utils
-    Aux -.->|uses| Readers
-    Aux -.->|uses| Utils
-    Store -.->|uses| Aux
-    Store -.->|uses| Readers
-    Store -.->|uses| Utils
-    Grids -.->|optional| Store
-    Grids -.->|uses| Utils
-    Viz -.->|uses| Grids
-
-    Canvodpy ==>|coordinates| Readers
-    Canvodpy ==>|coordinates| Aux
-    Canvodpy ==>|coordinates| Store
-    Canvodpy ==>|coordinates| VOD
-    Canvodpy ==>|coordinates| Grids
-    Canvodpy ==>|coordinates| Viz
-
-    style Utils fill:#fce4ec,stroke:#880e4f,stroke-width:3px
-    style Readers fill:#fff3e0,stroke:#e65100,stroke-width:2px
-    style Aux fill:#fff3e0,stroke:#e65100,stroke-width:2px
-    style Store fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
-    style VOD fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
-    style Grids fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
-    style Viz fill:#e0f2f1,stroke:#004d40,stroke-width:2px
-    style Canvodpy fill:#e3f2fd,stroke:#0d47a1,stroke-width:4px
+    Aux -.-> Readers
+    Store -.-> Grids
+    StoreMeta -.-> Utils
+    Viz -.-> Grids
+    OPS -.-> Grids
+    OPS -.-> Utils

@@ -23,7 +23,7 @@
   --bg:        var(--g1);
   --surface:   var(--g2);
   --surface-2: var(--g1);
-  --border:    var(--g3);
+  --border:    #5D7D5B;          /* was: var(--g3) — 3.57:1 on g1, passes WCAG non-text */
 
   --text:      var(--g5);
   --muted:     var(--g4);
@@ -32,7 +32,10 @@
   --link-hover:var(--g5);
 
   --code-bg:   var(--g2);
-  --code-border: var(--g3);
+  --code-border: #6B8B69;        /* was: var(--g3) — stronger code block borders */
+
+  /* Shadow elevation for light mode cards */
+  --card-shadow: 0 2px 8px hsla(130, 20%, 30%, 0.12), 0 1px 3px hsla(130, 20%, 30%, 0.08);
 
   --radius: 12px;
 
@@ -43,29 +46,50 @@
   /* Typography scale */
   --base-font-size: 16px;
   --base-line-height: 1.6;
+
 }
 
 /* Dark mode tokens */
 .dark,
 [data-md-color-scheme="slate"],
 [data-theme="dark"]{
-  --bg:        var(--g5);
-  --surface:   var(--g4);
-  --surface-2: var(--g5);
-  --border:    var(--g4);
+  --bg:        #0d0d0d;
+  --surface:   #2a2a2a;
+  --surface-2: #1a1a1a;
+  --border:    #555555;
 
-  /* Use ONE main text color everywhere to avoid “white + green” mix */
-  --text:      var(--g2);  /* <- less “glowy” than g1 */
-  --muted:     var(--g1);
+  --text:      var(--g1);        /* brighter cream for readability */
+  --muted:     var(--g2);
 
-  --link:      var(--g2);
+  --link:      var(--g3);
   --link-hover:var(--g1);
 
-  --code-bg:   var(--g5);
-  --code-border: var(--g4);
+  --code-bg:   #1e1e1e;
+  --code-border: #444444;
 
-  --ui-action: var(--g2);
+  --ui-action: var(--g3);
   --ui-action-hover: var(--g1);
+
+  /* No shadow elevation in dark mode — borders do the work */
+  --card-shadow: none;
+}
+
+/* Mermaid diagram theming — must use :root>* to beat Material's :root>* specificity */
+:root>*{
+  --md-mermaid-font-family: "Space Grotesk", system-ui, sans-serif;
+  --md-mermaid-edge-color: var(--g4);
+  --md-mermaid-node-bg-color: var(--g2);
+  --md-mermaid-node-fg-color: var(--g4);
+  --md-mermaid-label-bg-color: var(--g1);
+  --md-mermaid-label-fg-color: var(--g5);
+}
+[data-md-color-scheme="slate"]:root>*,
+:root>[data-md-color-scheme="slate"]{
+  --md-mermaid-edge-color: #666;
+  --md-mermaid-node-bg-color: #2a2a2a;
+  --md-mermaid-node-fg-color: #555;
+  --md-mermaid-label-bg-color: #0d0d0d;
+  --md-mermaid-label-fg-color: var(--g1);
 }
 
 /* =========================================================
@@ -207,6 +231,13 @@ main{
   font-size: 0.8rem;
 }
 
+/* Dark mode: brighter breadcrumbs */
+[data-md-color-scheme="slate"] .md-breadcrumbs,
+[data-md-color-scheme="slate"] .md-breadcrumbs__link{
+  color: var(--g2) !important;
+  font-weight: 500;
+}
+
 /* Nav menu items */
 .md-nav__link,
 .md-tabs__link,
@@ -240,8 +271,24 @@ small, figcaption,
 .md-typeset .md-caption,
 .md-typeset .admonition-title,
 .md-nav__title,
+/* GitHub repo info — visible in header bar on desktop */
+@media screen and (min-width: 76.25em){
+  .md-header__source{
+    display: block !important;
+    max-width: 13rem;
+    width: auto;
+    margin-left: auto;
+  }
+}
+.md-source{
+  color: var(--g1) !important;
+}
+.md-source__repository{
+  color: var(--g1) !important;
+}
 .md-source__facts{
-  color: var(--muted) !important;
+  color: var(--g2) !important;
+  font-size: 0.65rem;
 }
 /* Footer direction labels need light color against dark footer bg */
 .md-footer .md-footer__direction{
@@ -336,7 +383,16 @@ nav a:hover{
   border-left: 2px solid var(--link) !important;
 }
 
-/* TOC sidebar ("On this page") */
+/* Dark mode: stronger active state for sidebar + TOC */
+[data-md-color-scheme="slate"] .md-nav__link--active,
+[data-md-color-scheme="slate"] .md-nav__item--active > .md-nav__link,
+[data-md-color-scheme="slate"] .md-nav__item--active > a{
+  background: #1e1e1e !important;
+  border-left: 2px solid var(--g3) !important;
+  border-radius: 0 4px 4px 0;
+}
+
+/* TOC sidebar ("On this page") — always visible on desktop */
 .md-sidebar,
 .md-sidebar--secondary,
 .md-sidebar--secondary .md-sidebar__inner,
@@ -344,6 +400,34 @@ nav a:hover{
 .md-nav__title{
   background: transparent !important;
 }
+
+@media screen and (min-width: 960px){
+  .md-sidebar--secondary{
+    display: block !important;
+    height: auto !important;
+  }
+}
+
+/* Disable blur overlay when nav drawer opens */
+.md-overlay{
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background-color: rgba(0,0,0,0.3) !important;
+}
+
+/* Nav drawer (mobile/narrow) needs solid background */
+@media screen and (max-width: 76.1875em){
+  .md-sidebar--primary{
+    background: var(--bg) !important;
+  }
+}
+
+/* Nav drawer inner sections */
+.md-nav--primary,
+.md-nav--primary .md-nav{
+  background: var(--bg) !important;
+}
+
 
 /* Remove focus/hover blue outlines that MkDocs Material adds via box-shadow */
 .md-nav__link:focus,
@@ -400,7 +484,7 @@ pre, .highlight pre, .md-typeset pre{
   border-radius: var(--radius) !important;
   padding: 0.8rem 1rem !important;
   overflow-x: auto;
-  box-shadow: none !important;
+  box-shadow: var(--card-shadow, none) !important;
   color: var(--text) !important;
   font-size: 0.85rem;
 }
@@ -547,13 +631,30 @@ hr{ border-color: color-mix(in srgb, var(--border) 70%, transparent) !important;
 table, .md-typeset table{
   background: transparent !important;
   border-color: var(--border) !important;
+  box-shadow: var(--card-shadow, none);
+  border-radius: var(--radius) !important;
+  overflow: hidden;
 }
 .md-typeset table:not([class]) th{
-  background: color-mix(in srgb, var(--surface) 55%, transparent) !important;
+  background: var(--surface) !important;
+  border-bottom: 2px solid var(--border) !important;
+  font-weight: 600;
 }
 .md-typeset table:not([class]) td{
   background: transparent !important;
-  border-top-color: color-mix(in srgb, var(--border) 70%, transparent) !important;
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent) !important;
+}
+
+/* Dark table styling — visible header + row borders + subtle striping */
+[data-md-color-scheme=”slate”] .md-typeset table:not([class]) th{
+  background: #2a2a2a !important;
+  border-bottom: 2px solid #555 !important;
+}
+[data-md-color-scheme=”slate”] .md-typeset table:not([class]) td{
+  border-bottom: 1px solid #2a2a2a !important;
+}
+[data-md-color-scheme=”slate”] .md-typeset table:not([class]) tr:nth-child(odd) td{
+  background: #222222 !important;
 }
 
 /* =========================================================
@@ -623,33 +724,57 @@ body{
    ========================================================= */
 .hero{
   text-align: center;
-  padding: 3rem 1rem 2rem;
-}
-
-.hero h1{
-  font-size: 2.8rem !important;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  padding: 4rem 1rem 2rem;
+  border-radius: 0 0 var(--radius) var(--radius);
   margin-bottom: 0.5rem;
 }
 
+/* Dark mode: tighter hero + subtle bottom separator */
+[data-md-color-scheme="slate"] .hero{
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.hero h1{
+  font-size: 3.2rem !important;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.4rem;
+  line-height: 1.1;
+}
+
+/* Tagline (second paragraph) */
 .hero p:first-of-type{
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   color: var(--muted);
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.6rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+/* Sub-tagline (third paragraph) */
+.hero p:first-of-type + p{
+  font-size: 1.1rem;
+  color: var(--text);
+  margin-bottom: 1.4rem;
+  max-width: 52ch;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .hero .md-button{
   display: inline-block;
   margin: 0.3rem;
-  padding: 0.6rem 1.4rem;
+  padding: 0.65rem 1.5rem;
   border-radius: 8px;
   font-weight: 600;
   font-size: 0.9rem;
   text-decoration: none !important;
   border: 2px solid var(--link);
   color: var(--text) !important;
-  transition: all 0.15s ease;
+  transition: all 0.18s ease;
+  letter-spacing: 0.01em;
 }
 
 .hero .md-button.md-button--primary,
@@ -666,18 +791,67 @@ body{
   border-color: var(--link-hover);
   color: var(--bg) !important;
   text-decoration: none !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--link-hover) 25%, transparent);
 }
 
-.hero .md-button:hover{
-  background: var(--link-hover);
+.hero .md-button:not(.md-button--primary):hover{
+  background: color-mix(in srgb, var(--link) 10%, transparent);
   border-color: var(--link-hover);
-  color: var(--bg) !important;
+  color: var(--link-hover) !important;
   text-decoration: none !important;
+  transform: translateY(-1px);
 }
 
 /* Badges row */
 .hero p:has(a > img){
   margin-bottom: 1.5rem;
+}
+
+/* =========================================================
+   Card grid enhancements
+   ========================================================= */
+
+/* Card hover lift — Zensical "levitate" effect */
+.md-typeset .grid.cards > ul > li,
+.md-typeset .grid.cards > ol > li{
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: var(--card-shadow, none);
+}
+
+.md-typeset .grid.cards > ul > li:hover,
+.md-typeset .grid.cards > ol > li:hover{
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--link) 15%, transparent) !important;
+}
+
+/* Section dividers: generous breathing room */
+.md-typeset hr{
+  margin: 2.4rem 0 !important;
+}
+
+/* =========================================================
+   Admonition color overrides — keep Nordic palette
+   ========================================================= */
+.md-typeset .admonition.tip,
+.md-typeset details.tip{
+  border-left-color: var(--g4) !important;
+}
+.md-typeset .admonition.info,
+.md-typeset details.info{
+  border-left-color: var(--g3) !important;
+}
+.md-typeset .admonition.success,
+.md-typeset details.success{
+  border-left-color: var(--g4) !important;
+}
+.md-typeset .admonition.warning,
+.md-typeset details.warning{
+  border-left-color: color-mix(in srgb, var(--g4) 70%, #c8a400) !important;
+}
+.md-typeset .admonition.abstract,
+.md-typeset details.abstract{
+  border-left-color: var(--g3) !important;
 }
 
 /* =========================================================
@@ -711,4 +885,29 @@ body{
   color: var(--text) !important;
   fill: var(--text) !important;
   font-family: "Space Grotesk", system-ui, sans-serif !important;
+}
+
+/* Dark mermaid: neutral gray nodes instead of green */
+[data-md-color-scheme="slate"] .mermaid .node rect,
+[data-md-color-scheme="slate"] .mermaid .node polygon,
+[data-md-color-scheme="slate"] .mermaid .node circle{
+  fill: #2a2a2a !important;
+  stroke: #555 !important;
+}
+[data-md-color-scheme="slate"] .mermaid .edgePath .path{
+  stroke: #666 !important;
+}
+[data-md-color-scheme="slate"] .mermaid text,
+[data-md-color-scheme="slate"] .mermaid .nodeLabel{
+  fill: var(--g1) !important;
+  color: var(--g1) !important;
+}
+[data-md-color-scheme="slate"] .mermaid .edgeLabel{
+  background: #0d0d0d !important;
+  color: var(--g1) !important;
+}
+
+/* Pre-rendered SVG diagrams (beautiful-mermaid): desaturate in dark mode */
+[data-md-color-scheme="slate"] .mermaid-rendered svg{
+  filter: saturate(0.3) brightness(1.3);
 }

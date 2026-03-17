@@ -1,0 +1,41 @@
+flowchart TD
+    subgraph ACQ[Acquisition]
+        RINEX["RINEX 3.04<br/>(SNR, PR, Phase, Doppler)"]
+        SP3["SP3 Precise Ephemerides"]
+        CLK["CLK Precise Clocks"]
+    end
+
+    subgraph PREPROCESS[Preprocessing]
+        PARSE["Parse + Hermite Interpolation"]
+        AUX["Auxiliary Dataset<br/>(ECEF positions)"]
+        SCS["ECEF → Spherical (θ, φ)"]
+    end
+
+    subgraph STORE[Storage]
+        ICE["Icechunk Store<br/>(obs dataset)"]
+    end
+
+    subgraph VOD[VOD Retrieval]
+        PAIR["Canopy / Reference Pairing"]
+        TAU["Tau-Omega Inversion<br/>VOD = −ln(T) · cos(θ)"]
+    end
+
+    subgraph GRID[Gridding]
+        HGRID["Hemispheric Grid<br/>(equal-area / HEALPix)"]
+        KDTREE["KDTree Assignment<br/>O(n log m)"]
+    end
+
+    OUT["VOD Dataset<br/>(epoch × cell)"]
+
+    RINEX --> PARSE
+    SP3 --> PARSE
+    CLK --> PARSE
+    PARSE --> AUX
+    AUX --> SCS
+    SCS --> ICE
+
+    ICE --> PAIR
+    PAIR --> TAU
+    TAU --> OUT
+    OUT --> HGRID
+    HGRID --> KDTREE

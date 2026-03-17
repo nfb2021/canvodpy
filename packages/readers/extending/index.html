@@ -25,7 +25,7 @@
       
       
       <link rel="icon" href="../../../assets/logo.svg">
-      <meta name="generator" content="zensical-0.0.23">
+      <meta name="generator" content="zensical-0.0.24">
     
     
       
@@ -36,7 +36,7 @@
       
         
       
-      <link rel="stylesheet" href="../../../assets/stylesheets/modern/main.1e989742.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/modern/main.28978c9b.min.css">
       
         
           
@@ -48,8 +48,54 @@
 
     
     
+  <script>
+    // Patch mermaid to use "base" theme instead of "default" (blue).
+    // Material dynamically imports mermaid and calls initialize() —
+    // we intercept the import to patch the module before Material uses it.
+    (function() {
+      var _origImport = window.__import__ || null;
+
+      // Material uses dynamic import() for mermaid. We can't intercept
+      // native import(), but we CAN define a getter on window.mermaid
+      // that patches initialize() the moment it's assigned.
+      var _mermaid = undefined;
+      var _patched = false;
+      Object.defineProperty(window, "mermaid", {
+        configurable: true,
+        enumerable: true,
+        get: function() { return _mermaid; },
+        set: function(val) {
+          _mermaid = val;
+          if (val && val.initialize && !_patched) {
+            _patched = true;
+            var _origInit = val.initialize.bind(val);
+            val.initialize = function(config) {
+              var isDark = document.body && document.body.getAttribute("data-md-color-scheme") === "slate";
+            config = Object.assign({}, config, {
+              theme: "base",
+              themeVariables: isDark
+                ? { primaryColor: "#2a2a2a", primaryTextColor: "#E1E6B9", primaryBorderColor: "#555",
+                    lineColor: "#666", secondaryColor: "#1a1a1a", tertiaryColor: "#1e1e1e",
+                    mainBkg: "#2a2a2a", nodeBorder: "#555", clusterBkg: "#1a1a1a", clusterBorder: "#444",
+                    titleColor: "#E1E6B9", edgeLabelBackground: "#0d0d0d", nodeTextColor: "#E1E6B9",
+                    textColor: "#E1E6B9", fontFamily: '"Space Grotesk", system-ui, sans-serif' }
+                : { primaryColor: "#C4D7A4", primaryTextColor: "#183128", primaryBorderColor: "#5D7D5B",
+                    lineColor: "#5D7D5B", secondaryColor: "#E1E6B9", tertiaryColor: "#ABC8A4",
+                    mainBkg: "#C4D7A4", nodeBorder: "#5D7D5B", clusterBkg: "#E1E6B9", clusterBorder: "#6B8B69",
+                    titleColor: "#183128", edgeLabelBackground: "#E1E6B9", nodeTextColor: "#183128",
+                    textColor: "#183128", fontFamily: '"Space Grotesk", system-ui, sans-serif' }
+            });
+              return _origInit(config);
+            };
+          }
+        }
+      });
+    })();
+  </script>
+  
       
     
+
     
       
         
@@ -219,6 +265,22 @@
   
   
   
+    <li class="md-tabs__item">
+      <a href="../../../principles/" class="md-tabs__link">
+        
+  
+  Conventions & Defaults
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
     
     
       <li class="md-tabs__item">
@@ -297,6 +359,25 @@
           
   
   Release & Publishing
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../impressum/" class="md-tabs__link">
+          
+  
+  Legal
 
         </a>
       </li>
@@ -400,6 +481,33 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../../principles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conventions & Defaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
     
     
       
@@ -422,10 +530,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
             
   
   
@@ -443,8 +551,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -570,6 +678,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -586,10 +702,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -607,8 +723,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -637,6 +753,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -653,10 +775,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1" checked>
         
           
-          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_1" id="__nav_4_1_label" tabindex="">
             
   
   
@@ -674,8 +796,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_3_1">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4_1">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -728,6 +850,90 @@
     
   
     RINEX v3.04 Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sbf/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SBF Reader
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ephemeris-sources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ephemeris Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../satellite-catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Satellite Catalog (IGS SINEX)
   
 
     
@@ -848,6 +1054,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#contract-constants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contract Constants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#step-by-step-implementation" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -904,10 +1121,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#step-5-dataset-conversion" class="md-nav__link">
+  <a href="#step-5-dataset-conversion-with-datasetbuilder" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 5 — Dataset Conversion
+        Step 5 — Dataset Conversion with DatasetBuilder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-6-to_ds_and_auxiliary-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 6 — to_ds_and_auxiliary() (optional)
       
     </span>
   </a>
@@ -935,6 +1163,17 @@
     <span class="md-ellipsis">
       
         Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audit-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audit Integration
       
     </span>
   </a>
@@ -1015,10 +1254,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" >
         
           
-          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="">
             
   
   
@@ -1036,8 +1275,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_2">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1222,10 +1461,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
         
           
-          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="">
             
   
   
@@ -1243,8 +1482,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1317,10 +1556,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
         
           
-          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="">
             
   
   
@@ -1338,8 +1577,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1416,10 +1655,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
         
           
-          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="">
             
   
   
@@ -1437,8 +1676,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1567,10 +1806,105 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" >
         
           
-          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod-store-metadata
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    canvod-store-metadata
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../store-metadata/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="">
             
   
   
@@ -1588,8 +1922,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1662,10 +1996,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_8" >
         
           
-          <label class="md-nav__link" for="__nav_3_7" id="__nav_3_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_8" id="__nav_4_8_label" tabindex="">
             
   
   
@@ -1683,8 +2017,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1702,6 +2036,291 @@
   
     <li class="md-nav__item">
       <a href="../../utils/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_9" id="__nav_4_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod-ops
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    canvod-ops
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ops/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_10" id="__nav_4_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod-virtualiconvname
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    canvod-virtualiconvname
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../naming/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_11" id="__nav_4_11_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod-audit
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    canvod-audit
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../audit/overview/" class="md-nav__link">
         
   
   
@@ -1758,6 +2377,18 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -1771,10 +2402,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
             
   
   
@@ -1792,8 +2423,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1866,7 +2497,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../guides/development.md" class="md-nav__link">
+      <a href="../../../guides/DEVELOPMENT/" class="md-nav__link">
         
   
   
@@ -1902,6 +2533,34 @@
     
   
     Architecture & Design Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/ai-development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developing with Claude Code
   
 
     
@@ -1971,6 +2630,146 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/dask-resources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dask & Resource Management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/api-levels/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/airflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Airflow Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/diagnostics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diagnostics & Monitoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2012,10 +2811,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -2033,8 +2832,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2230,6 +3029,105 @@
       
         
       
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Legal
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Legal
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../impressum/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Impressum & AI Disclosure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
         
       
         
@@ -2257,10 +3155,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
             
   
   
@@ -2278,8 +3176,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2464,6 +3362,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../api/canvod-store-metadata/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod.store_metadata
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../api/canvod-viz/" class="md-nav__link">
         
   
@@ -2500,6 +3426,90 @@
     
   
     canvod.utils
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/canvod-ops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod.ops
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/canvod-virtualiconvname/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod.virtualiconvname
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/canvod-audit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod.audit
   
 
     
@@ -2552,6 +3562,17 @@
     <span class="md-ellipsis">
       
         Implementation Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contract-constants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contract Constants
       
     </span>
   </a>
@@ -2615,10 +3636,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#step-5-dataset-conversion" class="md-nav__link">
+  <a href="#step-5-dataset-conversion-with-datasetbuilder" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 5 — Dataset Conversion
+        Step 5 — Dataset Conversion with DatasetBuilder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-6-to_ds_and_auxiliary-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 6 — to_ds_and_auxiliary() (optional)
       
     </span>
   </a>
@@ -2646,6 +3678,17 @@
     <span class="md-ellipsis">
       
         Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audit-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audit Integration
       
     </span>
   </a>
@@ -2767,7 +3810,7 @@
 
 
 <h1 id="extending-readers">Extending Readers<a class="headerlink" href="#extending-readers" title="Permanent link">&para;</a></h1>
-<p>Add support for a new GNSS data format by implementing the <code>GNSSDataReader</code> abstract base class. canvod-readers uses the ABC pattern to enforce a consistent contract — any reader that passes the checklist below can be used anywhere <code>GNSSDataReader</code> is accepted.</p>
+<p>Add support for a new <abbr title="Global Navigation Satellite System — umbrella term for GPS, Galileo, GLONASS, BeiDou, etc. (Navipedia: GNSS)">GNSS</abbr> data format by implementing the <code>GNSSDataReader</code> abstract base class. canvod-readers uses the ABC pattern to enforce a consistent contract — any reader that passes the checklist below can be used anywhere <code>GNSSDataReader</code> is accepted.</p>
 <hr />
 <h2 id="implementation-checklist">Implementation Checklist<a class="headerlink" href="#implementation-checklist" title="Permanent link">&para;</a></h2>
 <div class="grid cards">
@@ -2775,21 +3818,23 @@
 <li>
 <p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M360.8 1.2c-17-4.9-34.7 5-39.6 22l-128 448c-4.9 17 5 34.7 22 39.6s34.7-5 39.6-22l128-448c4.9-17-5-34.7-22-39.6m64.6 136.1c-12.5 12.5-12.5 32.8 0 45.3l73.4 73.4-73.4 73.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l96-96c12.5-12.5 12.5-32.8 0-45.3l-96-96c-12.5-12.5-32.8-12.5-45.3 0zm-274.7 0c-12.5-12.5-32.8-12.5-45.3 0l-96 96c-12.5 12.5-12.5 32.8 0 45.3l96 96c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256l73.3-73.4c12.5-12.5 12.5-32.8 0-45.3z"/></svg></span> &nbsp; <strong>1. Inherit correctly</strong></p>
 <hr />
-<p><code>class MyReader(BaseModel, GNSSDataReader)</code> — both <code>BaseModel</code>
-(for Pydantic validation) and the ABC.</p>
+<p><code>class MyReader(GNSSDataReader)</code> — just one parent!
+<code>GNSSDataReader</code> is already a Pydantic <code>BaseModel</code> with <code>fpath</code>
+and file validation built in.</p>
 </li>
 <li>
-<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M133.8 36.3c10.9 7.6 13.5 22.6 5.9 33.4l-56 80c-4.1 5.8-10.5 9.5-17.6 10.1S52 158 47 153L7 113c-9.3-9.4-9.3-24.6 0-34s24.6-9.3 34 0l19.8 19.8 39.6-56.6c7.6-10.9 22.6-13.5 33.4-5.9m0 160c10.9 7.6 13.5 22.6 5.9 33.4l-56 80c-4.1 5.8-10.5 9.5-17.6 10.1S52 318 47 313L7 273c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l19.8 19.8 39.6-56.6c7.6-10.9 22.6-13.5 33.4-5.9zM224 96c0-17.7 14.3-32 32-32h224c17.7 0 32 14.3 32 32s-14.3 32-32 32H256c-17.7 0-32-14.3-32-32m0 160c0-17.7 14.3-32 32-32h224c17.7 0 32 14.3 32 32s-14.3 32-32 32H256c-17.7 0-32-14.3-32-32m-64 160c0-17.7 14.3-32 32-32h288c17.7 0 32 14.3 32 32s-14.3 32-32 32H192c-17.7 0-32-14.3-32-32m-96-40a40 40 0 1 1 0 80 40 40 0 1 1 0-80"/></svg></span> &nbsp; <strong>2. Implement all abstract methods</strong></p>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M133.8 36.3c10.9 7.6 13.5 22.6 5.9 33.4l-56 80c-4.1 5.8-10.5 9.5-17.6 10.1S52 158 47 153L7 113c-9.3-9.4-9.3-24.6 0-34s24.6-9.3 34 0l19.8 19.8 39.6-56.6c7.6-10.9 22.6-13.5 33.4-5.9m0 160c10.9 7.6 13.5 22.6 5.9 33.4l-56 80c-4.1 5.8-10.5 9.5-17.6 10.1S52 318 47 313L7 273c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l19.8 19.8 39.6-56.6c7.6-10.9 22.6-13.5 33.4-5.9zM224 96c0-17.7 14.3-32 32-32h224c17.7 0 32 14.3 32 32s-14.3 32-32 32H256c-17.7 0-32-14.3-32-32m0 160c0-17.7 14.3-32 32-32h224c17.7 0 32 14.3 32 32s-14.3 32-32 32H256c-17.7 0-32-14.3-32-32m-64 160c0-17.7 14.3-32 32-32h288c17.7 0 32 14.3 32 32s-14.3 32-32 32H192c-17.7 0-32-14.3-32-32m-96-40a40 40 0 1 1 0 80 40 40 0 1 1 0-80"/></svg></span> &nbsp; <strong>2. Implement abstract methods</strong></p>
 <hr />
 <p><code>file_hash</code>, <code>to_ds()</code>, <code>iter_epochs()</code>, <code>start_time</code>, <code>end_time</code>,
-<code>systems</code>, <code>num_epochs</code>, <code>num_satellites</code>.</p>
+<code>systems</code>, <code>num_satellites</code>.  (<code>num_epochs</code> has a default that counts
+via <code>iter_epochs()</code> — override for O(1) if your format stores the count.)</p>
 </li>
 <li>
-<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M256 0c4.6 0 9.2 1 13.4 2.9l188.4 79.9c22 9.3 38.4 31 38.3 57.2-.5 99.2-41.3 280.7-213.6 363.2-16.7 8-36.1 8-52.8 0C57.3 420.7 16.6 239.2 16.1 140c-.1-26.2 16.3-47.9 38.3-57.2L242.7 2.9C246.9 1 251.4 0 256 0m0 66.8v378.1c138-66.8 175.1-214.8 176-303.4L256 66.9z"/></svg></span> &nbsp; <strong>3. Call <code>validate_output()</code></strong></p>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M256 0c4.6 0 9.2 1 13.4 2.9l188.4 79.9c22 9.3 38.4 31 38.3 57.2-.5 99.2-41.3 280.7-213.6 363.2-16.7 8-36.1 8-52.8 0C57.3 420.7 16.6 239.2 16.1 140c-.1-26.2 16.3-47.9 38.3-57.2L242.7 2.9C246.9 1 251.4 0 256 0m0 66.8v378.1c138-66.8 175.1-214.8 176-303.4L256 66.9z"/></svg></span> &nbsp; <strong>3. Use <code>DatasetBuilder</code> (recommended)</strong></p>
 <hr />
-<p>Last line of every <code>to_ds()</code> must be
-<code>self.validate_output(ds, required_vars=...)</code>.
-Never skip it.</p>
+<p>Use <code>DatasetBuilder</code> in your <code>to_ds()</code> to construct the output Dataset.
+It handles coordinate arrays, frequency resolution, dtype enforcement,
+and calls <code>validate_dataset()</code> automatically.</p>
 </li>
 <li>
 <p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M342.6 9.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l9.4 9.3L28.1 342.6C10.1 360.6 0 385 0 410.5v5.5c0 53 43 96 96 96h5.5c25.5 0 49.9-10.1 67.9-28.1L448 205.3l9.4 9.4c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3l-160-160zM205.3 256 352 109.3l50.7 50.7-96 96H205.2z"/></svg></span> &nbsp; <strong>4. Write tests</strong></p>
@@ -2800,38 +3845,46 @@ Aim for &gt;90 % coverage.</p>
 </ul>
 </div>
 <hr />
+<h2 id="contract-constants">Contract Constants<a class="headerlink" href="#contract-constants" title="Permanent link">&para;</a></h2>
+<p>The output Dataset contract is defined by importable constants in
+<code>canvod.readers.base</code> — these are the <strong>single source of truth</strong>:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.base</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">REQUIRED_DIMS</span><span class="p">,</span>       <span class="c1"># (&quot;epoch&quot;, &quot;sid&quot;)</span>
+    <span class="n">REQUIRED_COORDS</span><span class="p">,</span>     <span class="c1"># {name: dtype, ...}</span>
+    <span class="n">REQUIRED_ATTRS</span><span class="p">,</span>      <span class="c1"># {&quot;Created&quot;, &quot;Software&quot;, &quot;Institution&quot;, &quot;File Hash&quot;}</span>
+    <span class="n">DEFAULT_REQUIRED_VARS</span><span class="p">,</span>  <span class="c1"># [&quot;SNR&quot;]</span>
+<span class="p">)</span>
+</code></pre></div>
+<p>Use <code>validate_dataset(ds)</code> to check any Dataset against them.
+It collects <strong>all</strong> violations and raises a single <code>ValueError</code>
+listing every problem.</p>
+<hr />
 <h2 id="step-by-step-implementation">Step-by-Step Implementation<a class="headerlink" href="#step-by-step-implementation" title="Permanent link">&para;</a></h2>
 <h3 id="step-1-reader-class">Step 1 — Reader Class<a class="headerlink" href="#step-1-reader-class" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">ConfigDict</span>
+<p><code>GNSSDataReader</code> is a Pydantic <code>BaseModel</code> with <code>fpath: Path</code> and file
+validation built in. You only need to set reader-specific config:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConfigDict</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">GNSSDataReader</span>
 
-<span class="k">class</span><span class="w"> </span><span class="nc">MyFormatReader</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="n">GNSSDataReader</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Reader for My Custom Format.</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MyFormatReader</span><span class="p">(</span><span class="n">GNSSDataReader</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Reader for My Custom Format.&quot;&quot;&quot;</span>
 
-<span class="sd">    Implements GNSSDataReader ABC for custom GNSS data format.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span>
-        <span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>                  <span class="c1"># Immutable after construction</span>
-        <span class="n">arbitrary_types_allowed</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="c1"># Required for Path, numpy, etc.</span>
-    <span class="p">)</span>
-
-    <span class="n">fpath</span><span class="p">:</span> <span class="n">Path</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>   <span class="c1"># no arbitrary_types needed</span>
+    <span class="c1"># no fpath field needed — inherited from GNSSDataReader</span>
 </code></pre></div>
 <h3 id="step-2-file-hash">Step 2 — File Hash<a class="headerlink" href="#step-2-file-hash" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.gnss_specs.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">rinex_file_hash</span>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.gnss_specs.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">file_hash</span>
 
-<span class="k">class</span><span class="w"> </span><span class="nc">MyFormatReader</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="n">GNSSDataReader</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MyFormatReader</span><span class="p">(</span><span class="n">GNSSDataReader</span><span class="p">):</span>
     <span class="o">...</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">file_hash</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;16-character SHA-256 prefix of the file — used for deduplication.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="n">rinex_file_hash</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fpath</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">file_hash</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fpath</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="step-3-metadata-properties">Step 3 — Metadata Properties<a class="headerlink" href="#step-3-metadata-properties" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">MyFormatReader</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="n">GNSSDataReader</span><span class="p">):</span>
+<div class="highlight"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">MyFormatReader</span><span class="p">(</span><span class="n">GNSSDataReader</span><span class="p">):</span>
     <span class="o">...</span>
 
     <span class="nd">@property</span>
@@ -2846,97 +3899,102 @@ Aim for &gt;90 % coverage.</p>
     <span class="k">def</span><span class="w"> </span><span class="nf">systems</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_systems</span><span class="p">()</span>   <span class="c1"># e.g. [&quot;G&quot;, &quot;E&quot;]</span>
 
-    <span class="nd">@property</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">num_epochs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-        <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">iter_epochs</span><span class="p">())</span>
+    <span class="c1"># num_epochs has a default (iterates via iter_epochs);</span>
+    <span class="c1"># override for O(1) if your format stores the count in the header.</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">num_satellites</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-        <span class="k">return</span> <span class="nb">len</span><span class="p">({</span><span class="n">obs</span><span class="o">.</span><span class="n">sv</span> <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">iter_epochs</span><span class="p">()</span> <span class="k">for</span> <span class="n">obs</span> <span class="ow">in</span> <span class="n">ep</span><span class="o">.</span><span class="n">observations</span><span class="p">})</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_count_satellites</span><span class="p">()</span>
 </code></pre></div>
 <h3 id="step-4-epoch-iterator">Step 4 — Epoch Iterator<a class="headerlink" href="#step-4-epoch-iterator" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Generator</span>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterator</span>
 
-<span class="k">class</span><span class="w"> </span><span class="nc">MyFormatReader</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="n">GNSSDataReader</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MyFormatReader</span><span class="p">(</span><span class="n">GNSSDataReader</span><span class="p">):</span>
     <span class="o">...</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">iter_epochs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">iter_epochs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Lazily yield one epoch at a time — keep memory bounded.&quot;&quot;&quot;</span>
-        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fpath</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">fpath</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_skip_header</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">raw</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_raw_epoch_generator</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
                 <span class="k">yield</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decode_epoch</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span>
 </code></pre></div>
-<h3 id="step-5-dataset-conversion">Step 5 — Dataset Conversion<a class="headerlink" href="#step-5-dataset-conversion" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">xarray</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xr</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.gnss_specs.signals</span><span class="w"> </span><span class="kn">import</span> <span class="n">SignalIDMapper</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.gnss_specs.metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">SNR_METADATA</span><span class="p">,</span> <span class="n">COORDS_METADATA</span><span class="p">,</span> <span class="n">get_global_attrs</span>
+<h3 id="step-5-dataset-conversion-with-datasetbuilder">Step 5 — Dataset Conversion with DatasetBuilder<a class="headerlink" href="#step-5-dataset-conversion-with-datasetbuilder" title="Permanent link">&para;</a></h3>
+<p><code>DatasetBuilder</code> handles coordinate assembly, frequency resolution,
+dtype enforcement, and validation — so your <code>to_ds()</code> stays simple:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.builder</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatasetBuilder</span>
 
-<span class="k">class</span><span class="w"> </span><span class="nc">MyFormatReader</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="n">GNSSDataReader</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MyFormatReader</span><span class="p">(</span><span class="n">GNSSDataReader</span><span class="p">):</span>
     <span class="o">...</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">to_ds</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
-        <span class="n">keep_rnx_data_vars</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">keep_data_vars</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">xr</span><span class="o">.</span><span class="n">Dataset</span><span class="p">:</span>
-        <span class="c1"># 1. Collect</span>
+        <span class="n">builder</span> <span class="o">=</span> <span class="n">DatasetBuilder</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">iter_epochs</span><span class="p">():</span>
+            <span class="n">ei</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">add_epoch</span><span class="p">(</span><span class="n">epoch</span><span class="o">.</span><span class="n">timestamp</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">obs</span> <span class="ow">in</span> <span class="n">epoch</span><span class="o">.</span><span class="n">observations</span><span class="p">:</span>
+                <span class="n">sig</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">add_signal</span><span class="p">(</span>
+                    <span class="n">sv</span><span class="o">=</span><span class="n">obs</span><span class="o">.</span><span class="n">sv</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">obs</span><span class="o">.</span><span class="n">band</span><span class="p">,</span> <span class="n">code</span><span class="o">=</span><span class="n">obs</span><span class="o">.</span><span class="n">code</span>
+                <span class="p">)</span>
+                <span class="n">builder</span><span class="o">.</span><span class="n">set_value</span><span class="p">(</span><span class="n">ei</span><span class="p">,</span> <span class="n">sig</span><span class="p">,</span> <span class="s2">&quot;SNR&quot;</span><span class="p">,</span> <span class="n">obs</span><span class="o">.</span><span class="n">snr_value</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">(</span>
+            <span class="n">keep_data_vars</span><span class="o">=</span><span class="n">keep_data_vars</span><span class="p">,</span>
+            <span class="n">extra_attrs</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;Source Format&quot;</span><span class="p">:</span> <span class="s2">&quot;My Custom Format&quot;</span><span class="p">},</span>
+        <span class="p">)</span>
+</code></pre></div>
+<details class="note">
+<summary>Manual Dataset construction (advanced)</summary>
+<p>If you need more control than <code>DatasetBuilder</code> provides, you can
+construct the Dataset manually using <code>SignalIDMapper</code> and
+<code>validate_dataset()</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">xarray</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xr</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.gnss_specs.signals</span><span class="w"> </span><span class="kn">import</span> <span class="n">SignalIDMapper</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.gnss_specs.metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">SNR_METADATA</span><span class="p">,</span> <span class="n">COORDS_METADATA</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_dataset</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyFormatReader</span><span class="p">(</span><span class="n">GNSSDataReader</span><span class="p">):</span>
+    <span class="o">...</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_ds</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">keep_data_vars</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">xr</span><span class="o">.</span><span class="n">Dataset</span><span class="p">:</span>
         <span class="n">all_epochs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">iter_epochs</span><span class="p">())</span>
-
-        <span class="c1"># 2. Build SID index</span>
         <span class="n">mapper</span> <span class="o">=</span> <span class="n">SignalIDMapper</span><span class="p">()</span>
-        <span class="n">all_sids</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">({</span>
-            <span class="n">mapper</span><span class="o">.</span><span class="n">create_signal_id</span><span class="p">(</span><span class="n">obs</span><span class="o">.</span><span class="n">sv</span><span class="p">,</span> <span class="n">obs</span><span class="o">.</span><span class="n">code</span><span class="p">)</span>
-            <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">all_epochs</span>
-            <span class="k">for</span> <span class="n">obs</span> <span class="ow">in</span> <span class="n">ep</span><span class="o">.</span><span class="n">observations</span>
-        <span class="p">})</span>
 
-        <span class="c1"># 3. Coordinate arrays</span>
-        <span class="n">epochs</span>     <span class="o">=</span> <span class="p">[</span><span class="n">ep</span><span class="o">.</span><span class="n">timestamp</span> <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">all_epochs</span><span class="p">]</span>
-        <span class="n">sv_arr</span>     <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">sid</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;|&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="n">all_sids</span><span class="p">])</span>
-        <span class="n">system_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">sid</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>            <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="n">all_sids</span><span class="p">])</span>
-        <span class="n">band_arr</span>   <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">sid</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;|&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="n">all_sids</span><span class="p">])</span>
-        <span class="n">code_arr</span>   <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">sid</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;|&quot;</span><span class="p">)[</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="n">all_sids</span><span class="p">])</span>
-        <span class="n">fc</span>         <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">mapper</span><span class="o">.</span><span class="n">get_band_frequency</span><span class="p">(</span><span class="n">sid</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;|&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
-                               <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="n">all_sids</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
-        <span class="n">bw</span>         <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">mapper</span><span class="o">.</span><span class="n">get_band_bandwidth</span><span class="p">(</span><span class="n">sid</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;|&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
-                               <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="n">all_sids</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="c1"># Build SID index, coordinate arrays, data arrays...</span>
+        <span class="c1"># (see existing readers for full example)</span>
 
-        <span class="c1"># 4. Data arrays (SNR minimum; extend for Phase / PR / Doppler)</span>
-        <span class="n">sid_to_idx</span> <span class="o">=</span> <span class="p">{</span><span class="n">sid</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">sid</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">all_sids</span><span class="p">)}</span>
-        <span class="n">snr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">epochs</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">all_sids</span><span class="p">)),</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">ep</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">all_epochs</span><span class="p">):</span>
-            <span class="k">for</span> <span class="n">obs</span> <span class="ow">in</span> <span class="n">ep</span><span class="o">.</span><span class="n">observations</span><span class="p">:</span>
-                <span class="n">sid</span> <span class="o">=</span> <span class="n">mapper</span><span class="o">.</span><span class="n">create_signal_id</span><span class="p">(</span><span class="n">obs</span><span class="o">.</span><span class="n">sv</span><span class="p">,</span> <span class="n">obs</span><span class="o">.</span><span class="n">code</span><span class="p">)</span>
-                <span class="n">snr</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">sid_to_idx</span><span class="p">[</span><span class="n">sid</span><span class="p">]]</span> <span class="o">=</span> <span class="n">obs</span><span class="o">.</span><span class="n">snr</span>
-
-        <span class="c1"># 5. Assemble Dataset</span>
         <span class="n">ds</span> <span class="o">=</span> <span class="n">xr</span><span class="o">.</span><span class="n">Dataset</span><span class="p">(</span>
             <span class="n">data_vars</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;SNR&quot;</span><span class="p">:</span> <span class="p">((</span><span class="s2">&quot;epoch&quot;</span><span class="p">,</span> <span class="s2">&quot;sid&quot;</span><span class="p">),</span> <span class="n">snr</span><span class="p">,</span> <span class="n">SNR_METADATA</span><span class="p">)},</span>
-            <span class="n">coords</span><span class="o">=</span><span class="p">{</span>
-                <span class="s2">&quot;epoch&quot;</span><span class="p">:</span>      <span class="p">(</span><span class="s2">&quot;epoch&quot;</span><span class="p">,</span> <span class="n">epochs</span><span class="p">,</span> <span class="n">COORDS_METADATA</span><span class="p">[</span><span class="s2">&quot;epoch&quot;</span><span class="p">]),</span>
-                <span class="s2">&quot;sid&quot;</span><span class="p">:</span>        <span class="p">(</span><span class="s2">&quot;sid&quot;</span><span class="p">,</span> <span class="n">all_sids</span><span class="p">,</span> <span class="n">COORDS_METADATA</span><span class="p">[</span><span class="s2">&quot;sid&quot;</span><span class="p">]),</span>
-                <span class="s2">&quot;sv&quot;</span><span class="p">:</span>         <span class="p">(</span><span class="s2">&quot;sid&quot;</span><span class="p">,</span> <span class="n">sv_arr</span><span class="p">,</span>     <span class="n">COORDS_METADATA</span><span class="p">[</span><span class="s2">&quot;sv&quot;</span><span class="p">]),</span>
-                <span class="s2">&quot;system&quot;</span><span class="p">:</span>     <span class="p">(</span><span class="s2">&quot;sid&quot;</span><span class="p">,</span> <span class="n">system_arr</span><span class="p">,</span> <span class="n">COORDS_METADATA</span><span class="p">[</span><span class="s2">&quot;system&quot;</span><span class="p">]),</span>
-                <span class="s2">&quot;band&quot;</span><span class="p">:</span>       <span class="p">(</span><span class="s2">&quot;sid&quot;</span><span class="p">,</span> <span class="n">band_arr</span><span class="p">,</span>   <span class="n">COORDS_METADATA</span><span class="p">[</span><span class="s2">&quot;band&quot;</span><span class="p">]),</span>
-                <span class="s2">&quot;code&quot;</span><span class="p">:</span>       <span class="p">(</span><span class="s2">&quot;sid&quot;</span><span class="p">,</span> <span class="n">code_arr</span><span class="p">,</span>   <span class="n">COORDS_METADATA</span><span class="p">[</span><span class="s2">&quot;code&quot;</span><span class="p">]),</span>
-                <span class="s2">&quot;freq_center&quot;</span><span class="p">:(</span><span class="s2">&quot;sid&quot;</span><span class="p">,</span> <span class="n">fc</span><span class="p">,</span>          <span class="n">COORDS_METADATA</span><span class="p">[</span><span class="s2">&quot;freq_center&quot;</span><span class="p">]),</span>
-                <span class="s2">&quot;freq_min&quot;</span><span class="p">:</span>   <span class="p">(</span><span class="s2">&quot;sid&quot;</span><span class="p">,</span> <span class="n">fc</span> <span class="o">-</span> <span class="n">bw</span> <span class="o">/</span> <span class="mi">2</span><span class="p">,</span> <span class="n">COORDS_METADATA</span><span class="p">[</span><span class="s2">&quot;freq_min&quot;</span><span class="p">]),</span>
-                <span class="s2">&quot;freq_max&quot;</span><span class="p">:</span>   <span class="p">(</span><span class="s2">&quot;sid&quot;</span><span class="p">,</span> <span class="n">fc</span> <span class="o">+</span> <span class="n">bw</span> <span class="o">/</span> <span class="mi">2</span><span class="p">,</span> <span class="n">COORDS_METADATA</span><span class="p">[</span><span class="s2">&quot;freq_max&quot;</span><span class="p">]),</span>
-            <span class="p">},</span>
-            <span class="n">attrs</span><span class="o">=</span><span class="p">{</span>
-                <span class="o">**</span><span class="n">get_global_attrs</span><span class="p">(),</span>
-                <span class="s2">&quot;RINEX File Hash&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_hash</span><span class="p">,</span>
-                <span class="s2">&quot;Source Format&quot;</span><span class="p">:</span>   <span class="s2">&quot;My Custom Format&quot;</span><span class="p">,</span>
-            <span class="p">},</span>
+            <span class="n">coords</span><span class="o">=</span><span class="p">{</span><span class="o">...</span><span class="p">},</span>
+            <span class="n">attrs</span><span class="o">=</span><span class="p">{</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_attrs</span><span class="p">(),</span> <span class="s2">&quot;Source Format&quot;</span><span class="p">:</span> <span class="s2">&quot;My Custom Format&quot;</span><span class="p">},</span>
         <span class="p">)</span>
 
-        <span class="c1"># 6. MANDATORY — validate before returning</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">validate_output</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">required_vars</span><span class="o">=</span><span class="n">keep_rnx_data_vars</span><span class="p">)</span>
+        <span class="c1"># MANDATORY — validate before returning</span>
+        <span class="n">validate_dataset</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">required_vars</span><span class="o">=</span><span class="n">keep_data_vars</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">ds</span>
 </code></pre></div>
-<hr />
+</details>
+<h3 id="step-6-to_ds_and_auxiliary-optional">Step 6 — <code>to_ds_and_auxiliary()</code> (optional)<a class="headerlink" href="#step-6-to_ds_and_auxiliary-optional" title="Permanent link">&para;</a></h3>
+<p>If your format embeds metadata beyond observations (like <abbr title="Septentrio Binary Format — proprietary binary telemetry from Septentrio receivers; embeds satellite geometry">SBF</abbr> embeds
+satellite geometry), override <code>to_ds_and_auxiliary()</code> to collect
+both datasets in a single file scan:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_ds_and_auxiliary</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">keep_data_vars</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">xr</span><span class="o">.</span><span class="n">Dataset</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">xr</span><span class="o">.</span><span class="n">Dataset</span><span class="p">]]:</span>
+    <span class="n">obs_ds</span> <span class="o">=</span> <span class="o">...</span>   <span class="c1"># build obs dataset</span>
+    <span class="n">meta_ds</span> <span class="o">=</span> <span class="o">...</span>  <span class="c1"># build metadata dataset</span>
+    <span class="k">return</span> <span class="n">obs_ds</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;my_format_meta&quot;</span><span class="p">:</span> <span class="n">meta_ds</span><span class="p">}</span>
+</code></pre></div>
+<p>The default implementation calls <code>to_ds()</code> and returns an empty dict.</p>
 <hr />
 <h2 id="validation-requirements">Validation Requirements<a class="headerlink" href="#validation-requirements" title="Permanent link">&para;</a></h2>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Dimensions</label><label for="__tabbed_1_2">Coordinates</label><label for="__tabbed_1_3">Attributes</label><label for="__tabbed_1_4">Data Variables</label></div>
@@ -2947,32 +4005,35 @@ Aim for &gt;90 % coverage.</p>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><span class="n">required_coords</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;epoch&quot;</span><span class="p">:</span>       <span class="s2">&quot;datetime64[ns]&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;sid&quot;</span><span class="p">:</span>         <span class="s2">&quot;object&quot;</span><span class="p">,</span>     <span class="c1"># string</span>
-    <span class="s2">&quot;sv&quot;</span><span class="p">:</span>          <span class="s2">&quot;object&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;system&quot;</span><span class="p">:</span>      <span class="s2">&quot;object&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;band&quot;</span><span class="p">:</span>        <span class="s2">&quot;object&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;code&quot;</span><span class="p">:</span>        <span class="s2">&quot;object&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;freq_center&quot;</span><span class="p">:</span> <span class="s2">&quot;float64&quot;</span><span class="p">,</span>    <span class="c1"># must be float64, NOT float32</span>
-    <span class="s2">&quot;freq_min&quot;</span><span class="p">:</span>    <span class="s2">&quot;float64&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;freq_max&quot;</span><span class="p">:</span>    <span class="s2">&quot;float64&quot;</span><span class="p">,</span>
-<span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">REQUIRED_COORDS</span>
+
+<span class="c1"># REQUIRED_COORDS = {</span>
+<span class="c1">#     &quot;epoch&quot;:       &quot;datetime64[ns]&quot;,</span>
+<span class="c1">#     &quot;sid&quot;:         &quot;object&quot;,     # string</span>
+<span class="c1">#     &quot;sv&quot;:          &quot;object&quot;,</span>
+<span class="c1">#     &quot;system&quot;:      &quot;object&quot;,</span>
+<span class="c1">#     &quot;band&quot;:        &quot;object&quot;,</span>
+<span class="c1">#     &quot;code&quot;:        &quot;object&quot;,</span>
+<span class="c1">#     &quot;freq_center&quot;: &quot;float32&quot;,    # must be float32</span>
+<span class="c1">#     &quot;freq_min&quot;:    &quot;float32&quot;,</span>
+<span class="c1">#     &quot;freq_max&quot;:    &quot;float32&quot;,</span>
+<span class="c1"># }</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><span class="n">required_attrs</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;Created&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;Software&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;Institution&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;RINEX File Hash&quot;</span><span class="p">,</span>   <span class="c1"># for storage deduplication</span>
-<span class="p">}</span>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">REQUIRED_ATTRS</span>
+
+<span class="c1"># REQUIRED_ATTRS = {</span>
+<span class="c1">#     &quot;Created&quot;,</span>
+<span class="c1">#     &quot;Software&quot;,</span>
+<span class="c1">#     &quot;Institution&quot;,</span>
+<span class="c1">#     &quot;File Hash&quot;,    # for storage deduplication</span>
+<span class="c1"># }</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><span class="c1"># SNR and Phase required by default</span>
-<span class="k">assert</span> <span class="s2">&quot;SNR&quot;</span>   <span class="ow">in</span> <span class="n">ds</span><span class="o">.</span><span class="n">data_vars</span>
-<span class="k">assert</span> <span class="s2">&quot;Phase&quot;</span> <span class="ow">in</span> <span class="n">ds</span><span class="o">.</span><span class="n">data_vars</span>
+<div class="highlight"><pre><span></span><code><span class="c1"># SNR required by default</span>
+<span class="k">assert</span> <span class="s2">&quot;SNR&quot;</span> <span class="ow">in</span> <span class="n">ds</span><span class="o">.</span><span class="n">data_vars</span>
 
 <span class="c1"># All variables must be (epoch, sid)</span>
 <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">ds</span><span class="o">.</span><span class="n">data_vars</span><span class="p">:</span>
@@ -3007,8 +4068,7 @@ Aim for &gt;90 % coverage.</p>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">test_dataset_variables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">real_test_file</span><span class="p">):</span>
         <span class="n">ds</span> <span class="o">=</span> <span class="n">MyFormatReader</span><span class="p">(</span><span class="n">fpath</span><span class="o">=</span><span class="n">real_test_file</span><span class="p">)</span><span class="o">.</span><span class="n">to_ds</span><span class="p">()</span>
-        <span class="k">assert</span> <span class="s2">&quot;SNR&quot;</span>   <span class="ow">in</span> <span class="n">ds</span><span class="o">.</span><span class="n">data_vars</span>
-        <span class="k">assert</span> <span class="s2">&quot;Phase&quot;</span> <span class="ow">in</span> <span class="n">ds</span><span class="o">.</span><span class="n">data_vars</span>
+        <span class="k">assert</span> <span class="s2">&quot;SNR&quot;</span> <span class="ow">in</span> <span class="n">ds</span><span class="o">.</span><span class="n">data_vars</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">test_sid_dimensions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">real_test_file</span><span class="p">):</span>
         <span class="n">ds</span> <span class="o">=</span> <span class="n">MyFormatReader</span><span class="p">(</span><span class="n">fpath</span><span class="o">=</span><span class="n">real_test_file</span><span class="p">)</span><span class="o">.</span><span class="n">to_ds</span><span class="p">()</span>
@@ -3017,14 +4077,14 @@ Aim for &gt;90 % coverage.</p>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">test_file_hash_in_attrs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">real_test_file</span><span class="p">):</span>
         <span class="n">ds</span> <span class="o">=</span> <span class="n">MyFormatReader</span><span class="p">(</span><span class="n">fpath</span><span class="o">=</span><span class="n">real_test_file</span><span class="p">)</span><span class="o">.</span><span class="n">to_ds</span><span class="p">()</span>
-        <span class="k">assert</span> <span class="s2">&quot;RINEX File Hash&quot;</span> <span class="ow">in</span> <span class="n">ds</span><span class="o">.</span><span class="n">attrs</span>
+        <span class="k">assert</span> <span class="s2">&quot;File Hash&quot;</span> <span class="ow">in</span> <span class="n">ds</span><span class="o">.</span><span class="n">attrs</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">integration</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">test_full_pipeline</span><span class="p">(</span><span class="n">real_test_file</span><span class="p">):</span>
     <span class="n">reader</span> <span class="o">=</span> <span class="n">MyFormatReader</span><span class="p">(</span><span class="n">fpath</span><span class="o">=</span><span class="n">real_test_file</span><span class="p">)</span>
-    <span class="n">ds</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">to_ds</span><span class="p">(</span><span class="n">keep_rnx_data_vars</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;SNR&quot;</span><span class="p">])</span>
+    <span class="n">ds</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">to_ds</span><span class="p">(</span><span class="n">keep_data_vars</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;SNR&quot;</span><span class="p">])</span>
 
     <span class="c1"># Filter GPS only</span>
     <span class="n">gps</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">system</span> <span class="o">==</span> <span class="s2">&quot;G&quot;</span><span class="p">,</span> <span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -3035,27 +4095,62 @@ Aim for &gt;90 % coverage.</p>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatasetStructureValidator</span>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_dataset</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">test_validation_passes</span><span class="p">(</span><span class="n">real_test_file</span><span class="p">):</span>
     <span class="n">ds</span> <span class="o">=</span> <span class="n">MyFormatReader</span><span class="p">(</span><span class="n">fpath</span><span class="o">=</span><span class="n">real_test_file</span><span class="p">)</span><span class="o">.</span><span class="n">to_ds</span><span class="p">()</span>
-    <span class="c1"># validate_output() is already called inside to_ds() —</span>
+    <span class="c1"># validate_dataset() is already called inside to_ds() —</span>
     <span class="c1"># this test verifies it didn&#39;t raise</span>
-    <span class="n">validator</span> <span class="o">=</span> <span class="n">DatasetStructureValidator</span><span class="p">(</span><span class="n">dataset</span><span class="o">=</span><span class="n">ds</span><span class="p">)</span>
-    <span class="n">validator</span><span class="o">.</span><span class="n">validate_all</span><span class="p">()</span>   <span class="c1"># should not raise</span>
+    <span class="n">validate_dataset</span><span class="p">(</span><span class="n">ds</span><span class="p">)</span>   <span class="c1"># should not raise</span>
 </code></pre></div>
 </div>
 </div>
 </div>
 <hr />
+<h2 id="audit-integration">Audit Integration<a class="headerlink" href="#audit-integration" title="Permanent link">&para;</a></h2>
+<p>Adding a new reader is not complete until the <strong>audit suite</strong> can validate its
+output against existing readers. This ensures intra-validation — that your new
+reader produces scientifically consistent results when processing the same
+observation data.</p>
+<ol>
+<li>
+<p><strong>Add a Tier 1 comparison</strong> — compare your reader's output against an existing
+   reader on shared test data (same receiver, same time window). Follow the pattern
+   in <code>canvod.audit.runners.sbf_vs_rinex</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">canvod.audit.runners</span><span class="w"> </span><span class="kn">import</span> <span class="n">audit_sbf_vs_rinex</span>
+
+<span class="c1"># Your equivalent: audit_myformat_vs_rinex(...)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">audit_sbf_vs_rinex</span><span class="p">(</span><span class="n">sbf_store</span><span class="o">=</span><span class="s2">&quot;...&quot;</span><span class="p">,</span> <span class="n">rinex_store</span><span class="o">=</span><span class="s2">&quot;...&quot;</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">result</span><span class="o">.</span><span class="n">passed</span>
+</code></pre></div>
+</li>
+<li>
+<p><strong>Define tolerances</strong> — <abbr title="Signal-to-Noise Ratio — carrier power relative to noise floor, in dB-Hz. Key observable for GNSS transmissometry. (Navipedia: GNSS Measurements)">SNR</abbr> should be bit-identical if the underlying data is the
+   same. Angular values (θ, φ) may differ if ephemeris sources differ. Use the
+   appropriate <code>ToleranceTier</code> (EXACT, NUMERICAL, or SCIENTIFIC) and document
+   expected differences.</p>
+</li>
+<li>
+<p><strong>Add integration tests</strong> in <code>packages/canvod-audit/tests/test_integration.py</code> —
+   verify dataset structure, shared observables, and value ranges against real data
+   from the test submodule.</p>
+</li>
+<li>
+<p><strong>Run the full audit</strong> after implementation:</p>
+<div class="highlight"><pre><span></span><code>just<span class="w"> </span>test-audit
+</code></pre></div>
+</li>
+</ol>
+<p>See the <a href="../../../packages/audit/overview/">Audit Suite</a> for the full tier system.</p>
+<hr />
 <h2 id="common-pitfalls">Common Pitfalls<a class="headerlink" href="#common-pitfalls" title="Permanent link">&para;</a></h2>
 <div class="admonition failure">
 <p class="admonition-title">Wrong dtype for frequency coordinates</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># WRONG — float32 fails the dtype check</span>
-<span class="n">freq_center</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="o">...</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
-
-<span class="c1"># CORRECT</span>
+<div class="highlight"><pre><span></span><code><span class="c1"># WRONG — float64 fails the dtype check</span>
 <span class="n">freq_center</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="o">...</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+<span class="c1"># CORRECT — DatasetBuilder handles this automatically</span>
+<span class="n">freq_center</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="o">...</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
 </code></pre></div>
 </div>
 <div class="admonition failure">
@@ -3065,11 +4160,11 @@ Aim for &gt;90 % coverage.</p>
     <span class="n">ds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_dataset</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">ds</span>   <span class="c1"># ← will silently produce invalid datasets downstream</span>
 
-<span class="c1"># CORRECT</span>
+<span class="c1"># CORRECT — DatasetBuilder.build() calls validate_dataset() for you</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">to_ds</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">xr</span><span class="o">.</span><span class="n">Dataset</span><span class="p">:</span>
-    <span class="n">ds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_dataset</span><span class="p">()</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">validate_output</span><span class="p">(</span><span class="n">ds</span><span class="p">)</span>   <span class="c1"># mandatory</span>
-    <span class="k">return</span> <span class="n">ds</span>
+    <span class="n">builder</span> <span class="o">=</span> <span class="n">DatasetBuilder</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+    <span class="c1"># ... add epochs, signals, values ...</span>
+    <span class="k">return</span> <span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">()</span>  <span class="c1"># validates automatically</span>
 </code></pre></div>
 </div>
 <div class="admonition failure">
@@ -3077,26 +4172,36 @@ Aim for &gt;90 % coverage.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># WRONG</span>
 <span class="n">data_vars</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;SNR&quot;</span><span class="p">:</span> <span class="p">((</span><span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="s2">&quot;signal&quot;</span><span class="p">),</span> <span class="n">data</span><span class="p">)}</span>
 
-<span class="c1"># CORRECT</span>
+<span class="c1"># CORRECT — DatasetBuilder uses the right names automatically</span>
 <span class="n">data_vars</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;SNR&quot;</span><span class="p">:</span> <span class="p">((</span><span class="s2">&quot;epoch&quot;</span><span class="p">,</span> <span class="s2">&quot;sid&quot;</span><span class="p">),</span> <span class="n">data</span><span class="p">)}</span>
 </code></pre></div>
 </div>
 <hr />
 <h2 id="registering-with-readerfactory">Registering with ReaderFactory<a class="headerlink" href="#registering-with-readerfactory" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">canvod.readers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReaderFactory</span>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">canvodpy</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReaderFactory</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">my_package.readers</span><span class="w"> </span><span class="kn">import</span> <span class="n">MyFormatReader</span>
 
-<span class="c1"># Register</span>
+<span class="c1"># Register by name</span>
 <span class="n">ReaderFactory</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">&quot;my_format&quot;</span><span class="p">,</span> <span class="n">MyFormatReader</span><span class="p">)</span>
 
-<span class="c1"># Automatic detection</span>
-<span class="n">reader</span> <span class="o">=</span> <span class="n">ReaderFactory</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="s2">&quot;file.dat&quot;</span><span class="p">)</span>   <span class="c1"># → MyFormatReader</span>
+<span class="c1"># Create by name</span>
+<span class="n">reader</span> <span class="o">=</span> <span class="n">ReaderFactory</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="s2">&quot;my_format&quot;</span><span class="p">,</span> <span class="n">fpath</span><span class="o">=</span><span class="s2">&quot;file.dat&quot;</span><span class="p">)</span>
 </code></pre></div>
-<p>Update the detection logic to recognise your format:</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># In ReaderFactory._detect_format()</span>
-<span class="k">if</span> <span class="n">first_bytes</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;MY_FORMAT&quot;</span><span class="p">):</span>
-    <span class="k">return</span> <span class="s2">&quot;my_format&quot;</span>
-</code></pre></div>
+<p>For <abbr title="Receiver Independent Exchange Format — standard ASCII format for GNSS observations, defined by IGS (Navipedia: RINEX)">RINEX</abbr> files, <code>ReaderFactory.create_from_file(path)</code> auto-detects
+v2/v3 from the file header. Custom binary formats should use the
+name-based API above.</p>
+<!-- Glossary: hover any abbreviation to see its definition -->
+
+<!-- GNSS fundamentals — see Navipedia (navipedia.net) for detailed articles -->
+<!-- Satellite identifiers -->
+<!-- Observation data -->
+<!-- VOD and transmissometry -->
+<!-- Ephemerides and orbits -->
+<!-- Data standards -->
+<!-- Infrastructure -->
+<!-- Coordinate systems -->
+<!-- Signal bands -->
+<!-- Software tools -->
 
 
 
@@ -3116,6 +4221,8 @@ Aim for &gt;90 % coverage.</p>
             </div>
           
           
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
@@ -3174,7 +4281,7 @@ Aim for &gt;90 % coverage.</p>
       <div class="md-copyright">
   
     <div class="md-copyright__highlight">
-      Copyright &copy; 2026 Nicolas Bader, TU Wien
+      Copyright &copy; 2026 Nicolas François Bader, TU Wien. This documentation is provided &ldquo;as is&rdquo; without warranty of any kind, express or implied, including but not limited to warranties of correctness, completeness, or fitness for a particular purpose.
     </div>
   
   
@@ -3221,17 +4328,17 @@ Aim for &gt;90 % coverage.</p>
       <div class="md-dialog__inner md-typeset"></div>
     </div>
     
+      <div class="md-progress" data-md-component="progress" role="progressbar"></div>
+    
     
     
       
       
       
-      <script id="__config" type="application/json">{"annotate":null,"base":"../../..","features":["content.code.copy","content.code.annotate","navigation.footer","navigation.indexes","navigation.instant","navigation.instant.prefetch","navigation.path","navigation.sections","navigation.tabs","navigation.top","navigation.tracking","search.highlight"],"search":"../../../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+      <script id="__config" type="application/json">{"annotate":null,"base":"../../..","features":["content.code.copy","content.code.annotate","content.tooltips","content.tabs.link","navigation.footer","navigation.indexes","navigation.instant","navigation.instant.prefetch","navigation.instant.progress","navigation.path","navigation.sections","navigation.tabs","navigation.top","navigation.tracking","search.highlight","search.suggest","toc.follow"],"search":"../../../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.5fcf0de6.min.js"></script>
-      
-        <script src="https://unpkg.com/beautiful-mermaid/dist/beautiful-mermaid.browser.global.js"></script>
+      <script src="../../../assets/javascripts/bundle.16f8adc2.min.js"></script>
       
         <script src="../../../assets/mermaid-init.js"></script>
       

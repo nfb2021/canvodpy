@@ -1,0 +1,11 @@
+flowchart TD
+    RAW["`**Raw Dataset**
+    epoch, sid`"]
+    RAW --> TA["`**TemporalAggregate**
+    1-min mean`"]
+    TA --> GA["`**GridAssignment**
+    2-deg equal-area`"]
+    GA --> OUT["`**Enriched Dataset**
+    + cell_id
+    + PipelineResult metadata`"]
+    OUT --> STORE["`**Icechunk Store**`"]

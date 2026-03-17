@@ -4,6 +4,9 @@
         <loc>https://nfb2021.github.io/canvodpy/</loc>
       </url>
       <url>
+        <loc>https://nfb2021.github.io/canvodpy/principles/</loc>
+      </url>
+      <url>
         <loc>https://nfb2021.github.io/canvodpy/architecture/</loc>
       </url>
       <url>
@@ -17,6 +20,15 @@
       </url>
       <url>
         <loc>https://nfb2021.github.io/canvodpy/packages/readers/rinex-format/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/packages/readers/sbf/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/packages/readers/ephemeris-sources/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/packages/readers/satellite-catalog/</loc>
       </url>
       <url>
         <loc>https://nfb2021.github.io/canvodpy/packages/readers/architecture/</loc>
@@ -55,10 +67,22 @@
         <loc>https://nfb2021.github.io/canvodpy/packages/store/storage-strategies/</loc>
       </url>
       <url>
+        <loc>https://nfb2021.github.io/canvodpy/packages/store-metadata/overview/</loc>
+      </url>
+      <url>
         <loc>https://nfb2021.github.io/canvodpy/packages/viz/overview/</loc>
       </url>
       <url>
         <loc>https://nfb2021.github.io/canvodpy/packages/utils/overview/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/packages/ops/overview/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/packages/naming/overview/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/packages/audit/overview/</loc>
       </url>
       <url>
         <loc>https://nfb2021.github.io/canvodpy/guides/getting-started/</loc>
@@ -67,13 +91,34 @@
         <loc>https://nfb2021.github.io/canvodpy/CONTRIBUTING/</loc>
       </url>
       <url>
+        <loc>https://nfb2021.github.io/canvodpy/guides/DEVELOPMENT/</loc>
+      </url>
+      <url>
         <loc>https://nfb2021.github.io/canvodpy/guides/architecture-design/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/guides/ai-development/</loc>
       </url>
       <url>
         <loc>https://nfb2021.github.io/canvodpy/build-system/</loc>
       </url>
       <url>
         <loc>https://nfb2021.github.io/canvodpy/tooling/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/guides/configuration/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/guides/dask-resources/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/guides/api-levels/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/guides/airflow/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/guides/diagnostics/</loc>
       </url>
       <url>
         <loc>https://nfb2021.github.io/canvodpy/VERSIONING/</loc>
@@ -94,6 +139,9 @@
         <loc>https://nfb2021.github.io/canvodpy/guides/HOW_RELEASE_WORKS/</loc>
       </url>
       <url>
+        <loc>https://nfb2021.github.io/canvodpy/impressum/</loc>
+      </url>
+      <url>
         <loc>https://nfb2021.github.io/canvodpy/api/canvodpy/</loc>
       </url>
       <url>
@@ -112,9 +160,21 @@
         <loc>https://nfb2021.github.io/canvodpy/api/canvod-store/</loc>
       </url>
       <url>
+        <loc>https://nfb2021.github.io/canvodpy/api/canvod-store-metadata/</loc>
+      </url>
+      <url>
         <loc>https://nfb2021.github.io/canvodpy/api/canvod-viz/</loc>
       </url>
       <url>
         <loc>https://nfb2021.github.io/canvodpy/api/canvod-utils/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/api/canvod-ops/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/api/canvod-virtualiconvname/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/api/canvod-audit/</loc>
       </url>
 </urlset>

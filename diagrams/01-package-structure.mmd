@@ -8,9 +8,10 @@ graph TB
     end
 
     subgraph CorePkg[Core Processing Packages]
-        Readers["📖 canvod-readers<br/>RINEX v3.04 Parsing"]
-        Aux["📡 canvod-aux<br/>SP3/CLK/Position"]
+        Readers["📖 canvod-readers<br/>RINEX & SBF Parsing"]
+        Aux["📡 canvod-auxiliary<br/>SP3/CLK/Position"]
         Store["💾 canvod-store<br/>Icechunk Storage"]
+        StoreMeta["📋 canvod-store-metadata<br/>Provenance & Standards"]
         Utils["🛠️ canvod-utils<br/>Config & Tools"]
     end
 
@@ -20,29 +21,37 @@ graph TB
         Viz["📊 canvod-viz<br/>2D/3D Visualization"]
     end
 
+    subgraph InfraPkg[Infrastructure Packages]
+        Ops["⚙️ canvod-ops<br/>Preprocessing Pipeline"]
+        Naming["🏷️ canvod-virtualiconvname<br/>File Naming & Discovery"]
+    end
+
     Config --> Canvodpy
     Canvodpy --> Readers
     Canvodpy --> Aux
     Canvodpy --> Store
+    Canvodpy --> StoreMeta
     Canvodpy --> VOD
     Canvodpy --> Grids
     Canvodpy --> Viz
+    Canvodpy --> Ops
+    Canvodpy --> Naming
 
-    Readers --> Utils
     Aux --> Readers
-    Aux --> Utils
-    Store --> Aux
-    Store --> Readers
-    Store --> Utils
-    Grids --> Store
-    Grids --> Utils
+    Store --> Grids
+    StoreMeta --> Utils
     Viz --> Grids
+    Ops --> Grids
+    Ops --> Utils
 
     style Canvodpy fill:#e1f5ff,stroke:#01579b,stroke-width:3px
     style Readers fill:#fff3e0,stroke:#e65100,stroke-width:2px
     style Aux fill:#fff3e0,stroke:#e65100,stroke-width:2px
     style Store fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    style StoreMeta fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     style VOD fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
     style Grids fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
     style Viz fill:#e0f2f1,stroke:#004d40,stroke-width:2px
     style Utils fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    style Ops fill:#e0f2f1,stroke:#004d40,stroke-width:2px
+    style Naming fill:#e0f2f1,stroke:#004d40,stroke-width:2px

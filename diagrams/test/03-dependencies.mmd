@@ -1,0 +1,43 @@
+graph TB
+    subgraph Orchestration[🎯 Orchestration]
+        Canvodpy["canvodpy<br/>Pipeline · Processor · API"]
+    end
+
+    subgraph Presentation[📊 Presentation]
+        Viz["canvod-viz<br/>2D Plots · 3D Surface"]
+    end
+
+    subgraph Computation[🧮 Computation]
+        VOD["canvod-vod<br/>VOD Calculator · Tau-Omega"]
+        Grids["canvod-grids<br/>HEALPix · Geodesic · Fibonacci"]
+    end
+
+    subgraph Storage[💾 Storage]
+        Store["canvod-store<br/>Icechunk · Site · Reader"]
+    end
+
+    subgraph DataIO[📥 Data IO]
+        Readers["canvod-readers<br/>RINEX · SignalID · DataDir"]
+        Aux["canvod-aux<br/>SP3 · CLK · Interpolator"]
+    end
+
+    subgraph Foundation[🔧 Foundation]
+        Utils["canvod-utils<br/>Config · YYYYDOY · Tools"]
+    end
+
+    Readers -.->|uses| Utils
+    Aux -.->|uses| Readers
+    Aux -.->|uses| Utils
+    Store -.->|uses| Aux
+    Store -.->|uses| Readers
+    Store -.->|uses| Utils
+    Grids -.->|optional| Store
+    Grids -.->|uses| Utils
+    Viz -.->|uses| Grids
+
+    Canvodpy ==>|coordinates| Readers
+    Canvodpy ==>|coordinates| Aux
+    Canvodpy ==>|coordinates| Store
+    Canvodpy ==>|coordinates| VOD
+    Canvodpy ==>|coordinates| Grids
+    Canvodpy ==>|coordinates| Viz

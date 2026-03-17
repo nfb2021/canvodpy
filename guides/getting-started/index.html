@@ -15,7 +15,7 @@
         <link rel="canonical" href="https://nfb2021.github.io/canvodpy/guides/getting-started/">
       
       
-        <link rel="prev" href="../../packages/utils/overview/">
+        <link rel="prev" href="../../packages/audit/overview/">
       
       
         <link rel="next" href="../../CONTRIBUTING/">
@@ -25,7 +25,7 @@
       
       
       <link rel="icon" href="../../assets/logo.svg">
-      <meta name="generator" content="zensical-0.0.23">
+      <meta name="generator" content="zensical-0.0.24">
     
     
       
@@ -36,7 +36,7 @@
       
         
       
-      <link rel="stylesheet" href="../../assets/stylesheets/modern/main.1e989742.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/modern/main.28978c9b.min.css">
       
         
           
@@ -48,8 +48,54 @@
 
     
     
+  <script>
+    // Patch mermaid to use "base" theme instead of "default" (blue).
+    // Material dynamically imports mermaid and calls initialize() —
+    // we intercept the import to patch the module before Material uses it.
+    (function() {
+      var _origImport = window.__import__ || null;
+
+      // Material uses dynamic import() for mermaid. We can't intercept
+      // native import(), but we CAN define a getter on window.mermaid
+      // that patches initialize() the moment it's assigned.
+      var _mermaid = undefined;
+      var _patched = false;
+      Object.defineProperty(window, "mermaid", {
+        configurable: true,
+        enumerable: true,
+        get: function() { return _mermaid; },
+        set: function(val) {
+          _mermaid = val;
+          if (val && val.initialize && !_patched) {
+            _patched = true;
+            var _origInit = val.initialize.bind(val);
+            val.initialize = function(config) {
+              var isDark = document.body && document.body.getAttribute("data-md-color-scheme") === "slate";
+            config = Object.assign({}, config, {
+              theme: "base",
+              themeVariables: isDark
+                ? { primaryColor: "#2a2a2a", primaryTextColor: "#E1E6B9", primaryBorderColor: "#555",
+                    lineColor: "#666", secondaryColor: "#1a1a1a", tertiaryColor: "#1e1e1e",
+                    mainBkg: "#2a2a2a", nodeBorder: "#555", clusterBkg: "#1a1a1a", clusterBorder: "#444",
+                    titleColor: "#E1E6B9", edgeLabelBackground: "#0d0d0d", nodeTextColor: "#E1E6B9",
+                    textColor: "#E1E6B9", fontFamily: '"Space Grotesk", system-ui, sans-serif' }
+                : { primaryColor: "#C4D7A4", primaryTextColor: "#183128", primaryBorderColor: "#5D7D5B",
+                    lineColor: "#5D7D5B", secondaryColor: "#E1E6B9", tertiaryColor: "#ABC8A4",
+                    mainBkg: "#C4D7A4", nodeBorder: "#5D7D5B", clusterBkg: "#E1E6B9", clusterBorder: "#6B8B69",
+                    titleColor: "#183128", edgeLabelBackground: "#E1E6B9", nodeTextColor: "#183128",
+                    textColor: "#183128", fontFamily: '"Space Grotesk", system-ui, sans-serif' }
+            });
+              return _origInit(config);
+            };
+          }
+        }
+      });
+    })();
+  </script>
+  
       
     
+
     
       
         
@@ -219,6 +265,22 @@
   
   
   
+    <li class="md-tabs__item">
+      <a href="../../principles/" class="md-tabs__link">
+        
+  
+  Conventions & Defaults
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
     
     
       <li class="md-tabs__item">
@@ -295,6 +357,25 @@
           
   
   Release & Publishing
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../impressum/" class="md-tabs__link">
+          
+  
+  Legal
 
         </a>
       </li>
@@ -398,6 +479,33 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../principles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conventions & Defaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
     
     
       
@@ -420,10 +528,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
             
   
   
@@ -441,8 +549,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -566,6 +674,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -579,10 +695,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
             
   
   
@@ -600,8 +716,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -628,6 +744,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -641,10 +763,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1" >
         
           
-          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_1" id="__nav_4_1_label" tabindex="0">
             
   
   
@@ -662,8 +784,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_1">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -716,6 +838,90 @@
     
   
     RINEX v3.04 Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/readers/sbf/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SBF Reader
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/readers/ephemeris-sources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ephemeris Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/readers/satellite-catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Satellite Catalog (IGS SINEX)
   
 
     
@@ -825,10 +1031,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" >
         
           
-          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
             
   
   
@@ -846,8 +1052,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_2">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1029,10 +1235,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
         
           
-          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
             
   
   
@@ -1050,8 +1256,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1121,10 +1327,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
         
           
-          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
             
   
   
@@ -1142,8 +1348,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1217,10 +1423,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
         
           
-          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
             
   
   
@@ -1238,8 +1444,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1365,10 +1571,102 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" >
         
           
-          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod-store-metadata
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    canvod-store-metadata
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/store-metadata/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
             
   
   
@@ -1386,8 +1684,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1457,10 +1755,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_8" >
         
           
-          <label class="md-nav__link" for="__nav_3_7" id="__nav_3_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_8" id="__nav_4_8_label" tabindex="0">
             
   
   
@@ -1478,8 +1776,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1497,6 +1795,282 @@
   
     <li class="md-nav__item">
       <a href="../../packages/utils/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_9" id="__nav_4_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod-ops
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    canvod-ops
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/ops/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_10" id="__nav_4_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod-virtualiconvname
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    canvod-virtualiconvname
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/naming/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_11" id="__nav_4_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod-audit
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    canvod-audit
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/audit/overview/" class="md-nav__link">
         
   
   
@@ -1555,6 +2129,18 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -1571,10 +2157,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -1592,8 +2178,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1931,15 +2517,87 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#12-working-in-teams" class="md-nav__link">
+  <a href="#12-keeping-your-fork-up-to-date" class="md-nav__link">
     <span class="md-ellipsis">
       
-        12. Working in teams
+        12. Keeping your fork up to date
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="12. Working in teams">
+    <nav class="md-nav" aria-label="12. Keeping your fork up to date">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-this-is-necessary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why this is necessary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-time-setup-already-done-if-you-followed-step-7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One-time setup (already done if you followed step 7)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-your-local-main-branch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update your local main branch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-your-feature-branch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update your feature branch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12b-working-in-teams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12b. Working in teams
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="12b. Working in teams">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2053,10 +2711,99 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#14-common-commands-cheat-sheet" class="md-nav__link">
+  <a href="#14-pre-commit-hooks-and-why-your-commit-may-be-rejected" class="md-nav__link">
     <span class="md-ellipsis">
       
-        14. Common commands cheat sheet
+        14. Pre-commit hooks and why your commit may be rejected
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="14. Pre-commit hooks and why your commit may be rejected">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-runs-on-every-commit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What runs on every commit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-fix-a-rejected-commit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to fix a rejected commit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bypassing-hooks-emergency-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bypassing hooks (emergency only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-continuous-integration-and-test-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Continuous integration and test coverage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="15. Continuous integration and test coverage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ci-pipelines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI pipelines
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-coverage-with-coveralls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test coverage with Coveralls
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-common-commands-cheat-sheet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Common commands cheat sheet
       
     </span>
   </a>
@@ -2107,7 +2854,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../development.md" class="md-nav__link">
+      <a href="../DEVELOPMENT/" class="md-nav__link">
         
   
   
@@ -2143,6 +2890,34 @@
     
   
     Architecture & Design Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ai-development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developing with Claude Code
   
 
     
@@ -2212,6 +2987,146 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dask-resources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dask & Resource Management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-levels/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../airflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Airflow Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../diagnostics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diagnostics & Monitoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2253,10 +3168,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -2274,8 +3189,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2471,6 +3386,105 @@
       
         
       
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Legal
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Legal
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../impressum/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Impressum & AI Disclosure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
         
       
         
@@ -2498,10 +3512,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
             
   
   
@@ -2519,8 +3533,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2705,6 +3719,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../api/canvod-store-metadata/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod.store_metadata
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../api/canvod-viz/" class="md-nav__link">
         
   
@@ -2741,6 +3783,90 @@
     
   
     canvod.utils
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/canvod-ops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod.ops
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/canvod-virtualiconvname/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod.virtualiconvname
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/canvod-audit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    canvod.audit
   
 
     
@@ -3049,15 +4175,87 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#12-working-in-teams" class="md-nav__link">
+  <a href="#12-keeping-your-fork-up-to-date" class="md-nav__link">
     <span class="md-ellipsis">
       
-        12. Working in teams
+        12. Keeping your fork up to date
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="12. Working in teams">
+    <nav class="md-nav" aria-label="12. Keeping your fork up to date">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-this-is-necessary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why this is necessary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-time-setup-already-done-if-you-followed-step-7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One-time setup (already done if you followed step 7)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-your-local-main-branch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update your local main branch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-your-feature-branch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update your feature branch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12b-working-in-teams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12b. Working in teams
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="12b. Working in teams">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3171,10 +4369,99 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#14-common-commands-cheat-sheet" class="md-nav__link">
+  <a href="#14-pre-commit-hooks-and-why-your-commit-may-be-rejected" class="md-nav__link">
     <span class="md-ellipsis">
       
-        14. Common commands cheat sheet
+        14. Pre-commit hooks and why your commit may be rejected
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="14. Pre-commit hooks and why your commit may be rejected">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-runs-on-every-commit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What runs on every commit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-fix-a-rejected-commit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to fix a rejected commit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bypassing-hooks-emergency-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bypassing hooks (emergency only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-continuous-integration-and-test-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Continuous integration and test coverage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="15. Continuous integration and test coverage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ci-pipelines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI pipelines
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-coverage-with-coveralls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test coverage with Coveralls
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-common-commands-cheat-sheet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Common commands cheat sheet
       
     </span>
   </a>
@@ -3252,24 +4539,24 @@
 <div class="grid cards">
 <ul>
 <li>
-<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg></span> &nbsp; <strong>Steps 1–5</strong> &nbsp; GitHub + Git</p>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg></span> &nbsp; <strong><a href="#1-create-a-github-account">Steps 1–5</a></strong> &nbsp; GitHub + Git</p>
 <hr />
-<p>GitHub account · Homebrew · Git install · SSH keys · Git identity</p>
+<p><a href="#1-create-a-github-account">GitHub account</a> · <a href="#2-install-homebrew-macos">Homebrew</a> · <a href="#3-install-git">Git install</a> · <a href="#4-set-up-ssh-keys-for-github">SSH keys</a> · <a href="#5-configure-your-git-identity">Git identity</a></p>
 </li>
 <li>
-<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M195.1 9.5c3-14.8 16.1-25.5 31.3-25.5h59.8c15.2 0 28.3 10.7 31.3 25.5l14.5 70c14.1 6 27.3 13.7 39.3 22.8l67.8-22.5c14.4-4.8 30.2 1.2 37.8 14.4l29.9 51.8c7.6 13.2 4.9 29.8-6.5 39.9L447 233.3c.9 7.4 1.3 15 1.3 22.7s-.5 15.3-1.3 22.7l53.4 47.5c11.4 10.1 14 26.8 6.5 39.9L477 417.9c-7.6 13.1-23.4 19.2-37.8 14.4l-67.8-22.5c-12.1 9.1-25.3 16.7-39.3 22.8l-14.4 69.9c-3.1 14.9-16.2 25.5-31.3 25.5h-59.8c-15.2 0-28.3-10.7-31.3-25.5l-14.4-69.9c-14.1-6-27.2-13.7-39.3-22.8l-68.1 22.5c-14.4 4.8-30.2-1.2-37.8-14.4L5.8 366.1c-7.6-13.2-4.9-29.8 6.5-39.9l53.4-47.5c-.9-7.4-1.3-15-1.3-22.7s.5-15.3 1.3-22.7l-53.4-47.5C.9 175.7-1.7 159 5.8 145.9l29.9-51.8c7.6-13.2 23.4-19.2 37.8-14.4l67.8 22.5c12.1-9.1 25.3-16.7 39.3-22.8zM256.3 336a80 80 0 1 0-.6-160 80 80 0 1 0 .6 160"/></svg></span> &nbsp; <strong>Steps 6–9</strong> &nbsp; Tools + Repo</p>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M195.1 9.5c3-14.8 16.1-25.5 31.3-25.5h59.8c15.2 0 28.3 10.7 31.3 25.5l14.5 70c14.1 6 27.3 13.7 39.3 22.8l67.8-22.5c14.4-4.8 30.2 1.2 37.8 14.4l29.9 51.8c7.6 13.2 4.9 29.8-6.5 39.9L447 233.3c.9 7.4 1.3 15 1.3 22.7s-.5 15.3-1.3 22.7l53.4 47.5c11.4 10.1 14 26.8 6.5 39.9L477 417.9c-7.6 13.1-23.4 19.2-37.8 14.4l-67.8-22.5c-12.1 9.1-25.3 16.7-39.3 22.8l-14.4 69.9c-3.1 14.9-16.2 25.5-31.3 25.5h-59.8c-15.2 0-28.3-10.7-31.3-25.5l-14.4-69.9c-14.1-6-27.2-13.7-39.3-22.8l-68.1 22.5c-14.4 4.8-30.2-1.2-37.8-14.4L5.8 366.1c-7.6-13.2-4.9-29.8 6.5-39.9l53.4-47.5c-.9-7.4-1.3-15-1.3-22.7s.5-15.3 1.3-22.7l-53.4-47.5C.9 175.7-1.7 159 5.8 145.9l29.9-51.8c7.6-13.2 23.4-19.2 37.8-14.4l67.8 22.5c12.1-9.1 25.3-16.7 39.3-22.8zM256.3 336a80 80 0 1 0-.6-160 80 80 0 1 0 .6 160"/></svg></span> &nbsp; <strong><a href="#6-install-uv-and-just">Steps 6–9</a></strong> &nbsp; Tools + Repo</p>
 <hr />
-<p>Install <code>uv</code> + <code>just</code> · Fork + clone · Submodules · Dev environment</p>
+<p><a href="#6-install-uv-and-just">Install <code>uv</code> + <code>just</code></a> · <a href="#7-fork-and-clone-the-repository">Fork + clone</a> · <a href="#8-initialise-git-submodules">Submodules</a> · <a href="#9-install-the-development-environment">Dev environment</a></p>
 </li>
 <li>
-<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M32 64C14.3 64 0 78.3 0 96s14.3 32 32 32h86.7c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H265.3C253 35.7 224.8 16 192 16s-61 19.7-73.3 48zm0 160c-17.7 0-32 14.3-32 32s14.3 32 32 32h246.7c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48H480c17.7 0 32-14.3 32-32s-14.3-32-32-32h-54.7c-12.3-28.3-40.5-48-73.3-48s-61 19.7-73.3 48zm0 160c-17.7 0-32 14.3-32 32s14.3 32 32 32h54.7c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H233.3c-12.3-28.3-40.5-48-73.3-48s-61 19.7-73.3 48z"/></svg></span> &nbsp; <strong>Step 10</strong> &nbsp; Configuration</p>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M32 64C14.3 64 0 78.3 0 96s14.3 32 32 32h86.7c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H265.3C253 35.7 224.8 16 192 16s-61 19.7-73.3 48zm0 160c-17.7 0-32 14.3-32 32s14.3 32 32 32h246.7c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48H480c17.7 0 32-14.3 32-32s-14.3-32-32-32h-54.7c-12.3-28.3-40.5-48-73.3-48s-61 19.7-73.3 48zm0 160c-17.7 0-32 14.3-32 32s14.3 32 32 32h54.7c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H233.3c-12.3-28.3-40.5-48-73.3-48s-61 19.7-73.3 48z"/></svg></span> &nbsp; <strong><a href="#10-initialise-configuration-files">Step 10</a></strong> &nbsp; Configuration</p>
 <hr />
-<p>Initialize YAML config files · Set paths and credentials · Validate</p>
+<p><a href="#10-initialise-configuration-files">Initialize YAML config files</a> · Set paths and credentials · Validate</p>
 </li>
 <li>
-<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M256 512a256 256 0 1 1 0-512 256 256 0 1 1 0 512m118-366.3c-10.7-7.8-25.7-5.4-33.5 5.3L221.1 315.2 169 263.1c-9.4-9.4-24.6-9.4-33.9 0s-9.4 24.6 0 33.9l72 72c5 5 11.8 7.5 18.8 7s13.4-4.1 17.5-9.8l135.9-187c7.8-10.7 5.4-25.7-5.3-33.5"/></svg></span> &nbsp; <strong>Steps 11–13</strong> &nbsp; Verify + Contribute</p>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M256 512a256 256 0 1 1 0-512 256 256 0 1 1 0 512m118-366.3c-10.7-7.8-25.7-5.4-33.5 5.3L221.1 315.2 169 263.1c-9.4-9.4-24.6-9.4-33.9 0s-9.4 24.6 0 33.9l72 72c5 5 11.8 7.5 18.8 7s13.4-4.1 17.5-9.8l135.9-187c7.8-10.7 5.4-25.7-5.3-33.5"/></svg></span> &nbsp; <strong><a href="#11-run-the-test-suite">Steps 11–13</a></strong> &nbsp; Verify + Contribute</p>
 <hr />
-<p>Run tests · Quality checks · Your first pull request</p>
+<p><a href="#11-run-the-test-suite">Run tests</a> · <a href="#12-keeping-your-fork-up-to-date">Quality checks</a> · <a href="#13-your-first-contribution">Your first pull request</a></p>
 </li>
 </ul>
 </div>
@@ -3392,10 +4679,10 @@ git<span class="w"> </span>config<span class="w"> </span>--global<span class="w"
 <h2 id="6-install-development-tools">6. Install development tools<a class="headerlink" href="#6-install-development-tools" title="Permanent link">&para;</a></h2>
 <p>canVODpy uses two command-line tools to manage the project:</p>
 <ul>
-<li><strong>uv</strong> — a fast Python package manager that handles dependencies and virtual environments.</li>
+<li><strong><abbr title="Fast Python package manager written in Rust — replaces pip, pip-tools, virtualenv">uv</abbr></strong> — a fast Python package manager that handles dependencies and virtual environments.</li>
 <li><strong>just</strong> — a command runner (like a simplified Makefile) that provides shortcuts for common tasks.</li>
 </ul>
-<h3 id="install-uv">Install uv<a class="headerlink" href="#install-uv" title="Permanent link">&para;</a></h3>
+<h3 id="install-uv">Install <abbr title="Fast Python package manager written in Rust — replaces pip, pip-tools, virtualenv">uv</abbr><a class="headerlink" href="#install-uv" title="Permanent link">&para;</a></h3>
 <div class="tabbed-set tabbed-alternate" data-tabs="5:3"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><input id="__tabbed_5_3" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">macOS</label><label for="__tabbed_5_2">Linux</label><label for="__tabbed_5_3">Windows</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -3475,7 +4762,7 @@ just<span class="w"> </span>--version
 </code></pre></div>
 <p>This pulls:</p>
 <ul>
-<li><strong><code>packages/canvod-readers/tests/test_data</code></strong> — validation test data (falsified/corrupted RINEX files for testing)</li>
+<li><strong><code>packages/canvod-readers/tests/test_data</code></strong> — validation test data (falsified/corrupted <abbr title="Receiver Independent Exchange Format — standard ASCII format for GNSS observations, defined by IGS (Navipedia: RINEX)">RINEX</abbr> files for testing)</li>
 <li><strong><code>demo</code></strong> — clean real-world data for demos and documentation</li>
 </ul>
 <p>If you skip this step, tests that require these datasets will be automatically skipped.</p>
@@ -3504,15 +4791,15 @@ just<span class="w"> </span>hooks
 <tbody>
 <tr>
 <td><code>sites.yaml</code></td>
-<td>Defines research sites: data root paths, receiver definitions (name, type, directory), and VOD analysis pairs. Each receiver's <code>directory</code> is the full relative path from the site data root to the raw RINEX date folders (e.g. <code>01_reference/01_GNSS/01_raw</code>).</td>
+<td>Defines research sites: data root paths, receiver definitions (name, type, directory), and <abbr title="Vegetation Optical Depth — dimensionless measure of microwave attenuation through vegetation canopy (τ = −ln(T)·cos θ)">VOD</abbr> analysis pairs. Each receiver's <code>directory</code> is the full relative path from the site data root to the raw <abbr title="Receiver Independent Exchange Format — standard ASCII format for GNSS observations, defined by IGS (Navipedia: RINEX)">RINEX</abbr> date folders (e.g. <code>01_reference/01_GNSS/01_raw</code>).</td>
 </tr>
 <tr>
 <td><code>processing.yaml</code></td>
-<td>Processing parameters: metadata, credentials (NASA Earthdata), auxiliary data settings (agency, product type), time aggregation, compression, Icechunk storage, and store strategies.</td>
+<td>Processing parameters: metadata, credentials (NASA Earthdata), auxiliary data settings (agency, product type), time aggregation, compression, <abbr title="Version-controlled cloud-native tensor storage engine — git-like snapshots over Zarr v3 chunks">Icechunk</abbr> storage, and store strategies.</td>
 </tr>
 <tr>
 <td><code>sids.yaml</code></td>
-<td>Signal ID (SID) filtering: choose <code>all</code>, a named <code>preset</code> (e.g. <code>gps_galileo</code>), or list <code>custom</code> SIDs to keep.</td>
+<td>Signal ID (<abbr title="Signal Identifier — canVODpy format: SV|Band|Code (e.g. G01|L1|C). Uniquely identifies one observable per epoch.">SID</abbr>) filtering: choose <code>all</code>, a named <code>preset</code> (e.g. <code>gps_galileo</code>), or list <code>custom</code> SIDs to keep.</td>
 </tr>
 </tbody>
 </table>
@@ -3535,20 +4822,88 @@ just<span class="w"> </span>hooks
 </code></pre></div>
 <p>If both commands complete without errors, your environment is ready.</p>
 <hr />
-<h2 id="12-working-in-teams">12. Working in teams<a class="headerlink" href="#12-working-in-teams" title="Permanent link">&para;</a></h2>
-<p>During a hackathon or collaborative sprint, each team works on its own topic (often aligned with a package like <code>canvod-grids</code> or <code>canvod-readers</code>). A shared <strong>develop branch</strong> (e.g. <code>develop/hackathon2026</code>) acts as the integration point — no one commits to it directly. Instead, each team gets its own <strong>team branch</strong>.</p>
+<h2 id="12-keeping-your-fork-up-to-date">12. Keeping your fork up to date<a class="headerlink" href="#12-keeping-your-fork-up-to-date" title="Permanent link">&para;</a></h2>
+<p>The upstream repository (<code>nfb2021/canvodpy</code>) receives regular updates. To incorporate these into your fork, you need to <strong>fetch from upstream and merge into your local branch</strong>. This section explains every step.</p>
+<h3 id="why-this-is-necessary">Why this is necessary<a class="headerlink" href="#why-this-is-necessary" title="Permanent link">&para;</a></h3>
+<p>When you forked the repository, GitHub created a snapshot of <code>main</code> at that moment. Any commits pushed to the upstream <code>main</code> after your fork was created are <strong>not</strong> automatically reflected in your fork. If you work on a feature branch for several days, the upstream <code>main</code> may have moved ahead — your branch will be "behind." Merging upstream changes prevents conflicts from accumulating and ensures you are building on the latest codebase.</p>
+<h3 id="one-time-setup-already-done-if-you-followed-step-7">One-time setup (already done if you followed step 7)<a class="headerlink" href="#one-time-setup-already-done-if-you-followed-step-7" title="Permanent link">&para;</a></h3>
+<p>Verify that you have the <code>upstream</code> remote configured:</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>remote<span class="w"> </span>-v
+</code></pre></div>
+<p>You should see two remotes:</p>
+<div class="highlight"><pre><span></span><code>origin    git@github.com:YOUR_USERNAME/canvodpy.git (fetch)
+origin    git@github.com:YOUR_USERNAME/canvodpy.git (push)
+upstream  git@github.com:nfb2021/canvodpy.git (fetch)
+upstream  git@github.com:nfb2021/canvodpy.git (push)
+</code></pre></div>
+<p>If <code>upstream</code> is missing, add it:</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>remote<span class="w"> </span>add<span class="w"> </span>upstream<span class="w"> </span>git@github.com:nfb2021/canvodpy.git
+</code></pre></div>
+<h3 id="update-your-local-main-branch">Update your local <code>main</code> branch<a class="headerlink" href="#update-your-local-main-branch" title="Permanent link">&para;</a></h3>
+<p>Every time you want to sync with the latest upstream changes:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># 1. Switch to your local main branch</span>
+git<span class="w"> </span>checkout<span class="w"> </span>main
+
+<span class="c1"># 2. Fetch all new commits from the upstream repository</span>
+git<span class="w"> </span>fetch<span class="w"> </span>upstream
+
+<span class="c1"># 3. Merge upstream/main into your local main</span>
+<span class="c1">#    This is a fast-forward merge (no merge commit) if you have not</span>
+<span class="c1">#    committed directly to your local main — which you should not do.</span>
+git<span class="w"> </span>merge<span class="w"> </span>upstream/main
+
+<span class="c1"># 4. Push the updated main to your fork on GitHub</span>
+git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>main
+</code></pre></div>
+<p>After these four commands, your fork's <code>main</code> branch on GitHub is identical to the upstream <code>main</code>.</p>
+<h3 id="update-your-feature-branch">Update your feature branch<a class="headerlink" href="#update-your-feature-branch" title="Permanent link">&para;</a></h3>
+<p>If you are working on a feature branch, incorporate the freshly updated <code>main</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Switch to your feature branch</span>
+git<span class="w"> </span>checkout<span class="w"> </span>feature/my-feature
+
+<span class="c1"># Rebase your feature branch onto the updated main</span>
+git<span class="w"> </span>rebase<span class="w"> </span>main
+</code></pre></div>
+<p>Rebasing replays your commits on top of the latest <code>main</code>, producing a linear history. If Git reports a <strong>merge conflict</strong> during rebase, it will pause and show you which files conflict. Resolve each conflict by editing the file, then:</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>&lt;resolved-file&gt;
+git<span class="w"> </span>rebase<span class="w"> </span>--continue
+</code></pre></div>
+<p>If you want to abort the rebase and return to the state before:</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>rebase<span class="w"> </span>--abort
+</code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Force push after rebase</p>
+<p>Rebasing rewrites commit history. If you have already pushed your feature
+branch to your fork, you will need to force-push after rebasing:</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>push<span class="w"> </span>--force-with-lease<span class="w"> </span>origin<span class="w"> </span>feature/my-feature
+</code></pre></div>
+<p><code>--force-with-lease</code> is safer than <code>--force</code> because it refuses to
+overwrite commits that someone else may have pushed to the same branch.</p>
+</div>
+<h3 id="quick-reference">Quick reference<a class="headerlink" href="#quick-reference" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Full sync sequence (run periodically):</span>
+git<span class="w"> </span>checkout<span class="w"> </span>main
+git<span class="w"> </span>fetch<span class="w"> </span>upstream
+git<span class="w"> </span>merge<span class="w"> </span>upstream/main
+git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>main
+git<span class="w"> </span>checkout<span class="w"> </span>feature/my-feature
+git<span class="w"> </span>rebase<span class="w"> </span>main
+</code></pre></div>
+<hr />
+<h2 id="12b-working-in-teams">12b. Working in teams<a class="headerlink" href="#12b-working-in-teams" title="Permanent link">&para;</a></h2>
+<p>During collaborative sprints, each team works on its own topic (often aligned with a package such as <code>canvod-grids</code> or <code>canvod-readers</code>). A shared <strong>develop branch</strong> acts as the integration point — no one commits to it directly. Instead, each team gets its own <strong>team branch</strong>.</p>
 <h3 id="branch-structure">Branch structure<a class="headerlink" href="#branch-structure" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>main
-└── develop/hackathon2026              ← integration branch (shared by all teams)
-    ├── team-grids/                    ← Team A
-    │   ├── (direct commits)           ← Workflow A
-    │   └── team-grids/add-healpix     ← Workflow B feature branches
-    ├── team-readers/                  ← Team B
-    └── team-vod/                      ← Team C
+└── develop/sprint-2026              ← integration branch (shared by all teams)
+    ├── team-grids/                  ← Team A
+    │   ├── (direct commits)         ← Workflow A
+    │   └── team-grids/add-healpix   ← Workflow B feature branches
+    ├── team-readers/                ← Team B
+    └── team-vod/                    ← Team C
 </code></pre></div>
 <h3 id="set-up-the-team-branch">Set up the team branch<a class="headerlink" href="#set-up-the-team-branch" title="Permanent link">&para;</a></h3>
 <p>The <strong>team lead</strong> creates the branch once:</p>
-<div class="highlight"><pre><span></span><code>git<span class="w"> </span>checkout<span class="w"> </span>develop/hackathon2026
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>checkout<span class="w"> </span>develop/sprint-2026
 git<span class="w"> </span>checkout<span class="w"> </span>-b<span class="w"> </span>team-grids
 git<span class="w"> </span>push<span class="w"> </span>-u<span class="w"> </span>origin<span class="w"> </span>team-grids
 </code></pre></div>
@@ -3594,7 +4949,7 @@ git<span class="w"> </span>rebase<span class="w"> </span>team-grids
 </div>
 </div>
 <h3 id="merge-the-teams-work-into-the-develop-branch">Merge the team's work into the develop branch<a class="headerlink" href="#merge-the-teams-work-into-the-develop-branch" title="Permanent link">&para;</a></h3>
-<p>When your team's feature is ready, open <strong>one pull request</strong> from <code>team-grids</code> into <code>develop/hackathon2026</code> on GitHub. This is where the maintainer reviews the team's combined work.</p>
+<p>When your team's feature is ready, open <strong>one pull request</strong> from <code>team-grids</code> into the develop branch on GitHub. This is where the maintainer reviews the team's combined work.</p>
 <hr />
 <h2 id="13-your-first-contribution">13. Your first contribution<a class="headerlink" href="#13-your-first-contribution" title="Permanent link">&para;</a></h2>
 <h3 id="make-your-changes">Make your changes<a class="headerlink" href="#make-your-changes" title="Permanent link">&para;</a></h3>
@@ -3609,7 +4964,7 @@ git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </sp
 </code></pre></div>
 <p>Commit messages follow the <a href="https://www.conventionalcommits.org/">Conventional Commits</a> format: <code>type(scope): description</code>. Common types: <code>feat</code>, <code>fix</code>, <code>docs</code>, <code>test</code>, <code>refactor</code>.</p>
 <h3 id="push">Push<a class="headerlink" href="#push" title="Permanent link">&para;</a></h3>
-<p>Push to your team branch or feature branch (see <a href="#10-working-in-teams">Working in teams</a> above).</p>
+<p>Push to your team branch or feature branch (see <a href="#12b-working-in-teams">Working in teams</a> above).</p>
 <h3 id="open-a-pull-request">Open a pull request<a class="headerlink" href="#open-a-pull-request" title="Permanent link">&para;</a></h3>
 <ol>
 <li>Go to your fork on GitHub — you'll see a banner suggesting to open a pull request.</li>
@@ -3618,7 +4973,188 @@ git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </sp
 <li>Add a title and description, then click <strong>Create pull request</strong>.</li>
 </ol>
 <hr />
-<h2 id="14-common-commands-cheat-sheet">14. Common commands cheat sheet<a class="headerlink" href="#14-common-commands-cheat-sheet" title="Permanent link">&para;</a></h2>
+<h2 id="14-pre-commit-hooks-and-why-your-commit-may-be-rejected">14. Pre-commit hooks and why your commit may be rejected<a class="headerlink" href="#14-pre-commit-hooks-and-why-your-commit-may-be-rejected" title="Permanent link">&para;</a></h2>
+<p>When you ran <code>just hooks</code> in <a href="#9-set-up-the-development-environment">step 9</a>, a set of <strong>pre-commit hooks</strong> was installed into your local <code>.git/hooks/</code> directory. These hooks run automatically every time you execute <code>git commit</code>. If any hook fails, <strong>the commit is aborted</strong> — your changes remain staged but no commit is created.</p>
+<p>This is intentional: it prevents code that does not meet the project's quality standards from entering the Git history. The hooks are defined in <code>.pre-commit-config.yaml</code> at the repository root.</p>
+<h3 id="what-runs-on-every-commit">What runs on every commit<a class="headerlink" href="#what-runs-on-every-commit" title="Permanent link">&para;</a></h3>
+<p>The following checks execute automatically in sequence. If any one fails, the commit is rejected.</p>
+<table>
+<thead>
+<tr>
+<th>Hook</th>
+<th>When it runs</th>
+<th>What it checks</th>
+<th>Typical failure reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><abbr title="Fast Python linter and formatter written in Rust — replaces flake8, black, isort">ruff</abbr> check</strong></td>
+<td><code>pre-commit</code> (before commit is created)</td>
+<td>Python linting — unused imports, undefined names, style violations, type annotation issues</td>
+<td>You have an unused import or a linting rule violation</td>
+</tr>
+<tr>
+<td><strong><abbr title="Fast Python linter and formatter written in Rust — replaces flake8, black, isort">ruff</abbr> format</strong></td>
+<td><code>pre-commit</code></td>
+<td>Python formatting — consistent code style (indentation, line length, quote style, trailing commas)</td>
+<td>Your code is not formatted according to the project style</td>
+</tr>
+<tr>
+<td><strong><abbr title="Fast Python package manager written in Rust — replaces pip, pip-tools, virtualenv">uv</abbr>-lock</strong></td>
+<td><code>pre-commit</code></td>
+<td>Lockfile consistency — verifies <code>uv.lock</code> matches <code>pyproject.toml</code></td>
+<td>You changed a dependency in <code>pyproject.toml</code> but did not run <code>uv sync</code></td>
+</tr>
+<tr>
+<td><strong>trailing-whitespace</strong></td>
+<td><code>pre-commit</code></td>
+<td>Removes trailing whitespace from all files</td>
+<td>A line ends with invisible spaces or tabs</td>
+</tr>
+<tr>
+<td><strong>check-added-large-files</strong></td>
+<td><code>pre-commit</code></td>
+<td>Blocks files larger than the threshold from being committed</td>
+<td>You are trying to commit a large binary, dataset, or log file</td>
+</tr>
+<tr>
+<td><strong>detect-private-key</strong></td>
+<td><code>pre-commit</code></td>
+<td>Scans for accidentally staged private keys (SSH, PGP)</td>
+<td>You are about to commit a secret — <strong>do not override this</strong></td>
+</tr>
+<tr>
+<td><strong>end-of-file-fixer</strong></td>
+<td><code>pre-commit</code></td>
+<td>Ensures every file ends with exactly one newline</td>
+<td>A file is missing its final newline or has extra blank lines at the end</td>
+</tr>
+<tr>
+<td><strong>commitizen</strong></td>
+<td><code>commit-msg</code> (after you write the message)</td>
+<td>Validates that your commit message follows the <a href="https://www.conventionalcommits.org/">Conventional Commits</a> specification</td>
+<td>Your message does not match the <code>type(scope): subject</code> format</td>
+</tr>
+</tbody>
+</table>
+<h3 id="how-to-fix-a-rejected-commit">How to fix a rejected commit<a class="headerlink" href="#how-to-fix-a-rejected-commit" title="Permanent link">&para;</a></h3>
+<p>When a hook fails, read the error output carefully. The most common scenarios:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="8:4"><input checked="checked" id="__tabbed_8_1" name="__tabbed_8" type="radio" /><input id="__tabbed_8_2" name="__tabbed_8" type="radio" /><input id="__tabbed_8_3" name="__tabbed_8" type="radio" /><input id="__tabbed_8_4" name="__tabbed_8" type="radio" /><div class="tabbed-labels"><label for="__tabbed_8_1"><abbr title="Fast Python linter and formatter written in Rust — replaces flake8, black, isort">ruff</abbr> linting or formatting failure</label><label for="__tabbed_8_2">commitizen message validation failure</label><label for="__tabbed_8_3"><abbr title="Fast Python package manager written in Rust — replaces pip, pip-tools, virtualenv">uv</abbr>-lock mismatch</label><label for="__tabbed_8_4">Large file blocked</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p><abbr title="Fast Python linter and formatter written in Rust — replaces flake8, black, isort">ruff</abbr> will often <strong>auto-fix</strong> the issue. After the commit is rejected:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># The hook already ran ruff --fix, so files may have been modified.</span>
+<span class="c1"># Check what changed:</span>
+git<span class="w"> </span>diff
+
+<span class="c1"># If the changes look correct, stage them and commit again:</span>
+git<span class="w"> </span>add<span class="w"> </span>-u
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat(readers): your original message&quot;</span>
+</code></pre></div>
+<p>If <abbr title="Fast Python linter and formatter written in Rust — replaces flake8, black, isort">ruff</abbr> cannot auto-fix (e.g., an undefined variable), you must edit the code manually, then stage and commit again.</p>
+</div>
+<div class="tabbed-block">
+<p>Your commit message does not follow the Conventional Commits format. The error will say something like:</p>
+<div class="highlight"><pre><span></span><code>commit validation: failed!
+please enter a commit message in the commitizen format.
+</code></pre></div>
+<p>The required format is:</p>
+<div class="highlight"><pre><span></span><code>type(scope): subject
+</code></pre></div>
+<p>Where <code>type</code> is one of: <code>feat</code>, <code>fix</code>, <code>docs</code>, <code>refactor</code>, <code>test</code>, <code>chore</code>, <code>perf</code>, <code>ci</code>, <code>build</code>, <code>style</code></p>
+<p>And <code>scope</code> is one of: <code>readers</code>, <code>aux</code>, <code>grids</code>, <code>vod</code>, <code>store</code>, <code>viz</code>, <code>utils</code>, <code>naming</code>, <code>ops</code>, <code>docs</code>, <code>ci</code>, <code>deps</code></p>
+<p>Examples of <strong>valid</strong> messages:</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat(readers): add RINEX 4.0 parser&quot;</span>
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;fix(store): handle empty epoch arrays&quot;</span>
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;docs: update installation guide&quot;</span>
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;test(vod): add tau-omega edge cases&quot;</span>
+</code></pre></div>
+<p>Examples of <strong>invalid</strong> messages (will be rejected):</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;added new feature&quot;</span><span class="w">           </span><span class="c1"># no type prefix</span>
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat: add stuff&quot;</span><span class="w">              </span><span class="c1"># too vague (but technically valid)</span>
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;FEAT(readers): add parser&quot;</span><span class="w">    </span><span class="c1"># type must be lowercase</span>
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat(readers) add parser&quot;</span><span class="w">     </span><span class="c1"># missing colon after scope</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<p>You modified a <code>pyproject.toml</code> (added or changed a dependency) but the lockfile is out of date:</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>sync<span class="w">          </span><span class="c1"># regenerates uv.lock</span>
+git<span class="w"> </span>add<span class="w"> </span>uv.lock
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat(readers): your original message&quot;</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<p>You are trying to commit a file that exceeds the size threshold (typically data files, <code>.zarr</code> stores, or log files). These should not be in the Git repository. Remove the file from staging:</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>reset<span class="w"> </span>HEAD<span class="w"> </span>&lt;large-file&gt;
+<span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;&lt;large-file&gt;&quot;</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>.gitignore
+git<span class="w"> </span>add<span class="w"> </span>.gitignore
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;chore: update gitignore&quot;</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<h3 id="bypassing-hooks-emergency-only">Bypassing hooks (emergency only)<a class="headerlink" href="#bypassing-hooks-emergency-only" title="Permanent link">&para;</a></h3>
+<p>In rare situations where you need to commit despite a hook failure (e.g., you are certain the failure is a false positive), you can skip hooks:</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>commit<span class="w"> </span>--no-verify<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;fix(store): emergency hotfix&quot;</span>
+</code></pre></div>
+<div class="admonition danger">
+<p class="admonition-title">Use <code>--no-verify</code> with extreme caution</p>
+<p>Skipping hooks defeats their purpose. The <abbr title="Continuous Integration — automated build and test on every commit">CI</abbr> pipeline on GitHub runs the
+same checks — your pull request will fail if the code does not pass <abbr title="Fast Python linter and formatter written in Rust — replaces flake8, black, isort">ruff</abbr>,
+formatting, and commit message validation. Only use <code>--no-verify</code> when you
+fully understand why the hook is failing and are certain the failure is not
+a genuine code quality issue.</p>
+</div>
+<hr />
+<h2 id="15-continuous-integration-and-test-coverage">15. Continuous integration and test coverage<a class="headerlink" href="#15-continuous-integration-and-test-coverage" title="Permanent link">&para;</a></h2>
+<p>Every push to a branch and every pull request triggers automated checks on GitHub Actions. These are the same checks that run locally via <code>just check</code> and <code>just test</code>, but they execute in a clean environment to ensure reproducibility.</p>
+<h3 id="ci-pipelines"><abbr title="Continuous Integration — automated build and test on every commit">CI</abbr> pipelines<a class="headerlink" href="#ci-pipelines" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>Trigger</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Code Quality</strong></td>
+<td>Every push</td>
+<td>Checks lockfile consistency, runs <abbr title="Fast Python linter and formatter written in Rust — replaces flake8, black, isort">ruff</abbr> linting, checks formatting, runs type checking with ty</td>
+</tr>
+<tr>
+<td><strong>Test with Coverage</strong></td>
+<td>Push to <code>main</code> and all PRs</td>
+<td>Runs <code>just test-coverage</code> (pytest with coverage measurement), uploads results to Coveralls, posts a coverage summary comment on the PR</td>
+</tr>
+<tr>
+<td><strong>Platform Tests</strong></td>
+<td>PRs</td>
+<td>Runs the test suite across multiple operating systems and Python versions</td>
+</tr>
+<tr>
+<td><strong>Deploy Docs</strong></td>
+<td>Push to <code>main</code></td>
+<td>Builds and deploys the documentation site</td>
+</tr>
+</tbody>
+</table>
+<h3 id="test-coverage-with-coveralls">Test coverage with Coveralls<a class="headerlink" href="#test-coverage-with-coveralls" title="Permanent link">&para;</a></h3>
+<p>The project uses <a href="https://coveralls.io/">Coveralls</a> to track test coverage over time. After each test run in <abbr title="Continuous Integration — automated build and test on every commit">CI</abbr>:</p>
+<ol>
+<li>pytest generates a coverage report in LCOV format (<code>coverage.lcov</code>)</li>
+<li>The report is uploaded to <a href="https://coveralls.io/github/nfb2021/canvodpy">coveralls.io/github/nfb2021/canvodpy</a></li>
+<li>A coverage summary is posted as a comment on the pull request, showing which lines are covered and which are not</li>
+</ol>
+<p>Coverage is <strong>not</strong> a gate (your PR will not be blocked by low coverage), but it is visible to reviewers. When adding new code, include tests — this is both good scientific practice (every computation should be verifiable) and a courtesy to future contributors who need to understand what the code does.</p>
+<p>To measure coverage locally before pushing:</p>
+<div class="highlight"><pre><span></span><code>just<span class="w"> </span>test-coverage
+<span class="c1"># Opens an HTML report in your browser showing line-by-line coverage</span>
+</code></pre></div>
+<hr />
+<h2 id="16-common-commands-cheat-sheet">16. Common commands cheat sheet<a class="headerlink" href="#16-common-commands-cheat-sheet" title="Permanent link">&para;</a></h2>
 <div class="admonition tip">
 <p class="admonition-title">Print this</p>
 <table>
@@ -3643,7 +5179,7 @@ git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </sp
 </tr>
 <tr>
 <td><code>just check-dev-tools</code></td>
-<td>Verify uv, just, and python3 are installed</td>
+<td>Verify <abbr title="Fast Python package manager written in Rust — replaces pip, pip-tools, virtualenv">uv</abbr>, just, and python3 are installed</td>
 </tr>
 <tr>
 <td><code>just config-init</code></td>
@@ -3678,9 +5214,9 @@ git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </sp
 </div>
 <hr />
 <details class="question">
-<summary>15. Troubleshooting</summary>
+<summary>17. Troubleshooting</summary>
 <dl>
-<dt><strong>"command not found" for uv, just, or git</strong></dt>
+<dt><strong>"command not found" for <abbr title="Fast Python package manager written in Rust — replaces pip, pip-tools, virtualenv">uv</abbr>, just, or git</strong></dt>
 <dd>The tool is not installed or not on your <code>PATH</code>. Re-run the installation step and, if needed, open a new terminal window so your shell picks up the updated <code>PATH</code>.</dd>
 <dt><strong>"Permission denied (publickey)" when pushing or cloning</strong></dt>
 <dd>Your SSH key is not set up correctly. Go back to <a href="#4-set-up-an-ssh-key-for-github">step 4</a> and make sure the key is added to both the SSH agent and your GitHub account.</dd>
@@ -3704,10 +5240,10 @@ git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </sp
 </code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
-<p>Do <strong>not</strong> commit this change — it's specific to your machine. The default path works for most installations and for CI.</p>
+<p>Do <strong>not</strong> commit this change — it's specific to your machine. The default path works for most installations and for <abbr title="Continuous Integration — automated build and test on every commit">CI</abbr>.</p>
 </div>
 </dd>
-<dt><strong>Windows: uv install fails with "execution of scripts is disabled"</strong></dt>
+<dt><strong>Windows: <abbr title="Fast Python package manager written in Rust — replaces pip, pip-tools, virtualenv">uv</abbr> install fails with "execution of scripts is disabled"</strong></dt>
 <dd>
 <p>PowerShell's default execution policy blocks scripts. Use the bypass flag:</p>
 <div class="highlight"><pre><span></span><code><span class="n">powershell</span> <span class="n">-ExecutionPolicy</span> <span class="n">ByPass</span> <span class="n">-c</span> <span class="s2">&quot;irm https://astral.sh/uv/install.ps1 | iex&quot;</span>
@@ -3721,6 +5257,20 @@ git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </sp
 </dd>
 </dl>
 </details>
+<hr />
+<p><strong>Next in the trail:</strong> <a href="../../packages/audit/overview/">Audit Suite</a> · <a href="../api-levels/">API Levels</a> · <a href="../../architecture/">Architecture</a> · <a href="../ai-development/">AI Development</a></p>
+<!-- Glossary: hover any abbreviation to see its definition -->
+
+<!-- GNSS fundamentals — see Navipedia (navipedia.net) for detailed articles -->
+<!-- Satellite identifiers -->
+<!-- Observation data -->
+<!-- VOD and transmissometry -->
+<!-- Ephemerides and orbits -->
+<!-- Data standards -->
+<!-- Infrastructure -->
+<!-- Coordinate systems -->
+<!-- Signal bands -->
+<!-- Software tools -->
 
 
 
@@ -3740,6 +5290,8 @@ git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </sp
             </div>
           
           
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
@@ -3758,7 +5310,7 @@ git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </sp
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../../packages/utils/overview/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Overview">
+          <a href="../../packages/audit/overview/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Overview">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7M19 12H5"/></svg>
@@ -3798,7 +5350,7 @@ git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </sp
       <div class="md-copyright">
   
     <div class="md-copyright__highlight">
-      Copyright &copy; 2026 Nicolas Bader, TU Wien
+      Copyright &copy; 2026 Nicolas François Bader, TU Wien. This documentation is provided &ldquo;as is&rdquo; without warranty of any kind, express or implied, including but not limited to warranties of correctness, completeness, or fitness for a particular purpose.
     </div>
   
   
@@ -3845,17 +5397,17 @@ git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </sp
       <div class="md-dialog__inner md-typeset"></div>
     </div>
     
+      <div class="md-progress" data-md-component="progress" role="progressbar"></div>
+    
     
     
       
       
       
-      <script id="__config" type="application/json">{"annotate":null,"base":"../..","features":["content.code.copy","content.code.annotate","navigation.footer","navigation.indexes","navigation.instant","navigation.instant.prefetch","navigation.path","navigation.sections","navigation.tabs","navigation.top","navigation.tracking","search.highlight"],"search":"../../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+      <script id="__config" type="application/json">{"annotate":null,"base":"../..","features":["content.code.copy","content.code.annotate","content.tooltips","content.tabs.link","navigation.footer","navigation.indexes","navigation.instant","navigation.instant.prefetch","navigation.instant.progress","navigation.path","navigation.sections","navigation.tabs","navigation.top","navigation.tracking","search.highlight","search.suggest","toc.follow"],"search":"../../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.5fcf0de6.min.js"></script>
-      
-        <script src="https://unpkg.com/beautiful-mermaid/dist/beautiful-mermaid.browser.global.js"></script>
+      <script src="../../assets/javascripts/bundle.16f8adc2.min.js"></script>
       
         <script src="../../assets/mermaid-init.js"></script>
       

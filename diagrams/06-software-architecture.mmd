@@ -1,42 +1,40 @@
-graph LR
-    subgraph FOUNDATION[Foundation Layer]
-        UTILS["canvod-utils  Configuration (Pydantic) Date utilities (YYYYDOY) Shared tooling"]
+graph TD
+    subgraph ORCHESTRATION["Orchestration"]
+        CANVODPY["canvodpy"]
     end
 
-    subgraph DATAIO[Data IO Layer]
-        READERS["canvod-readers  RINEX v3.04 parser (Rnxv3Obs) Signal ID mapping (sv|band|code)"]
-        AUX["canvod-auxiliary  SP3/CLK retrieval Hermite interpolation FTP download management"]
+    subgraph COMPUTE["Computation"]
+        VOD["canvod-vod"]
+        GRIDS["canvod-grids"]
+        OPS["canvod-ops"]
     end
 
-    subgraph STORE_LAYER[Persistence Layer]
-        STORE["canvod-store  Icechunk versioned storage Site/receiver management Hash deduplication"]
+    subgraph STORE_LAYER["Persistence"]
+        STORE["canvod-store"]
     end
 
-    subgraph COMPUTE[Computation Layer]
-        VOD["canvod-vod  VOD calculator (ABC) Tau-Omega inversion Extensible algorithms"]
-        GRIDS["canvod-grids  Hemispheric grids (7 types) KDTree cell assignment Grid IO operations"]
+    subgraph DATAIO["Data I/O"]
+        READERS["canvod-readers"]
+        AUX["canvod-auxiliary"]
+        NAMING["canvod-virtualiconvname"]
     end
 
-    subgraph PRESENT[Presentation Layer]
-        VIZ["canvod-viz  2D polar projections 3D interactive surfaces Time-series plots"]
+    subgraph PRESENT["Presentation"]
+        VIZ["canvod-viz"]
     end
 
-    subgraph ORCHESTRATION[Orchestration Layer]
-        CANVODPY["canvodpy  Pipeline orchestrator Factory system Public API (3 levels)"]
+    subgraph FOUNDATION["Foundation"]
+        UTILS["canvod-utils"]
     end
 
-    READERS -.-> UTILS
-    AUX -.-> READERS
-    AUX -.-> UTILS
-    STORE -.-> AUX
-    STORE -.-> READERS
-    STORE -.-> UTILS
-    GRIDS -.-> UTILS
+    CANVODPY --> READERS & AUX & NAMING
+    CANVODPY --> STORE
+    CANVODPY --> VOD & GRIDS & OPS & VIZ
+
+    OPS -.-> GRIDS
     VIZ -.-> GRIDS
-
-    CANVODPY ==> READERS
-    CANVODPY ==> AUX
-    CANVODPY ==> STORE
-    CANVODPY ==> VOD
-    CANVODPY ==> GRIDS
-    CANVODPY ==> VIZ
+    AUX -.-> READERS
+    STORE -.-> READERS
+    NAMING -.-> UTILS
+    READERS -.-> UTILS
+    GRIDS -.-> UTILS

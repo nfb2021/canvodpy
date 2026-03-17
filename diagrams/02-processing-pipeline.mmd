@@ -2,28 +2,37 @@ flowchart TD
     Start([🚀 Start Processing]) --> Input
 
     subgraph Input[📥 Data Ingestion]
-        RINEX["📄 RINEX Files<br/>(.XXo, all constellations)"]
-        SP3["🛰️ SP3 Files<br/>(Precise Orbits)"]
-        CLK["⏰ CLK Files<br/>(Precise Clocks)"]
+        RINEX["📄 RINEX OBS Files<br/>(.rnx)"]
+        SBF["📦 SBF Binary Files<br/>(.sbf)"]
+    end
+
+    subgraph Ephemeris[🛰️ Ephemeris Sources]
+        SP3["🏛️ Agency Final<br/>SP3 + CLK<br/>(12-18 day latency)"]
+        SBFVIS["📡 SBF Broadcast<br/>SatVisibility block<br/>(immediate)"]
+        NAV["📄 RINEX NAV 🚧<br/>.YYp / .YYn<br/>(planned)"]
     end
 
     subgraph Reading[🔍 Reading and Parsing]
         RinexReader["Rnxv3Obs<br/>Parse RINEX v3.04"]
+        SbfReader["SbfReader<br/>Parse Septentrio Binary"]
         AuxReader["SP3/CLK Parsers<br/>Load Auxiliary Data"]
     end
 
-    subgraph Processing[⚙️ Processing]
+    subgraph Processing[⚙️ Geometry Augmentation]
         Interp["Hermite Interpolation<br/>Orbits/clocks → obs epochs"]
         Position["Coordinate Transform<br/>ECEF → spherical (r, θ, φ)"]
-        Augment["Dataset Augmentation<br/>Merge RINEX + geometry"]
+        DirectGeom["Direct θ, φ<br/>From receiver firmware"]
+        Augment["Dataset Augmentation<br/>Merge observations + geometry"]
     end
 
     subgraph Storage[💾 Versioned Storage - Icechunk]
+        Dedup["3-Layer Deduplication<br/>Hash · Temporal · Intra-batch"]
         Icechunk["Observations Store<br/>(epoch × sid)"]
+        Meta["Metadata Table<br/>File provenance"]
     end
 
     subgraph Analysis[📊 Analysis]
-        VODCalc["VOD Retrieval<br/>Tau-Omega model · canopy vs reference"]
+        VODCalc["VodComputer<br/>Tau-Omega model · canopy vs reference"]
         GridAssign["Hemispheric Grid Assignment<br/>Equal-area / HEALPix / geodesic"]
         Aggregate["Aggregation<br/>Per-cell statistics"]
     end
@@ -35,14 +44,20 @@ flowchart TD
     end
 
     RINEX --> RinexReader
+    SBF --> SbfReader
     SP3 --> AuxReader
-    CLK --> AuxReader
+    SBFVIS -.-> DirectGeom
+    NAV -.-> AuxReader
 
     RinexReader --> Augment
+    SbfReader --> Augment
     AuxReader --> Interp
     Interp --> Position
     Position --> Augment
-    Augment --> Icechunk
+    DirectGeom --> Augment
+    Augment --> Dedup
+    Dedup --> Icechunk
+    Dedup --> Meta
 
     Icechunk --> VODCalc
     VODCalc --> GridAssign
@@ -59,8 +74,10 @@ flowchart TD
     style Start fill:#4caf50,stroke:#1b5e20,stroke-width:3px,color:#fff
     style End fill:#4caf50,stroke:#1b5e20,stroke-width:3px,color:#fff
     style Input fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style Ephemeris fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
     style Reading fill:#ffecb3,stroke:#f57c00,stroke-width:2px
     style Processing fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
     style Storage fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     style Analysis fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
     style Output fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+    style NAV fill:#fff9c4,stroke:#f9a825,stroke-width:2px,stroke-dasharray: 5 5

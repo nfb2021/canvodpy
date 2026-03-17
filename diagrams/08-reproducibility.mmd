@@ -1,31 +1,35 @@
-flowchart LR
-    subgraph CONFIG[YAML Configuration]
-        PROC["processing.yaml  Processing parameters Storage paths Compression settings NASA credentials"]
-        SITES["sites.yaml  Receiver definitions Directory mappings VOD analysis pairs"]
-        SIDS["sids.yaml  Signal ID filters (system, band, code)"]
+flowchart TD
+    subgraph CONFIG["YAML Configuration"]
+        PROC["processing.yaml"]
+        SITES["sites.yaml"]
+        SIDS["sids.yaml"]
     end
 
-    subgraph LOADER[Configuration Loader]
-        DEFAULTS["Package Defaults (built-in YAML)"]
-        MERGE["Deep Merge (user overrides defaults)"]
-        PYDANTIC["Pydantic Validation (type safety, constraints)"]
+    subgraph LOADER["Configuration Loader"]
+        DEFAULTS["Package Defaults"]
+        MERGE["`**Deep Merge**
+        user overrides defaults`"]
+        PYDANTIC["`**Pydantic Validation**
+        type safety, constraints`"]
     end
 
-    subgraph VALIDATED[CanvodConfig validated]
-        PC["ProcessingConfig   ProcessingParams   StorageConfig   IcechunkConfig   MetadataConfig"]
-        SC["SitesConfig   ReceiverConfig   VODAnalysisConfig"]
-        SIC["SidsConfig   Signal filters"]
+    subgraph VALIDATED["CanvodConfig"]
+        PC["ProcessingConfig"]
+        SC["SitesConfig"]
+        SIC["SidsConfig"]
     end
 
-    subgraph VERSIONED[Versioned Data Storage]
-        IC_WRITE["Icechunk Write (atomic commits)"]
-        SNAPSHOT["Snapshot ID (content-addressable)"]
-        BRANCH["Branch Management (main, rechunk)"]
-        METADATA["Metadata Parquet (RINEX hash, epochs, snapshot, timestamp)"]
+    subgraph VERSIONED["Versioned Data Storage"]
+        IC_WRITE["Icechunk Write"]
+        SNAPSHOT["Snapshot ID"]
+        BRANCH["Branch Management"]
+        METADATA["Metadata Table"]
     end
 
-    subgraph PROVENANCE[Full Provenance]
-        TRACE["Every dataset traceable to:   Config version   RINEX file hash   Snapshot ID   Processing timestamp"]
+    subgraph PROVENANCE["Full Provenance"]
+        TRACE["`Every dataset traceable to:
+        config version, RINEX hash,
+        snapshot ID, timestamp`"]
     end
 
     PROC --> MERGE
