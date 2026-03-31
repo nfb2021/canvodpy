@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_ab91b92e650ecaab___init___py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-03-19 20:45 +0000
+            created at 2026-03-31 09:59 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -105,7 +105,7 @@
     <p class="mis show_mis"><span class="n"><a id="t23" href="#t23">23</a></span><span class="t"><span class="key">import</span> <span class="nam">argparse</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t24" href="#t24">24</a></span><span class="t"><span class="key">import</span> <span class="nam">sys</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t25" href="#t25">25</a></span><span class="t"><span class="key">import</span> <span class="nam">time</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t26" href="#t26">26</a></span><span class="t"><span class="key">from</span> <span class="nam">datetime</span> <span class="key">import</span> <span class="nam">datetime</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t26" href="#t26">26</a></span><span class="t"><span class="key">from</span> <span class="nam">datetime</span> <span class="key">import</span> <span class="nam">UTC</span><span class="op">,</span> <span class="nam">datetime</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t27" href="#t27">27</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t28" href="#t28">28</a></span><span class="t"><span class="key">import</span> <span class="nam">numpy</span> <span class="key">as</span> <span class="nam">np</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t29" href="#t29">29</a></span><span class="t"><span class="key">import</span> <span class="nam">structlog</span>&nbsp;</span><span class="r"></span></p>
@@ -214,7 +214,7 @@
     <p class="pln"><span class="n"><a id="t132" href="#t132">132</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t133" href="#t133">133</a></span><span class="t">    <span class="com"># numpy datetime64 fallback</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t134" href="#t134">134</a></span><span class="t">    <span class="nam">ts</span> <span class="op">=</span> <span class="op">(</span><span class="nam">latest_epoch</span> <span class="op">-</span> <span class="nam">np</span><span class="op">.</span><span class="nam">datetime64</span><span class="op">(</span><span class="str">"1970-01-01T00:00:00"</span><span class="op">)</span><span class="op">)</span> <span class="op">/</span> <span class="nam">np</span><span class="op">.</span><span class="nam">timedelta64</span><span class="op">(</span><span class="num">1</span><span class="op">,</span> <span class="str">"s"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t135" href="#t135">135</a></span><span class="t">    <span class="nam">dt</span> <span class="op">=</span> <span class="nam">datetime</span><span class="op">.</span><span class="nam">utcfromtimestamp</span><span class="op">(</span><span class="nam">float</span><span class="op">(</span><span class="nam">ts</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t135" href="#t135">135</a></span><span class="t">    <span class="nam">dt</span> <span class="op">=</span> <span class="nam">datetime</span><span class="op">.</span><span class="nam">fromtimestamp</span><span class="op">(</span><span class="nam">float</span><span class="op">(</span><span class="nam">ts</span><span class="op">)</span><span class="op">,</span> <span class="nam">tz</span><span class="op">=</span><span class="nam">UTC</span><span class="op">)</span><span class="op">.</span><span class="nam">replace</span><span class="op">(</span><span class="nam">tzinfo</span><span class="op">=</span><span class="key">None</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t136" href="#t136">136</a></span><span class="t">    <span class="key">return</span> <span class="fst">f"</span><span class="op">{</span><span class="nam">dt</span><span class="op">.</span><span class="nam">year</span><span class="op">}</span><span class="op">{</span><span class="nam">dt</span><span class="op">.</span><span class="nam">timetuple</span><span class="op">(</span><span class="op">)</span><span class="op">.</span><span class="nam">tm_yday</span><span class="op">:</span><span class="fst">03d</span><span class="op">}</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t137" href="#t137">137</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t138" href="#t138">138</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -455,7 +455,7 @@
             <a class="nav" href="z_ab91b92e650ecaab___init___py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-03-19 20:45 +0000
+            created at 2026-03-31 09:59 +0000
         </p>
     </div>
 </footer>

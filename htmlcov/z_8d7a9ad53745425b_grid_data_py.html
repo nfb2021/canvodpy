@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_8d7a9ad53745425b_grid_types_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-03-19 20:45 +0000
+            created at 2026-03-31 09:59 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -167,7 +167,7 @@
     <p class="pln"><span class="n"><a id="t85" href="#t85">85</a></span><span class="t">        <span class="com"># HEALPix</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t86" href="#t86">86</a></span><span class="t">        <span class="key">if</span> <span class="nam">self</span><span class="op">.</span><span class="nam">grid_type</span> <span class="op">==</span> <span class="str">"healpix"</span> <span class="key">and</span> <span class="str">"healpix_nside"</span> <span class="key">in</span> <span class="nam">self</span><span class="op">.</span><span class="nam">grid</span><span class="op">.</span><span class="nam">columns</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t87" href="#t87">87</a></span><span class="t">            <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t88" href="#t88">88</a></span><span class="t">                <span class="key">import</span> <span class="nam">healpy</span> <span class="key">as</span> <span class="nam">hp</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t88" href="#t88">88</a></span><span class="t">                <span class="key">import</span> <span class="nam">healpy</span> <span class="key">as</span> <span class="nam">hp</span>  <span class="com"># type: ignore[unresolved-import]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t89" href="#t89">89</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t90" href="#t90">90</a></span><span class="t">                <span class="nam">nside</span> <span class="op">=</span> <span class="nam">int</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">grid</span><span class="op">[</span><span class="str">"healpix_nside"</span><span class="op">]</span><span class="op">[</span><span class="num">0</span><span class="op">]</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t91" href="#t91">91</a></span><span class="t">                <span class="key">return</span> <span class="nam">np</span><span class="op">.</span><span class="nam">full</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
@@ -320,7 +320,7 @@
     <p class="pln"><span class="n"><a id="t238" href="#t238">238</a></span><span class="t">        <span class="com"># Add HEALPix-specific info</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t239" href="#t239">239</a></span><span class="t">        <span class="key">if</span> <span class="nam">self</span><span class="op">.</span><span class="nam">grid_type</span> <span class="op">==</span> <span class="str">"healpix"</span> <span class="key">and</span> <span class="str">"healpix_nside"</span> <span class="key">in</span> <span class="nam">self</span><span class="op">.</span><span class="nam">grid</span><span class="op">.</span><span class="nam">columns</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t240" href="#t240">240</a></span><span class="t">            <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t241" href="#t241">241</a></span><span class="t">                <span class="key">import</span> <span class="nam">healpy</span> <span class="key">as</span> <span class="nam">hp</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t241" href="#t241">241</a></span><span class="t">                <span class="key">import</span> <span class="nam">healpy</span> <span class="key">as</span> <span class="nam">hp</span>  <span class="com"># type: ignore[unresolved-import]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t242" href="#t242">242</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t243" href="#t243">243</a></span><span class="t">                <span class="nam">nside</span> <span class="op">=</span> <span class="nam">int</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">grid</span><span class="op">[</span><span class="str">"healpix_nside"</span><span class="op">]</span><span class="op">[</span><span class="num">0</span><span class="op">]</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t244" href="#t244">244</a></span><span class="t">                <span class="nam">stats</span><span class="op">[</span><span class="str">"healpix_nside"</span><span class="op">]</span> <span class="op">=</span> <span class="nam">nside</span>&nbsp;</span><span class="r"></span></p>
@@ -340,7 +340,7 @@
             <a class="nav" href="z_8d7a9ad53745425b_grid_types_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-03-19 20:45 +0000
+            created at 2026-03-31 09:59 +0000
         </p>
     </div>
 </footer>

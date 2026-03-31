@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_fcaf78242a449863_sbf_vs_rinex_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-03-19 20:45 +0000
+            created at 2026-03-31 09:59 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -205,19 +205,22 @@
     <p class="mis show_mis"><span class="n"><a id="t123" href="#t123">123</a></span><span class="t">        <span class="nam">ds_original</span> <span class="op">=</span> <span class="nam">load_group</span><span class="op">(</span><span class="nam">s</span><span class="op">,</span> <span class="nam">group</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t124" href="#t124">124</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t125" href="#t125">125</a></span><span class="t">        <span class="com"># Write to fresh store</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t126" href="#t126">126</a></span><span class="t">        <span class="nam">roundtrip_store</span><span class="op">.</span><span class="nam">write_initial_group</span><span class="op">(</span><span class="nam">group</span><span class="op">,</span> <span class="nam">ds_original</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t127" href="#t127">127</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t128" href="#t128">128</a></span><span class="t">        <span class="com"># Read back</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t129" href="#t129">129</a></span><span class="t">        <span class="nam">ds_back</span> <span class="op">=</span> <span class="nam">load_group</span><span class="op">(</span><span class="nam">roundtrip_store</span><span class="op">,</span> <span class="nam">group</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t126" href="#t126">126</a></span><span class="t">        <span class="nam">roundtrip_store</span><span class="op">.</span><span class="nam">write_initial_group</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t127" href="#t127">127</a></span><span class="t">            <span class="nam">dataset</span><span class="op">=</span><span class="nam">ds_original</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t128" href="#t128">128</a></span><span class="t">            <span class="nam">group_name</span><span class="op">=</span><span class="nam">group</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t129" href="#t129">129</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t130" href="#t130">130</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t131" href="#t131">131</a></span><span class="t">        <span class="nam">r</span> <span class="op">=</span> <span class="nam">compare_datasets</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t132" href="#t132">132</a></span><span class="t">            <span class="nam">ds_original</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t133" href="#t133">133</a></span><span class="t">            <span class="nam">ds_back</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t134" href="#t134">134</a></span><span class="t">            <span class="nam">variables</span><span class="op">=</span><span class="nam">variables</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t135" href="#t135">135</a></span><span class="t">            <span class="nam">tier</span><span class="op">=</span><span class="nam">ToleranceTier</span><span class="op">.</span><span class="nam">EXACT</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t136" href="#t136">136</a></span><span class="t">            <span class="nam">label</span><span class="op">=</span><span class="fst">f"</span><span class="op">{</span><span class="nam">group</span><span class="op">}</span><span class="fst">: store &#8594; Icechunk &#8594; read back</span><span class="fst">"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t137" href="#t137">137</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t138" href="#t138">138</a></span><span class="t">        <span class="nam">result</span><span class="op">.</span><span class="nam">results</span><span class="op">[</span><span class="fst">f"</span><span class="fst">roundtrip_zarr_</span><span class="op">{</span><span class="nam">group</span><span class="op">}</span><span class="fst">"</span><span class="op">]</span> <span class="op">=</span> <span class="nam">r</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t131" href="#t131">131</a></span><span class="t">        <span class="com"># Read back</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t132" href="#t132">132</a></span><span class="t">        <span class="nam">ds_back</span> <span class="op">=</span> <span class="nam">load_group</span><span class="op">(</span><span class="nam">roundtrip_store</span><span class="op">,</span> <span class="nam">group</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t133" href="#t133">133</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t134" href="#t134">134</a></span><span class="t">        <span class="nam">r</span> <span class="op">=</span> <span class="nam">compare_datasets</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t135" href="#t135">135</a></span><span class="t">            <span class="nam">ds_original</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t136" href="#t136">136</a></span><span class="t">            <span class="nam">ds_back</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t137" href="#t137">137</a></span><span class="t">            <span class="nam">variables</span><span class="op">=</span><span class="nam">variables</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t138" href="#t138">138</a></span><span class="t">            <span class="nam">tier</span><span class="op">=</span><span class="nam">ToleranceTier</span><span class="op">.</span><span class="nam">EXACT</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t139" href="#t139">139</a></span><span class="t">            <span class="nam">label</span><span class="op">=</span><span class="fst">f"</span><span class="op">{</span><span class="nam">group</span><span class="op">}</span><span class="fst">: store &#8594; Icechunk &#8594; read back</span><span class="fst">"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t140" href="#t140">140</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t141" href="#t141">141</a></span><span class="t">        <span class="nam">result</span><span class="op">.</span><span class="nam">results</span><span class="op">[</span><span class="fst">f"</span><span class="fst">roundtrip_zarr_</span><span class="op">{</span><span class="nam">group</span><span class="op">}</span><span class="fst">"</span><span class="op">]</span> <span class="op">=</span> <span class="nam">r</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -227,7 +230,7 @@
             <a class="nav" href="z_fcaf78242a449863_sbf_vs_rinex_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-03-19 20:45 +0000
+            created at 2026-03-31 09:59 +0000
         </p>
     </div>
 </footer>
