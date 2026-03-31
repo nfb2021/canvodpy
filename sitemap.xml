@@ -25,6 +25,9 @@
         <loc>https://nfb2021.github.io/canvodpy/packages/readers/sbf/</loc>
       </url>
       <url>
+        <loc>https://nfb2021.github.io/canvodpy/packages/readers/sbf-decoding/</loc>
+      </url>
+      <url>
         <loc>https://nfb2021.github.io/canvodpy/packages/readers/ephemeris-sources/</loc>
       </url>
       <url>
@@ -137,6 +140,15 @@
       </url>
       <url>
         <loc>https://nfb2021.github.io/canvodpy/guides/HOW_RELEASE_WORKS/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/FOSS_PRINCIPLES/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/FAIR_IMPLEMENTATION_SUMMARY/</loc>
+      </url>
+      <url>
+        <loc>https://nfb2021.github.io/canvodpy/OPENSSF_BADGE_GUIDE/</loc>
       </url>
       <url>
         <loc>https://nfb2021.github.io/canvodpy/impressum/</loc>

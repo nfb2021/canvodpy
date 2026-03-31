@@ -25,7 +25,7 @@
       
       
       <link rel="icon" href="../../assets/logo.svg">
-      <meta name="generator" content="zensical-0.0.24">
+      <meta name="generator" content="zensical-0.0.29">
     
     
       
@@ -36,7 +36,7 @@
       
         
       
-      <link rel="stylesheet" href="../../assets/stylesheets/modern/main.28978c9b.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/modern/main.6f2fbb28.min.css">
       
         
           
@@ -129,7 +129,7 @@
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
     <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
-    <label class="md-overlay" for="__drawer"></label>
+    <label class="md-overlay" for="__drawer" aria-label="Navigation"></label>
     <div data-md-component="skip">
       
         
@@ -149,10 +149,10 @@
   <nav class="md-header__inner md-grid" aria-label="Header">
     <a href="../.." title="canVODpy" class="md-header__button md-logo" aria-label="canVODpy" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../../assets/logo.svg" alt="canVODpy">
 
     </a>
-    <label class="md-header__button md-icon" for="__drawer">
+    <label class="md-header__button md-icon" for="__drawer" aria-label="Navigation">
       
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
     </label>
@@ -206,7 +206,7 @@
     
       
       
-        <label class="md-header__button md-icon" for="__search">
+        <label class="md-header__button md-icon" for="__search" aria-label="Search">
           
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
         </label>
@@ -372,6 +372,25 @@
     
     
       <li class="md-tabs__item">
+        <a href="../../FOSS_PRINCIPLES/" class="md-tabs__link">
+          
+  
+  Quality & Compliance
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
         <a href="../../impressum/" class="md-tabs__link">
           
   
@@ -426,7 +445,7 @@
   <label class="md-nav__title" for="__drawer">
     <a href="../.." title="canVODpy" class="md-nav__button md-logo" aria-label="canVODpy" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../../assets/logo.svg" alt="canVODpy">
 
     </a>
     canVODpy
@@ -750,6 +769,8 @@
       
         
       
+        
+      
     
     
     
@@ -866,6 +887,34 @@
     
   
     SBF Reader
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/readers/sbf-decoding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SBF Field Decoding
   
 
     
@@ -2714,6 +2763,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#running-multiple-configurations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running Multiple Configurations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running Multiple Configurations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#option-1-dag_runconf-at-trigger-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option 1 — dag_run.conf at trigger time
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-2-airflow-variables-environment-level-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option 2 — Airflow Variables (environment-level config)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-3-dag-level-param-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option 3 — DAG-level Param default
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-differences-between-scenarios" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config differences between scenarios
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#calling-tasks-without-airflow" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3031,6 +3141,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -3054,7 +3170,7 @@
   <span class="md-ellipsis">
     
   
-    Legal
+    Quality & Compliance
   
 
     
@@ -3067,6 +3183,181 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Quality & Compliance
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../FOSS_PRINCIPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FOSS Principles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../FAIR_IMPLEMENTATION_SUMMARY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAIR Software Compliance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OPENSSF_BADGE_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenSSF Best Practices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../SECURITY.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Legal
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3157,10 +3448,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
-          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
             
   
   
@@ -3178,8 +3469,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3737,6 +4028,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#running-multiple-configurations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running Multiple Configurations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running Multiple Configurations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#option-1-dag_runconf-at-trigger-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option 1 — dag_run.conf at trigger time
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-2-airflow-variables-environment-level-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option 2 — Airflow Variables (environment-level config)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-3-dag-level-param-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option 3 — DAG-level Param default
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-differences-between-scenarios" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config differences between scenarios
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#calling-tasks-without-airflow" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4072,6 +4424,112 @@ wrapper — no pipeline rewrite.</p>
 </ul>
 </div>
 <hr />
+<h2 id="running-multiple-configurations">Running Multiple Configurations<a class="headerlink" href="#running-multiple-configurations" title="Permanent link">&para;</a></h2>
+<p>Two processing scenarios are common:</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Reader</th>
+<th>Ephemeris</th>
+<th><abbr title="Directed Acyclic Graph — task dependency structure used by workflow schedulers (Airflow, Prefect)">DAG</abbr></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>a</strong> — agency quality, delayed</td>
+<td><abbr title="Receiver Independent Exchange Format — standard ASCII format for GNSS observations, defined by IGS (Navipedia: RINEX)">RINEX</abbr></td>
+<td><abbr title="Standard Product 3 — precise satellite orbit (position ± ~2 cm) file format, produced by IGS analysis centres (Navipedia: SP3)">SP3</abbr>/<abbr title="Clock — precise satellite and station clock correction file (30 s intervals), companion to SP3 orbits">CLK</abbr> (final)</td>
+<td><code>canvod_{site}_rinex</code></td>
+</tr>
+<tr>
+<td><strong>b</strong> — same-day, broadcast geometry</td>
+<td><abbr title="Septentrio Binary Format — proprietary binary telemetry from Septentrio receivers; embeds satellite geometry">SBF</abbr></td>
+<td><abbr title="Septentrio Binary Format — proprietary binary telemetry from Septentrio receivers; embeds satellite geometry">SBF</abbr> SatVisibility</td>
+<td><code>canvod_{site}_sbf</code></td>
+</tr>
+</tbody>
+</table>
+<p>Both DAGs are generated automatically per site. To run them with <strong>different
+config files</strong> (e.g. different store paths, observables, or ephemeris product
+types), use one of the three patterns below.</p>
+<hr />
+<h3 id="option-1-dag_runconf-at-trigger-time">Option 1 — <code>dag_run.conf</code> at trigger time<a class="headerlink" href="#option-1-dag_runconf-at-trigger-time" title="Permanent link">&para;</a></h3>
+<p>Pass a <code>config_path</code> override when triggering manually.  The task functions
+read it from <code>context["dag_run"].conf</code> and fall back to the default config
+if absent.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Scenario a — RINEX + final SP3/CLK</span>
+airflow<span class="w"> </span>dags<span class="w"> </span>trigger<span class="w"> </span>canvod_rosalia_rinex<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--conf<span class="w"> </span><span class="s1">&#39;{&quot;config_path&quot;: &quot;/etc/canvod/sites_rinex_agency.yaml&quot;}&#39;</span>
+
+<span class="c1"># Scenario b — SBF + broadcast geometry</span>
+airflow<span class="w"> </span>dags<span class="w"> </span>trigger<span class="w"> </span>canvod_rosalia_sbf<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--conf<span class="w"> </span><span class="s1">&#39;{&quot;config_path&quot;: &quot;/etc/canvod/sites_sbf_broadcast.yaml&quot;}&#39;</span>
+</code></pre></div>
+<p>Or via the <code>af</code> CLI:</p>
+<div class="highlight"><pre><span></span><code>af<span class="w"> </span>runs<span class="w"> </span>trigger<span class="w"> </span>canvod_rosalia_rinex<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-F<span class="w"> </span><span class="nv">config_path</span><span class="o">=</span>/etc/canvod/sites_rinex_agency.yaml
+</code></pre></div>
+<p>This is the simplest approach for one-off or backfill runs.</p>
+<div class="admonition info">
+<p class="admonition-title">Backfill <abbr title="Directed Acyclic Graph — task dependency structure used by workflow schedulers (Airflow, Prefect)">DAG</abbr> already supports conf</p>
+<p><code>canvod_backfill</code> accepts <code>site</code>, <code>branch</code>, <code>start_date</code>, and <code>end_date</code>
+as params — add <code>config_path</code> to the same <code>--conf</code> dict to backfill with
+a specific config.</p>
+</div>
+<hr />
+<h3 id="option-2-airflow-variables-environment-level-config">Option 2 — Airflow Variables (environment-level config)<a class="headerlink" href="#option-2-airflow-variables-environment-level-config" title="Permanent link">&para;</a></h3>
+<p>Store the config path as an Airflow Variable.  This is appropriate when
+an entire Airflow environment (prod / dev / staging) should always use a
+specific config — no per-run override needed.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Set once per environment</span>
+airflow<span class="w"> </span>variables<span class="w"> </span><span class="nb">set</span><span class="w"> </span>canvod_config_path<span class="w"> </span>/etc/canvod/sites_production.yaml
+</code></pre></div>
+<p>Tasks retrieve it with:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Variable</span>
+<span class="n">config_path</span> <span class="o">=</span> <span class="n">Variable</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;canvod_config_path&quot;</span><span class="p">,</span> <span class="n">default_var</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+<p>Two Airflow deployments can point at entirely different <abbr title="Version-controlled cloud-native tensor storage engine — git-like snapshots over Zarr v3 chunks">Icechunk</abbr> stores and
+processing parameters without any code changes.</p>
+<hr />
+<h3 id="option-3-dag-level-param-default">Option 3 — <abbr title="Directed Acyclic Graph — task dependency structure used by workflow schedulers (Airflow, Prefect)">DAG</abbr>-level <code>Param</code> default<a class="headerlink" href="#option-3-dag-level-param-default" title="Permanent link">&para;</a></h3>
+<p>For a permanent two-scenario setup where each <abbr title="Directed Acyclic Graph — task dependency structure used by workflow schedulers (Airflow, Prefect)">DAG</abbr> always defaults to a
+specific config, define <code>config_path</code> as a <code>Param</code> in the <abbr title="Directed Acyclic Graph — task dependency structure used by workflow schedulers (Airflow, Prefect)">DAG</abbr> definition:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.models.param</span><span class="w"> </span><span class="kn">import</span> <span class="n">Param</span>
+
+<span class="nd">@dag</span><span class="p">(</span>
+    <span class="n">dag_id</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;canvod_</span><span class="si">{</span><span class="n">site</span><span class="si">}</span><span class="s2">_rinex&quot;</span><span class="p">,</span>
+    <span class="n">params</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;config_path&quot;</span><span class="p">:</span> <span class="n">Param</span><span class="p">(</span>
+            <span class="n">default</span><span class="o">=</span><span class="s2">&quot;/etc/canvod/sites_rinex_agency.yaml&quot;</span><span class="p">,</span>
+            <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;string&quot;</span><span class="p">,</span>
+            <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Path to sites.yaml — override per run if needed&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="p">},</span>
+    <span class="o">...</span>
+<span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">rinex_dag</span><span class="p">():</span> <span class="o">...</span>
+</code></pre></div>
+<p>The Airflow UI exposes <code>config_path</code> as an editable field when triggering
+the <abbr title="Directed Acyclic Graph — task dependency structure used by workflow schedulers (Airflow, Prefect)">DAG</abbr> manually, so ad-hoc overrides remain possible without CLI flags.</p>
+<hr />
+<h3 id="config-differences-between-scenarios">Config differences between scenarios<a class="headerlink" href="#config-differences-between-scenarios" title="Permanent link">&para;</a></h3>
+<p>The two scenarios typically differ in these <code>processing.yaml</code> fields:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Scenario a — RINEX + agency ephemeris</span>
+<span class="nt">processing</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">ephemeris_source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">final</span><span class="w">          </span><span class="c1"># SP3/CLK, ~12-18 day lag</span>
+<span class="w">  </span><span class="nt">keep_rnx_vars</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">SNR</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">Pseudorange</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">Phase</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">Doppler</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">store_radial_distance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+
+<span class="c1"># Scenario b — SBF + broadcast ephemeris</span>
+<span class="nt">processing</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">ephemeris_source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">broadcast</span><span class="w">      </span><span class="c1"># Embedded in SBF binary, same-day</span>
+<span class="w">  </span><span class="nt">store_sbf_raw_observables</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">  </span><span class="c1"># SNR_raw, Phase_raw, Pseudorange_unsmoothed</span>
+<span class="w">  </span><span class="nt">store_radial_distance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<p>Separate <code>sites_rinex.yaml</code> and <code>sites_sbf.yaml</code> files can share the same
+site geometry and receiver layout while differing only in the processing block.</p>
+<hr />
 <h2 id="calling-tasks-without-airflow">Calling Tasks Without Airflow<a class="headerlink" href="#calling-tasks-without-airflow" title="Permanent link">&para;</a></h2>
 <p>The task functions are plain Python functions with no Airflow dependency.
 Use them directly for scripting or debugging:</p>
@@ -4240,13 +4698,16 @@ canvodpy/src/canvodpy/workflows/
     
       
       
-      
       <script id="__config" type="application/json">{"annotate":null,"base":"../..","features":["content.code.copy","content.code.annotate","content.tooltips","content.tabs.link","navigation.footer","navigation.indexes","navigation.instant","navigation.instant.prefetch","navigation.instant.progress","navigation.path","navigation.sections","navigation.tabs","navigation.top","navigation.tracking","search.highlight","search.suggest","toc.follow"],"search":"../../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.16f8adc2.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c2b142ea.min.js"></script>
       
         <script src="../../assets/mermaid-init.js"></script>
+      
+        <script src="../../assets/mathjax-init.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       
     
   </body>
