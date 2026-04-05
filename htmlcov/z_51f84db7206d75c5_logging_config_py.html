@@ -64,8 +64,8 @@
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="z_1463a382258a175e___init___py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-03-31 21:22 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.13.5">coverage.py v7.13.5</a>,
+            created at 2026-04-05 21:28 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -307,7 +307,7 @@
     <p class="run"><span class="n"><a id="t225" href="#t225">225</a></span><span class="t">    <span class="key">if</span> <span class="nam">logfile</span> <span class="key">is</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t226" href="#t226">226</a></span><span class="t">        <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t227" href="#t227">227</a></span><span class="t">            <span class="nam">logfile</span> <span class="op">=</span> <span class="nam">load_config</span><span class="op">(</span><span class="op">)</span><span class="op">.</span><span class="nam">processing</span><span class="op">.</span><span class="nam">logging</span><span class="op">.</span><span class="nam">get_log_file</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t228" href="#t228">228</a></span><span class="t">        <span class="key">except</span> <span class="nam">FileNotFoundError</span><span class="op">,</span> <span class="nam">Exception</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t228" href="#t228">228</a></span><span class="t">        <span class="key">except</span> <span class="op">(</span><span class="nam">FileNotFoundError</span><span class="op">,</span> <span class="nam">Exception</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t229" href="#t229">229</a></span><span class="t">            <span class="com"># Fallback when config system isn't available (e.g. CI, tests)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t230" href="#t230">230</a></span><span class="t">            <span class="nam">logfile</span> <span class="op">=</span> <span class="nam">Path</span><span class="op">.</span><span class="nam">cwd</span><span class="op">(</span><span class="op">)</span> <span class="op">/</span> <span class="str">".logs"</span> <span class="op">/</span> <span class="str">"canvodpy.log"</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t231" href="#t231">231</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -513,7 +513,7 @@
     <p class="pln"><span class="n"><a id="t431" href="#t431">431</a></span><span class="t"><span class="str">    """</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t432" href="#t432">432</a></span><span class="t">    <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t433" href="#t433">433</a></span><span class="t">        <span class="nam">depth</span> <span class="op">=</span> <span class="nam">load_config</span><span class="op">(</span><span class="op">)</span><span class="op">.</span><span class="nam">processing</span><span class="op">.</span><span class="nam">logging</span><span class="op">.</span><span class="nam">log_path_depth</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t434" href="#t434">434</a></span><span class="t">    <span class="key">except</span> <span class="nam">FileNotFoundError</span><span class="op">,</span> <span class="nam">Exception</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t434" href="#t434">434</a></span><span class="t">    <span class="key">except</span> <span class="op">(</span><span class="nam">FileNotFoundError</span><span class="op">,</span> <span class="nam">Exception</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t435" href="#t435">435</a></span><span class="t">        <span class="nam">depth</span> <span class="op">=</span> <span class="num">6</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t436" href="#t436">436</a></span><span class="t">    <span class="nam">rel_path</span> <span class="op">=</span> <span class="nam">Path</span><span class="op">(</span><span class="op">*</span><span class="nam">fname</span><span class="op">.</span><span class="nam">parts</span><span class="op">[</span><span class="op">-</span><span class="nam">depth</span><span class="op">:</span><span class="op">]</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t437" href="#t437">437</a></span><span class="t">    <span class="key">return</span> <span class="nam">LOGGER</span><span class="op">.</span><span class="nam">bind</span><span class="op">(</span><span class="nam">file</span><span class="op">=</span><span class="nam">str</span><span class="op">(</span><span class="nam">rel_path</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -525,8 +525,8 @@
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a class="nav" href="z_1463a382258a175e___init___py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-03-31 21:22 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.13.5">coverage.py v7.13.5</a>,
+            created at 2026-04-05 21:28 +0000
         </p>
     </div>
 </footer>
