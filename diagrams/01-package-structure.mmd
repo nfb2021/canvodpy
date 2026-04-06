@@ -24,6 +24,7 @@ graph TB
     subgraph InfraPkg[Infrastructure Packages]
         Ops["⚙️ canvod-ops<br/>Preprocessing Pipeline"]
         Naming["🏷️ canvod-virtualiconvname<br/>File Naming & Discovery"]
+        Audit["🔍 canvod-audit<br/>Verification Suite"]
     end
 
     Config --> Canvodpy
@@ -36,6 +37,7 @@ graph TB
     Canvodpy --> Viz
     Canvodpy --> Ops
     Canvodpy --> Naming
+    Canvodpy --> Audit
 
     Aux --> Readers
     Store --> Grids
@@ -55,3 +57,4 @@ graph TB
     style Utils fill:#fce4ec,stroke:#880e4f,stroke-width:2px
     style Ops fill:#e0f2f1,stroke:#004d40,stroke-width:2px
     style Naming fill:#e0f2f1,stroke:#004d40,stroke-width:2px
+    style Audit fill:#fff8e1,stroke:#f57f17,stroke-width:2px

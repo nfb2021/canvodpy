@@ -13,6 +13,7 @@ graph TD
         StoreMeta["canvod-store-metadata"]
         Viz["canvod-viz"]
         OPS["canvod-ops"]
+        Audit["canvod-audit"]
     end
 
     subgraph Orchestration["Orchestration Layer"]
@@ -28,6 +29,7 @@ graph TD
     Canvodpy ==> OPS
     Canvodpy ==> NAMING
     Canvodpy ==> StoreMeta
+    Canvodpy ==> Audit
 
     Aux -.-> Readers
     Store -.-> Grids

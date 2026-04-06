@@ -1,11 +1,26 @@
 flowchart TD
     RAW["`**Raw Dataset**
-    epoch, sid`"]
-    RAW --> TA["`**TemporalAggregate**
-    1-min mean`"]
+    (epoch, sid) from RINEX store`"]
+
+    RAW --> SIG["`**Signal Selection**
+    keep_sids filter
+    obs type selection`"]
+
+    SIG --> QC["`**Quality Control**
+    polar angle cutoff
+    SNR threshold mask`"]
+
+    QC --> TA["`**TemporalAggregate**
+    resample → regular epoch grid
+    configurable window (e.g. 1 min)`"]
+
     TA --> GA["`**GridAssignment**
-    2-deg equal-area`"]
-    GA --> OUT["`**Enriched Dataset**
-    + cell_id
-    + PipelineResult metadata`"]
-    OUT --> STORE["`**Icechunk Store**`"]
+    KDTree nearest-cell query
+    2° equal-area hemigrid`"]
+
+    GA --> OUT["`**PipelineResult**
+    + cell_id coord
+    + pipeline metadata attrs`"]
+
+    OUT --> STORE["`**Icechunk Store**
+    versioned, atomic commit`"]

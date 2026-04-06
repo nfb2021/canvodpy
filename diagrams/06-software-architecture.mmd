@@ -27,9 +27,14 @@ graph TD
         UTILS["canvod-utils"]
     end
 
+    subgraph VERIFY["Verification"]
+        AUDIT["canvod-audit"]
+    end
+
     CANVODPY --> READERS & AUX & NAMING
     CANVODPY --> STORE
     CANVODPY --> VOD & GRIDS & OPS & VIZ
+    CANVODPY --> AUDIT
 
     OPS -.-> GRIDS
     VIZ -.-> GRIDS

@@ -16,7 +16,8 @@ sequenceDiagram
 
     Pipeline->>VODCalc: calculate(canopy_ds, ref_ds)
 
-    VODCalc->>VODCalc: Apply Tau-Omega Model<br/>τ = -ln(SNR_canopy/SNR_ref)
+    VODCalc->>VODCalc: Compute Transmissivity<br/>T = 10^(ΔSNR_dBHz / 10)
+    VODCalc->>VODCalc: Apply Tau-Omega Model<br/>τ = -ln(T) · cos(θ)
 
     VODCalc-->>Pipeline: VOD Dataset (τ per sid, epoch)
 

@@ -15,7 +15,8 @@ flowchart TD
 
     %% ── Data Discovery ──
     subgraph DISCOVERY[Data Discovery per DOY]
-        MATCHER["PairDataDirMatcher (ThreadPoolExecutor)"]
+        MAPPER["FilenameMapper (virtual → canonical names)"]
+        VALIDATOR["DataDirectoryValidator (pre-flight gate)"]
         EXPAND["SCS Expansion Reference receivers expanded per canopy position"]
         SCHEDULE["Processing Schedule {date: {group: (dir, type, pos_dir)}}"]
     end
@@ -85,8 +86,9 @@ flowchart TD
     SITE --> VOD_STORE
 
     %% Discovery
-    CONFIG --> MATCHER
-    MATCHER --> EXPAND
+    CONFIG --> MAPPER
+    MAPPER --> VALIDATOR
+    VALIDATOR --> EXPAND
     EXPAND --> SCHEDULE
 
     %% Auxiliary pipeline
