@@ -3125,10 +3125,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#short-term-1-2-weeks" class="md-nav__link">
+  <a href="#completed-short-term" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Short Term (1-2 weeks)
+        Completed (Short Term)
       
     </span>
   </a>
@@ -4021,10 +4021,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#short-term-1-2-weeks" class="md-nav__link">
+  <a href="#completed-short-term" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Short Term (1-2 weeks)
+        Completed (Short Term)
       
     </span>
   </a>
@@ -4214,9 +4214,9 @@
 
 
 <h1 id="fair-compliance-setup-implementation-summary"><abbr title="Findable, Accessible, Interoperable, Reusable — guiding principles for scientific data stewardship (Wilkinson et al. 2016)">FAIR</abbr> Compliance Setup - Implementation Summary<a class="headerlink" href="#fair-compliance-setup-implementation-summary" title="Permanent link">&para;</a></h1>
-<p><strong>Date:</strong> March 30, 2026
+<p><strong>Date:</strong> April 7, 2026
 <strong>Repository:</strong> nfb2021/canvodpy
-<strong>Status:</strong> ✅ Complete</p>
+<strong>Status:</strong> ✅ Complete — 5/5 green</p>
 <h2 id="what-was-implemented">What Was Implemented<a class="headerlink" href="#what-was-implemented" title="Permanent link">&para;</a></h2>
 <h3 id="1-howfairis-github-action-workflow">1. ✅ howfairis GitHub Action Workflow<a class="headerlink" href="#1-howfairis-github-action-workflow" title="Permanent link">&para;</a></h3>
 <p><strong>File:</strong> <code>.github/workflows/fair-software.yml</code></p>
@@ -4225,7 +4225,7 @@
 - Triggers on push to main/develop branches, PRs, and manual dispatch
 - Provides colored output in workflow logs</p>
 <p><strong>Badge Added to README:</strong>
-<div class="highlight"><pre><span></span><code>[<span class="nt">![FAIR Software</span>](<span class="na">https://github.com/nfb2021/canvodpy/actions/workflows/fair-software.yml/badge.svg</span>)](...)
+<div class="highlight"><pre><span></span><code>[<span class="nt">![FAIR Software</span>](<span class="na">https://github.com/nfb2021/canvodpy/actions/workflows/fair-software.yml/badge.svg</span>)](https://github.com/nfb2021/canvodpy/actions/workflows/fair-software.yml)
 </code></pre></div></p>
 <h3 id="2-openssf-scorecard-workflow">2. ✅ OpenSSF Scorecard Workflow<a class="headerlink" href="#2-openssf-scorecard-workflow" title="Permanent link">&para;</a></h3>
 <p><strong>File:</strong> <code>.github/workflows/scorecard.yml</code></p>
@@ -4236,7 +4236,7 @@
 - Publishes results to OpenSSF public API
 - Enables the OpenSSF Scorecard badge</p>
 <p><strong>Badge Added to README:</strong>
-<div class="highlight"><pre><span></span><code>[<span class="nt">![OpenSSF Scorecard</span>](<span class="na">https://api.securityscorecards.dev/projects/github.com/nfb2021/canvodpy/badge</span>)](...)
+<div class="highlight"><pre><span></span><code>[<span class="nt">![OpenSSF Scorecard</span>](<span class="na">https://api.securityscorecards.dev/projects/github.com/nfb2021/canvodpy/badge</span>)](https://securityscorecards.dev/viewer/?uri=github.com/nfb2021/canvodpy)
 </code></pre></div></p>
 <h3 id="3-security-policy">3. ✅ Security Policy<a class="headerlink" href="#3-security-policy" title="Permanent link">&para;</a></h3>
 <p><strong>File:</strong> <code>SECURITY.md</code></p>
@@ -4253,7 +4253,6 @@
 <p><strong>File:</strong> <code>.howfairis.yml</code></p>
 <p>Enhanced with:
 - Clear explanations for why checks are skipped
-- References to ongoing work (<abbr title="Python Package Index — public Python package repository">PyPI</abbr> planned for v1.0.0)
 - Comments documenting what checks already pass
 - Links to relevant URLs</p>
 <h3 id="5-openssf-best-practices-badge-guide">5. ✅ OpenSSF Best Practices Badge Guide<a class="headerlink" href="#5-openssf-best-practices-badge-guide" title="Permanent link">&para;</a></h3>
@@ -4296,8 +4295,8 @@
 <tr>
 <td>3</td>
 <td><strong>Registry</strong></td>
-<td>⏳ Pending</td>
-<td>TestPyPI workflows ready, <abbr title="Python Package Index — public Python package repository">PyPI</abbr> planned for v1.0</td>
+<td>✅ Pass</td>
+<td>Published to <abbr title="Python Package Index — public Python package repository">PyPI</abbr> (<a href="https://pypi.org/project/canvodpy/">canvodpy</a> + 11 sub-packages, v0.2.1+)</td>
 </tr>
 <tr>
 <td>4</td>
@@ -4313,7 +4312,7 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Overall:</strong> 🟢 <strong>&#8536; complete</strong>, &#8533; pending (<abbr title="Python Package Index — public Python package repository">PyPI</abbr> for v1.0)</p>
+<p><strong>Overall:</strong> 🟢 <strong>5/5 complete</strong></p>
 <h2 id="file-changes-summary">File Changes Summary<a class="headerlink" href="#file-changes-summary" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>Created:
   .github/workflows/fair-software.yml      # howfairis automation
@@ -4332,45 +4331,15 @@ Modified:
 <li>✅ Scorecard results will appear in Security tab after first run</li>
 <li>✅ <abbr title="Findable, Accessible, Interoperable, Reusable — guiding principles for scientific data stewardship (Wilkinson et al. 2016)">FAIR</abbr> compliance is monitored on every PR</li>
 </ul>
-<h3 id="short-term-1-2-weeks">Short Term (1-2 weeks)<a class="headerlink" href="#short-term-1-2-weeks" title="Permanent link">&para;</a></h3>
-<ol>
-<li><strong>Apply for OpenSSF Best Practices badge</strong></li>
-<li>Go to https://bestpractices.coreinfrastructure.org/</li>
-<li>Follow <code>docs/OPENSSF_BADGE_GUIDE.md</code></li>
-<li>
-<p>Estimated time: 2-3 hours to complete questionnaire</p>
-</li>
-<li>
-<p><strong>Enable GitHub Security Features</strong></p>
-</li>
-<li>Settings → Security → Enable secret scanning</li>
-<li>
-<p>Settings → Security → Enable private vulnerability reporting (already done!)</p>
-</li>
-<li>
-<p><strong>Address Quick Wins from Badge Guide</strong></p>
-</li>
-<li>Add security section to CONTRIBUTING.md</li>
-<li>Document secure coding practices</li>
-<li>Verify REUSE compliance with <code>uv run reuse lint</code></li>
-</ol>
+<h3 id="completed-short-term">Completed (Short Term)<a class="headerlink" href="#completed-short-term" title="Permanent link">&para;</a></h3>
+<ul>
+<li>✅ OpenSSF Best Practices badge obtained (<a href="https://www.bestpractices.dev/projects/12329">Project 12329</a>)</li>
+<li>✅ GitHub Security Features enabled (secret scanning, private vulnerability reporting)</li>
+<li>✅ REUSE 3.3 compliant (<code>uv run reuse lint</code> passes)</li>
+</ul>
 <h3 id="medium-term-before-v100">Medium Term (Before v1.0.0)<a class="headerlink" href="#medium-term-before-v100" title="Permanent link">&para;</a></h3>
 <ol>
-<li><strong>Publish to <abbr title="Python Package Index — public Python package repository">PyPI</abbr></strong></li>
-<li>Will automatically satisfy <abbr title="Findable, Accessible, Interoperable, Reusable — guiding principles for scientific data stewardship (Wilkinson et al. 2016)">FAIR</abbr> recommendation #3</li>
-<li>
-<p>TestPyPI workflows already in place</p>
-</li>
-<li>
-<p><strong>Complete OpenSSF Badge</strong></p>
-</li>
-<li>Work through remaining criteria</li>
-<li>
-<p>Add badge to README once approved</p>
-</li>
-<li>
-<p><strong>Consider Additional Security Enhancements</strong></p>
-</li>
+<li><strong>Consider Additional Security Enhancements</strong></li>
 <li>Signed releases (GPG or Sigstore)</li>
 <li>Release checksums (SHA256)</li>
 <li>Supply chain security (SLSA provenance)</li>
