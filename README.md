@@ -131,7 +131,7 @@
 | packages/canvod-readers/src/canvod/readers/gnss\_specs/models.py                |      271 |       54 |     80% |90-91, 93-94, 272-278, 358, 435-443, 469-478, 500-523, 636-641, 735-736, 797-798, 806-809, 817-820, 827, 833-834, 868, 871, 874-882, 910 |
 | packages/canvod-readers/src/canvod/readers/gnss\_specs/satellite\_catalog.py    |      371 |       55 |     85% |317, 326-329, 333-338, 354-358, 378-379, 391-404, 409-424, 453, 552, 572, 674, 741-747, 800, 820, 827, 837, 845, 861, 869, 885, 893, 909, 918, 937 |
 | packages/canvod-readers/src/canvod/readers/gnss\_specs/signals.py               |       23 |        1 |     96% |       114 |
-| packages/canvod-readers/src/canvod/readers/gnss\_specs/utils.py                 |       21 |        0 |    100% |           |
+| packages/canvod-readers/src/canvod/readers/gnss\_specs/utils.py                 |       20 |        2 |     90% |     25-26 |
 | packages/canvod-readers/src/canvod/readers/gnss\_specs/validation\_constants.py |       32 |        0 |    100% |           |
 | packages/canvod-readers/src/canvod/readers/matching/\_\_init\_\_.py             |        3 |        0 |    100% |           |
 | packages/canvod-readers/src/canvod/readers/matching/dir\_matcher.py             |      110 |        7 |     94% |51, 342-343, 363, 368, 381-382 |
@@ -190,7 +190,7 @@
 | packages/canvod-vod/src/canvod/vod/\_internal/\_\_init\_\_.py                   |        2 |        0 |    100% |           |
 | packages/canvod-vod/src/canvod/vod/\_internal/logger.py                         |        5 |        1 |     80% |        26 |
 | packages/canvod-vod/src/canvod/vod/calculator.py                                |       66 |        7 |     89% |51, 65, 106-112 |
-| **TOTAL**                                                                       | **18986** | **11062** | **42%** |           |
+| **TOTAL**                                                                       | **18985** | **11064** | **42%** |           |
 
 
 ## Setup coverage badge
