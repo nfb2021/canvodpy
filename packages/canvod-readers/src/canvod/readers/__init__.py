@@ -55,6 +55,7 @@ from canvod.readers.matching import (
     PairDataDirMatcher,
     PairMatchedDirs,
 )
+from canvod.readers.rinex import Rnxv2Obs
 from canvod.readers.rinex.v3_04 import Rnxv3Obs
 from canvod.readers.sbf import SbfEpoch, SbfHeader, SbfReader, SbfSignalObs
 from canvod.utils.tools import YYYYDOY
@@ -74,6 +75,7 @@ __all__ = [
     "MatchedDirs",
     "PairDataDirMatcher",
     "PairMatchedDirs",
+    "Rnxv2Obs",
     "Rnxv3Obs",
     "SbfEpoch",
     "SbfHeader",
