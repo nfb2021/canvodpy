@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_71ccfa8a540bd563_satellite_catalog_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.5">coverage.py v7.13.5</a>,
-            created at 2026-04-09 09:42 +0000
+            created at 2026-04-09 11:55 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -354,7 +354,7 @@
     <p class="mis show_mis"><span class="n"><a id="t272" href="#t272">272</a></span><span class="t">            <span class="key">if</span> <span class="nam">isinstance</span><span class="op">(</span><span class="nam">value</span><span class="op">,</span> <span class="nam">pint</span><span class="op">.</span><span class="nam">Quantity</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t273" href="#t273">273</a></span><span class="t">                <span class="key">return</span> <span class="nam">value</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t274" href="#t274">274</a></span><span class="t">            <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t275" href="#t275">275</a></span><span class="t">                <span class="key">return</span> <span class="nam">UREG</span><span class="op">.</span><span class="nam">Quantity</span><span class="op">(</span><span class="nam">value</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t275" href="#t275">275</a></span><span class="t">                <span class="key">return</span> <span class="nam">UREG</span><span class="op">.</span><span class="nam">Quantity</span><span class="op">(</span><span class="nam">value</span><span class="op">)</span>  <span class="com"># ty: ignore[invalid-return-type]</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t276" href="#t276">276</a></span><span class="t">            <span class="key">except</span> <span class="nam">pint</span><span class="op">.</span><span class="nam">errors</span><span class="op">.</span><span class="nam">UndefinedUnitError</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t277" href="#t277">277</a></span><span class="t">                <span class="nam">msg</span> <span class="op">=</span> <span class="fst">f"</span><span class="fst">Invalid unit for </span><span class="op">{</span><span class="nam">value</span><span class="op">}</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t278" href="#t278">278</a></span><span class="t">                <span class="nam">_raise_value_error</span><span class="op">(</span><span class="nam">msg</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -1141,7 +1141,7 @@
             <a class="nav" href="z_71ccfa8a540bd563_satellite_catalog_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.5">coverage.py v7.13.5</a>,
-            created at 2026-04-09 09:42 +0000
+            created at 2026-04-09 11:55 +0000
         </p>
     </div>
 </footer>

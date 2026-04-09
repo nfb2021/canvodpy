@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_e587a41e60d941b3___init___py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.5">coverage.py v7.13.5</a>,
-            created at 2026-04-09 09:42 +0000
+            created at 2026-04-09 11:55 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -1455,12 +1455,12 @@
     <p class="mis show_mis"><span class="n"><a id="t1373" href="#t1373">1373</a></span><span class="t">            <span class="nam">sampling_interval</span> <span class="op">=</span> <span class="nam">inferred</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1374" href="#t1374">1374</a></span><span class="t">        <span class="com"># normalize to pint</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t1375" href="#t1375">1375</a></span><span class="t">        <span class="key">elif</span> <span class="key">not</span> <span class="nam">isinstance</span><span class="op">(</span><span class="nam">sampling_interval</span><span class="op">,</span> <span class="nam">pint</span><span class="op">.</span><span class="nam">Quantity</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1376" href="#t1376">1376</a></span><span class="t">            <span class="nam">sampling_interval</span> <span class="op">=</span> <span class="nam">UREG</span><span class="op">.</span><span class="nam">Quantity</span><span class="op">(</span><span class="nam">sampling_interval</span><span class="op">)</span><span class="op">.</span><span class="nam">to</span><span class="op">(</span><span class="nam">UREG</span><span class="op">.</span><span class="nam">seconds</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1376" href="#t1376">1376</a></span><span class="t">            <span class="nam">sampling_interval</span> <span class="op">=</span> <span class="nam">UREG</span><span class="op">.</span><span class="nam">Quantity</span><span class="op">(</span><span class="nam">sampling_interval</span><span class="op">)</span><span class="op">.</span><span class="nam">to</span><span class="op">(</span><span class="nam">UREG</span><span class="op">.</span><span class="nam">seconds</span><span class="op">)</span>  <span class="com"># ty: ignore[invalid-assignment]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1377" href="#t1377">1377</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1378" href="#t1378">1378</a></span><span class="t">        <span class="com"># Normalize/Infer dump interval</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t1379" href="#t1379">1379</a></span><span class="t">        <span class="key">if</span> <span class="nam">dump_interval</span> <span class="key">is</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t1380" href="#t1380">1380</a></span><span class="t">            <span class="nam">inferred_dump</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">infer_dump_interval</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t1381" href="#t1381">1381</a></span><span class="t">                <span class="nam">sampling_interval</span><span class="op">=</span><span class="nam">sampling_interval</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t1381" href="#t1381">1381</a></span><span class="t">                <span class="nam">sampling_interval</span><span class="op">=</span><span class="nam">sampling_interval</span>  <span class="com"># ty: ignore[invalid-argument-type]</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t1382" href="#t1382">1382</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t1383" href="#t1383">1383</a></span><span class="t">            <span class="key">if</span> <span class="nam">inferred_dump</span> <span class="key">is</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t1384" href="#t1384">1384</a></span><span class="t">                <span class="nam">msg</span> <span class="op">=</span> <span class="str">"Could not infer dump interval from file"</span>&nbsp;</span><span class="r"></span></p>
@@ -1468,7 +1468,7 @@
     <p class="mis show_mis"><span class="n"><a id="t1386" href="#t1386">1386</a></span><span class="t">            <span class="nam">dump_interval</span> <span class="op">=</span> <span class="nam">inferred_dump</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t1387" href="#t1387">1387</a></span><span class="t">        <span class="key">elif</span> <span class="key">not</span> <span class="nam">isinstance</span><span class="op">(</span><span class="nam">dump_interval</span><span class="op">,</span> <span class="nam">pint</span><span class="op">.</span><span class="nam">Quantity</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1388" href="#t1388">1388</a></span><span class="t">            <span class="com"># Accept '15 min', '1h', etc.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1389" href="#t1389">1389</a></span><span class="t">            <span class="nam">dump_interval</span> <span class="op">=</span> <span class="nam">UREG</span><span class="op">.</span><span class="nam">Quantity</span><span class="op">(</span><span class="nam">dump_interval</span><span class="op">)</span><span class="op">.</span><span class="nam">to</span><span class="op">(</span><span class="nam">UREG</span><span class="op">.</span><span class="nam">seconds</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1389" href="#t1389">1389</a></span><span class="t">            <span class="nam">dump_interval</span> <span class="op">=</span> <span class="nam">UREG</span><span class="op">.</span><span class="nam">Quantity</span><span class="op">(</span><span class="nam">dump_interval</span><span class="op">)</span><span class="op">.</span><span class="nam">to</span><span class="op">(</span><span class="nam">UREG</span><span class="op">.</span><span class="nam">seconds</span><span class="op">)</span>  <span class="com"># ty: ignore[invalid-assignment]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1390" href="#t1390">1390</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1391" href="#t1391">1391</a></span><span class="t">        <span class="com"># Build inputs for the validator model</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t1392" href="#t1392">1392</a></span><span class="t">        <span class="nam">epoch_indices</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">get_epoch_record_batches</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -2168,7 +2168,7 @@
             <a class="nav" href="z_e587a41e60d941b3___init___py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.5">coverage.py v7.13.5</a>,
-            created at 2026-04-09 09:42 +0000
+            created at 2026-04-09 11:55 +0000
         </p>
     </div>
 </footer>
