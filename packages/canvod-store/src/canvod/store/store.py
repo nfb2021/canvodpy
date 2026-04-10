@@ -21,6 +21,10 @@ from zarr.dtype import VariableLengthUTF8
 
 from canvod.store.viewer import add_rich_display_to_store
 
+# Suppress the "local filesystem not safe for concurrent commits" Rust/tracing
+# warning — we are aware and it is noise for single-writer local workflows.
+icechunk.set_logs_filter("icechunk=error")
+
 if TYPE_CHECKING:
     from plotly.graph_objects import Figure
 
@@ -98,11 +102,21 @@ class MyIcechunkStore:
         compression_algorithm : str | None, optional
             Override default compression algorithm.
         """
-        from canvod.utils.config import load_config
+        try:
+            from canvod.utils.config import load_config
 
-        cfg = load_config()
-        ic_cfg = cfg.processing.icechunk
-        st_cfg = cfg.processing.storage
+            cfg = load_config()
+            ic_cfg = cfg.processing.icechunk
+            _rinex_store_strategy = cfg.processing.storage.rinex_store_strategy
+            _rinex_store_expire_days = cfg.processing.storage.rinex_store_expire_days
+            _vod_store_strategy = cfg.processing.storage.vod_store_strategy
+        except Exception:
+            from canvod.utils.config.models import IcechunkConfig
+
+            ic_cfg = IcechunkConfig()
+            _rinex_store_strategy = "append"
+            _rinex_store_expire_days = 2
+            _vod_store_strategy = "overwrite"
 
         self.store_path = Path(store_path)
         self.store_type = store_type
@@ -124,9 +138,9 @@ class MyIcechunkStore:
         self.chunk_strategy = chunk_strategies.get(store_type, {})
 
         # Storage config cached for metadata rows
-        self._rinex_store_strategy = st_cfg.rinex_store_strategy
-        self._rinex_store_expire_days = st_cfg.rinex_store_expire_days
-        self._vod_store_strategy = st_cfg.vod_store_strategy
+        self._rinex_store_strategy = _rinex_store_strategy
+        self._rinex_store_expire_days = _rinex_store_expire_days
+        self._vod_store_strategy = _vod_store_strategy
 
         # Configure repository
         self.config = icechunk.RepositoryConfig.default()
@@ -322,12 +336,9 @@ class MyIcechunkStore:
             List of branch names.
         """
         try:
-            storage_config = icechunk.local_filesystem_storage(self.store_path)
-            repo = icechunk.Repository.open(
-                storage=storage_config,
-            )
-
-            return list(repo.list_branches())
+            if self._repo is None:
+                self._ensure_store_exists()
+            return list(self._repo.list_branches())  # type: ignore[union-attr]
         except Exception as e:
             self._logger.warning(f"Failed to list branches in {self!r}: {e}")
             warnings.warn(f"Failed to list branches in {self!r}: {e}", stacklevel=2)
@@ -354,15 +365,12 @@ class MyIcechunkStore:
             else:
                 branches = [branch]
 
-            storage_config = icechunk.local_filesystem_storage(self.store_path)
-            repo = icechunk.Repository.open(
-                storage=storage_config,
-            )
+            if self._repo is None:
+                self._ensure_store_exists()
 
             group_dict = {}
             for br in branches:
                 with self.readonly_session(br) as session:
-                    session = repo.readonly_session(br)
                     root = zarr.open(session.store, mode="r")
                     group_dict[br] = list(root.group_keys())
 
