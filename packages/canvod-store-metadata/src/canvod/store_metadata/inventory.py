@@ -12,17 +12,34 @@ from .io import metadata_exists, read_metadata
 from .schema import StoreMetadata
 
 
+def _is_icechunk_store(path: Path) -> bool:
+    """Return True if path looks like an Icechunk store (v1 or v2 layout)."""
+    # v1: refs/ directory present
+    if (path / "refs").is_dir():
+        return True
+    # v2: unified toc file 'repo' + snapshots/ directory
+    if (path / "repo").is_file() and (path / "snapshots").is_dir():
+        return True
+    return False
+
+
 def _find_icechunk_stores(root_dir: Path, recursive: bool = True) -> list[Path]:
-    """Find Icechunk stores by looking for refs/ directories."""
+    """Find Icechunk stores by looking for v1 or v2 layout markers."""
     stores: list[Path] = []
     if not root_dir.is_dir():
         return stores
 
-    pattern = "**/refs" if recursive else "*/refs"
-    for refs_dir in root_dir.glob(pattern):
-        store_path = refs_dir.parent
-        if (store_path / "refs").is_dir():
-            stores.append(store_path)
+    # Collect candidate parent directories from both v1 and v2 markers
+    patterns = ["**/refs", "**/snapshots"] if recursive else ["*/refs", "*/snapshots"]
+    candidates: set[Path] = set()
+    for pattern in patterns:
+        for marker in root_dir.glob(pattern):
+            candidates.add(marker.parent)
+
+    for candidate in candidates:
+        if _is_icechunk_store(candidate):
+            stores.append(candidate)
+
     return sorted(set(stores))
 
 
