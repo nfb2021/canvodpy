@@ -4,7 +4,7 @@
 
 | Name                                                                            |    Stmts |     Miss |   Cover |   Missing |
 |-------------------------------------------------------------------------------- | -------: | -------: | ------: | --------: |
-| canvodpy/src/canvodpy/\_\_init\_\_.py                                           |       58 |       12 |     79% |248-249, 255-256, 263-264, 270-271, 277-278, 284-285 |
+| canvodpy/src/canvodpy/\_\_init\_\_.py                                           |       63 |       14 |     78% |248-249, 255-256, 262-263, 270-271, 277-278, 284-285, 291-292 |
 | canvodpy/src/canvodpy/api.py                                                    |      137 |       67 |     51% |105, 110-114, 119, 124, 183, 197-199, 202, 295-302, 361, 364, 367, 395-412, 444-449, 482-538, 555, 558, 618-624, 675-680, 706-707 |
 | canvodpy/src/canvodpy/cli/\_\_init\_\_.py                                       |        0 |        0 |    100% |           |
 | canvodpy/src/canvodpy/cli/run.py                                                |      158 |      158 |      0% |    21-366 |
@@ -12,7 +12,7 @@
 | canvodpy/src/canvodpy/diagnostics/sbf\_timing\_diagnostics\_new\_api.py         |      100 |      100 |      0% |    13-229 |
 | canvodpy/src/canvodpy/diagnostics/timing\_diagnostics\_new\_api.py              |      100 |      100 |      0% |    13-233 |
 | canvodpy/src/canvodpy/diagnostics/timing\_diagnostics\_script.py                |      101 |      101 |      0% |     9-237 |
-| canvodpy/src/canvodpy/factories.py                                              |       93 |       32 |     66% |235-258, 274-301 |
+| canvodpy/src/canvodpy/factories.py                                              |      114 |       51 |     55% |236-259, 275-309, 320-331 |
 | canvodpy/src/canvodpy/fluent.py                                                 |      174 |      117 |     33% |125-127, 153-203, 218-284, 295-307, 329-367, 381-391, 404-415, 428-430, 435-443, 448-451 |
 | canvodpy/src/canvodpy/functional.py                                             |       83 |        0 |    100% |           |
 | canvodpy/src/canvodpy/globals.py                                                |        9 |        9 |      0% |      8-50 |
@@ -139,9 +139,10 @@
 | packages/canvod-readers/src/canvod/readers/nmea/\_\_init\_\_.py                 |        2 |        0 |    100% |           |
 | packages/canvod-readers/src/canvod/readers/nmea/exceptions.py                   |       10 |        0 |    100% |           |
 | packages/canvod-readers/src/canvod/readers/nmea/v4\_00.py                       |      340 |      134 |     61% |67-68, 92, 165, 173, 178, 185, 239-240, 245-254, 306-307, 311-313, 317-318, 347-348, 378-379, 390-393, 399, 403, 407, 411, 415-419, 423, 427-431, 437, 460-568, 596, 601-602, 619, 639-661, 670-678 |
-| packages/canvod-readers/src/canvod/readers/rinex/\_\_init\_\_.py                |        3 |        0 |    100% |           |
+| packages/canvod-readers/src/canvod/readers/rinex/\_\_init\_\_.py                |        4 |        0 |    100% |           |
 | packages/canvod-readers/src/canvod/readers/rinex/v2\_11.py                      |      655 |      536 |     18% |103-105, 124-128, 189-191, 201-209, 217-400, 405, 408, 414-415, 431-454, 459-462, 521-531, 584-589, 593, 596, 604, 610-624, 628, 634, 638-652, 656-658, 662, 666-670, 692-731, 758-770, 780-809, 827-864, 875-950, 969, 983-992, 996, 1000-1018, 1034-1275, 1308-1363, 1371-1387, 1392-1397, 1400-1443, 1473-1495, 1510 |
 | packages/canvod-readers/src/canvod/readers/rinex/v3\_04.py                      |      715 |      580 |     19% |91-94, 117, 125-149, 212-219, 227-237, 259-404, 414-444, 461-466, 485-494, 511-518, 537-568, 587-595, 614-627, 646-678, 697-706, 711, 715, 723-724, 787-809, 821, 825, 834, 845-852, 864, 876, 888-893, 905-907, 919, 931-935, 953-966, 988-1063, 1071-1114, 1126, 1142-1162, 1189-1192, 1211, 1238-1249, 1256-1273, 1284-1298, 1316-1339, 1368-1395, 1421-1438, 1458-1523, 1538-1745, 1770-1775, 1808-1862, 1901-1927, 1930-1975, 1990-1991 |
+| packages/canvod-readers/src/canvod/readers/rinex/v3\_05\_stripped.py            |      136 |      119 |     12% |55, 59-69, 72-215, 222-264 |
 | packages/canvod-readers/src/canvod/readers/sbf/\_\_init\_\_.py                  |        3 |        0 |    100% |           |
 | packages/canvod-readers/src/canvod/readers/sbf/\_registry.py                    |       40 |        0 |    100% |           |
 | packages/canvod-readers/src/canvod/readers/sbf/\_scaling.py                     |       70 |        0 |    100% |           |
@@ -193,7 +194,7 @@
 | packages/canvod-vod/src/canvod/vod/\_internal/\_\_init\_\_.py                   |        2 |        0 |    100% |           |
 | packages/canvod-vod/src/canvod/vod/\_internal/logger.py                         |        5 |        1 |     80% |        26 |
 | packages/canvod-vod/src/canvod/vod/calculator.py                                |       66 |        7 |     89% |51, 65, 106-112 |
-| **TOTAL**                                                                       | **19348** | **11199** | **42%** |           |
+| **TOTAL**                                                                       | **19511** | **11339** | **42%** |           |
 
 
 ## Setup coverage badge
