@@ -193,6 +193,7 @@ class ReaderFactory(ComponentFactory):
     #: Maps detected format identifiers to registered component names.
     _format_aliases: ClassVar[dict[str, str]] = {
         "rinex_v3": "rinex3",
+        "rinex_v3_stripped": "rinex3_stripped",
         "rinex_v2": "rinex2",
         "nmea": "nmea",
     }
@@ -281,6 +282,11 @@ class ReaderFactory(ComponentFactory):
 
         with fpath.open() as f:
             first_line = f.readline()
+            header_lines: list[str] = []
+            for line in f:
+                header_lines.append(line)
+                if "END OF HEADER" in line:
+                    break
 
         # NMEA sentences start with '$'
         if first_line.startswith("$"):
@@ -294,11 +300,35 @@ class ReaderFactory(ComponentFactory):
             raise ValueError(msg) from e
 
         if 3.0 <= version < 4.0:
+            if ReaderFactory._is_stripped_v3(header_lines):
+                return "rinex_v3_stripped"
             return "rinex_v3"
         if 2.0 <= version < 3.0:
             return "rinex_v2"
         msg = f"Unsupported RINEX version: {version}"
         raise ValueError(msg)
+
+    @staticmethod
+    def _is_stripped_v3(header_lines: list[str]) -> bool:
+        """Return True if every ``SYS / # / OBS TYPES`` code starts with ``S``.
+
+        A stripped RINEX v3 file contains signal-strength observables only.
+        Header lines wrap at 13 codes, but every wrapped continuation also
+        starts with a system letter or whitespace continuation, so we scan all
+        ``SYS / # / OBS TYPES`` records together.
+        """
+        codes: list[str] = []
+        for line in header_lines:
+            if "SYS / # / OBS TYPES" not in line:
+                continue
+            payload = line[:60]
+            tokens = payload.split()
+            for tok in tokens:
+                if len(tok) == 3 and tok[0] in "CLDS":
+                    codes.append(tok)
+        if not codes:
+            return False
+        return all(c.startswith("S") for c in codes)
 
 
 class GridFactory(ComponentFactory):

@@ -8,8 +8,11 @@ Supports multiple RINEX versions:
 
 from canvod.readers.rinex.v2_11 import Rnxv2Obs
 from canvod.readers.rinex.v3_04 import Rnxv3Obs
+from canvod.readers.rinex.v3_05_stripped import Rnxv3StrippedObs, StrippedRinexError
 
 __all__ = [
     "Rnxv2Obs",
     "Rnxv3Obs",
+    "Rnxv3StrippedObs",
+    "StrippedRinexError",
 ]

@@ -249,6 +249,13 @@ def _register_builtin_components() -> None:
         log.debug("canvod-readers not available, skipping reader registration")
 
     try:
+        from canvod.readers.rinex import Rnxv3StrippedObs
+
+        ReaderFactory.register("rinex3_stripped", Rnxv3StrippedObs)
+    except ImportError:
+        log.debug("Rnxv3StrippedObs not available, skipping registration")
+
+    try:
         from canvod.readers.sbf import SbfReader
 
         ReaderFactory.register("sbf", SbfReader)
