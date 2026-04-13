@@ -8,6 +8,7 @@ on:
 permissions:
     contents: write
     pull-requests: write
+    actions: write
 
 env:
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -32,9 +33,30 @@ jobs:
               run: uv lock
 
             - name: Commit updated lockfile
+              id: commit
               run: |
                   git config user.name  "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
                   git add uv.lock
-                  git diff --cached --quiet || git commit -m "chore: regenerate uv.lock after dependency bump"
-                  git push
+                  if git diff --cached --quiet; then
+                      echo "changed=false" >> "$GITHUB_OUTPUT"
+                  else
+                      git commit -m "chore: regenerate uv.lock after dependency bump"
+                      git push
+                      echo "changed=true" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Re-run failed checks after lockfile update
+              if: steps.commit.outputs.changed == 'true'
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  # Wait briefly for GitHub to register the new commit
+                  sleep 10
+                  # Re-run any failed workflow runs on this PR's branch
+                  gh run list \
+                      --repo "$GITHUB_REPOSITORY" \
+                      --branch "${{ github.head_ref }}" \
+                      --json databaseId,conclusion \
+                      --jq '.[] | select(.conclusion == "failure") | .databaseId' \
+                  | xargs -r -I{} gh run rerun {} --repo "$GITHUB_REPOSITORY" --failed
