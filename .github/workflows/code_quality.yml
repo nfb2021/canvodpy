@@ -22,6 +22,7 @@ jobs:
               with:
                   tool: just
             - name: Check uv.lock is up to date
+              if: github.actor != 'dependabot[bot]'
               run: just check-lock
 
     linting:
@@ -60,7 +61,6 @@ jobs:
               uses: taiki-e/install-action@d0f23220b09a75c6db730f13bb37c4f8144b4382 # v2.75.9
               with:
                   tool: just
-            - run: uv sync --locked --dev
             - name: Type check with ty
               run: just check-types
 
