@@ -46,6 +46,9 @@ jobs:
               uses: taiki-e/install-action@d0f23220b09a75c6db730f13bb37c4f8144b4382 # v2.75.9
               with:
                   tool: just
+            - name: Update lock file (Dependabot only)
+              if: github.actor == 'dependabot[bot]'
+              run: uv lock
             - name: Install the Project
               run: uv sync --locked --dev
             - name: Run Tests
