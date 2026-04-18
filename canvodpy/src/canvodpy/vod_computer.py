@@ -165,14 +165,20 @@ class VodComputer:
         store = self._site.rinex_store
 
         with store.readonly_session() as session:
-            canopy_ds = xr.open_zarr(store=session.store, group=canopy_name)
+            canopy_ds = xr.open_zarr(
+                store=session.store, group=canopy_name, consolidated=False
+            )
             try:
-                sky_ds = xr.open_zarr(store=session.store, group=ref_name)
+                sky_ds = xr.open_zarr(
+                    store=session.store, group=ref_name, consolidated=False
+                )
             except Exception:
                 # Paired naming: reference_01_canopy_01 instead of reference_01
                 paired_name = f"{ref_name}_{canopy_name}"
                 log.info("group_fallback", original=ref_name, paired=paired_name)
-                sky_ds = xr.open_zarr(store=session.store, group=paired_name)
+                sky_ds = xr.open_zarr(
+                    store=session.store, group=paired_name, consolidated=False
+                )
 
         # Time-range filter
         if start or end:
@@ -322,14 +328,21 @@ class VodComputer:
         import numpy as np
         import pandas as pd
 
-        # When epoch is stored as int64 nanoseconds, convert bounds to match
+        # Convert bounds to match the epoch dtype.
+        # Newer NumPy (2.x / Python 3.14) no longer auto-coerces datetime.datetime
+        # to datetime64 in comparisons, so we must convert explicitly.
         if np.issubdtype(ds.epoch.dtype, np.integer):
-            start = pd.Timestamp(start).value if start else None  # ty: ignore[invalid-assignment]
-            end = pd.Timestamp(end).value if end else None  # ty: ignore[invalid-assignment]
+            # Icechunk epoch stored as int64 nanoseconds
+            start = pd.Timestamp(start).value if start is not None else None  # ty: ignore[invalid-assignment]
+            end = pd.Timestamp(end).value if end is not None else None  # ty: ignore[invalid-assignment]
+        else:
+            # datetime64[ns] — plain datetime.datetime is not comparable on NumPy 2.x
+            start = np.datetime64(start, "ns") if start is not None else None  # ty: ignore[invalid-assignment]
+            end = np.datetime64(end, "ns") if end is not None else None  # ty: ignore[invalid-assignment]
 
-        if start:
+        if start is not None:
             ds = ds.sel(epoch=ds.epoch >= start)
-        if end:
+        if end is not None:
             ds = ds.sel(epoch=ds.epoch <= end)
         return ds
 
