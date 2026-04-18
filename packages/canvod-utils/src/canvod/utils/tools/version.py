@@ -1,8 +1,7 @@
 """Version utilities for canVODpy packages."""
 
+import tomllib
 from pathlib import Path
-
-import tomli
 
 
 def get_version_from_pyproject(pyproject_path: Path | None = None) -> str:
@@ -40,6 +39,6 @@ def get_version_from_pyproject(pyproject_path: Path | None = None) -> str:
             raise FileNotFoundError(msg)
 
     with open(pyproject_path, "rb") as f:
-        data = tomli.load(f)
+        data = tomllib.load(f)
 
     return data["project"]["version"]
