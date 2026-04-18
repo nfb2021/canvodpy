@@ -176,7 +176,7 @@
 | packages/canvod-utils/src/canvod/utils/tools/date\_utils.py                     |      105 |       16 |     85% |37, 44, 125, 139, 155, 172, 174, 213, 229, 249, 331, 336, 348, 361, 392-393 |
 | packages/canvod-utils/src/canvod/utils/tools/hashing.py                         |        9 |        6 |     33% |     32-37 |
 | packages/canvod-utils/src/canvod/utils/tools/validation.py                      |        7 |        5 |     29% |     29-33 |
-| packages/canvod-utils/src/canvod/utils/tools/version.py                         |       16 |        2 |     88% |     39-40 |
+| packages/canvod-utils/src/canvod/utils/tools/version.py                         |       16 |        2 |     88% |     38-39 |
 | packages/canvod-virtualiconvname/src/canvod/virtualiconvname/\_\_init\_\_.py    |        9 |        0 |    100% |           |
 | packages/canvod-virtualiconvname/src/canvod/virtualiconvname/catalog.py         |       86 |        5 |     94% |63-64, 75-76, 276 |
 | packages/canvod-virtualiconvname/src/canvod/virtualiconvname/config\_models.py  |       23 |        0 |    100% |           |
