@@ -128,18 +128,18 @@ def _(mo):
 
 @app.cell
 def _():
+    import os
     from pathlib import Path
 
-    BROADCAST_STORE = Path(
-        "/Volumes/ExtremePro/canvod_audit_output"
-        "/tier1_broadcast_vs_agency/Rosalia/canvodpy_SBF_broadcast_store"
+    AUDIT_ROOT = Path(
+        os.environ.get("CANVOD_AUDIT_OUTPUT", "/Volumes/ExtremePro/canvod_audit_output")
     )
-    AGENCY_STORE = Path(
-        "/Volumes/ExtremePro/canvod_audit_output"
-        "/tier1_sbf_vs_rinex/Rosalia/canvodpy_SBF_store"
+    BROADCAST_STORE = (
+        AUDIT_ROOT / "tier1_broadcast_vs_agency/Rosalia/canvodpy_SBF_broadcast_store"
     )
+    AGENCY_STORE = AUDIT_ROOT / "tier1_sbf_vs_rinex/Rosalia/canvodpy_SBF_store"
     GROUPS = ["canopy_01", "reference_01_canopy_01"]
-    return AGENCY_STORE, BROADCAST_STORE, GROUPS
+    return AGENCY_STORE, AUDIT_ROOT, BROADCAST_STORE, GROUPS
 
 
 @app.cell

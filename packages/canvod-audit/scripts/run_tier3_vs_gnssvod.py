@@ -79,6 +79,7 @@ SNR itself is identical (same RINEX, same formula).
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -101,7 +102,9 @@ ROSALIA_ROOT = Path(
 CANOPY_DIR = ROSALIA_ROOT / "02_canopy" / "01_GNSS" / "01_raw" / "25001"
 REFERENCE_DIR = ROSALIA_ROOT / "01_reference" / "01_GNSS" / "01_raw" / "25001"
 
-AUDIT_ROOT = Path("/Volumes/ExtremePro/canvod_audit_output")
+AUDIT_ROOT = Path(
+    os.environ.get("CANVOD_AUDIT_OUTPUT", "/Volumes/ExtremePro/canvod_audit_output")
+)
 TIER3_DIR = AUDIT_ROOT / "tier3_vs_gnssvod" / "Rosalia"
 
 # Ephemeris: match gnssvod's GFZ rapid products

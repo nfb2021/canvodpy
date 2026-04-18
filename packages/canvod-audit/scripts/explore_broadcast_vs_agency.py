@@ -39,15 +39,17 @@ def _():
 
 @app.cell
 def _():
+    import os
+    from pathlib import Path
+
+    AUDIT_ROOT = Path(
+        os.environ.get("CANVOD_AUDIT_OUTPUT", "/Volumes/ExtremePro/canvod_audit_output")
+    )
     BROADCAST_STORE = (
-        "/Volumes/ExtremePro/canvod_audit_output"
-        "/tier1_broadcast_vs_agency/Rosalia/canvodpy_SBF_broadcast_store"
+        AUDIT_ROOT / "tier1_broadcast_vs_agency/Rosalia/canvodpy_SBF_broadcast_store"
     )
-    AGENCY_STORE = (
-        "/Volumes/ExtremePro/canvod_audit_output"
-        "/tier1_sbf_vs_rinex/Rosalia/canvodpy_SBF_allvars_store"
-    )
-    return AGENCY_STORE, BROADCAST_STORE
+    AGENCY_STORE = AUDIT_ROOT / "tier1_sbf_vs_rinex/Rosalia/canvodpy_SBF_allvars_store"
+    return AGENCY_STORE, AUDIT_ROOT, BROADCAST_STORE
 
 
 @app.cell

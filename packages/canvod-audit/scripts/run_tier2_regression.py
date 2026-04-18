@@ -18,6 +18,7 @@ tier1_sbf_broadcast: ``tier1_broadcast_vs_agency/Rosalia/canvodpy_SBF_broadcast_
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from canvod.audit.runners.regression import audit_regression
@@ -25,7 +26,9 @@ from canvod.audit.tolerances import ToleranceTier
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
-AUDIT_ROOT = Path("/Volumes/ExtremePro/canvod_audit_output")
+AUDIT_ROOT = Path(
+    os.environ.get("CANVOD_AUDIT_OUTPUT", "/Volumes/ExtremePro/canvod_audit_output")
+)
 CHECKPOINT_DIR = AUDIT_ROOT / "tier2_checkpoints"
 
 STORES = {

@@ -298,6 +298,7 @@ RINEX_STORE: ``tier0_rinex_vs_gnssvodpy/Rosalia/canvodpy_RINEX_store``
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -314,18 +315,16 @@ from canvod.audit.runners.sbf_vs_rinex import (
 )
 from canvod.audit.tolerances import ToleranceTier
 
-# ── Store paths ──────────────────────────────────────────────────────────
-SBF_STORE = (
-    "/Volumes/ExtremePro/canvod_audit_output"
-    "/tier1_sbf_vs_rinex/Rosalia/canvodpy_SBF_store"
-)
-RINEX_STORE = (
-    "/Volumes/ExtremePro/canvod_audit_output"
-    "/tier0_rinex_vs_gnssvodpy/Rosalia/canvodpy_RINEX_store"
+AUDIT_ROOT = Path(
+    os.environ.get("CANVOD_AUDIT_OUTPUT", "/Volumes/ExtremePro/canvod_audit_output")
 )
 
+# ── Store paths ──────────────────────────────────────────────────────────
+SBF_STORE = AUDIT_ROOT / "tier1_sbf_vs_rinex/Rosalia/canvodpy_SBF_store"
+RINEX_STORE = AUDIT_ROOT / "tier0_rinex_vs_gnssvodpy/Rosalia/canvodpy_RINEX_store"
+
 GROUPS = ["canopy_01", "reference_01_canopy_01"]
-REPORT_DIR = Path("/Volumes/ExtremePro/canvod_audit_output/reports")
+REPORT_DIR = AUDIT_ROOT / "reports"
 
 
 def reindex_sbf_to_rinex(ds_sbf, ds_rnx):
