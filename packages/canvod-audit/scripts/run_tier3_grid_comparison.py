@@ -16,6 +16,7 @@ canvodpy output all present).
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -24,7 +25,10 @@ import xarray as xr
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
-TIER3_DIR = Path("/Volumes/ExtremePro/canvod_audit_output/tier3_vs_gnssvod/Rosalia")
+AUDIT_ROOT = Path(
+    os.environ.get("CANVOD_AUDIT_OUTPUT", "/Volumes/ExtremePro/canvod_audit_output")
+)
+TIER3_DIR = AUDIT_ROOT / "tier3_vs_gnssvod/Rosalia"
 
 CANVODPY_STORE = TIER3_DIR / "canvodpy_trimmed_store"
 GNSSVOD_CANOPY = TIER3_DIR / "gnssvod_canopy_output.parquet"

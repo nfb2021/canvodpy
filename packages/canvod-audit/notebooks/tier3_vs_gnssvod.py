@@ -1,3 +1,5 @@
+import os
+
 import marimo
 
 __generated_with = "0.21.1"
@@ -153,7 +155,9 @@ def _(mo):
 def _():
     from pathlib import Path
 
-    AUDIT_ROOT = Path("/Volumes/ExtremePro/canvod_audit_output")
+    AUDIT_ROOT = Path(
+        os.environ.get("CANVOD_AUDIT_OUTPUT", "/Volumes/ExtremePro/canvod_audit_output")
+    )
     TIER3_DIR = AUDIT_ROOT / "tier3_vs_gnssvod" / "Rosalia"
 
     CANVODPY_STORE = TIER3_DIR / "canvodpy_trimmed_store"

@@ -418,12 +418,15 @@ class GLONASS(ConstellationBase):
         aggregate_fdma: bool = True,
     ) -> None:
         """Initialize GLONASS constellation with FDMA channel assignments."""
+        super().__init__(
+            constellation="GLONASS",
+            static_svs=[f"R{i:02d}" for i in range(1, 25)],
+            aggregate_fdma=aggregate_fdma,
+        )
         if glonass_channel_pth is None or not glonass_channel_pth.exists():
             msg = f"{glonass_channel_pth} does not exist"
             raise FileNotFoundError(msg)
         self.pth = glonass_channel_pth
-        self.svs: list[str] = [f"R{i:02d}" for i in range(1, 25)]
-        self.aggregate_fdma = aggregate_fdma
 
         if self.aggregate_fdma:
             # Aggregate mode: G1 and G2 are single bands.

@@ -44,15 +44,15 @@ def _():
 
 @app.cell
 def _():
-    SBF_STORE = (
-        "/Volumes/ExtremePro/canvod_audit_output"
-        "/tier1_sbf_vs_rinex/Rosalia/canvodpy_SBF_allvars_store"
+    import os
+    from pathlib import Path
+
+    AUDIT_ROOT = Path(
+        os.environ.get("CANVOD_AUDIT_OUTPUT", "/Volumes/ExtremePro/canvod_audit_output")
     )
-    RINEX_STORE = (
-        "/Volumes/ExtremePro/canvod_audit_output"
-        "/tier1_sbf_vs_rinex/Rosalia/canvodpy_RINEX_allvars_store"
-    )
-    return RINEX_STORE, SBF_STORE
+    SBF_STORE = AUDIT_ROOT / "tier1_sbf_vs_rinex/Rosalia/canvodpy_SBF_allvars_store"
+    RINEX_STORE = AUDIT_ROOT / "tier1_sbf_vs_rinex/Rosalia/canvodpy_RINEX_allvars_store"
+    return AUDIT_ROOT, RINEX_STORE, SBF_STORE
 
 
 @app.cell

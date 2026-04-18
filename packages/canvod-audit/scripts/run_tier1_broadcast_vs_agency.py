@@ -33,6 +33,7 @@ Prerequisites
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -43,18 +44,18 @@ from canvod.audit.runners.common import load_group, open_store
 from canvod.audit.runners.ephemeris import DEFAULT_VARIABLES, EPHEMERIS_TOLERANCES
 from canvod.audit.tolerances import ToleranceTier
 
-# ── Store paths ──────────────────────────────────────────────────────────
-BROADCAST_STORE = (
-    "/Volumes/ExtremePro/canvod_audit_output"
-    "/tier1_broadcast_vs_agency/Rosalia/canvodpy_SBF_broadcast_store"
-)
-AGENCY_STORE = (
-    "/Volumes/ExtremePro/canvod_audit_output"
-    "/tier1_sbf_vs_rinex/Rosalia/canvodpy_SBF_store"
+AUDIT_ROOT = Path(
+    os.environ.get("CANVOD_AUDIT_OUTPUT", "/Volumes/ExtremePro/canvod_audit_output")
 )
 
+# ── Store paths ──────────────────────────────────────────────────────────
+BROADCAST_STORE = (
+    AUDIT_ROOT / "tier1_broadcast_vs_agency/Rosalia/canvodpy_SBF_broadcast_store"
+)
+AGENCY_STORE = AUDIT_ROOT / "tier1_sbf_vs_rinex/Rosalia/canvodpy_SBF_store"
+
 GROUPS = ["canopy_01", "reference_01_canopy_01"]
-REPORT_DIR = Path("/Volumes/ExtremePro/canvod_audit_output/reports")
+REPORT_DIR = AUDIT_ROOT / "reports"
 
 
 def main() -> None:

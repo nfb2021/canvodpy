@@ -25,6 +25,7 @@ Prerequisites
 
 from __future__ import annotations
 
+import os
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -33,7 +34,9 @@ from canvod.audit.runners.regression import freeze_checkpoint
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
-AUDIT_ROOT = Path("/Volumes/ExtremePro/canvod_audit_output")
+AUDIT_ROOT = Path(
+    os.environ.get("CANVOD_AUDIT_OUTPUT", "/Volumes/ExtremePro/canvod_audit_output")
+)
 CHECKPOINT_DIR = AUDIT_ROOT / "tier2_checkpoints"
 
 VERSION = "0.1.0"
