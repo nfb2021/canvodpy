@@ -261,3 +261,13 @@ The AI agent is configured with:
 New contributors: Claude Code can explain any part of the codebase, run the test
 suite, generate diagrams, and help navigate the monorepo. Start with
 `claude` in the repo root — it will automatically load this context.
+
+### Session discipline
+
+- **Always `cd` into the repo root before launching** — Claude Code reads the
+  current directory for context; launching from home means no project awareness.
+- **Prefer short, focused sessions** over marathon ones. When switching to an
+  unrelated task, start fresh with `/clear`.
+- **Watch for context window degradation**: signs are Claude re-reading files it
+  already examined, or suggesting changes you already rejected. Use `/compact`
+  to summarise conversation history and reclaim context space.
