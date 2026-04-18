@@ -110,7 +110,6 @@ class HemisphereVisualizer3D:
         # Initialize style
         if style is None:
             style = PlotStyle()
-            colorscale = colorscale  # Use parameter
         else:
             colorscale = style.colorscale
 

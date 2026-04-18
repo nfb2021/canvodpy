@@ -108,11 +108,10 @@ def cn0_dbhz(raw: int, sig_num: int) -> pint.Quantity | None:
     """
     if raw == 255:
         return None
-    match sig_num:
-        case 1 | 2:
-            value = raw * 0.25
-        case _:
-            value = raw * 0.25 + 10.0
+    if sig_num in (1, 2):
+        value = raw * 0.25
+    else:
+        value = raw * 0.25 + 10.0
     return value * UREG.dBHz
 
 

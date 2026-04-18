@@ -165,6 +165,19 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
+# Type-checker stubs so that static analysis tools (CodeQL, mypy, pyright) can
+# resolve the subpackage names that are lazily loaded via __getattr__ at runtime.
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import canvod.auxiliary as auxiliary
+    import canvod.grids as grids
+    import canvod.readers as readers
+    import canvod.store as store
+    import canvod.viz as viz
+    import canvod.vod as vod
+
+
 # ============================================================================
 # Version
 # ============================================================================
@@ -205,9 +218,9 @@ __all__ = [  # noqa: RUF022
     "GridFactory",
     "VODFactory",
     "AugmentationFactory",
-    # Subpackages (advanced users)
+    # Subpackages (advanced users — lazy-loaded via __getattr__)
     "readers",
-    "aux",
+    "auxiliary",
     "grids",
     "vod",
     "viz",
