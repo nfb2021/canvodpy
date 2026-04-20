@@ -65,7 +65,7 @@ def valid_rinex_dir(valid_test_data_dir: Path) -> Path:
 @pytest.fixture(scope="session")
 def valid_aux_dir(valid_test_data_dir: Path) -> Path:
     """Directory containing valid auxiliary test files."""
-    return valid_test_data_dir / "aux/00_aux_files"
+    return valid_test_data_dir / "aux_data"
 
 
 @pytest.fixture
