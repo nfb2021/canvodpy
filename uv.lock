@@ -281,7 +281,7 @@ dev = [
 
 [[package]]
 name = "canvod-grids"
-version = "0.2.2"
+version = "0.2.3"
 source = { editable = "packages/canvod-grids" }
 dependencies = [
     { name = "astropy" },
@@ -426,7 +426,7 @@ dev = [
 
 [[package]]
 name = "canvod-store"
-version = "0.2.2"
+version = "0.2.3"
 source = { editable = "packages/canvod-store" }
 dependencies = [
     { name = "canvod-auxiliary" },
