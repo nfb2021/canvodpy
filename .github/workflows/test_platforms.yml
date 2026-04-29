@@ -42,14 +42,19 @@ jobs:
                   enable-cache: true
             - name: Set up Python
               run: uv python install
-            - name: Install just
-              uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37 # v2.75.25
-              with:
-                  tool: just
             - name: Update lock file (Dependabot only)
               if: github.actor == 'dependabot[bot]'
               run: uv lock
             - name: Install the Project
               run: uv sync --locked --dev
             - name: Run Tests
-              run: just test-all-packages
+              run: |
+                  uv run pytest canvodpy/tests/ --verbose --color=yes
+                  uv run pytest packages/canvod-auxiliary/tests/ --verbose --color=yes
+                  uv run pytest packages/canvod-readers/tests/ --verbose --color=yes
+                  uv run pytest packages/canvod-store/tests/ --verbose --color=yes
+                  uv run pytest packages/canvod-grids/tests/ --verbose --color=yes
+                  uv run pytest packages/canvod-viz/tests/ --verbose --color=yes
+                  uv run pytest packages/canvod-virtualiconvname/tests/ --verbose --color=yes
+                  uv run pytest packages/canvod-vod/tests/ --verbose --color=yes
+                  uv run pytest packages/canvod-ops/tests/ --verbose --color=yes

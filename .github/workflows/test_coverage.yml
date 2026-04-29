@@ -27,11 +27,6 @@ jobs:
             - name: Set up Python
               run: uv python install
 
-            - name: Install just
-              uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37 # v2.75.25
-              with:
-                  tool: just
-
             - name: Update lock file (Dependabot only)
               if: github.actor == 'dependabot[bot]'
               run: uv lock
@@ -39,7 +34,7 @@ jobs:
               run: uv sync --locked --dev
 
             - name: Run Tests with Coverage
-              run: just test-coverage
+              run: uv run pytest
 
             - name: Upload to Coveralls
               uses: coverallsapp/github-action@5cbfd81b66ca5d10c19b062c04de0199c215fb6e # v2.3.7
