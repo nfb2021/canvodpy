@@ -1,0 +1,71 @@
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#000000', 'primaryColor': '#e1e6b8', 'primaryTextColor': '#000000', 'primaryBorderColor': '#b8c090', 'lineColor': '#cccccc', 'secondaryColor': '#e1e6b8', 'tertiaryColor': '#173128', 'mainBkg': '#e1e6b8', 'nodeBorder': '#b8c090', 'clusterBkg': '#17312880', 'clusterBorder': '#2d5a44', 'titleColor': '#e1e6b8', 'edgeLabelBackground': '#000000', 'textColor': '#ffffff', 'fontFamily': 'Space Grotesk, sans-serif'}}}%%
+flowchart TD
+    subgraph CFG["Configuration"]
+        YAML["`**YAML Config**
+        processing, sites, sids`"]
+        PYDANTIC["Pydantic Validation"]
+        CONFIG["CanvodConfig"]
+    end
+
+    subgraph INIT["Site Initialization"]
+        SITE["Site(name)"]
+        OBS_STORE["Observation Icechunk Store"]
+        VOD_STORE["VOD Icechunk Store"]
+    end
+
+    subgraph DISCOVERY["Data Discovery"]
+        VALIDATOR["`**DataDirectoryValidator**
+        pre-flight gate`"]
+        MAPPER["`**FilenameMapper**
+        VirtualFiles`"]
+        SCHEDULE["Processing Schedule"]
+    end
+
+    subgraph AUX["Auxiliary Pipeline"]
+        FTP["`**FTP Download**
+        ESA / NASA fallback`"]
+        HERMITE["`**Hermite Interpolation**
+        SP3 ephemerides`"]
+        AUX_ZARR["Auxiliary Zarr Cache"]
+    end
+
+    subgraph PARALLEL["Parallel Processing (Dask Distributed)"]
+        READ_R["`**Read GNSS file**
+        ReaderFactory`"]
+        SPHERICAL["`**Spherical Coords**
+        ECEF to r, theta, phi
+        or SBF embedded geometry`"]
+    end
+
+    subgraph WRITE["Icechunk Storage"]
+        HASH_CHECK["`**File Hash Check**
+        skip duplicates`"]
+        APPEND["Append + Commit"]
+    end
+
+    subgraph GRID["Grid Assignment"]
+        BUILD_GRID["`**Build Grid**
+        equal-area / geodesic / ...`"]
+        KDTREE["`**KDTree Assign**
+        O(n log m)`"]
+    end
+
+    subgraph VOD["VOD Retrieval"]
+        DELTA["delta SNR canopy - ref"]
+        TAU["VOD = -ln(T) cos(theta)"]
+    end
+
+    YAML --> PYDANTIC --> CONFIG --> SITE
+    SITE --> OBS_STORE & VOD_STORE
+
+    CONFIG --> VALIDATOR --> MAPPER --> SCHEDULE
+
+    SCHEDULE --> FTP --> HERMITE --> AUX_ZARR
+
+    SCHEDULE --> READ_R --> SPHERICAL
+    AUX_ZARR --> SPHERICAL
+
+    SPHERICAL --> HASH_CHECK --> APPEND --> OBS_STORE
+
+    OBS_STORE --> BUILD_GRID --> KDTREE --> DELTA --> TAU
+    TAU --> VOD_STORE

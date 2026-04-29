@@ -93,6 +93,8 @@ nav = [
     ]},
   ]},
 
+  { "Notebooks" = "notebooks/index.md" },
+
   { "Development" = [
     { "Getting Started" = "guides/getting-started.md" },
     { "Contributing" = "CONTRIBUTING.md" },
