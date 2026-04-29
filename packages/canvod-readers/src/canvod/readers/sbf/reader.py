@@ -1883,11 +1883,6 @@ class SbfReader(GNSSDataReader):
             attrs=attrs,
         )
 
-        if keep_data_vars is not None:
-            for var in list(obs_ds.data_vars):
-                if var not in keep_data_vars:
-                    obs_ds = obs_ds.drop_vars([var])
-
         if pad_global_sid:
             from canvod.auxiliary.preprocessing import pad_to_global_sid
 
@@ -2246,6 +2241,11 @@ class SbfReader(GNSSDataReader):
                 coords=obs_ds["Phase"].coords,
                 attrs=_PHASE_RAW_ATTRS,
             )
+
+        if keep_data_vars is not None:
+            for var in list(obs_ds.data_vars):
+                if var not in keep_data_vars:
+                    obs_ds = obs_ds.drop_vars([var])
 
         return obs_ds, {"sbf_obs": meta_ds}
 

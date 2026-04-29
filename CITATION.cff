@@ -37,7 +37,7 @@ keywords:
 license: Apache-2.0
 version: 0.2.2
 date-released: "2026-04-06"
-doi: "10.5281/zenodo.19445061"
+doi: "10.5281/zenodo.18496233"
 references:
   - type: software
     title: "canvodpy-test-data: Reference GNSS observations for canVODpy testing"
@@ -47,6 +47,7 @@ references:
         orcid: "https://orcid.org/0000-0002-9932-1925"
     repository-code: "https://github.com/nfb2021/canvodpy-test-data"
     url: "https://github.com/nfb2021/canvodpy-test-data"
+    doi: "10.5281/zenodo.19708759"
     abstract: >
       Real GNSS observations from Rosalia, Austria (DOY 2025-001) in RINEX v3.04
       and SBF format, together with precise SP3/CLK ephemerides and Icechunk store

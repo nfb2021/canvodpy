@@ -1,6 +1,6 @@
 [project]
 name = "canvod-grids"
-version = "0.2.2"
+version = "0.2.3"
 description = "Equal-area hemispheric grid operations for GNSS-Transmissometry"
 readme = "README.md"
 authors = [

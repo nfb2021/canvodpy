@@ -253,6 +253,8 @@ temp/
 .vod_plotly_plots/
 *.html
 !docs/overrides/*.html
+!docs/diagrams/*.html
+!docs/diagrams/poster/*.html
 
 # Documentation builds
 site/
