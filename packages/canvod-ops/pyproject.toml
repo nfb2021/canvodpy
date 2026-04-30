@@ -1,6 +1,6 @@
 [project]
 name = "canvod-ops"
-version = "0.2.2"
+version = "0.3.0"
 description = "Operational data processing pipeline for GNSS-Transmissometry"
 readme = "README.md"
 authors = [
