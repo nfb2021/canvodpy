@@ -1,0 +1,24 @@
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#000000', 'primaryColor': '#e1e6b8', 'primaryTextColor': '#000000', 'primaryBorderColor': '#b8c090', 'lineColor': '#cccccc', 'secondaryColor': '#e1e6b8', 'tertiaryColor': '#173128', 'mainBkg': '#e1e6b8', 'nodeBorder': '#b8c090', 'clusterBkg': '#17312880', 'clusterBorder': '#2d5a44', 'titleColor': '#e1e6b8', 'edgeLabelBackground': '#000000', 'textColor': '#ffffff', 'fontFamily': 'Space Grotesk, sans-serif'}}}%%
+graph TD
+    subgraph ORCH["Orchestration"]
+        CANVODPY["canvodpy"]
+    end
+    subgraph IO["Data I/O"]
+        READERS["canvod-readers<br/>RINEX v3.04 / v2.11 / v3.05 Stripped<br/>SBF / NMEA v4.00"]
+        AUX["canvod-auxiliary<br/>SP3 ephemerides / Broadcast"]
+    end
+    subgraph PERSIST["Persistence"]
+        STORE["canvod-store<br/>Icechunk / Zarr"]
+    end
+    subgraph COMPUTE["Computation"]
+        GRIDS["canvod-grids<br/>7 grid types"]
+        VOD["canvod-vod<br/>Tau-Omega model"]
+    end
+    subgraph PRESENT["Presentation"]
+        VIZ["canvod-viz<br/>2D polar / 3D interactive"]
+    end
+
+    CANVODPY --> READERS & AUX & STORE & GRIDS & VOD & VIZ
+    AUX -.-> READERS
+    STORE -.-> GRIDS
+    VIZ -.-> GRIDS
