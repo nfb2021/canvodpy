@@ -9,9 +9,10 @@ adding yourself alphabetically by surname.
 
 ## Project Founder
 
-- **Nicolas François Bader** — TU Wien, CLIMERS ([ORCID](https://orcid.org/))
+- **Nicolas François Bader** — TU Wien, CLIMERS ([ORCID](https://orcid.org/0000-0002-9932-1925
+))
 
 ## Contributors
-
+- **Konstantin Schellenberg** - Max Planck Insitute for Biogeochemistry ([ORCID](https://orcid.org/0000-0002-2563-9017))
 <!-- Add new contributors alphabetically by surname, one per line: -->
 <!-- - **Full Name** — Affiliation ([ORCID](https://orcid.org/xxxx-xxxx-xxxx-xxxx)) -->
