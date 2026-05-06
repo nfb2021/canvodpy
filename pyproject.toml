@@ -12,21 +12,21 @@ exclude = ["packages/canvod-streamstats"]
 
 [dependency-groups]
 dev = [
-    "anywidget>=0.10.0",
-    "commitizen>=4.13.10",
+    "anywidget>=0.11.0",
+    "commitizen>=4.15.1",
     "hypothesis>=6.152.4",
     "ipykernel>=7.2.0",
-    "marimo>=0.23.4",
+    "marimo>=0.23.5",
     "mkdocstrings-python>=2.0.3",
-    "mystmd>=1.8.3",
+    "mystmd>=1.9.0",
     "pre-commit>=4.6.0",
-    "pytest>=9.0.1",
-    "pytest-cov>=7.0.0",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
     "pytest-mock>=3.15.1",
-    "ruff>=0.15.10",
-    "traitlets>=5.14.3",
-    "ty>=0.0.33",
-    "zensical>=0.0.33",
+    "ruff>=0.15.12",
+    "traitlets>=5.15.0",
+    "ty>=0.0.34",
+    "zensical>=0.0.40",
 ]
 
 # ============================================================================
