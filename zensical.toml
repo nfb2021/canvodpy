@@ -200,8 +200,6 @@ custom_checkbox = true
 # --------------------------------------------------------------------------
 [project.theme]
 language = "en"
-logo = "assets/logo.svg"
-favicon = "assets/logo.svg"
 custom_dir = "docs/overrides"
 
 features = [
