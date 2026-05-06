@@ -260,7 +260,7 @@ canVODpy follows FAIR software principles and OpenSSF best practices:
     **Private reporting:** GitHub Security Advisories
     **Response time:** 48 hours initial, 7-90 days fix
 
-    [:octicons-arrow-right-24: Security Policy](../SECURITY.md)
+    [:octicons-arrow-right-24: Security Policy](SECURITY.md)
 
 </div>
 
@@ -279,4 +279,4 @@ All quality checks run automatically:
 
 All workflows must pass before merging to `main`.
 
-**See also:** [Security Policy](../SECURITY.md) · [FAIR Compliance](FAIR_IMPLEMENTATION_SUMMARY.md)
+**See also:** [Security Policy](SECURITY.md) · [FAIR Compliance](FAIR_IMPLEMENTATION_SUMMARY.md)

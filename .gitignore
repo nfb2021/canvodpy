@@ -247,7 +247,6 @@ temp/
 # Images (generated diagrams, plots)
 *.png
 *.svg
-!docs/assets/logo.svg
 
 # Custom plotting outputs
 .vod_plotly_plots/

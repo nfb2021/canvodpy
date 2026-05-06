@@ -11,7 +11,7 @@ This page documents the complete release automation chain — from commit messag
     Structured commit messages that machines can parse.
     `feat`, `fix`, `docs` determine version bumps automatically.
 
-    [:octicons-arrow-right-24: Details](#conventional-commits-system)
+    [:octicons-arrow-right-24: Details](#1-conventional-commits-system)
 
 -   :fontawesome-solid-scroll: &nbsp; **Changelog Generator**
 
@@ -20,7 +20,7 @@ This page documents the complete release automation chain — from commit messag
     `git-changelog` reads commit history and produces
     `CHANGELOG.md` automatically on every release.
 
-    [:octicons-arrow-right-24: Details](#git-changelog-generator)
+    [:octicons-arrow-right-24: Details](#2-git-changelog-generator)
 
 -   :fontawesome-solid-tag: &nbsp; **Version Management**
 
@@ -29,7 +29,7 @@ This page documents the complete release automation chain — from commit messag
     `commitizen` bumps `version` in all 8 `pyproject.toml` files
     simultaneously, creates a git tag, and commits.
 
-    [:octicons-arrow-right-24: Details](#version-management-with-commitizen)
+    [:octicons-arrow-right-24: Details](#3-version-management-with-commitizen)
 
 -   :fontawesome-brands-github: &nbsp; **GitHub Releases**
 
@@ -38,7 +38,7 @@ This page documents the complete release automation chain — from commit messag
     A workflow detects new tags, creates a draft release from
     the CHANGELOG, and waits for maintainer approval.
 
-    [:octicons-arrow-right-24: Details](#github-releases-automation)
+    [:octicons-arrow-right-24: Details](#4-github-releases-automation)
 
 -   :fontawesome-solid-box-open: &nbsp; **PyPI Publishing**
 
@@ -47,7 +47,7 @@ This page documents the complete release automation chain — from commit messag
     Two workflows: `publish_testpypi.yml` (beta/alpha tags) and
     `publish_pypi.yml` (stable tags). Triggered by publishing the release.
 
-    [:octicons-arrow-right-24: Details](#pypi-publishing-setup)
+    [:octicons-arrow-right-24: Details](#5-pypi-publishing-setup)
 
 -   :fontawesome-solid-lock: &nbsp; **OIDC Authentication**
 
@@ -56,7 +56,7 @@ This page documents the complete release automation chain — from commit messag
     Short-lived JWT tokens from GitHub — no stored API keys.
     Each workflow run gets a unique 10-minute proof-of-identity.
 
-    [:octicons-arrow-right-24: Details](#trusted-publishing-with-oidc)
+    [:octicons-arrow-right-24: Details](#6-trusted-publishing-with-oidc)
 
 </div>
 

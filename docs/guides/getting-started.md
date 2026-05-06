@@ -8,25 +8,25 @@ This guide walks you through everything you need — from creating a GitHub acco
 
     ---
 
-    [GitHub account](#1-create-a-github-account) · [Homebrew](#2-install-homebrew-macos) · [Git install](#3-install-git) · [SSH keys](#4-set-up-ssh-keys-for-github) · [Git identity](#5-configure-your-git-identity)
+    [GitHub account](#1-create-a-github-account) · [Homebrew](#2-install-homebrew-macos-only) · [Git install](#3-install-git) · [SSH keys](#4-set-up-an-ssh-key-for-github) · [Git identity](#5-configure-your-git-identity)
 
--   :fontawesome-solid-gear: &nbsp; **[Steps 6–9](#6-install-uv-and-just)** &nbsp; Tools + Repo
-
-    ---
-
-    [Install `uv` + `just`](#6-install-uv-and-just) · [Fork + clone](#7-fork-and-clone-the-repository) · [Submodules](#8-initialise-git-submodules) · [Dev environment](#9-install-the-development-environment)
-
--   :fontawesome-solid-sliders: &nbsp; **[Step 10](#10-initialise-configuration-files)** &nbsp; Configuration
+-   :fontawesome-solid-gear: &nbsp; **[Steps 6–9](#6-install-development-tools)** &nbsp; Tools + Repo
 
     ---
 
-    [Initialize YAML config files](#10-initialise-configuration-files) · Set paths and credentials · Validate
+    [Install `uv` + `just`](#6-install-development-tools) · [Fork + clone](#7-fork-and-clone-the-repository) · [Submodules](#8-initialize-submodules) · [Dev environment](#9-set-up-the-development-environment)
 
--   :fontawesome-solid-circle-check: &nbsp; **[Steps 11–13](#11-run-the-test-suite)** &nbsp; Verify + Contribute
+-   :fontawesome-solid-sliders: &nbsp; **[Step 10](#10-configure-the-project)** &nbsp; Configuration
 
     ---
 
-    [Run tests](#11-run-the-test-suite) · [Quality checks](#12-keeping-your-fork-up-to-date) · [Your first pull request](#13-your-first-contribution)
+    [Initialize YAML config files](#10-configure-the-project) · Set paths and credentials · Validate
+
+-   :fontawesome-solid-circle-check: &nbsp; **[Steps 11–13](#11-verify-everything-works)** &nbsp; Verify + Contribute
+
+    ---
+
+    [Run tests](#11-verify-everything-works) · [Quality checks](#12-keeping-your-fork-up-to-date) · [Your first pull request](#13-your-first-contribution)
 
 </div>
 
