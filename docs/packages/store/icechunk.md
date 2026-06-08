@@ -50,18 +50,40 @@ Icechunk is a cloud-native transactional storage format for multidimensional arr
 
 ## Storage Structure
 
-```
-stores/
-  rosalia/
-    rinex/
-      .icechunk/          # Repository metadata + snapshots
-      data/               # SHA-256 addressed chunk files
-      refs/               # Branch heads
-    vod/
-      .icechunk/
-      data/
-      refs/
-```
+=== "Spec v2 (icechunk ≥ 2.0)"
+
+    ```
+    stores/
+      rosalia/
+        rinex/
+          repo            # Unified repository info (branches, tags, config)
+          snapshots/      # Immutable snapshot files
+          chunks/         # SHA-256 addressed chunk data
+        vod/
+          repo
+          snapshots/
+          chunks/
+    ```
+
+=== "Spec v1 (icechunk 1.x)"
+
+    ```
+    stores/
+      rosalia/
+        rinex/
+          .icechunk/      # Repository metadata + snapshots
+          data/           # SHA-256 addressed chunk files
+          refs/           # Branch heads
+        vod/
+          .icechunk/
+          data/
+          refs/
+    ```
+
+!!! info "Format compatibility"
+    Icechunk 2.x reads and writes both v1 and v2 repositories — no migration required.
+    Run `icechunk.upgrade_icechunk_repository(repo)` to opt in to the v2 format
+    for a given store. `scan_stores()` detects both layouts automatically.
 
 ---
 
@@ -165,17 +187,26 @@ icechunk:
 === "Version History"
 
     ```python
-    # List all snapshots on main branch
-    history = site.rinex_store.list_snapshots()
-    for snap in history:
-        print(snap.id[:8], snap.message, snap.written_at)
+    # List all commits on main branch
+    history = site.rinex_store.get_history()
+    for entry in history:
+        print(entry["snapshot_id"][:8], entry["written_at"], entry["commit_msg"])
 
-    # Open a specific historical version
-    ds_v1 = site.rinex_store.read(
+    # Pretty-print — same output, one liner
+    site.rinex_store.print_history(limit=20)
+
+    # Open a specific historical snapshot
+    ds_old = site.rinex_store.read(
         receiver_name="canopy_01",
         time_range=("2024-01-01", "2024-01-31"),
-        snapshot=history[-1].id,
+        snapshot=history[-1]["snapshot_id"],
     )
+
+    # Visualise the commit graph (SVG in notebooks, coloured text in terminal)
+    site.rinex_store.plot_commit_graph()
+
+    # Repo-wide operations audit trail (commits, branch ops, GC, …)
+    site.rinex_store.print_ops_log(limit=30)
     ```
 
 === "Query Time Range"
