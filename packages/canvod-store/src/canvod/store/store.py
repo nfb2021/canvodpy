@@ -2148,6 +2148,52 @@ class MyIcechunkStore:
             ts = entry["written_at"].strftime("%Y-%m-%d %H:%M:%S")
             print(f"{ts} {entry['snapshot_id'][:8]} {entry['commit_msg']}")
 
+    def get_ops_log(self, limit: int | None = None) -> list[dict]:
+        """
+        Return the repository operations log (newest first).
+
+        The ops log is an immutable audit trail of every structural mutation:
+        commits, branch and tag operations, GC runs, config changes, etc.
+        Unlike :meth:`get_history`, this is repo-wide (not per-branch) and
+        covers all event types, not only commits.
+
+        Parameters
+        ----------
+        limit : int | None, optional
+            Maximum number of entries to return. ``None`` returns all.
+
+        Returns
+        -------
+        list[dict]
+            Each entry contains ``kind`` (str), ``updated_at`` (datetime),
+            and ``backup_path`` (str).
+        """
+        entries = []
+        for i, update in enumerate(self._repo.ops_log()):
+            entries.append(
+                {
+                    "kind": str(update.kind),
+                    "updated_at": update.updated_at,
+                    "backup_path": update.backup_path,
+                }
+            )
+            if limit is not None and i + 1 >= limit:
+                break
+        return entries
+
+    def print_ops_log(self, limit: int | None = 50) -> None:
+        """
+        Pretty-print the repository operations log for quick inspection.
+
+        Parameters
+        ----------
+        limit : int | None, optional
+            Maximum number of entries to display (default: 50).
+        """
+        for entry in self.get_ops_log(limit=limit):
+            ts = entry["updated_at"].strftime("%Y-%m-%d %H:%M:%S")
+            print(f"{ts}  {entry['kind']}")
+
     def __repr__(self) -> str:
         """Return the developer-facing representation.
 
