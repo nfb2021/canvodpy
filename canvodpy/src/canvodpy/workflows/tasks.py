@@ -1003,7 +1003,7 @@ def process_sbf(
     use_broadcast = aux_zarr_path is None
     # preprocess_with_hermite_aux always requires an aux path argument;
     # when using broadcast geometry the path is unused internally.
-    effective_aux_path = Path("/dev/null") if use_broadcast else Path(aux_zarr_path)  # ty: ignore[invalid-argument-type]
+    effective_aux_path = Path("/dev/null") if use_broadcast else Path(aux_zarr_path)
 
     research_site = GnssResearchSite(site)
     receivers_processed: list[str] = []
