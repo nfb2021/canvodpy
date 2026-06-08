@@ -26,7 +26,7 @@ from canvod.store.viewer import add_rich_display_to_store
 icechunk.set_logs_filter("icechunk=error")
 
 if TYPE_CHECKING:
-    from plotly.graph_objects import Figure
+    from icechunk import AncestryGraph
 
 
 @add_rich_display_to_store
@@ -2486,286 +2486,34 @@ class MyIcechunkStore:
         self.repo.delete_tag(tag_name)
         self._logger.warning(f"Deleted tag '{tag_name}'")
 
-    def plot_commit_graph(self, max_commits: int = 100) -> Figure:
+    def plot_commit_graph(
+        self,
+        branch: str | None = None,
+        *,
+        plain: bool = False,
+    ) -> AncestryGraph:
         """
-        Visualize commit history as an interactive git-like graph.
+        Visualize commit history as a graph.
 
-        Creates an interactive visualization showing:
-        - Branches with different colors
-        - Chronological commit ordering
-        - Branch divergence points
-        - Commit messages on hover
-        - Click to see commit details
+        Delegates to icechunk's native ``repo.ancestry_graph()``. Renders as
+        an SVG diagram in Jupyter/marimo notebooks, or as colored text in a
+        terminal (``print(store.plot_commit_graph())``).
 
         Parameters
         ----------
-        max_commits : int
-            Maximum number of commits to display (default: 100).
+        branch : str, optional
+            Restrict the graph to this branch's linear history.
+            When omitted, all branches are shown as a tree.
+        plain : bool, optional
+            Render without ANSI colours or SVG fill colours (useful for CI
+            logs or piping to a file).
 
         Returns
         -------
-        Figure
-            Interactive plotly figure (works in marimo and Jupyter).
+        AncestryGraph
+            Displayable object with ``_repr_svg_()`` for notebooks.
         """
-        from collections import defaultdict
-        from datetime import datetime
-
-        import plotly.graph_objects as go
-
-        # Collect all commits with full metadata
-        commit_map = {}  # id -> commit data
-        branch_tips = {}  # branch -> latest commit id
-
-        for branch in self.repo.list_branches():
-            ancestors = list(self.repo.ancestry(branch=branch))
-            if ancestors:
-                branch_tips[branch] = ancestors[0].id
-
-            for ancestor in ancestors:
-                if ancestor.id not in commit_map:
-                    commit_map[ancestor.id] = {
-                        "id": ancestor.id,
-                        "parent_id": ancestor.parent_id,
-                        "message": ancestor.message,
-                        "written_at": ancestor.written_at,
-                        "branches": [branch],
-                    }
-                else:
-                    # Multiple branches point to same commit
-                    commit_map[ancestor.id]["branches"].append(branch)
-
-                if len(commit_map) >= max_commits:
-                    break
-            if len(commit_map) >= max_commits:
-                break
-
-        # Build parent-child relationships
-        commits_list = list(commit_map.values())
-        commits_list.sort(key=lambda c: c["written_at"])  # Oldest first
-
-        # Assign horizontal positions (chronological)
-        commit_x_positions = {}
-        for idx, commit in enumerate(commits_list):
-            commit["x"] = idx
-            commit_x_positions[commit["id"]] = idx
-
-        # Assign vertical positions: commits shared by branches stay on same Y
-        # Only diverge when branches have different commits
-        branch_names = sorted(
-            self.repo.list_branches(), key=lambda b: (b != "main", b)
-        )  # main first
-
-        # Build a set of all commit IDs for each branch
-        branch_commits = {}
-        for branch in branch_names:
-            history = list(self.repo.ancestry(branch=branch))
-            branch_commits[branch] = {h.id for h in history if h.id in commit_map}
-
-        # Find where branches diverge
-        def branches_share_commit(
-            commit_id: str,
-            branches: list[str],
-        ) -> list[str]:
-            """Return branches that contain a commit.
-
-            Parameters
-            ----------
-            commit_id : str
-                Commit identifier to check.
-            branches : list[str]
-                Branch names to search.
-
-            Returns
-            -------
-            list[str]
-                Branches that contain the commit.
-            """
-            return [b for b in branches if commit_id in branch_commits[b]]
-
-        # Assign Y position: all commits on a single horizontal line initially
-        # We'll use vertical offset for parallel branch indicators
-        for commit in commits_list:
-            commit["y"] = 0  # All on same timeline
-            commit["branch_set"] = frozenset(commit["branches"])
-
-        # Color palette for branches
-        colors = [
-            "#4a9a4a",  # green (main)
-            "#5580c8",  # blue
-            "#d97643",  # orange
-            "#9b59b6",  # purple
-            "#e74c3c",  # red
-            "#1abc9c",  # turquoise
-            "#f39c12",  # yellow
-            "#34495e",  # dark gray
-        ]
-        branch_colors = {b: colors[i % len(colors)] for i, b in enumerate(branch_names)}
-
-        # Build edges: draw parallel lines for shared commits (metro-style)
-        edges_by_branch = defaultdict(list)  # branch -> list of edge dicts
-
-        for commit in commits_list:
-            if commit["parent_id"] and commit["parent_id"] in commit_map:
-                parent = commit_map[commit["parent_id"]]
-
-                # Find which branches share both this commit and its parent
-                shared_branches = [
-                    b for b in commit["branches"] if b in parent["branches"]
-                ]
-
-                for branch in shared_branches:
-                    edges_by_branch[branch].append(
-                        {
-                            "x0": parent["x"],
-                            "y0": parent["y"],
-                            "x1": commit["x"],
-                            "y1": commit["y"],
-                        }
-                    )
-
-        # Create plotly figure
-        fig = go.Figure()
-
-        # Draw edges grouped by branch (parallel lines for shared paths)
-        for branch_idx, branch in enumerate(branch_names):
-            if branch not in edges_by_branch:
-                continue
-
-            color = branch_colors[branch]
-
-            # Draw each edge as a separate line
-            for edge in edges_by_branch[branch]:
-                # Vertical offset for parallel lines (metro-style)
-                offset = (branch_idx - (len(branch_names) - 1) / 2) * 0.15
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=[edge["x0"], edge["x1"]],
-                        y=[edge["y0"] + offset, edge["y1"] + offset],
-                        mode="lines",
-                        line=dict(color=color, width=3),
-                        hoverinfo="skip",
-                        showlegend=False,
-                        opacity=0.7,
-                    )
-                )
-
-        # Draw commits (nodes) - one trace per unique commit
-        # Color by which branches include it
-        x_vals = [c["x"] for c in commits_list]
-        y_vals = [c["y"] for c in commits_list]
-
-        # Format hover text
-        hover_texts = []
-        marker_colors = []
-        marker_symbols = []
-
-        for c in commits_list:
-            # Handle both string and datetime objects
-            if isinstance(c["written_at"], str):
-                time_str = datetime.fromisoformat(c["written_at"]).strftime(
-                    "%Y-%m-%d %H:%M"
-                )
-            else:
-                time_str = c["written_at"].strftime("%Y-%m-%d %H:%M")
-
-            branches_str = ", ".join(c["branches"])
-            hover_texts.append(
-                f"<b>{c['message'] or 'No message'}</b><br>"
-                f"Commit: {c['id'][:12]}<br>"
-                f"Branches: {branches_str}<br>"
-                f"Time: {time_str}"
-            )
-
-            # Color by first branch (priority: main)
-            if "main" in c["branches"]:
-                marker_colors.append(branch_colors["main"])
-            else:
-                marker_colors.append(branch_colors[c["branches"][0]])
-
-            # Star for branch tips
-            if c["id"] in branch_tips.values():
-                marker_symbols.append("star")
-            else:
-                marker_symbols.append("circle")
-
-        fig.add_trace(
-            go.Scatter(
-                x=x_vals,
-                y=y_vals,
-                mode="markers",
-                name="Commits",
-                marker=dict(
-                    size=14,
-                    color=marker_colors,
-                    symbol=marker_symbols,
-                    line=dict(color="white", width=2),
-                ),
-                hovertext=hover_texts,
-                hoverinfo="text",
-                showlegend=False,
-            )
-        )
-
-        # Add legend traces (invisible points just for legend)
-        for branch_idx, branch in enumerate(branch_names):
-            fig.add_trace(
-                go.Scatter(
-                    x=[None],
-                    y=[None],
-                    mode="markers",
-                    name=branch,
-                    marker=dict(
-                        size=10,
-                        color=branch_colors[branch],
-                        line=dict(color="white", width=2),
-                    ),
-                    showlegend=True,
-                )
-            )
-
-        # Layout styling
-        title_text = (
-            f"Commit Graph: {self.site_name} ({len(commits_list)} commits, "
-            f"{len(branch_names)} branches)"
-        )
-        fig.update_layout(
-            title=dict(
-                text=title_text,
-                font=dict(size=16, color="#e5e5e5"),
-            ),
-            xaxis=dict(
-                title="Time (oldest ← → newest)",
-                showticklabels=False,
-                showgrid=True,
-                gridcolor="rgba(255,255,255,0.1)",
-                zeroline=False,
-            ),
-            yaxis=dict(
-                title="",
-                showticklabels=False,
-                showgrid=False,
-                zeroline=False,
-                range=[-1, 1],  # Fixed range for single timeline
-            ),
-            plot_bgcolor="#1a1a1a",
-            paper_bgcolor="#1a1a1a",
-            font=dict(color="#e5e5e5"),
-            hovermode="closest",
-            height=400,
-            width=max(800, len(commits_list) * 50),
-            legend=dict(
-                title="Branches",
-                orientation="h",
-                x=0,
-                y=-0.15,
-                bgcolor="rgba(30,30,30,0.8)",
-                bordercolor="rgba(255,255,255,0.2)",
-                borderwidth=1,
-            ),
-        )
-
-        return fig
+        return self._repo.ancestry_graph(branch=branch, plain=plain)
 
     def cleanup_stale_branches(
         self, keep_patterns: list[str] | None = None
