@@ -2599,11 +2599,11 @@ class RinexDataProcessor:
         normalized_configs: list[tuple[str, str, Path, Path | None, str]] = []
         for cfg in receiver_configs:
             if len(cfg) == 3:
-                normalized_configs.append((*cfg, None, self._reader_name))  # ty: ignore[invalid-argument-type]
+                normalized_configs.append((*cfg, None, self._reader_name))
             elif len(cfg) == 4:
-                normalized_configs.append((*cfg, self._reader_name))  # ty: ignore[invalid-argument-type]
+                normalized_configs.append((*cfg, self._reader_name))
             else:
-                normalized_configs.append(cfg)  # ty: ignore[invalid-argument-type]
+                normalized_configs.append(cfg)
 
         if keep_vars is None:
             keep_vars = load_config().processing.processing.keep_rnx_vars

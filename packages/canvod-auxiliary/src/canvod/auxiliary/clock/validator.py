@@ -55,7 +55,7 @@ def validate_clk_dataset(ds: xr.Dataset) -> dict[str, bool | float | int]:
     if results["has_epoch"]:
         # Check temporal consistency
         epochs = ds["epoch"].values
-        results["epochs_monotonic"] = np.all(epochs[:-1] <= epochs[1:])
+        results["epochs_monotonic"] = bool(np.all(epochs[:-1] <= epochs[1:]))
         results["num_epochs"] = len(epochs)
     else:
         results["epochs_monotonic"] = False

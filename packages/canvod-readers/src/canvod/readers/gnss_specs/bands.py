@@ -1,5 +1,7 @@
 """Band registry and plotting helpers for GNSS signals."""
 
+from typing import cast
+
 import matplotlib.pyplot as plt
 from matplotlib import gridspec, patches
 from pint import Quantity
@@ -97,12 +99,12 @@ class Bands(BaseModel):
             Dictionary with float values (magnitudes only).
 
         """
-        result = {}
+        result: dict[str, dict[str, float | str | bool]] = {}
         for band, props in band_properties.items():
-            clean_props = {}
+            clean_props: dict[str, float | str | bool] = {}
             for key, value in props.items():
                 if isinstance(value, Quantity):
-                    clean_props[key] = value.magnitude
+                    clean_props[key] = cast(float, value.magnitude)
                 else:
                     clean_props[key] = value
             result[band] = clean_props

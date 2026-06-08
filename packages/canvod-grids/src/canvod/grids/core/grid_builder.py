@@ -1,7 +1,7 @@
 """Base class for hemisphere grid builders."""
 
 from abc import ABC, abstractmethod
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import polars as pl
@@ -104,22 +104,10 @@ class BaseGridBuilder(ABC):
         result = self._build_grid()
 
         if len(result) == 4:
-            grid, theta_lims, phi_lims, cell_ids = cast(
-                tuple[pl.DataFrame, np.ndarray, list[np.ndarray], list[np.ndarray]],
-                result,
-            )
+            grid, theta_lims, phi_lims, cell_ids = result
             extra_kwargs = {}
         elif len(result) == 5:
-            grid, theta_lims, phi_lims, cell_ids, extra_kwargs = cast(
-                tuple[
-                    pl.DataFrame,
-                    np.ndarray,
-                    list[np.ndarray],
-                    list[np.ndarray],
-                    dict[str, Any],
-                ],
-                result,
-            )
+            grid, theta_lims, phi_lims, cell_ids, extra_kwargs = result
         else:
             raise ValueError(f"Invalid grid builder result: {len(result)} elements")
 

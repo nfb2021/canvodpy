@@ -938,7 +938,7 @@ class IcechunkStoreViewer:
         """
 
 
-def add_rich_display_to_store(store_class: type) -> type:
+def add_rich_display_to_store[StoreT: type](store_class: StoreT) -> StoreT:
     """
     Add modern HTML display capabilities to IcechunkStore.
 

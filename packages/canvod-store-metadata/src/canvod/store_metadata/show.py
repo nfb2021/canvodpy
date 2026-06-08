@@ -13,7 +13,7 @@ from __future__ import annotations
 import sys
 import textwrap
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from .io import metadata_exists, read_metadata
 from .schema import StoreMetadata
@@ -172,8 +172,8 @@ def format_environment(meta: StoreMetadata) -> str:
     lines.append(_kv("uv.lock hash", e.uv_lock_hash))
     has_toml = e.pyproject_toml_text is not None
     has_lock = e.uv_lock_text is not None
-    pyproject_text = cast(str, e.pyproject_toml_text) if has_toml else None
-    uv_lock_text = cast(str, e.uv_lock_text) if has_lock else None
+    pyproject_text = e.pyproject_toml_text if has_toml else None
+    uv_lock_text = e.uv_lock_text if has_lock else None
     pyproject_desc = (
         f"stored ({len(pyproject_text)} chars)"
         if pyproject_text is not None

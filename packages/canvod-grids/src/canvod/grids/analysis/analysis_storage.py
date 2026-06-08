@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import structlog
@@ -845,8 +845,7 @@ class AnalysisStorage:
 
             store: Any = zarr.open(session.store, mode="r+")
             if group_path in store:
-                store_map = cast(Any, store)
-                del store_map[group_path]
+                del store[group_path]
                 snapshot_id = session.commit(f"Deleted {label}")
                 logger.info("%s deleted (snapshot: %s)", label, snapshot_id[:8])
                 return snapshot_id
@@ -1077,8 +1076,7 @@ class AnalysisStorage:
 
             group: Any = zarr.open(session.store, path=group_path, mode="r+")
             if weight_name in group:
-                group_map = cast(Any, group)
-                del group_map[weight_name]
+                del group[weight_name]
                 snapshot_id = session.commit(
                     f"Deleted weight '{weight_name}' for {dataset_name}/{grid_name}"
                 )
@@ -1119,8 +1117,7 @@ class AnalysisStorage:
 
             group: Any = zarr.open(session.store, path=group_path, mode="r+")
             if mask_var in group:
-                group_map = cast(Any, group)
-                del group_map[mask_var]
+                del group[mask_var]
                 commit_msg = (
                     f"Deleted filter mask '{filter_type}' for "
                     f"{dataset_name}/{grid_name}"
