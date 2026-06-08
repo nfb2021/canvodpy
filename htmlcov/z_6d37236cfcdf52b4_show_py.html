@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_6d37236cfcdf52b4_validate_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.14.1">coverage.py v7.14.1</a>,
-            created at 2026-06-08 17:12 +0000
+            created at 2026-06-08 17:52 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -95,7 +95,7 @@
     <p class="run"><span class="n"><a id="t13" href="#t13">13</a></span><span class="t"><span class="key">import</span> <span class="nam">sys</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t14" href="#t14">14</a></span><span class="t"><span class="key">import</span> <span class="nam">textwrap</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t"><span class="key">from</span> <span class="nam">pathlib</span> <span class="key">import</span> <span class="nam">Path</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t"><span class="key">from</span> <span class="nam">typing</span> <span class="key">import</span> <span class="nam">Any</span><span class="op">,</span> <span class="nam">cast</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t"><span class="key">from</span> <span class="nam">typing</span> <span class="key">import</span> <span class="nam">Any</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t17" href="#t17">17</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t"><span class="key">from</span> <span class="op">.</span><span class="nam">io</span> <span class="key">import</span> <span class="nam">metadata_exists</span><span class="op">,</span> <span class="nam">read_metadata</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t19" href="#t19">19</a></span><span class="t"><span class="key">from</span> <span class="op">.</span><span class="nam">schema</span> <span class="key">import</span> <span class="nam">StoreMetadata</span>&nbsp;</span><span class="r"></span></p>
@@ -254,8 +254,8 @@
     <p class="mis show_mis"><span class="n"><a id="t172" href="#t172">172</a></span><span class="t">    <span class="nam">lines</span><span class="op">.</span><span class="nam">append</span><span class="op">(</span><span class="nam">_kv</span><span class="op">(</span><span class="str">"uv.lock hash"</span><span class="op">,</span> <span class="nam">e</span><span class="op">.</span><span class="nam">uv_lock_hash</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t173" href="#t173">173</a></span><span class="t">    <span class="nam">has_toml</span> <span class="op">=</span> <span class="nam">e</span><span class="op">.</span><span class="nam">pyproject_toml_text</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t174" href="#t174">174</a></span><span class="t">    <span class="nam">has_lock</span> <span class="op">=</span> <span class="nam">e</span><span class="op">.</span><span class="nam">uv_lock_text</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t175" href="#t175">175</a></span><span class="t">    <span class="nam">pyproject_text</span> <span class="op">=</span> <span class="nam">cast</span><span class="op">(</span><span class="nam">str</span><span class="op">,</span> <span class="nam">e</span><span class="op">.</span><span class="nam">pyproject_toml_text</span><span class="op">)</span> <span class="key">if</span> <span class="nam">has_toml</span> <span class="key">else</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t176" href="#t176">176</a></span><span class="t">    <span class="nam">uv_lock_text</span> <span class="op">=</span> <span class="nam">cast</span><span class="op">(</span><span class="nam">str</span><span class="op">,</span> <span class="nam">e</span><span class="op">.</span><span class="nam">uv_lock_text</span><span class="op">)</span> <span class="key">if</span> <span class="nam">has_lock</span> <span class="key">else</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t175" href="#t175">175</a></span><span class="t">    <span class="nam">pyproject_text</span> <span class="op">=</span> <span class="nam">e</span><span class="op">.</span><span class="nam">pyproject_toml_text</span> <span class="key">if</span> <span class="nam">has_toml</span> <span class="key">else</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t176" href="#t176">176</a></span><span class="t">    <span class="nam">uv_lock_text</span> <span class="op">=</span> <span class="nam">e</span><span class="op">.</span><span class="nam">uv_lock_text</span> <span class="key">if</span> <span class="nam">has_lock</span> <span class="key">else</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t177" href="#t177">177</a></span><span class="t">    <span class="nam">pyproject_desc</span> <span class="op">=</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t178" href="#t178">178</a></span><span class="t">        <span class="fst">f"</span><span class="fst">stored (</span><span class="op">{</span><span class="nam">len</span><span class="op">(</span><span class="nam">pyproject_text</span><span class="op">)</span><span class="op">}</span><span class="fst"> chars)</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t179" href="#t179">179</a></span><span class="t">        <span class="key">if</span> <span class="nam">pyproject_text</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
@@ -552,7 +552,7 @@
             <a class="nav" href="z_6d37236cfcdf52b4_validate_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.14.1">coverage.py v7.14.1</a>,
-            created at 2026-06-08 17:12 +0000
+            created at 2026-06-08 17:52 +0000
         </p>
     </div>
 </footer>
