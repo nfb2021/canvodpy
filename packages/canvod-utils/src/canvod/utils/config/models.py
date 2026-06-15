@@ -425,41 +425,12 @@ class StorageConfig(BaseModel):
     rinex_store_expire_days: int = Field(2, ge=1)
     vod_store_strategy: Literal["skip", "overwrite", "append"] = "overwrite"
 
-    @field_validator("stores_root_dir")
+    @field_validator("stores_root_dir", mode="before")
     @classmethod
-    def validate_stores_dir(cls, v: Path) -> Path:
-        """Validate stores directory path.
-
-        Parameters
-        ----------
-        v : Path
-            Directory where stores are created.
-
-        Returns
-        -------
-        Path
-            Validated path.
-        """
-        # Only validate if it looks like a real path (not a placeholder)
-        path_str = str(v)
-        if path_str.startswith("/path/"):
-            # This is a placeholder path from defaults - skip validation
-            return v
-
-        # For real paths, create if it doesn't exist
-        if not v.exists():
-            try:
-                v.mkdir(parents=True, exist_ok=True)
-            except (OSError, PermissionError) as e:
-                # Warn but don't fail - let user create it manually
-                import warnings
-
-                warnings.warn(
-                    f"Could not create stores directory {v}: {e}. "
-                    "Please create it manually.",
-                    UserWarning,
-                    stacklevel=2,
-                )
+    def validate_stores_dir(cls, v: object) -> object:
+        """Expand ~ in stores_root_dir at parse time."""
+        if isinstance(v, str):
+            return Path(v).expanduser()
         return v
 
     def get_rinex_store_path(self, site_name: str) -> Path:
