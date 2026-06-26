@@ -1,0 +1,50 @@
+{
+  "group": "canopy_01",
+  "shape": {
+    "epoch": 720,
+    "sid": 40
+  },
+  "variables": {
+    "S1C": {
+      "dtype": "float32",
+      "shape": [
+        720,
+        40
+      ],
+      "checksum": "09ca13150a078d30",
+      "nan_fraction": 0.19975694444444445
+    },
+    "S2W": {
+      "dtype": "float32",
+      "shape": [
+        720,
+        40
+      ],
+      "checksum": "c8a61c7a8bca2c3c",
+      "nan_fraction": 0.19975694444444445
+    }
+  },
+  "metadata_table": {
+    "n_rows": 4,
+    "hashes": [
+      "09b24741025cc69c",
+      "f0056b058cfa73d3",
+      "23a4f3b84f4f4f48",
+      "7dbcdd3e94ec30c0"
+    ],
+    "actions": [
+      "write",
+      "append",
+      "append",
+      "append"
+    ]
+  },
+  "history_count": 5,
+  "branches": [
+    "main"
+  ],
+  "epoch_checksum": "5a8828dca0f18d57",
+  "epoch_start": "2025-01-01T00:00:00.000000000",
+  "epoch_end": "2025-01-01T00:59:55.000000000",
+  "n_epochs": 720
+}

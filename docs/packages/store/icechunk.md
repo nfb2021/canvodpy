@@ -56,13 +56,17 @@ Icechunk is a cloud-native transactional storage format for multidimensional arr
     stores/
       rosalia/
         rinex/
-          repo            # Unified repository info (branches, tags, config)
-          snapshots/      # Immutable snapshot files
-          chunks/         # SHA-256 addressed chunk data
+          snapshots/      # Immutable snapshot objects
+          transactions/   # Transaction logs
+          overwritten/    # Overwritten-chunk tracking
+          chunks/         # SHA-256 addressed chunk data (once data is written)
+          manifests/      # Chunk manifests (once data is written)
         vod/
-          repo
           snapshots/
+          transactions/
+          overwritten/
           chunks/
+          manifests/
     ```
 
 === "Spec v1 (icechunk 1.x)"
@@ -71,19 +75,26 @@ Icechunk is a cloud-native transactional storage format for multidimensional arr
     stores/
       rosalia/
         rinex/
-          .icechunk/      # Repository metadata + snapshots
-          data/           # SHA-256 addressed chunk files
-          refs/           # Branch heads
+          refs/           # Branch and tag refs
+          snapshots/      # Immutable snapshot files
+          transactions/   # Transaction logs
+          chunks/         # SHA-256 addressed chunk data
+          manifests/      # Chunk manifests
+          branch.main     # Branch pointer (file at store root)
         vod/
-          .icechunk/
-          data/
           refs/
+          snapshots/
+          transactions/
+          chunks/
+          manifests/
+          branch.main
     ```
 
 !!! info "Format compatibility"
-    Icechunk 2.x reads and writes both v1 and v2 repositories — no migration required.
-    Run `icechunk.upgrade_icechunk_repository(repo)` to opt in to the v2 format
-    for a given store. `scan_stores()` detects both layouts automatically.
+    Icechunk 2.x opens v1 stores transparently — no migration required.
+    Run `icechunk.upgrade_icechunk_repository(repo, dry_run=False)` to
+    explicitly upgrade a store to v2 format. `scan_stores()` detects both
+    layouts automatically.
 
 ---
 
@@ -202,8 +213,8 @@ icechunk:
         snapshot=history[-1]["snapshot_id"],
     )
 
-    # Visualise the commit graph (SVG in notebooks, coloured text in terminal)
-    site.rinex_store.plot_commit_graph()
+    # Visualise the commit DAG (SVG in notebooks, coloured text in terminal)
+    site.rinex_store.ancestry_graph()
 
     # Repo-wide operations audit trail (commits, branch ops, GC, …)
     site.rinex_store.print_ops_log(limit=30)

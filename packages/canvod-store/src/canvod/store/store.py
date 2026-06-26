@@ -2,8 +2,7 @@ import contextlib
 import io
 import json
 import sys
-import warnings
-from collections.abc import Generator, Sequence
+from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -13,7 +12,6 @@ import numpy as np
 import polars as pl
 import xarray as xr
 import zarr
-from canvod.utils.config import load_config
 from canvod.utils.tools import get_version_from_pyproject
 from canvodpy.logging import get_logger
 from icechunk.xarray import to_icechunk
@@ -102,6 +100,8 @@ class MyIcechunkStore:
         compression_algorithm : str | None, optional
             Override default compression algorithm.
         """
+        self._logger = get_logger(__name__)
+
         try:
             from canvod.utils.config import load_config
 
@@ -110,6 +110,7 @@ class MyIcechunkStore:
             _rinex_store_strategy = cfg.processing.storage.rinex_store_strategy
             _rinex_store_expire_days = cfg.processing.storage.rinex_store_expire_days
             _vod_store_strategy = cfg.processing.storage.vod_store_strategy
+            _log_path_depth = cfg.processing.logging.log_path_depth
         except Exception:
             from canvod.utils.config.models import IcechunkConfig
 
@@ -117,6 +118,7 @@ class MyIcechunkStore:
             _rinex_store_strategy = "append"
             _rinex_store_expire_days = 2
             _vod_store_strategy = "overwrite"
+            _log_path_depth = 3
 
         self.store_path = Path(store_path)
         self.store_type = store_type
@@ -141,6 +143,7 @@ class MyIcechunkStore:
         self._rinex_store_strategy = _rinex_store_strategy
         self._rinex_store_expire_days = _rinex_store_expire_days
         self._vod_store_strategy = _vod_store_strategy
+        self._log_path_depth = _log_path_depth
 
         # Configure repository
         self.config = icechunk.RepositoryConfig.default()
@@ -150,21 +153,49 @@ class MyIcechunkStore:
         self.config.inline_chunk_threshold_bytes = ic_cfg.inline_threshold
         self.config.get_partial_values_concurrency = ic_cfg.get_concurrency
 
+        preload_cfg = None
         if ic_cfg.manifest_preload_enabled:
-            self.config.manifest = icechunk.ManifestConfig(
-                preload=icechunk.ManifestPreloadConfig(
-                    max_total_refs=ic_cfg.manifest_preload_max_refs,
-                    preload_if=icechunk.ManifestPreloadCondition.name_matches(
-                        ic_cfg.manifest_preload_pattern
-                    ),
-                )
+            preload_cfg = icechunk.ManifestPreloadConfig(
+                max_total_refs=ic_cfg.manifest_preload_max_refs,
+                preload_if=icechunk.ManifestPreloadCondition.name_matches(
+                    ic_cfg.manifest_preload_pattern
+                ),
             )
             self._logger.info(
                 f"Manifest preload enabled: {ic_cfg.manifest_preload_pattern}"
             )
 
+        splitting_cfg = None
+        if ic_cfg.manifest_splitting_enabled:
+            from icechunk import (
+                ManifestSplitCondition,
+                ManifestSplitDimCondition,
+                ManifestSplittingConfig,
+            )
+
+            _n_refs = ic_cfg.manifest_splitting_chunk_refs
+            _n_ep = ic_cfg.manifest_splitting_epoch_range
+            splitting_cfg = ManifestSplittingConfig.from_dict(
+                {
+                    ManifestSplitCondition.name_matches(".*"): {
+                        ManifestSplitDimCondition.Any(): _n_refs,
+                    },
+                    ManifestSplitCondition.name_matches("obs|snr"): {
+                        ManifestSplitDimCondition.Axis(0): _n_ep,
+                    },
+                }
+            )
+            self._logger.info(
+                f"Manifest splitting enabled: chunk_refs={_n_refs}, epoch_range={_n_ep}"
+            )
+
+        if preload_cfg is not None or splitting_cfg is not None:
+            self.config.manifest = icechunk.ManifestConfig(
+                preload=preload_cfg,
+                splitting=splitting_cfg,
+            )
+
         self._repo = None
-        self._logger = get_logger(__name__)
 
         # Remove .DS_Store files that corrupt icechunk ref listing on macOS
         self._clean_ds_store()
@@ -238,48 +269,16 @@ class MyIcechunkStore:
         self,
         branch: str = "main",
     ) -> Generator[icechunk.ReadonlySession]:
-        """Context manager for readonly sessions.
-
-        Parameters
-        ----------
-        branch : str, default "main"
-            Branch name.
-
-        Returns
-        -------
-        Generator[icechunk.ReadonlySession, None, None]
-            Readonly session context manager.
-        """
-        session = self.repo.readonly_session(branch)
-        try:
-            self._logger.debug(f"Opened readonly session for branch '{branch}'")
-            yield session
-        finally:
-            self._logger.debug(f"Closed readonly session for branch '{branch}'")
+        """Thin wrapper over ``repo.readonly_session()`` for this CM."""
+        yield self.repo.readonly_session(branch)
 
     @contextlib.contextmanager
     def writable_session(
         self,
         branch: str = "main",
     ) -> Generator[icechunk.WritableSession]:
-        """Context manager for writable sessions.
-
-        Parameters
-        ----------
-        branch : str, default "main"
-            Branch name.
-
-        Returns
-        -------
-        Generator[icechunk.WritableSession, None, None]
-            Writable session context manager.
-        """
-        session = self.repo.writable_session(branch)
-        try:
-            self._logger.debug(f"Opened writable session for branch '{branch}'")
-            yield session
-        finally:
-            self._logger.debug(f"Closed writable session for branch '{branch}'")
+        """Thin wrapper over ``repo.writable_session()`` for this CM."""
+        yield self.repo.writable_session(branch)
 
     # ── Root-level store attributes ────────────────────────────────────────────
 
@@ -298,13 +297,14 @@ class MyIcechunkStore:
         str
             Snapshot ID from the commit.
         """
-        with self.writable_session(branch) as session:
+        message = f"Set root attrs: {list(attrs.keys())}"
+        with self.repo.transaction(branch, message=message) as store:
             try:
-                root = zarr.open_group(session.store, mode="r+")
+                root = zarr.open_group(store, mode="r+")
             except zarr.errors.GroupNotFoundError:
-                root = zarr.open_group(session.store, mode="w")
+                root = zarr.open_group(store, mode="w")
             root.attrs.update(attrs)
-            return session.commit(f"Set root attrs: {list(attrs.keys())}")
+        return self.repo.lookup_branch(branch)
 
     def get_root_attrs(self, branch: str = "main") -> dict[str, Any]:
         """Read root-level Zarr attributes from the store.
@@ -335,14 +335,7 @@ class MyIcechunkStore:
         list[str]
             List of branch names.
         """
-        try:
-            if self._repo is None:
-                self._ensure_store_exists()
-            return list(self._repo.list_branches())  # type: ignore[union-attr]
-        except Exception as e:
-            self._logger.warning(f"Failed to list branches in {self!r}: {e}")
-            warnings.warn(f"Failed to list branches in {self!r}: {e}", stacklevel=2)
-            return []
+        return list(self.repo.list_branches())
 
     def get_group_names(self, branch: str | None = None) -> dict[str, list[str]]:
         """
@@ -359,26 +352,16 @@ class MyIcechunkStore:
             Dictionary mapping branch names to lists of group names.
 
         """
-        try:
-            if not branch:
-                branches = self.get_branch_names()
-            else:
-                branches = [branch]
-
-            if self._repo is None:
-                self._ensure_store_exists()
-
-            group_dict = {}
-            for br in branches:
-                with self.readonly_session(br) as session:
+        branches = [branch] if branch else self.get_branch_names()
+        group_dict = {}
+        for br in branches:
+            with self.readonly_session(br) as session:
+                try:
                     root = zarr.open(session.store, mode="r")
                     group_dict[br] = list(root.group_keys())
-
-            return group_dict
-
-        except Exception as e:
-            self._logger.warning(f"Failed to list groups in {self!r}: {e}")
-            return {}
+                except zarr.errors.GroupNotFoundError:
+                    group_dict[br] = []
+        return group_dict
 
     def list_groups(self, branch: str = "main") -> list[str]:
         """
@@ -401,9 +384,7 @@ class MyIcechunkStore:
 
     @property
     def tree(self) -> None:
-        """
-        Display hierarchical tree of all branches, groups, and subgroups.
-        """
+        """Print hierarchical tree of all branches and groups. See ``print_tree``."""
         self.print_tree(max_depth=None)
 
     def print_tree(self, max_depth: int | None = None) -> None:
@@ -773,33 +754,33 @@ class MyIcechunkStore:
                 f"Group '{group_name}' already exists. Use append_to_group() instead."
             )
 
+        dataset = self._normalize_encodings(dataset)
+
+        rinex_hash = dataset.attrs.get("File Hash")
+        if rinex_hash is None:
+            raise ValueError("Dataset missing 'File Hash' attribute")
+        start = dataset.epoch.min().values
+        end = dataset.epoch.max().values
+
+        if commit_message is None:
+            version = get_version_from_pyproject()
+            commit_message = f"[v{version}] Initial commit to group '{group_name}'"
+
         with self.writable_session(branch) as session:
-            dataset = self._normalize_encodings(dataset)
-
-            rinex_hash = dataset.attrs.get("File Hash")
-            if rinex_hash is None:
-                raise ValueError("Dataset missing 'File Hash' attribute")
-            start = dataset.epoch.min().values
-            end = dataset.epoch.max().values
-
             to_icechunk(dataset, session, group=group_name, mode="w")
-
-            if commit_message is None:
-                version = get_version_from_pyproject()
-                commit_message = f"[v{version}] Initial commit to group '{group_name}'"
-
-            snapshot_id = session.commit(commit_message)
-
-            self.append_metadata(
+            zroot = zarr.open_group(session.store, mode="a")
+            self._append_metadata_row(
+                zroot=zroot,
                 group_name=group_name,
                 rinex_hash=rinex_hash,
                 start=start,
                 end=end,
-                snapshot_id=snapshot_id,
-                action="write",  # Correct action for initial data
+                snapshot_id="",
+                action="write",
                 commit_msg=commit_message,
                 dataset_attrs=dataset.attrs,
             )
+            session.commit(commit_message)
 
         self._logger.info(
             f"Created group '{group_name}' with {len(dataset.epoch)} epochs, "
@@ -987,18 +968,19 @@ class MyIcechunkStore:
                     f"[v{version}] Overwrote file {rinex_hash} in group '{group_name}'"
                 )
 
-            snapshot_id = session.commit(commit_message)
-
-            self.append_metadata(
+            zroot = zarr.open_group(session.store, mode="a")
+            self._append_metadata_row(
+                zroot=zroot,
                 group_name=group_name,
                 rinex_hash=rinex_hash,
                 start=start,
                 end=end,
-                snapshot_id=snapshot_id,
+                snapshot_id="",
                 action="overwrite",
                 commit_msg=commit_message,
                 dataset_attrs=dataset.attrs,
             )
+            session.commit(commit_message)
 
     def get_group_info(self, group_name: str, branch: str = "main") -> dict[str, Any]:
         """
@@ -1052,11 +1034,11 @@ class MyIcechunkStore:
         self, group_name: str, name: str, branch: str = "main"
     ) -> bool:
         """Return True if a metadata dataset *name* exists for *group_name*."""
-        path = f"{group_name}/metadata/{name}"
         try:
-            with self.readonly_session(branch) as session:
-                zarr.open_group(session.store, mode="r", path=path)
-                return True
+            session = self.repo.readonly_session(branch)
+            root = zarr.open_group(session.store, mode="r")
+            meta = root.get(f"{group_name}/metadata", None)
+            return meta is not None and name in meta
         except Exception:
             return False
 
@@ -1266,8 +1248,7 @@ class MyIcechunkStore:
         str
             Relative path string with log_path_depth parts.
         """
-        depth = load_config().processing.logging.log_path_depth
-        return str(Path(*file_path.parts[-depth:]))
+        return str(Path(*file_path.parts[-self._log_path_depth :]))
 
     def get_store_stats(self) -> dict[str, Any]:
         """
@@ -1342,28 +1323,31 @@ class MyIcechunkStore:
             )
             return
 
+        if commit_message is None and action == "write":
+            version = get_version_from_pyproject()
+            commit_message = f"[v{version}] Wrote to group '{group_name}'"
+        elif commit_message is None and action == "append":
+            version = get_version_from_pyproject()
+            commit_message = f"[v{version}] Appended to group '{group_name}'"
+        elif commit_message is None:
+            version = get_version_from_pyproject()
+            commit_message = f"[v{version}] {action} to group '{group_name}'"
+
         with self.writable_session(branch) as session:
             to_icechunk(dataset, session, group=group_name, append_dim=append_dim)
-
-            if commit_message is None and action == "write":
-                version = get_version_from_pyproject()
-                commit_message = f"[v{version}] Wrote to group '{group_name}'"
-            elif commit_message is None and action != "append":
-                version = get_version_from_pyproject()
-                commit_message = f"[v{version}] Appended to group '{group_name}'"
-
-            snapshot_id = session.commit(commit_message)
-
-            self.append_metadata(
+            zroot = zarr.open_group(session.store, mode="a")
+            self._append_metadata_row(
+                zroot=zroot,
                 group_name=group_name,
                 rinex_hash=rinex_hash,
                 start=start,
                 end=end,
-                snapshot_id=snapshot_id,
+                snapshot_id="",
                 action=action,
                 commit_msg=commit_message,
                 dataset_attrs=dataset.attrs,
             )
+            session.commit(commit_message)
 
         if action == "append":
             self._logger.info(
@@ -1470,8 +1454,9 @@ class MyIcechunkStore:
             )
         return True
 
-    def append_metadata(
+    def _append_metadata_row(
         self,
+        zroot: zarr.Group,
         group_name: str,
         rinex_hash: str,
         start: np.datetime64,
@@ -1480,27 +1465,32 @@ class MyIcechunkStore:
         action: str,
         commit_msg: str,
         dataset_attrs: dict,
-        branch: str = "main",
         canonical_name: str | None = None,
         physical_path: str | None = None,
     ) -> None:
-        """
-        Append a metadata row into the group_name/metadata/table.
+        """Write one metadata row into an already-open zarr group (no session/commit).
+
+        Must be called inside an active writable session or transaction so the
+        caller controls the commit boundary. This is the canonical implementation;
+        ``append_metadata`` is a thin standalone wrapper around it.
 
         Schema:
             index           int64 (continuous row id)
             rinex_hash      str   (UTF-8, VariableLengthUTF8)
             start           datetime64[ns]
             end             datetime64[ns]
-            snapshot_id     str   (UTF-8)
-            action          str   (UTF-8, e.g. "insert"|"append"|"overwrite"|"skip")
+            snapshot_id     str   (UTF-8; empty string when written inside a
+                                  combined data+metadata commit — the commit ID
+                                  is recoverable via repo.ancestry())
+            action          str   (UTF-8, e.g. "write"|"append"|"overwrite")
             commit_msg      str   (UTF-8)
             written_at      str   (UTF-8, ISO8601 with timezone)
-            write_strategy  str   (UTF-8, RINEX_STORE_STRATEGY or VOD_STORE_STRATEGY)
+            write_strategy  str   (UTF-8)
             attrs           str   (UTF-8, JSON dump of dataset attrs)
+            canonical_name  str   (UTF-8)
+            physical_path   str   (UTF-8)
         """
         written_at = datetime.now().astimezone().isoformat()
-
         row = {
             "rinex_hash": str(rinex_hash),
             "start": np.datetime64(start, "ns"),
@@ -1517,58 +1507,75 @@ class MyIcechunkStore:
             "physical_path": str(physical_path) if physical_path else "",
         }
         df_row = pl.DataFrame([row])
+        meta_group_path = f"{group_name}/metadata/table"
 
-        with self.writable_session(branch) as session:
-            zroot = zarr.open_group(session.store, mode="a")
-            meta_group_path = f"{group_name}/metadata/table"
-
-            if (
-                "metadata" not in zroot[group_name]
-                or "table" not in zroot[group_name]["metadata"]
-            ):
-                # --- First time: create arrays with correct dtypes ---
-                zmeta = zroot.require_group(meta_group_path)
-
-                # index counter
+        if (
+            "metadata" not in zroot[group_name]
+            or "table" not in zroot[group_name]["metadata"]
+        ):
+            zmeta = zroot.require_group(meta_group_path)
+            zmeta.create_array(
+                name="index", shape=(0,), dtype="i8", chunks=(1024,), overwrite=True
+            )
+            zmeta["index"].append([0])
+            for col in df_row.columns:
+                if col in ("start", "end"):
+                    dtype = "M8[ns]"
+                    arr = np.array(df_row[col].to_numpy(), dtype=dtype)
+                else:
+                    dtype = VariableLengthUTF8()
+                    arr = df_row[col].to_list()
                 zmeta.create_array(
-                    name="index", shape=(0,), dtype="i8", chunks=(1024,), overwrite=True
+                    name=col, shape=(0,), dtype=dtype, chunks=(1024,), overwrite=True
                 )
-                zmeta["index"].append([0])
+                zmeta[col].append(arr)
+        else:
+            zmeta = zroot[meta_group_path]
+            current_len = zmeta["index"].shape[0]
+            zmeta["index"].append([current_len])
+            for col in df_row.columns:
+                if col in ("start", "end"):
+                    arr = np.array(df_row[col].to_numpy(), dtype="M8[ns]")
+                else:
+                    arr = df_row[col].to_list()
+                zmeta[col].append(arr)
 
-                for col in df_row.columns:
-                    if col in ("start", "end"):
-                        dtype = "M8[ns]"
-                        arr = np.array(df_row[col].to_numpy(), dtype=dtype)
-                    else:
-                        dtype = VariableLengthUTF8()
-                        arr = df_row[col].to_list()
+    def append_metadata(
+        self,
+        group_name: str,
+        rinex_hash: str,
+        start: np.datetime64,
+        end: np.datetime64,
+        snapshot_id: str,
+        action: str,
+        commit_msg: str,
+        dataset_attrs: dict,
+        branch: str = "main",
+        canonical_name: str | None = None,
+        physical_path: str | None = None,
+    ) -> None:
+        """Standalone metadata-row append — opens its own transaction.
 
-                    zmeta.create_array(
-                        name=col,
-                        shape=(0,),
-                        dtype=dtype,
-                        chunks=(1024,),
-                        overwrite=True,
-                    )
-                    zmeta[col].append(arr)
-
-            else:
-                # --- Append to existing ---
-                zmeta = zroot[meta_group_path]
-
-                # index increment
-                current_len = zmeta["index"].shape[0]
-                next_idx = current_len
-                zmeta["index"].append([next_idx])
-
-                for col in df_row.columns:
-                    if col in ("start", "end"):
-                        arr = np.array(df_row[col].to_numpy(), dtype="M8[ns]")
-                    else:
-                        arr = df_row[col].to_list()
-                    zmeta[col].append(arr)
-
-            session.commit(f"Appended metadata row for {group_name}, hash={rinex_hash}")
+        For ingest paths (write_initial_group, append_to_group) use
+        _append_metadata_row directly inside the data-write session to avoid
+        an extra commit per file.
+        """
+        message = f"Appended metadata row for {group_name}, hash={rinex_hash}"
+        with self.repo.transaction(branch, message=message) as store:
+            zroot = zarr.open_group(store, mode="a")
+            self._append_metadata_row(
+                zroot=zroot,
+                group_name=group_name,
+                rinex_hash=rinex_hash,
+                start=start,
+                end=end,
+                snapshot_id=snapshot_id,
+                action=action,
+                commit_msg=commit_msg,
+                dataset_attrs=dataset_attrs,
+                canonical_name=canonical_name,
+                physical_path=physical_path,
+            )
 
         self._logger.info(
             f"Metadata appended for group '{group_name}': "
@@ -1706,11 +1713,11 @@ class MyIcechunkStore:
         df = pl.DataFrame(data)
 
         # Convert numeric datetime64 columns back to proper Polars datetimes
-        if df["start"].dtype in (pl.Int64, pl.Float64):
+        if "start" in df.columns and df["start"].dtype in (pl.Int64, pl.Float64):
             df = df.with_columns(pl.col("start").cast(pl.Datetime("ns")))
-        if df["end"].dtype in (pl.Int64, pl.Float64):
+        if "end" in df.columns and df["end"].dtype in (pl.Int64, pl.Float64):
             df = df.with_columns(pl.col("end").cast(pl.Datetime("ns")))
-        if df["written_at"].dtype == pl.Utf8:
+        if "written_at" in df.columns and df["written_at"].dtype == pl.Utf8:
             df = df.with_columns(pl.col("written_at").str.to_datetime("%+"))
         return df
 
@@ -1906,7 +1913,7 @@ class MyIcechunkStore:
                 existing = df.filter(pl.col("rinex_hash").is_in(file_hashes))
                 return set(existing["rinex_hash"].to_list())
 
-        except KeyError, zarr.errors.GroupNotFoundError, Exception:
+        except Exception:
             # Branch/group/metadata doesn't exist yet (fresh store)
             return set()
 
@@ -1940,7 +1947,7 @@ class MyIcechunkStore:
         try:
             with self.readonly_session(branch) as session:
                 df = self.load_metadata(session.store, group_name)
-        except KeyError, zarr.errors.GroupNotFoundError, Exception:
+        except Exception:
             return set()
 
         if df.is_empty():
@@ -1970,78 +1977,6 @@ class MyIcechunkStore:
                 overlapping.add(rinex_hash)
 
         return overlapping
-
-    def append_metadata_bulk_store(
-        self,
-        group_name: str,
-        rows: list[dict[str, Any]],
-        store: Any,
-    ) -> None:
-        """
-        Append metadata rows into an open transaction store.
-
-        Parameters
-        ----------
-        group_name : str
-            Group name (e.g. "canopy", "reference").
-        rows : list[dict[str, Any]]
-            Metadata rows to append.
-        store : Any
-            Open Icechunk transaction store.
-        """
-        if not rows:
-            return
-
-        zroot = zarr.open_group(store, mode="a")
-        zmeta = zroot.require_group(f"{group_name}/metadata/table")
-
-        # Find next index
-        start_index = 0
-        if "index" in zmeta:
-            start_index = (
-                int(zmeta["index"][-1]) + 1 if zmeta["index"].shape[0] > 0 else 0
-            )
-
-        for i, row in enumerate(rows, start=start_index):
-            row["index"] = i
-
-        import polars as pl
-
-        df = pl.DataFrame(rows)
-
-        for col in df.columns:
-            list_only_cols = {
-                "attrs",
-                "commit_msg",
-                "action",
-                "write_strategy",
-                "rinex_hash",
-                "snapshot_id",
-            }
-            if col in list_only_cols:
-                values = df[col].to_list()
-            else:
-                values = df[col].to_numpy()
-
-            if col == "index":
-                dtype = "i8"
-            elif col in ("start", "end"):
-                dtype = "M8[ns]"
-            else:
-                dtype = VariableLengthUTF8()
-
-            if col not in zmeta:
-                zmeta.create_array(
-                    name=col, shape=(0,), dtype=dtype, chunks=(1024,), overwrite=True
-                )
-
-            arr = zmeta[col]
-            old_len = arr.shape[0]
-            new_len = old_len + len(values)
-            arr.resize(new_len)
-            arr[old_len:new_len] = values
-
-        self._logger.info(f"Appended {df.height} metadata rows to group '{group_name}'")
 
     def expire_old_snapshots(
         self,
@@ -2277,7 +2212,7 @@ class MyIcechunkStore:
         )
 
         # Get CURRENT snapshot from source branch to preserve all other groups
-        current_snapshot = next(self.repo.ancestry(branch=source_branch)).id
+        current_snapshot = self.repo.lookup_branch(source_branch)
 
         # Create temp branch from current snapshot (preserves all existing groups)
         try:
@@ -2311,7 +2246,7 @@ class MyIcechunkStore:
 
         # Promote to main if requested
         if promote_to_main:
-            rechunked_snapshot = next(self.repo.ancestry(branch=temp_branch)).id
+            rechunked_snapshot = self.repo.lookup_branch(temp_branch)
             self.repo.reset_branch(source_branch, rechunked_snapshot)
             self._logger.info(
                 f"Reset branch '{source_branch}' to rechunked snapshot "
@@ -2322,186 +2257,6 @@ class MyIcechunkStore:
             if delete_temp_branch:
                 self.repo.delete_branch(temp_branch)
                 self._logger.info(f"Deleted temporary branch '{temp_branch}'")
-
-        return snapshot_id
-
-    def rechunk_group_verbose(
-        self,
-        group_name: str,
-        chunks: dict[str, int] | None = None,
-        source_branch: str = "main",
-        temp_branch: str | None = None,
-        promote_to_main: bool = True,
-        delete_temp_branch: bool = True,
-    ) -> str:
-        """
-        Rechunk a group with optimal chunk sizes.
-
-        Parameters
-        ----------
-        group_name : str
-            Name of the group to rechunk
-        chunks : dict[str, int] | None
-            Chunking specification, e.g. {'epoch': 34560, 'sid': -1}. Defaults
-            to `gnnsvodpy.globals.ICECHUNK_CHUNK_STRATEGIES`.
-        source_branch : str
-            Branch to read original data from (default: "main")
-        temp_branch : str | None
-            Temporary branch name for rechunked data. If None, uses
-            "{group_name}_rechunked".
-        promote_to_main : bool
-            If True, reset main branch to rechunked snapshot after writing
-        delete_temp_branch : bool
-            If True, delete temporary branch after promotion (only if
-            promote_to_main=True).
-
-        Returns
-        -------
-        str
-            Snapshot ID of the rechunked data
-        """
-        if temp_branch is None:
-            temp_branch = f"{group_name}_rechunked_temp"
-
-        if chunks is None:
-            chunks = self.chunk_strategy or {"epoch": 34560, "sid": -1}
-
-        print(f"\n{'=' * 60}")
-        print(f"Starting rechunk of group '{group_name}'")
-        print(f"Target chunks: {chunks}")
-        print(f"{'=' * 60}\n")
-
-        self._logger.info(
-            f"Starting rechunk of group '{group_name}' with chunks={chunks}"
-        )
-
-        # Get CURRENT snapshot from source branch to preserve all other groups
-        print(f"[1/7] Getting current snapshot from branch '{source_branch}'...")
-        current_snapshot = next(self.repo.ancestry(branch=source_branch)).id
-        print(f"      ✓ Current snapshot: {current_snapshot[:12]}")
-
-        # Create temp branch from current snapshot (preserves all existing groups)
-        print(f"\n[2/7] Creating temporary branch '{temp_branch}'...")
-        try:
-            self.repo.create_branch(temp_branch, current_snapshot)
-            print(f"      ✓ Branch '{temp_branch}' created")
-            self._logger.info(
-                f"Created temporary branch '{temp_branch}' from current {source_branch}"
-            )
-        except Exception as e:
-            print(
-                f"      ⚠ Branch '{temp_branch}' already exists, using existing branch"
-            )
-            self._logger.warning(f"Branch '{temp_branch}' may already exist: {e}")
-
-        # Read original data
-        print(f"\n[3/7] Reading original data from '{group_name}'...")
-        ds_original = self.read_group(group_name, branch=source_branch)
-
-        # Unify chunks if inconsistent
-        try:
-            ds_original = ds_original.unify_chunks()
-            print("      ✓ Unified inconsistent chunks")
-        except TypeError, ValueError:
-            pass  # Chunks are already consistent
-
-        print(f"      ✓ Data shape: {dict(ds_original.sizes)}")
-        print(f"      ✓ Original chunks: {ds_original.chunks}")
-        self._logger.info(f"Original chunks: {ds_original.chunks}")
-
-        # Rechunk
-        print("\n[4/7] Rechunking data...")
-        ds_rechunked = ds_original.chunk(chunks)
-        ds_rechunked = ds_rechunked.unify_chunks()
-        print(f"      ✓ New chunks: {ds_rechunked.chunks}")
-        self._logger.info(f"New chunks: {ds_rechunked.chunks}")
-
-        # Clear encoding to avoid conflicts
-        for var in ds_rechunked.data_vars:
-            ds_rechunked[var].encoding = {}
-        for coord in ds_rechunked.coords:
-            if "chunks" in ds_rechunked[coord].encoding:
-                del ds_rechunked[coord].encoding["chunks"]
-
-        # Write rechunked data first (overwrites entire group)
-        print(f"\n[5/7] Writing rechunked data to branch '{temp_branch}'...")
-        print("      This may take several minutes for large datasets...")
-        with self.writable_session(temp_branch) as session:
-            to_icechunk(ds_rechunked, session, group=group_name, mode="w")
-            session.commit(f"Wrote rechunked data for {group_name}")
-        print("      ✓ Data written successfully")
-
-        # Copy subgroups after writing rechunked data
-        print(f"\n[6/7] Copying subgroups from '{group_name}'...")
-        with self.writable_session(temp_branch) as session:
-            with self.readonly_session(source_branch) as icsession:
-                source_group = zarr.open_group(icsession.store, mode="r")[group_name]
-            target_group = zarr.open_group(session.store, mode="a")[group_name]
-
-            subgroup_count = 0
-            for subgroup_name in source_group.group_keys():
-                print(f"      ✓ Copying subgroup '{subgroup_name}'...")
-                source_subgroup = source_group[subgroup_name]
-                target_subgroup = target_group.create_group(
-                    subgroup_name, overwrite=True
-                )
-
-                # Copy arrays from subgroup
-                for array_name in source_subgroup.array_keys():
-                    source_array = source_subgroup[array_name]
-                    target_array = target_subgroup.create_array(
-                        array_name,
-                        shape=source_array.shape,
-                        dtype=source_array.dtype,
-                        chunks=source_array.chunks,
-                        overwrite=True,
-                    )
-                    target_array[:] = source_array[:]
-
-                # Copy subgroup attributes
-                target_subgroup.attrs.update(source_subgroup.attrs)
-                subgroup_count += 1
-
-            if subgroup_count > 0:
-                snapshot_id = session.commit(
-                    f"Rechunked {group_name} with chunks={chunks}"
-                )
-                print(f"      ✓ {subgroup_count} subgroups copied")
-            else:
-                snapshot_id = next(self.repo.ancestry(branch=temp_branch)).id
-                print("      ✓ No subgroups to copy")
-
-        print(f"      ✓ Snapshot ID: {snapshot_id[:12]}")
-        self._logger.info(
-            f"Rechunked data written to branch '{temp_branch}', snapshot={snapshot_id}"
-        )
-
-        # Promote to main if requested
-        if promote_to_main:
-            print(f"\n[7/7] Promoting to '{source_branch}' branch...")
-            rechunked_snapshot = next(self.repo.ancestry(branch=temp_branch)).id
-            self.repo.reset_branch(source_branch, rechunked_snapshot)
-            print(
-                f"      ✓ Branch '{source_branch}' reset to {rechunked_snapshot[:12]}"
-            )
-            self._logger.info(
-                f"Reset branch '{source_branch}' to rechunked snapshot "
-                f"{rechunked_snapshot}"
-            )
-
-            # Delete temp branch if requested
-            if delete_temp_branch:
-                print(f"      ✓ Deleting temporary branch '{temp_branch}'...")
-                self.delete_branch(temp_branch)
-                print("      ✓ Temporary branch deleted")
-                self._logger.info(f"Deleted temporary branch '{temp_branch}'")
-        else:
-            print("\n[7/7] Skipping promotion (promote_to_main=False)")
-            print(f"      Rechunked data available on branch '{temp_branch}'")
-
-        print(f"\n{'=' * 60}")
-        print(f"✓ Rechunking complete for '{group_name}'")
-        print(f"{'=' * 60}\n")
 
         return snapshot_id
 
@@ -2518,7 +2273,7 @@ class MyIcechunkStore:
         """
         if snapshot_id is None:
             # Tag current main branch tip
-            snapshot_id = next(self.repo.ancestry(branch="main")).id
+            snapshot_id = self.repo.lookup_branch("main")
 
         self.repo.create_tag(tag_name, snapshot_id)
         self._logger.info(f"Created tag '{tag_name}' at snapshot {snapshot_id[:8]}")
@@ -2620,28 +2375,27 @@ class MyIcechunkStore:
         dict
             Snapshot metadata and statistics
         """
-        # Find the snapshot in ancestry
-        for ancestor in self.repo.ancestry(branch="main"):
-            if ancestor.id == snapshot_id or ancestor.id.startswith(snapshot_id):
-                info = {
-                    "snapshot_id": ancestor.id,
-                    "message": ancestor.message,
-                    "written_at": ancestor.written_at,
-                    "parent_id": ancestor.parent_id,
-                }
+        try:
+            snap = self.repo.lookup_snapshot(snapshot_id)
+        except Exception as e:
+            raise ValueError(f"Snapshot {snapshot_id} not found") from e
 
-                # Try to get groups at this snapshot
-                try:
-                    session = self.repo.readonly_session(snapshot_id=ancestor.id)
-                    root = zarr.open(session.store, mode="r")
-                    info["groups"] = list(root.group_keys())
-                    info["arrays"] = list(root.array_keys())
-                except Exception as e:
-                    self._logger.warning(f"Could not inspect snapshot contents: {e}")
+        info = {
+            "snapshot_id": snap.id,
+            "message": snap.message,
+            "written_at": snap.written_at,
+            "parent_id": snap.parent_id,
+        }
 
-                return info
+        try:
+            session = self.repo.readonly_session(snapshot_id=snap.id)
+            root = zarr.open(session.store, mode="r")
+            info["groups"] = list(root.group_keys())
+            info["arrays"] = list(root.array_keys())
+        except Exception as e:
+            self._logger.warning(f"Could not inspect snapshot contents: {e}")
 
-        raise ValueError(f"Snapshot {snapshot_id} not found in history")
+        return info
 
     def compare_snapshots(self, snapshot_id_1: str, snapshot_id_2: str) -> dict:
         """
@@ -2722,342 +2476,6 @@ class MyIcechunkStore:
         self._logger.info(f"Maintenance complete: {results}")
         return results
 
-    def sanitize_store(
-        self,
-        source_branch: str = "main",
-        temp_branch: str = "sanitize_temp",
-        promote_to_main: bool = True,
-        delete_temp_branch: bool = True,
-    ) -> str:
-        """
-        Sanitize all groups by removing NaN-only SIDs and cleaning coordinates.
-
-        Creates a temporary branch, applies sanitization to all groups, then
-        optionally promotes to main and cleans up.
-
-        Parameters
-        ----------
-        source_branch : str, default "main"
-            Branch to read original data from.
-        temp_branch : str, default "sanitize_temp"
-            Temporary branch name for sanitized data.
-        promote_to_main : bool, default True
-            If True, reset main branch to sanitized snapshot after writing.
-        delete_temp_branch : bool, default True
-            If True, delete temporary branch after promotion.
-
-        Returns
-        -------
-        str
-            Snapshot ID of the sanitized data.
-        """
-        import time
-
-        from icechunk.xarray import to_icechunk
-
-        print(f"\n{'=' * 60}")
-        print("Starting store sanitization")
-        print(f"{'=' * 60}\n")
-
-        # Step 1: Get current snapshot
-        print(f"[1/6] Getting current snapshot from '{source_branch}'...")
-        current_snapshot = next(self.repo.ancestry(branch=source_branch)).id
-        print(f"      ✓ Current snapshot: {current_snapshot[:12]}")
-
-        # Step 2: Create temp branch
-        print(f"\n[2/6] Creating temporary branch '{temp_branch}'...")
-        try:
-            self.repo.create_branch(temp_branch, current_snapshot)
-            print(f"      ✓ Branch '{temp_branch}' created")
-        except Exception:
-            print("      ⚠ Branch exists, deleting and recreating...")
-            self.delete_branch(temp_branch)
-            self.repo.create_branch(temp_branch, current_snapshot)
-            print(f"      ✓ Branch '{temp_branch}' created")
-
-        # Step 3: Get all groups
-        print("\n[3/6] Discovering groups...")
-        groups = self.list_groups()
-        print(f"      ✓ Found {len(groups)} groups: {groups}")
-
-        # Step 4: Sanitize each group
-        print("\n[4/6] Sanitizing groups...")
-        sanitized_count = 0
-
-        for group_name in groups:
-            print(f"\n      Processing '{group_name}'...")
-            t_start = time.time()
-
-            try:
-                # Read original data
-                ds_original = self.read_group(group_name, branch=source_branch)
-                original_sids = len(ds_original.sid)
-                print(f"        • Original: {original_sids} SIDs")
-
-                # Sanitize: remove SIDs with all-NaN data
-                ds_sanitized = self._sanitize_dataset(ds_original)
-                sanitized_sids = len(ds_sanitized.sid)
-                removed_sids = original_sids - sanitized_sids
-
-                print(
-                    f"        • Sanitized: {sanitized_sids} SIDs "
-                    f"(removed {removed_sids})"
-                )
-
-                # Write sanitized data
-                with self.writable_session(temp_branch) as session:
-                    to_icechunk(ds_sanitized, session, group=group_name, mode="w")
-
-                    # Copy metadata subgroups if they exist
-                    try:
-                        with self.readonly_session(source_branch) as read_session:
-                            source_group = zarr.open_group(
-                                read_session.store, mode="r"
-                            )[group_name]
-                            if "metadata" in source_group.group_keys():
-                                # Copy entire metadata subgroup
-                                dest_group = zarr.open_group(session.store)[group_name]
-                                zarr.copy(
-                                    source_group["metadata"],
-                                    dest_group,
-                                    name="metadata",
-                                )
-                                print("        • Copied metadata subgroup")
-                    except Exception as e:
-                        print(f"        ⚠ Could not copy metadata: {e}")
-
-                    session.commit(
-                        f"Sanitized {group_name}: removed {removed_sids} empty SIDs"
-                    )
-
-                t_elapsed = time.time() - t_start
-                print(f"        ✓ Completed in {t_elapsed:.2f}s")
-                sanitized_count += 1
-
-            except Exception as e:
-                print(f"        ✗ Failed: {e}")
-                continue
-
-        print(f"\n      ✓ Sanitized {sanitized_count}/{len(groups)} groups")
-
-        # Step 5: Get final snapshot
-        print("\n[5/6] Getting sanitized snapshot...")
-        sanitized_snapshot = next(self.repo.ancestry(branch=temp_branch)).id
-        print(f"      ✓ Snapshot: {sanitized_snapshot[:12]}")
-
-        # Step 6: Promote to main
-        if promote_to_main:
-            print(f"\n[6/6] Promoting to '{source_branch}' branch...")
-            self.repo.reset_branch(source_branch, sanitized_snapshot)
-            print(
-                f"      ✓ Branch '{source_branch}' reset to {sanitized_snapshot[:12]}"
-            )
-
-            if delete_temp_branch:
-                print(f"      ✓ Deleting temporary branch '{temp_branch}'...")
-                self.delete_branch(temp_branch)
-                print("      ✓ Temporary branch deleted")
-        else:
-            print("\n[6/6] Skipping promotion (promote_to_main=False)")
-            print(f"      Sanitized data available on branch '{temp_branch}'")
-
-        print(f"\n{'=' * 60}")
-        print("✓ Sanitization complete")
-        print(f"{'=' * 60}\n")
-
-        return sanitized_snapshot
-
-    def _sanitize_dataset(self, ds: xr.Dataset) -> xr.Dataset:
-        """
-        Remove SIDs that have all-NaN data and clean coordinate metadata.
-
-        Parameters
-        ----------
-        ds : xr.Dataset
-            Dataset to sanitize
-
-        Returns
-        -------
-        xr.Dataset
-            Sanitized dataset with NaN-only SIDs removed
-        """
-        # Find SIDs that have at least some non-NaN data across all variables
-        has_data = ds.to_array().notnull().any(dim=["variable", "epoch"])
-
-        # Keep only SIDs with data
-        sids_with_data = ds.sid.values[has_data.values]
-        ds_clean = ds.sel(sid=sids_with_data)
-
-        # Clean coordinate metadata - remove NaN values from string coordinates
-        for coord in ["band", "system", "code", "sv"]:
-            if coord in ds_clean.coords:
-                coord_values = ds_clean[coord].values
-                # Convert object arrays, handling NaN
-                if coord_values.dtype == object:
-                    clean_values = []
-                    for val in coord_values:
-                        if isinstance(val, float) and np.isnan(val):
-                            clean_values.append("")
-                        elif val is None or (isinstance(val, str) and val == "nan"):
-                            clean_values.append("")
-                        else:
-                            clean_values.append(str(val))
-                    ds_clean = ds_clean.assign_coords({coord: ("sid", clean_values)})
-
-        # Numeric coordinates can keep NaN if needed
-        for coord in ["freq_center", "freq_min", "freq_max"]:
-            if coord in ds_clean.coords:
-                # These are fine as-is since they're numeric
-                pass
-
-        return ds_clean
-
-    def safe_temporal_aggregate(
-        self,
-        group: str,
-        freq: str = "1D",
-        vars_to_aggregate: Sequence[str] = ("VOD",),
-        geometry_vars: Sequence[str] = ("phi", "theta"),
-        drop_empty: bool = True,
-        branch: str = "main",
-    ) -> xr.Dataset:
-        """Aggregate temporally irregular VOD data per SID.
-
-        Each satellite (SID) is aggregated independently within each
-        time bin.  Mixing observations across satellites is physically
-        meaningless because each observes a different part of the canopy
-        from a different sky position.
-
-        .. note::
-
-           For production use, prefer ``canvod.ops.TemporalAggregate``
-           which uses Polars groupby and handles all coordinate types
-           explicitly.  This method is a convenience wrapper for quick
-           interactive exploration.
-
-        Parameters
-        ----------
-        group : str
-            Group name to aggregate.
-        freq : str, default "1D"
-            Resample frequency string.
-        vars_to_aggregate : Sequence[str], optional
-            Variables to aggregate using mean.
-        geometry_vars : Sequence[str], optional
-            Geometry variables to aggregate using mean (centroid of
-            contributing sky positions).
-        drop_empty : bool, default True
-            Drop empty epochs after aggregation.
-        branch : str, default "main"
-            Branch name to read from.
-
-        Returns
-        -------
-        xr.Dataset
-            Aggregated dataset with independent per-SID aggregation.
-        """
-        log = get_logger(__name__)
-
-        with self.readonly_session(branch=branch) as session:
-            ds = xr.open_zarr(session.store, group=group, consolidated=False)
-
-            log.info(
-                "Aggregating group",
-                group=group,
-                branch=branch,
-                freq=freq,
-            )
-
-            # Aggregate data and geometry vars with mean (per SID
-            # independently — resample preserves the sid dimension).
-            all_vars = list(vars_to_aggregate) + list(geometry_vars)
-            merged_vars = []
-            for var in all_vars:
-                if var in ds:
-                    merged_vars.append(ds[var].resample(epoch=freq).mean())
-                else:
-                    log.warning("Skipping missing variable", var=var)
-            ds_agg = xr.merge(merged_vars)
-
-            # Preserve sid-only coordinates (sv, band, code, etc.)
-            for coord in ds.coords:
-                if coord in ds_agg.coords or coord == "epoch":
-                    continue
-                coord_dims = ds.coords[coord].dims
-                # Only copy coords whose dims all survive in ds_agg
-                if all(d in ds_agg.dims for d in coord_dims):
-                    ds_agg[coord] = ds[coord]
-
-            # Drop all-NaN epochs if requested
-            if drop_empty and "VOD" in ds_agg:
-                valid_mask = ds_agg["VOD"].notnull().any(dim="sid").compute()
-                ds_agg = ds_agg.isel(epoch=valid_mask)
-
-            log.info("Aggregation done", sizes=dict(ds_agg.sizes))
-            return ds_agg
-
-    def safe_temporal_aggregate_to_branch(
-        self,
-        source_group: str,
-        target_group: str,
-        target_branch: str,
-        freq: str = "1D",
-        overwrite: bool = False,
-        **kwargs: Any,
-    ) -> xr.Dataset:
-        """Aggregate a group and save to a new Icechunk branch/group.
-
-        Parameters
-        ----------
-        source_group : str
-            Source group name.
-        target_group : str
-            Target group name.
-        target_branch : str
-            Target branch name.
-        freq : str, default "1D"
-            Resample frequency string.
-        overwrite : bool, default False
-            Whether to overwrite an existing branch.
-        **kwargs : Any
-            Additional keyword args passed to safe_temporal_aggregate().
-
-        Returns
-        -------
-        xr.Dataset
-            Aggregated dataset written to the target branch.
-        """
-
-        print(
-            f"🚀 Creating new aggregated branch '{target_branch}' at '{target_group}'"
-        )
-
-        # Compute safe aggregation
-        ds_agg = self.safe_temporal_aggregate(
-            group=source_group,
-            freq=freq,
-            **kwargs,
-        )
-
-        # Write to new branch
-        current_snapshot = next(self.repo.ancestry(branch="main")).id
-        self.delete_branch(target_branch)
-        self.repo.create_branch(target_branch, current_snapshot)
-        with self.writable_session(target_branch) as session:
-            to_icechunk(
-                obj=ds_agg,
-                session=session,
-                group=target_group,
-                mode="w",
-            )
-            session.commit(f"Saved aggregated data to {target_group} at freq={freq}")
-
-        print(
-            f"✅ Saved aggregated dataset to branch '{target_branch}' "
-            f"(group '{target_group}')"
-        )
-        return ds_agg
-
 
 # Factory functions for common use cases
 def create_rinex_store(store_path: Path) -> MyIcechunkStore:
@@ -3092,61 +2510,3 @@ def create_vod_store(store_path: Path) -> MyIcechunkStore:
         Configured store for VOD analysis data.
     """
     return MyIcechunkStore(store_path=store_path, store_type="vod_store")
-
-
-def write_vod_to_store(
-    vod_store: MyIcechunkStore,
-    group_name: str,
-    vod_ds: xr.Dataset,
-    canopy_hash: str,
-    sky_hash: str,
-    commit_msg: str = "VOD calculation",
-) -> str:
-    """Write VOD data to store with metadata tracking."""
-
-    with vod_store.writable_session() as session:
-        vod_store.write_dataset(dataset=vod_ds, group_name=group_name, session=session)
-
-        start = vod_ds["epoch"].values[0]
-        end = vod_ds["epoch"].values[-1]
-
-        vod_store.append_metadata(
-            group_name=group_name,
-            rinex_hash=f"{canopy_hash}_{sky_hash}",
-            start=start,
-            end=end,
-            snapshot_id=session.snapshot_id,
-            action="insert",
-            commit_msg=commit_msg,
-            dataset_attrs=dict(vod_ds.attrs),
-        )
-
-        snapshot_id = session.commit(commit_msg)
-
-    return snapshot_id
-
-
-# Example usage
-if __name__ == "__main__":
-    import tempfile
-
-    from gnssvodpy.research_sites_config import RESEARCH_SITES
-
-    # Create a temporary directory for testing
-    with tempfile.TemporaryDirectory() as temp_dir:
-        print(f"Temporary directory created at: {temp_dir}")
-
-    # Example: Create stores for Rosalia site
-    rosalia_config = RESEARCH_SITES["Rosalia"]
-
-    # Create RINEX store
-    rinex_store = create_rinex_store(Path(temp_dir) / "rinex_store")
-    print(f"RINEX store: {rinex_store}")
-
-    # Create VOD store
-    vod_store = create_vod_store(Path(temp_dir) / "vod_store")
-    print(f"VOD store: {vod_store}")
-
-    # List existing groups
-    print(f"RINEX groups: {rinex_store.list_groups()}")
-    print(f"VOD groups: {vod_store.list_groups()}")

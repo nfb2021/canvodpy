@@ -13,7 +13,7 @@ travel, branching/tagging, and deduplication on cloud object storage (S3, GCS,
 Azure) or local filesystems. Apply this skill when working with Icechunk repos,
 sessions, stores, version control, or xarray/Zarr integration on Icechunk.
 
-**Icechunk 1.0 API** — the examples below use the current stable API.
+**Icechunk 2.x API** — the examples below use the current stable API.
 
 ## Quick Start
 
@@ -262,28 +262,38 @@ optionally by dimension coordinate ranges:
 
 ```python
 from icechunk import (
-    ManifestSplittingConfig, ManifestSplitCondition,
-    ManifestSplitDimCondition,
+    ManifestConfig, ManifestSplittingConfig,
+    ManifestSplitCondition, ManifestSplitDimCondition,
 )
 
-manifest=ManifestSplittingConfig(
-    split_conditions=[
-        # Split when a manifest has >1000 chunk refs for an array
-        ManifestSplitCondition(
-            array_name_regex=".*",
-            num_chunk_refs=1000,
-        ),
-        # Split along "epoch" dim every 34560 indices (one day of 2.5s GNSS data)
-        ManifestSplitCondition(
-            array_name_regex="obs|snr",
-            num_chunk_refs=500,
-            dim_conditions=[
-                ManifestSplitDimCondition(dimension=0, max_range=34560),
-            ],
-        ),
-    ],
+# ManifestSplittingConfig.from_dict maps:
+#   condition → {dim_condition → max_chunk_refs_per_sub_manifest}
+splitting = ManifestSplittingConfig.from_dict({
+    # Split any array when a sub-manifest exceeds 1000 chunk refs
+    ManifestSplitCondition.name_matches(".*"): {
+        ManifestSplitDimCondition.Any(): 1000,
+    },
+    # Also split obs/snr along axis 0 (epoch) every 34560 indices
+    ManifestSplitCondition.name_matches("obs|snr"): {
+        ManifestSplitDimCondition.Axis(0): 34560,
+    },
+})
+
+# Wrap in ManifestConfig when assigning to RepositoryConfig
+config = RepositoryConfig(
+    manifest=ManifestConfig(splitting=splitting),
 )
 ```
+
+**Conditions:**
+- `ManifestSplitCondition.name_matches(regex)` — match by array name
+- `ManifestSplitCondition.path_matches(regex)` — match by full array path
+- Combine with `&` (AND) or `|` (OR) operators
+
+**Dimension conditions:**
+- `ManifestSplitDimCondition.Any()` — split along any dimension
+- `ManifestSplitDimCondition.Axis(n)` — split along the nth axis
+- `ManifestSplitDimCondition.DimensionName(name)` — split along a named dim
 
 **When to split:** Repos with >100k chunks per array. Splitting makes commits
 faster (only modified sub-manifests are rewritten) and reads faster (only
@@ -294,21 +304,32 @@ relevant sub-manifests are fetched).
 Preload chunk manifests into memory at session open for faster first reads:
 
 ```python
-from icechunk import ManifestPreloadConfig, ManifestPreloadCondition
+from icechunk import (
+    ManifestConfig, ManifestPreloadConfig, ManifestPreloadCondition,
+)
 
-manifest=ManifestPreloadConfig(
-    max_total_refs=100_000_000,         # safety cap on total refs loaded
-    max_arrays_to_scan=1000,            # max arrays to evaluate conditions on
-    preload_if=ManifestPreloadCondition(
-        # Combinators: .and_(other), .or_(other), .not_()
-        # Leaf conditions:
-        #   ManifestPreloadCondition.array_name("regex")
-        #   ManifestPreloadCondition.num_chunk_refs(max_refs)
-        ManifestPreloadCondition.array_name("obs|snr|epoch")
-            .and_(ManifestPreloadCondition.num_chunk_refs(50_000))
+preload = ManifestPreloadConfig(
+    max_total_refs=100_000_000,     # safety cap on total refs loaded
+    max_arrays_to_scan=1000,        # max arrays to evaluate conditions on
+    preload_if=(
+        # Preload arrays matching name AND with refs in [0, 50_000]
+        ManifestPreloadCondition.name_matches("obs|snr|epoch")
+        & ManifestPreloadCondition.num_refs(0, 50_000)
     ),
 )
+
+# Wrap in ManifestConfig when assigning to RepositoryConfig
+config = RepositoryConfig(
+    manifest=ManifestConfig(preload=preload),
+)
 ```
+
+**Conditions:**
+- `ManifestPreloadCondition.name_matches(regex)` — match by array name
+- `ManifestPreloadCondition.path_matches(regex)` — match by full path
+- `ManifestPreloadCondition.num_refs(from, to)` — match by chunk-ref count range
+- `ManifestPreloadCondition.true` / `.false` — unconditional preload / skip
+- Combine with `&` (AND) or `|` (OR) operators
 
 **When to preload:** Read-heavy workloads accessing known arrays repeatedly.
 Increases memory use but eliminates per-read manifest fetches.
@@ -435,7 +456,8 @@ ds.to_zarr(store, encoding={"obs": {"chunks": (34560, -1)}})
 | `repo.create_branch(name, snapshot_id=)` | Create branch |
 | `repo.delete_branch(name)` | Delete branch |
 | `repo.reset_branch(name, snapshot_id=)` | Reset branch tip |
-| `repo.lookup_branch(name)` | Get branch tip snapshot ID |
+| `repo.lookup_branch(name)` | Get branch tip snapshot ID (O(1)) |
+| `repo.lookup_snapshot(snapshot_id)` | Get snapshot info object with `.id`, `.message`, `.written_at`, `.parent_id`, `.metadata` (O(1)) |
 | `repo.list_tags()` | List all tags |
 | `repo.create_tag(name, snapshot_id=)` | Create immutable tag |
 | `repo.delete_tag(name)` | Delete tag |
@@ -445,8 +467,11 @@ ds.to_zarr(store, encoding={"obs": {"chunks": (34560, -1)}})
 | Method | Description |
 |---|---|
 | `session.store` | Access `zarr.Store` |
-| `session.commit(message)` | Commit changes, returns snapshot ID |
+| `session.commit(message)` | Commit changes, advance branch tip, return snapshot ID |
+| `session.flush(message)` | Create anonymous snapshot without advancing branch (for checkpoints); session becomes read-only after call |
+| `session.amend(message)` | Replace the immediately preceding snapshot with updated content |
 | `session.has_uncommitted_changes` | Check for pending changes |
+| `session.snapshot_id` | ID of the snapshot this session is based on |
 
 ### Xarray
 

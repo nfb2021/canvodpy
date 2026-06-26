@@ -379,6 +379,18 @@ open-notebook NAME:
 app-notebook NAME:
     uv run marimo run demo/{{ NAME }}
 
+# start the hemisphere API server (run from repo root; see .icechunk_gridding_claude/RUNNING.md)
+hemi-serve:
+    CATALOG=.icechunk_gridding_claude/_out/catalog.json \
+      uv run --with fastapi --with uvicorn --with xpublish \
+      python .icechunk_gridding_claude/serve_hemisphere.py
+
+# open the VOD hemisphere viewer notebook for interactive editing
+hemi-view:
+    uv run --with marimo --with plotly --with wigglystuff --with httpx \
+      --with ipywidgets \
+      marimo edit .icechunk_gridding_claude/view_vod_cube.py
+
 # ============================================================================
 # Documentation
 # ============================================================================

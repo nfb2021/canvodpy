@@ -356,6 +356,7 @@ packages/*/config/
 .archive/
 .processing/
 .vscode/
+.icechunk_gridding_claude/
 
 # ============================================================================
 # Private packages (symlinked from external repos, local only)

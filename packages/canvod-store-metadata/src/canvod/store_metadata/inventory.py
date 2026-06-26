@@ -13,30 +13,24 @@ from .schema import StoreMetadata
 
 
 def _is_icechunk_store(path: Path) -> bool:
-    """Return True if path looks like an Icechunk store (v1 or v2 layout)."""
-    # v1: refs/ directory present
-    if (path / "refs").is_dir():
-        return True
-    # v2: unified toc file 'repo' + snapshots/ directory
-    if (path / "repo").is_file() and (path / "snapshots").is_dir():
-        return True
-    return False
+    """Return True if path looks like an Icechunk ≥2.0 store.
+
+    Icechunk 2.x layout: snapshots/ + transactions/ directories at the root.
+    """
+    return (path / "snapshots").is_dir() and (path / "transactions").is_dir()
 
 
 def _find_icechunk_stores(root_dir: Path, recursive: bool = True) -> list[Path]:
-    """Find Icechunk stores by looking for v1 or v2 layout markers."""
+    """Find Icechunk stores under root_dir by their layout markers."""
     stores: list[Path] = []
     if not root_dir.is_dir():
         return stores
 
-    # Collect candidate parent directories from both v1 and v2 markers
-    patterns = ["**/refs", "**/snapshots"] if recursive else ["*/refs", "*/snapshots"]
-    candidates: set[Path] = set()
-    for pattern in patterns:
-        for marker in root_dir.glob(pattern):
-            candidates.add(marker.parent)
-
-    for candidate in candidates:
+    # snapshots/ is always non-empty and reliably findable; refs/ may be empty
+    # in v2 so we glob on snapshots/ only.
+    pattern = "**/snapshots" if recursive else "*/snapshots"
+    for marker in root_dir.glob(pattern):
+        candidate = marker.parent
         if _is_icechunk_store(candidate):
             stores.append(candidate)
 

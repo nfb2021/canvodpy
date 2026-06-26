@@ -387,6 +387,20 @@ class IcechunkConfig(BaseModel):
         "epoch|sid",
         description="Regex pattern for coordinate names to preload",
     )
+    manifest_splitting_enabled: bool = Field(
+        False,
+        description="Enable manifest splitting for stores with >100k chunks per array",
+    )
+    manifest_splitting_chunk_refs: int = Field(
+        1000,
+        ge=1,
+        description="Split a manifest when it has more than this many chunk refs",
+    )
+    manifest_splitting_epoch_range: int = Field(
+        34560,
+        ge=1,
+        description="Split obs/snr manifests along epoch dim every N indices (default: 1 day at 2.5 s)",
+    )
 
 
 class StorageConfig(BaseModel):
