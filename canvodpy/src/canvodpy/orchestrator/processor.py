@@ -90,6 +90,7 @@ def preprocess_with_hermite_aux(
     store_sbf_raw_observables: bool = True,
     broadcast_canopy_file: Path | None = None,
     broadcast_canopy_fmt: str | None = None,
+    pad_global_sid: bool = True,
 ) -> tuple[Path, xr.Dataset, dict[str, xr.Dataset], dict[str, list[str]]]:
     """Read RINEX and compute coordinates using Hermite-interpolated aux data from Zarr.
 
@@ -160,6 +161,7 @@ def preprocess_with_hermite_aux(
                 write_global_attrs=True,
                 keep_sids=keep_sids,
                 store_raw_observables=store_sbf_raw_observables,
+                pad_global_sid=pad_global_sid,
             )
             ds.attrs["File Hash"] = rnx.file_hash
             t_rinex = time.perf_counter()

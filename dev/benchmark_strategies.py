@@ -233,11 +233,15 @@ def write_day_to_store(
     datasets: list[tuple[Path, xr.Dataset]],
     rx_name: str,
     store_path: Path,
+    store_sids: list[str] | None = None,
 ) -> float:
     """Write one receiver-day batch to a fresh temp Icechunk store.
 
     Returns wall-time of the write (open session → commit) in seconds.
     Does NOT include pool creation or data-processing time.
+
+    When ``store_sids`` is provided (lazy-pad mode) each dataset is reindexed
+    to the full SID axis before writing, filling unobserved SIDs with NaN.
     """
     store = MyIcechunkStore(store_path, store_type="rinex_store")
     groups: list[str] = store.list_groups() or []
@@ -245,6 +249,9 @@ def write_day_to_store(
     t0 = time.perf_counter()
     with store.writable_session("main") as session:
         for idx, (_, ds) in enumerate(datasets):
+            if store_sids is not None:
+                ds = ds.reindex(sid=store_sids, fill_value=float("nan"))
+
             # Best-effort cleanse (private helpers; skip if API changed)
             try:
                 ds = store._cleanse_dataset_attrs(ds)
@@ -467,8 +474,29 @@ def make_task(
     rx_name: str,
     keep_vars: list[str] | None = None,
     keep_sids: list[str] | None = None,
+    lazy_pad: bool = False,
 ) -> tuple:
-    """Pack positional args for ``preprocess_with_hermite_aux``."""
+    """Pack positional args for ``preprocess_with_hermite_aux``.
+
+    When ``lazy_pad=True`` the worker returns only actually-observed SIDs
+    (~100); the driver reindexes to the full store SID axis before writing.
+    """
+    if lazy_pad:
+        return (
+            f,
+            keep_vars,
+            aux_path,
+            pos,
+            rx_name,
+            None,  # keep_sids unused when pad_global_sid=False
+            READER_NAME,
+            False,  # use_sbf_geometry
+            False,  # store_radial_distance
+            False,  # store_sbf_raw_observables
+            None,  # broadcast_canopy_file
+            None,  # broadcast_canopy_fmt
+            False,  # pad_global_sid → observed-only
+        )
     return (
         f,
         keep_vars,
@@ -497,6 +525,8 @@ def run_s0(
     dry_run: bool,
     keep_vars: list[str] | None = None,
     keep_sids: list[str] | None = None,
+    lazy_pad: bool = False,
+    store_sids: list[str] | None = None,
 ) -> dict:
     """S0: new ``ProcessPoolExecutor`` for every receiver-day."""
     mem = SystemMonitor()
@@ -537,7 +567,9 @@ def run_s0(
                 futures = {
                     executor.submit(
                         _timed_preprocess,
-                        *make_task(f, aux_path, pos, rx_name, keep_vars, keep_sids),
+                        *make_task(
+                            f, aux_path, pos, rx_name, keep_vars, keep_sids, lazy_pad
+                        ),
                     ): (f, time.perf_counter())
                     for f in files
                 }
@@ -570,7 +602,9 @@ def run_s0(
             write_s = 0.0
             if not dry_run and results_rx:
                 _ev("write_start", f"{rx_name}/{doy}")
-                write_s = write_day_to_store(results_rx, rx_name, store_path)
+                write_s = write_day_to_store(
+                    results_rx, rx_name, store_path, store_sids
+                )
                 m["write_seconds"].append(write_s)
                 _ev("write_done", f"{rx_name}/{doy} dur={write_s:.2f}s")
 
@@ -603,6 +637,8 @@ def run_s1(
     dry_run: bool,
     keep_vars: list[str] | None = None,
     keep_sids: list[str] | None = None,
+    lazy_pad: bool = False,
+    store_sids: list[str] | None = None,
 ) -> dict:
     """S1: one warm pool, bounded 2N window, submit one receiver-day at a time."""
     mem = SystemMonitor()
@@ -641,7 +677,7 @@ def run_s1(
                 results_rx: list[tuple[Path, xr.Dataset]] = []
 
                 tasks = [
-                    make_task(f, aux_path, pos, rx_name, keep_vars, keep_sids)
+                    make_task(f, aux_path, pos, rx_name, keep_vars, keep_sids, lazy_pad)
                     for f in files
                 ]
                 _ev("tasks_submitted", f"{rx_name}/{doy} n={len(tasks)}")
@@ -665,7 +701,9 @@ def run_s1(
                 write_s = 0.0
                 if not dry_run and results_rx:
                     _ev("write_start", f"{rx_name}/{doy}")
-                    write_s = write_day_to_store(results_rx, rx_name, store_path)
+                    write_s = write_day_to_store(
+                        results_rx, rx_name, store_path, store_sids
+                    )
                     m["write_seconds"].append(write_s)
                     _ev("write_done", f"{rx_name}/{doy} dur={write_s:.2f}s")
 
@@ -701,6 +739,8 @@ def run_s2(
     dry_run: bool,
     keep_vars: list[str] | None = None,
     keep_sids: list[str] | None = None,
+    lazy_pad: bool = False,
+    store_sids: list[str] | None = None,
 ) -> dict:
     """S2: warm pool, flat LPT task list (all days × receivers), bounded 2N window.
 
@@ -744,7 +784,9 @@ def run_s2(
                 flat.append(
                     (
                         f.stat().st_size,
-                        make_task(f, aux_path, pos, rx_name, keep_vars, keep_sids),
+                        make_task(
+                            f, aux_path, pos, rx_name, keep_vars, keep_sids, lazy_pad
+                        ),
                         doy,
                         rx_name,
                     )
@@ -808,7 +850,9 @@ def run_s2(
                     if not dry_run:
                         store_path = store_base / f"s2_{doy}_{rx_name}"
                         _ev("write_start", f"{rx_name}/{doy}")
-                        write_s = write_day_to_store(datasets, rx_name, store_path)
+                        write_s = write_day_to_store(
+                            datasets, rx_name, store_path, store_sids
+                        )
                         m["write_seconds"].append(write_s)
                         _ev("write_done", f"{rx_name}/{doy} dur={write_s:.2f}s")
                     m["per_day"][doy][rx_name]["tasks"] = len(datasets)
@@ -1091,29 +1135,54 @@ def main() -> None:
         default=None,
         help="Limit to first N days (default: all 28). --dry-run overrides to 1.",
     )
+    parser.add_argument(
+        "--s2-only",
+        action="store_true",
+        help="Run only the S2 strategy (skip S0 and S1).",
+    )
+    parser.add_argument(
+        "--lazy-pad",
+        action="store_true",
+        help=(
+            "Defer SID padding to the write boundary. Workers return only observed SIDs "
+            "(~100); driver reindexes to full store axis before Icechunk commit."
+        ),
+    )
     args = parser.parse_args()
 
     n_workers = args.workers
     days_dir = args.days_dir
     dry_run = args.dry_run
+    s2_only = args.s2_only
     n_days = 1 if dry_run else (args.days if args.days is not None else len(DOYS))
 
     # ── Load config (keep_vars / keep_sids) ──────────────────────────────────
     cfg = load_config()
     keep_vars: list[str] | None = ["SNR"]
     keep_sids: list[str] | None = cfg.sids.custom_sids or None
+    lazy_pad: bool = args.lazy_pad
+    # When lazy_pad, workers return observed-only SIDs; driver reindexes to
+    # keep_sids (the 277 curated) just before Icechunk commit.
+    store_sids: list[str] | None = keep_sids if lazy_pad else None
 
     # ── Memory safety cap ─────────────────────────────────────────────────────
     # SNR-only + 277-SID curated config: ~0.67 GB peak per worker (tracemalloc).
+    # Lazy-pad (--lazy-pad) drops in-flight to ~100 observed SIDs → ~0.25 GB.
     # macOS spawn adds ~3 GB one-time base per worker process; Linux fork shares
-    # parent pages so incremental cost is data only.  Use 1.0 GB as conservative
-    # estimate; revisit after lazy-padding reduces in-flight to ~100 observed SIDs.
+    # parent pages so incremental cost is data only.
     avail_gb = psutil.virtual_memory().available / 1024**3
     total_gb = psutil.virtual_memory().total / 1024**3
-    n_sid_label = (
-        f"{len(keep_sids)}-SID curated" if keep_sids else "all-SID global (3658)"
-    )
-    gb_per_worker = 1.0
+    if lazy_pad:
+        n_sid_label = "~100 observed (lazy pad → 277 at write)"
+        # macOS spawn: ~3 GB module imports per worker dominate regardless of data size.
+        # Linux fork: data footprint (~0.25 GB) would be the right value there.
+        gb_per_worker = 1.0
+    elif keep_sids:
+        n_sid_label = f"{len(keep_sids)}-SID curated"
+        gb_per_worker = 1.0
+    else:
+        n_sid_label = "all-SID global (3658)"
+        gb_per_worker = 1.0
     safe_workers = max(1, int(avail_gb * 0.70 / gb_per_worker))
     if n_workers > safe_workers:
         print(
@@ -1138,6 +1207,7 @@ def main() -> None:
     )
     print(f"  keep_vars: {keep_vars}")
     print(f"  keep_sids: {n_sid_label}")
+    print(f"  lazy_pad : {lazy_pad}")
     print()
 
     # ── Discover files ────────────────────────────────────────────────────────
@@ -1172,39 +1242,44 @@ def main() -> None:
     all_results: list[dict] = []
 
     try:
-        # ── S0: baseline ─────────────────────────────────────────────────────
-        print("\n── S0 (fresh pool per receiver-day) ──")
-        all_results.append(
-            run_s0(
-                file_map,
-                aux_zarrs,
-                positions,
-                n_workers,
-                store_base,
-                dry_run,
-                keep_vars=keep_vars,
-                keep_sids=keep_sids,
+        if not s2_only:
+            # ── S0: baseline ──────────────────────────────────────────────────
+            print("\n── S0 (fresh pool per receiver-day) ──")
+            all_results.append(
+                run_s0(
+                    file_map,
+                    aux_zarrs,
+                    positions,
+                    n_workers,
+                    store_base,
+                    dry_run,
+                    keep_vars=keep_vars,
+                    keep_sids=keep_sids,
+                    lazy_pad=lazy_pad,
+                    store_sids=store_sids,
+                )
             )
-        )
-        shutil.rmtree(store_base, ignore_errors=True)
-        store_base.mkdir()
+            shutil.rmtree(store_base, ignore_errors=True)
+            store_base.mkdir()
 
-        # ── S1: warm pool, per-day ────────────────────────────────────────────
-        print("\n── S1 (warm pool, bounded 2N window, per-day) ──")
-        all_results.append(
-            run_s1(
-                file_map,
-                aux_zarrs,
-                positions,
-                n_workers,
-                store_base,
-                dry_run,
-                keep_vars=keep_vars,
-                keep_sids=keep_sids,
+            # ── S1: warm pool, per-day ────────────────────────────────────────
+            print("\n── S1 (warm pool, bounded 2N window, per-day) ──")
+            all_results.append(
+                run_s1(
+                    file_map,
+                    aux_zarrs,
+                    positions,
+                    n_workers,
+                    store_base,
+                    dry_run,
+                    keep_vars=keep_vars,
+                    keep_sids=keep_sids,
+                    lazy_pad=lazy_pad,
+                    store_sids=store_sids,
+                )
             )
-        )
-        shutil.rmtree(store_base, ignore_errors=True)
-        store_base.mkdir()
+            shutil.rmtree(store_base, ignore_errors=True)
+            store_base.mkdir()
 
         # ── S2: warm pool, flat LPT ───────────────────────────────────────────
         print("\n── S2 (warm pool, bounded 2N window, flat LPT) ──")
@@ -1218,6 +1293,8 @@ def main() -> None:
                 dry_run,
                 keep_vars=keep_vars,
                 keep_sids=keep_sids,
+                lazy_pad=lazy_pad,
+                store_sids=store_sids,
             )
         )
 

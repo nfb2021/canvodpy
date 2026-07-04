@@ -78,6 +78,24 @@ multithreading saturates all 8 cores). The parallelism gain is real but bounded 
 CPU/memory bandwidth saturation on macOS. On Linux, COW semantics eliminate the module
 import overhead and would allow more workers within the same RAM budget.
 
+### Run 3 — lazy padding (S2 only, 6 workers, 14 DOYs)
+
+S2 with `pad_global_sid=False` + driver-side `reindex(sid=store_sids)` before commit.
+
+| Strategy | Wall(s) | wkr-CPU% | DrvRSS | Swap | s/DOY |
+|---|---|---|---|---|---|
+| S2 lazy pad | 351.9s | 88.4% | 5,453 MB | 4,268 MB | 25.1s |
+| S2 Run 2 (baseline) | *(138.6s / 6 DOYs)* | 94% | 867 MB | 2,358 MB | **23.1s** |
+
+Lazy padding is **~9% slower** on macOS. Driver RSS ballooned to 5,453 MB (vs 867 MB)
+and swap rose to 4,268 MB despite identical worker count. The reindex in the driver
+accumulates expanded datasets faster than the sequential Icechunk write can drain them.
+
+> **⚠️ ASSUMPTION:** The macOS result does not rule out a benefit on Linux.
+> On Linux fork, per-worker cost is data-only (~0.25 GB lazy vs ~0.67 GB padded),
+> potentially allowing ~2.7× more workers. This was **not measured** — production
+> runs on Linux; benchmark there before drawing conclusions.
+
 ---
 
 ## In-memory expansion — measured
@@ -109,16 +127,32 @@ current — a one-function code change.
 (`reindex(sid=store_axis)` just before Icechunk commit) so the in-flight dataset carries
 only the actually-observed SIDs (~100 in practice). This is the prerequisite for S3.
 
+**Measured on macOS: lazy padding provides no speedup (slightly slower, ~9%).**
+Run 3 (lazy pad, 6 workers, 14 DOYs): S2 = 25.1s/DOY vs Run 2 (277-SID, 6 workers): 23.1s/DOY.
+Driver RSS jumped to 5,453 MB (vs 867 MB) and swap rose to 4,268 MB (vs 2,358 MB), offsetting
+the smaller per-task footprint.
+
+> **⚠️ ASSUMPTION — not yet measured on Linux:** The expected benefit of lazy padding on Linux
+> relies on fork/COW semantics: workers share the parent's read-only pages (module imports cost
+> nothing incrementally) so the data footprint is the only incremental RAM per worker.
+> Under that model, ~100 observed SIDs (~0.25 GB/worker) vs 277 SIDs (~0.67 GB/worker) would
+> unlock ~2.7× more workers within the same RAM budget. This has **not been benchmarked** —
+> the macOS numbers cannot confirm or refute it. Production runs on Linux; verify there.
+
 **Worker count projection on 10 GB machine (peak as the binding constraint):**
 
 | OS | Workers (loky spawn/fork) | Reasoning |
 |---|---|---|
-| macOS (spawn) | 2 | ~3 GB module imports + 0.67 GB peak per worker |
-| Linux (fork/COW) | ~10 | Imports shared; only 0.67 GB incremental per worker |
+| macOS (spawn) | 6 | ~3 GB module imports dominate; data size irrelevant |
+| Linux (fork/COW) — no lazy pad | ~14 | Imports shared; 0.67 GB data per worker |
+| Linux (fork/COW) — lazy pad | ~28 | Imports shared; 0.25 GB data per worker |
+
+> These Linux projections are **extrapolated from macOS measurements + OS fork semantics**,
+> not directly benchmarked. Validate on the actual production server.
 
 **Reducing in-memory footprint is the highest-leverage single improvement available.**
 The config change is immediate; fixing the allocation order and implementing lazy padding
-are medium-effort code changes that unlock S3.
+are medium-effort code changes that unlock S3 and pay off most on Linux.
 
 ---
 
