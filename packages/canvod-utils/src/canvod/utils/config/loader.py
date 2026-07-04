@@ -6,6 +6,7 @@ Loads configuration from multiple YAML files with priority:
 2. User configuration files (highest priority)
 """
 
+import functools
 import os
 import sys
 from pathlib import Path
@@ -230,6 +231,7 @@ class ConfigLoader:
         print("\n" + "=" * 70)
 
 
+@functools.lru_cache(maxsize=8)
 def load_config(config_dir: Path | None = None) -> CanvodConfig:
     """
     Load configuration from YAML files.
