@@ -308,15 +308,12 @@ class TestSidsConfig:
         with pytest.raises(ValidationError, match="preset must be specified"):
             SidsConfig(mode="preset", preset=None)
 
-    def test_mode_preset_omitted_uses_default(self):
-        """Pydantic v2: field_validator doesn't run for default values.
-
-        This is a known behavior — the model accepts mode='preset' with
-        preset=None (default) but get_sids() returns [].
-        """
+    def test_mode_preset_without_name_raises(self):
+        """mode='preset' with no preset name raises ValueError on get_sids()."""
         s = SidsConfig(mode="preset")
         assert s.preset is None
-        assert s.get_sids() == []
+        with pytest.raises(ValueError, match="preset must be set"):
+            s.get_sids()
 
     def test_mode_preset_with_name(self):
         s = SidsConfig(mode="preset", preset="gps_l1_only")

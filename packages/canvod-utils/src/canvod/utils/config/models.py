@@ -11,6 +11,7 @@ These models provide:
 from pathlib import Path
 from typing import Literal
 
+import yaml
 from pydantic import (
     BaseModel,
     EmailStr,
@@ -238,24 +239,6 @@ class ProcessingParams(BaseModel):
             "(SP3/CLK). 'broadcast': use broadcast ephemerides from SBF "
             "SatVisibility blocks (SBF reader_format only, skips SP3/CLK "
             "download). Broadcast is faster but less accurate (~1-2 m orbit)."
-        ),
-    )
-    parallelization_strategy: Literal["dask", "processpool"] = Field(
-        "dask",
-        description=(
-            "'dask': use Dask distributed LocalCluster for parallel RINEX "
-            "processing (default). 'processpool': use ProcessPoolExecutor "
-            "directly, skipping Dask overhead — faster for small datasets or "
-            "when Dask startup latency dominates."
-        ),
-    )
-    scheduler_address: str | None = Field(
-        None,
-        description=(
-            "Address of an existing Dask scheduler to connect to instead of "
-            "spinning up a LocalCluster (e.g. 'tcp://192.168.1.100:8786'). "
-            "When set, parallelization_strategy must be 'dask'. "
-            "Useful on shared clusters where one scheduler serves all workers."
         ),
     )
     store_sbf_raw_observables: bool = Field(
@@ -957,16 +940,18 @@ class SidsConfig(BaseModel):
         return self.custom_sids
 
     def _get_preset_sids(self) -> list[str]:
-        """Load the preset SID list.
-
-        Returns
-        -------
-        list[str]
-            Preset SID list.
-        """
-        # TODO: Implement preset loading from package defaults
-        # For now, return empty list
-        return []
+        if self.preset is None:
+            msg = "preset must be set when mode is 'preset'"
+            raise ValueError(msg)
+        presets_dir = Path(__file__).parent / "presets"
+        preset_file = presets_dir / f"{self.preset}.yaml"
+        if not preset_file.exists():
+            known = sorted(p.stem for p in presets_dir.glob("*.yaml"))
+            msg = f"Unknown SID preset '{self.preset}'. Available: {known}"
+            raise ValueError(msg)
+        with preset_file.open() as f:
+            data = yaml.safe_load(f)
+        return data.get("sids", [])
 
 
 # ============================================================================
