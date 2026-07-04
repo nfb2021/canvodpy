@@ -299,3 +299,11 @@ SIGNAL_TABLE: dict[int, SignalDef] = {s.number: s for s in _SIGNAL_DEFS}
 #: GLONASS FDMA signal numbers (frequency depends on FreqNr, not fixed).
 #: Source: RefGuide-4.14.0, Table 4.1.10, p. 256, frequency column footnote.
 FDMA_SIGNAL_NUMS: frozenset[int] = frozenset({8, 9, 10, 11})
+
+#: Pre-computed carrier frequencies as plain Hz floats for zero-allocation hot-path access.
+#: Derived from SIGNAL_TABLE at import time — never mutate.
+#: GLONASS FDMA signals (8-11) map to None; use _glonass_freq_hz_f() for slot-specific Hz.
+_SIGNAL_FREQ_HZ: dict[int, float | None] = {
+    num: (float(sig.freq.to("Hz").magnitude) if sig.freq is not None else None)
+    for num, sig in SIGNAL_TABLE.items()
+}

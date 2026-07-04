@@ -40,8 +40,20 @@ from canvod.readers.gnss_specs.metadata import (
     DTYPES,
     OBSERVABLES_METADATA,
 )
-from canvod.readers.sbf._registry import FDMA_SIGNAL_NUMS, SIGNAL_TABLE, decode_svid
+from canvod.readers.sbf._registry import (
+    _SIGNAL_FREQ_HZ,
+    FDMA_SIGNAL_NUMS,
+    SIGNAL_TABLE,
+    decode_svid,
+)
 from canvod.readers.sbf._scaling import (
+    _cn0_dbhz_f,
+    _doppler2_hz_f,
+    _doppler_hz_f,
+    _glonass_freq_hz_f,
+    _phase_cycles_f,
+    _pr2_m_f,
+    _pseudorange_m_f,
     cn0_dbhz,
     decode_offsets_msb,
     decode_signal_num,
@@ -102,6 +114,25 @@ def _tow_wn_to_utc(tow_ms: int, wn: int, delta_ls: int) -> datetime:
     gps_seconds = wn * _SECONDS_PER_GPS_WEEK + tow_ms / 1000.0
     utc_seconds = gps_seconds - delta_ls
     return _GPS_EPOCH + timedelta(seconds=utc_seconds)
+
+
+def _resolve_freq_hz(
+    sig_num: int,
+    svid: int,
+    freq_nr_cache: dict[int, int],
+) -> float | None:
+    """Return carrier frequency in Hz as a plain float, or None if unavailable.
+
+    Zero-allocation fast variant of SbfReader._resolve_freq() for use in the
+    hot decode loop inside to_ds_and_auxiliary().  GLONASS FDMA signals return
+    None when FreqNr is not yet known; L-Band MSS (sig 23) always returns None.
+    """
+    if sig_num in FDMA_SIGNAL_NUMS:
+        freq_nr = freq_nr_cache.get(svid)
+        if freq_nr is None:
+            return None
+        return _glonass_freq_hz_f(sig_num, freq_nr)
+    return _SIGNAL_FREQ_HZ.get(sig_num)  # None for unknown / L-Band MSS
 
 
 # ---------------------------------------------------------------------------
@@ -672,6 +703,242 @@ _RX_ERROR_ATTRS: dict[str, object] = {
 }
 
 
+_SMOOTHING_FLAG_ATTRS: dict[str, object] = {
+    "long_name": "Pseudorange smoothing flag",
+    "flag_values": [-1, 0, 1],
+    "flag_meanings": "missing not_smoothed smoothed",
+    "source": "SBF MeasEpoch block (Block 4027) — ObsInfo bit 0",
+    "comment": (
+        "1 = pseudorange is carrier-smoothed (smoothing filter applied by "
+        "the receiver), 0 = not smoothed, -1 = no observation. "
+        "Extracted from the ObsInfo byte (bit 0) of each MeasEpoch "
+        "Type1/Type2 sub-block."
+    ),
+    "references": (
+        "Septentrio AsteRx SB3 ProBase Firmware v4.14.0 Reference Guide, "
+        "MeasEpoch block (Block 4027), field ObsInfo bit 0, pp. 260-263."
+    ),
+}
+_HALF_CYCLE_ATTRS: dict[str, object] = {
+    "long_name": "Carrier-phase half-cycle ambiguity flag",
+    "flag_values": [-1, 0, 1],
+    "flag_meanings": "missing resolved half_cycle_ambiguous",
+    "source": "SBF MeasEpoch block (Block 4027) — ObsInfo bit 2",
+    "comment": (
+        "1 = the carrier phase of this observation may contain an "
+        "unresolved 0.5-cycle ambiguity, 0 = ambiguity resolved, "
+        "-1 = no observation. Extracted from the ObsInfo byte (bit 2) "
+        "of each MeasEpoch Type1/Type2 sub-block."
+    ),
+    "references": (
+        "Septentrio AsteRx SB3 ProBase Firmware v4.14.0 Reference Guide, "
+        "MeasEpoch block (Block 4027), field ObsInfo bit 2, pp. 260-263."
+    ),
+}
+
+# ---------------------------------------------------------------------------
+# QualityInd (Block 4082) indicator attributes
+# ---------------------------------------------------------------------------
+
+_QUAL_COMMENT_TAIL = (
+    "Score on a 0 (poor) to 10 (excellent) scale; -1 = unknown / not "
+    "reported (raw value 15 or indicator absent). Decoded from QualityInd "
+    "indicator words: bits 0-7 = indicator type, bits 8-11 = value."
+)
+_QUAL_REFERENCE = (
+    "Septentrio AsteRx SB3 ProBase Firmware v4.14.x Reference Guide, "
+    "QualityInd block (Block 4082), field Indicators."
+)
+_QUAL_OVERALL_ATTRS: dict[str, object] = {
+    "long_name": "Overall receiver quality indicator",
+    "valid_range": [0, 10],
+    "source": "SBF QualityInd block (Block 4082), indicator type 0",
+    "comment": _QUAL_COMMENT_TAIL,
+    "references": _QUAL_REFERENCE,
+}
+_QUAL_GNSS_MAIN_ATTRS: dict[str, object] = {
+    "long_name": "GNSS signal quality, main antenna",
+    "valid_range": [0, 10],
+    "source": "SBF QualityInd block (Block 4082), indicator type 1",
+    "comment": _QUAL_COMMENT_TAIL,
+    "references": _QUAL_REFERENCE,
+}
+_QUAL_RF_MAIN_ATTRS: dict[str, object] = {
+    "long_name": "RF power level quality, main antenna",
+    "valid_range": [0, 10],
+    "source": "SBF QualityInd block (Block 4082), indicator type 11",
+    "comment": _QUAL_COMMENT_TAIL,
+    "references": _QUAL_REFERENCE,
+}
+_QUAL_CPU_ATTRS: dict[str, object] = {
+    "long_name": "CPU headroom quality indicator",
+    "valid_range": [0, 10],
+    "source": "SBF QualityInd block (Block 4082), indicator type 21",
+    "comment": _QUAL_COMMENT_TAIL,
+    "references": _QUAL_REFERENCE,
+}
+_QUAL_SCINT_ATTRS: dict[str, object] = {
+    "long_name": "Ionospheric scintillation score",
+    "valid_range": [0, 10],
+    "source": "SBF QualityInd block (Block 4082), indicator type 29",
+    "comment": (_QUAL_COMMENT_TAIL + " Indicator type 29 requires firmware >= 4.15.1."),
+    "references": _QUAL_REFERENCE,
+}
+
+# ---------------------------------------------------------------------------
+# RFStatus (Block 4092) flag attributes
+# ---------------------------------------------------------------------------
+
+_SPOOFING_FLAG_ATTRS: dict[str, object] = {
+    "long_name": "GNSS spoofing detection flag",
+    "flag_values": [-1, 0, 1],
+    "flag_meanings": "not_available no_spoofing spoofing_detected",
+    "source": "SBF RFStatus block (Block 4092) — Flags bit 0",
+    "comment": (
+        "1 = the receiver detected suspected spoofing of GNSS signals at "
+        "this epoch, 0 = no spoofing detected, -1 = no RFStatus block "
+        "available for this epoch."
+    ),
+    "references": (
+        "Septentrio AsteRx SB3 ProBase Firmware v4.14.x Reference Guide, "
+        "RFStatus block (Block 4092), field Flags bit 0."
+    ),
+}
+_NMA_FAIL_ATTRS: dict[str, object] = {
+    "long_name": "Navigation message authentication failure flag",
+    "flag_values": [-1, 0, 1],
+    "flag_meanings": "not_available authentication_ok authentication_failed",
+    "source": "SBF RFStatus block (Block 4092) — Flags bit 1",
+    "comment": (
+        "1 = navigation message authentication (e.g. Galileo OSNMA) failed "
+        "at this epoch, 0 = no authentication failure, -1 = no RFStatus "
+        "block available for this epoch."
+    ),
+    "references": (
+        "Septentrio AsteRx SB3 ProBase Firmware v4.14.x Reference Guide, "
+        "RFStatus block (Block 4092), field Flags bit 1."
+    ),
+}
+
+# ---------------------------------------------------------------------------
+# ChannelStatus (Block 4013) tracking / PVT status attributes
+# ---------------------------------------------------------------------------
+
+_TRACKING_STATUS_RAW_ATTRS: dict[str, object] = {
+    "long_name": "Raw per-satellite tracking status bitfield (main antenna)",
+    "source": (
+        "SBF ChannelStatus block (Block 4013) — ChannelStateInfo.TrackingStatus"
+    ),
+    "comment": (
+        "Raw u2 bitfield with 2 bits per signal type: 0 = Idle, 1 = Search, "
+        "2 = Sync, 3 = Tracking. Bit positions are constellation-specific "
+        "(e.g. GPS: bits 0-1 = L1CA, 2-3 = P1Y, 4-5 = P2Y, 6-7 = L2C, "
+        "8-9 = L5, 10-11 = L1C). The same per-satellite value is broadcast "
+        "to all SIDs of that satellite; decode the bit pair for the SID's "
+        "signal type to obtain per-signal status. Main antenna only. "
+        "0 also means no ChannelStatus information for this epoch."
+    ),
+    "references": (
+        "Septentrio AsteRx SB3 ProBase Firmware v4.14.x Reference Guide, "
+        "ChannelStatus block (Block 4013), ChannelStateInfo sub-block, "
+        "field TrackingStatus."
+    ),
+}
+_PVT_STATUS_RAW_ATTRS: dict[str, object] = {
+    "long_name": "Raw per-satellite PVT usage status bitfield (main antenna)",
+    "source": "SBF ChannelStatus block (Block 4013) — ChannelStateInfo.PVTStatus",
+    "comment": (
+        "Raw u2 bitfield with 2 bits per signal type: 0 = Not used in PVT, "
+        "1 = Waiting for ephemeris, 2 = Used in PVT, 3 = Rejected. Bit "
+        "positions are constellation-specific and match TrackingStatus. "
+        "The same per-satellite value is broadcast to all SIDs of that "
+        "satellite. Main antenna only. "
+        "0 also means no ChannelStatus information for this epoch."
+    ),
+    "references": (
+        "Septentrio AsteRx SB3 ProBase Firmware v4.14.x Reference Guide, "
+        "ChannelStatus block (Block 4013), ChannelStateInfo sub-block, "
+        "field PVTStatus."
+    ),
+}
+
+
+def _decode_quality_indicators(qualind: dict[str, Any]) -> dict[int, int]:
+    """Decode QualityInd (Block 4082) indicator words to ``{type: value}``.
+
+    ``sbf_parser`` returns the ``Indicators`` u2[N] array as raw
+    little-endian bytes; decode each 16-bit word as
+    bits 0-7 = indicator type, bits 8-11 = value (0-10; 15 = unknown).
+
+    Parameters
+    ----------
+    qualind : dict
+        Raw QualityInd block dict from ``sbf_parser``.
+
+    Returns
+    -------
+    dict of {int: int}
+        Mapping indicator type → value, with 15 (unknown) mapped to -1.
+    """
+    raw = qualind.get("Indicators", b"")
+    if isinstance(raw, (bytes, bytearray)):
+        words = [
+            int.from_bytes(raw[i : i + 2], "little") for i in range(0, len(raw) - 1, 2)
+        ]
+    else:  # already a sequence of ints
+        words = [int(w) for w in raw]
+    out: dict[int, int] = {}
+    for word in words:
+        ind_type = word & 0xFF
+        value = (word >> 8) & 0x0F
+        out[ind_type] = -1 if value == 15 else value
+    return out
+
+
+def _extract_tracking_info(
+    chanstatus: dict[str, Any],
+) -> list[tuple[str, int, int]]:
+    """Extract per-satellite tracking info from a ChannelStatus block.
+
+    Only Main-antenna (Antenna == 0) ChannelStateInfo sub-blocks are
+    considered — the primary receiver channel.
+
+    Parameters
+    ----------
+    chanstatus : dict
+        Raw ChannelStatus (Block 4013) dict from ``sbf_parser``.
+
+    Returns
+    -------
+    list of (sv, tracking_status, pvt_status)
+        One entry per satellite with a Main-antenna channel state, where
+        ``sv`` is e.g. ``"G01"`` and the two status values are the raw u2
+        bitfields (2 bits per signal type).
+    """
+    out: list[tuple[str, int, int]] = []
+    sats = chanstatus.get("SatInfo") or chanstatus.get("ChannelSatInfo") or []
+    for sat in sats:
+        try:
+            svid = int(sat["SVID"])
+            if svid == 0:  # Do-Not-Use
+                continue
+            sys_code, prn = decode_svid(svid)
+            sv = f"{sys_code}{prn:02d}"
+            for state in sat.get("StateInfo") or []:
+                if int(state.get("Antenna", 0)) == 0:  # Main antenna
+                    out.append(
+                        (
+                            sv,
+                            int(state["TrackingStatus"]),
+                            int(state["PVTStatus"]),
+                        )
+                    )
+                    break
+        except KeyError, TypeError, ValueError:
+            continue
+    return out
+
+
 def _build_obs_map(meas_epoch_data: dict[str, Any]) -> dict[tuple[int, int], int]:
     """Build ``(rx_channel, sig_num) → svid`` mapping from a MeasEpoch dict.
 
@@ -698,8 +965,9 @@ def _build_obs_map(meas_epoch_data: dict[str, Any]) -> dict[tuple[int, int], int
             type_byte2 = int(t2["Type"])
             obs_info2 = int(t2["ObsInfo"])
             sig_num2 = decode_signal_num(type_byte2, obs_info2)
-            rx_ch2 = int(t2.get("RxChannel", 0))
-            obs_map[(rx_ch2, sig_num2)] = svid
+            # Type2 sub-blocks carry no RxChannel field on the wire —
+            # they inherit the channel of their parent Type1 sub-block.
+            obs_map[(rx_ch, sig_num2)] = svid
     return obs_map
 
 
@@ -815,7 +1083,9 @@ class SbfReader(GNSSDataReader):
         cache: dict[int, int] = {}
         for name, data in parser.read(str(self.fpath)):
             if name == "ChannelStatus":
-                for sat in data.get("ChannelSatInfo", []):
+                # sbf_parser keys the sub-block list "SatInfo";
+                # keep "ChannelSatInfo" as a legacy fallback.
+                for sat in data.get("SatInfo") or data.get("ChannelSatInfo") or []:
                     svid = int(sat["SVID"])
                     if svid != 0:
                         cache[svid] = int(sat["FreqNr"])
@@ -1006,7 +1276,9 @@ class SbfReader(GNSSDataReader):
                     delta_ls = int(data["DeltaLS"])
 
                 case "ChannelStatus":
-                    for sat in data.get("ChannelSatInfo", []):
+                    # sbf_parser keys the sub-block list "SatInfo";
+                    # keep "ChannelSatInfo" as a legacy fallback.
+                    for sat in data.get("SatInfo") or data.get("ChannelSatInfo") or []:
                         svid = int(sat["SVID"])
                         if svid != 0:
                             freq_nr_cache[svid] = int(sat["FreqNr"])
@@ -1056,6 +1328,9 @@ class SbfReader(GNSSDataReader):
         import math
 
         freq_nr_cache = self._freq_nr_cache.copy()
+        # PERF C3: memoize (svid, sig_num) → sid props; only a few hundred
+        # unique pairs exist per file vs ~1M observation decodes.
+        _sid_memo: dict[tuple[int, int], dict[str, Any] | None] = {}
 
         # --- Single pass: collect timestamps, SID properties, and per-epoch obs ---
         # Stores per-epoch obs as dicts (SID → value) so we only scan the file once.
@@ -1065,7 +1340,12 @@ class SbfReader(GNSSDataReader):
         # Per-epoch accumulator: list of (snr_dict, pr_dict, ph_dict, dop_dict)
         epoch_rows: list[
             tuple[
-                dict[str, float], dict[str, float], dict[str, float], dict[str, float]
+                dict[str, float],
+                dict[str, float],
+                dict[str, float],
+                dict[str, float],
+                dict[str, int],
+                dict[str, int],
             ]
         ] = []
 
@@ -1077,9 +1357,16 @@ class SbfReader(GNSSDataReader):
             e_pr: dict[str, float] = {}
             e_ph: dict[str, float] = {}
             e_dop: dict[str, float] = {}
+            e_smooth: dict[str, int] = {}
+            e_half: dict[str, int] = {}
 
             for obs in epoch.observations:
-                props = _sid_props_from_obs(obs.svid, obs.signal_num, freq_nr_cache)
+                _key = (obs.svid, obs.signal_num)
+                if _key not in _sid_memo:
+                    _sid_memo[_key] = _sid_props_from_obs(
+                        obs.svid, obs.signal_num, freq_nr_cache
+                    )
+                props = _sid_memo[_key]
                 if props is None:
                     continue
                 sid = props["sid"]
@@ -1093,8 +1380,11 @@ class SbfReader(GNSSDataReader):
                     e_ph[sid] = obs.phase_cycles
                 if obs.doppler is not None:
                     e_dop[sid] = float(obs.doppler.to(UREG.Hz).magnitude)
+                # ObsInfo bit 0 = smoothing, bit 2 = half-cycle ambiguity
+                e_smooth[sid] = int(obs.obs_info & 0x01)
+                e_half[sid] = int((obs.obs_info >> 2) & 0x01)
 
-            epoch_rows.append((e_snr, e_pr, e_ph, e_dop))
+            epoch_rows.append((e_snr, e_pr, e_ph, e_dop, e_smooth, e_half))
 
         sorted_sids = sorted(sid_props)
         sid_to_idx = {sid: i for i, sid in enumerate(sorted_sids)}
@@ -1107,8 +1397,13 @@ class SbfReader(GNSSDataReader):
         ph_arr = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Phase"])
         dop_arr = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Doppler"])
         ssi_arr = np.full((n_epochs, n_sids), -1, dtype=DTYPES["SSI"])
+        # ObsInfo flags: -1 = no observation, 0 = flag clear, 1 = flag set
+        smoothing_arr = np.full((n_epochs, n_sids), -1, dtype=np.int8)
+        half_cycle_arr = np.full((n_epochs, n_sids), -1, dtype=np.int8)
 
-        for t_idx, (e_snr, e_pr, e_ph, e_dop) in enumerate(epoch_rows):
+        for t_idx, (e_snr, e_pr, e_ph, e_dop, e_smooth, e_half) in enumerate(
+            epoch_rows
+        ):
             for sid, val in e_snr.items():
                 snr_arr[t_idx, sid_to_idx[sid]] = val
             for sid, val in e_pr.items():
@@ -1117,6 +1412,10 @@ class SbfReader(GNSSDataReader):
                 ph_arr[t_idx, sid_to_idx[sid]] = val
             for sid, val in e_dop.items():
                 dop_arr[t_idx, sid_to_idx[sid]] = val
+            for sid, flag in e_smooth.items():
+                smoothing_arr[t_idx, sid_to_idx[sid]] = flag
+            for sid, flag in e_half.items():
+                half_cycle_arr[t_idx, sid_to_idx[sid]] = flag
 
         # Build coordinate arrays
         freq_center = np.asarray(
@@ -1191,6 +1490,16 @@ class SbfReader(GNSSDataReader):
                 "Phase": (["epoch", "sid"], ph_arr, OBSERVABLES_METADATA["Phase"]),
                 "Doppler": (["epoch", "sid"], dop_arr, OBSERVABLES_METADATA["Doppler"]),
                 "SSI": (["epoch", "sid"], ssi_arr, OBSERVABLES_METADATA["SSI"]),
+                "Smoothing": (
+                    ["epoch", "sid"],
+                    smoothing_arr,
+                    _SMOOTHING_FLAG_ATTRS,
+                ),
+                "HalfCycle": (
+                    ["epoch", "sid"],
+                    half_cycle_arr,
+                    _HALF_CYCLE_ATTRS,
+                ),
             },
             coords=coords,
             attrs=attrs,
@@ -1245,7 +1554,14 @@ class SbfReader(GNSSDataReader):
             ``(epoch, sid)`` data variables.
         """
         parser = sbf_parser.SbfParser()
-        freq_nr_cache = self._freq_nr_cache.copy()
+        # PERF C4: start with an empty FreqNr map instead of the
+        # _freq_nr_cache pre-scan (which costs a full extra file pass);
+        # the map is filled on-the-fly from ChannelStatus blocks, which
+        # appear within the first epoch in practice.
+        freq_nr_cache: dict[int, int] = {}
+        # PERF C3: memoize (svid, sig_num) → sid props; only a few hundred
+        # unique pairs exist per file vs ~1M observation decodes.
+        _sid_memo: dict[tuple[int, int], dict[str, Any] | None] = {}
 
         pending: dict[str, Any] = {
             "pvt": None,
@@ -1253,9 +1569,13 @@ class SbfReader(GNSSDataReader):
             "status": None,
             "satvis": [],
             "extra": [],
+            "qualind": None,
+            "rfstatus": None,
+            "chanstatus": None,
         }
 
-        # Each record: (ts, pvt, dop, status, satvis, extra, obs_map)
+        # Each record: (ts, pvt, dop, status, satvis, extra,
+        #               qualind, rfstatus, chanstatus, obs_map)
         records: list[tuple[Any, ...]] = []
 
         # sid discovery — same logic as to_ds() pass 1
@@ -1269,7 +1589,10 @@ class SbfReader(GNSSDataReader):
                     delta_ls = int(data["DeltaLS"])
 
                 case "ChannelStatus":
-                    for sat in data.get("ChannelSatInfo", []):
+                    pending["chanstatus"] = data
+                    # sbf_parser keys the sub-block list "SatInfo";
+                    # keep "ChannelSatInfo" as a legacy fallback.
+                    for sat in data.get("SatInfo") or data.get("ChannelSatInfo") or []:
                         svid_cs = int(sat["SVID"])
                         if svid_cs != 0:
                             freq_nr_cache[svid_cs] = int(sat["FreqNr"])
@@ -1289,6 +1612,12 @@ class SbfReader(GNSSDataReader):
                 case "MeasExtra":
                     pending["extra"] = list(data.get("MeasExtraChannel", []))
 
+                case "QualityInd":
+                    pending["qualind"] = data
+
+                case "RFStatus":
+                    pending["rfstatus"] = data
+
                 case "MeasEpoch":
                     tow_ms = int(data["TOW"])
                     wn = int(data["WNc"])
@@ -1298,20 +1627,28 @@ class SbfReader(GNSSDataReader):
                     # Discover sids from Type1 and Type2 sub-blocks
                     for t1 in data.get("Type_1", []):
                         svid1 = int(t1["SVID"])
-                        props1 = _sid_props_from_obs(
+                        _key1 = (
                             svid1,
                             decode_signal_num(int(t1["Type"]), int(t1["ObsInfo"])),
-                            freq_nr_cache,
                         )
+                        if _key1 not in _sid_memo:
+                            _sid_memo[_key1] = _sid_props_from_obs(
+                                svid1, _key1[1], freq_nr_cache
+                            )
+                        props1 = _sid_memo[_key1]
                         if props1 is not None and props1["sid"] not in sid_props:
                             sid_props[props1["sid"]] = props1
 
                         for t2 in t1.get("Type_2", []):
-                            props2 = _sid_props_from_obs(
+                            _key2 = (
                                 svid1,
                                 decode_signal_num(int(t2["Type"]), int(t2["ObsInfo"])),
-                                freq_nr_cache,
                             )
+                            if _key2 not in _sid_memo:
+                                _sid_memo[_key2] = _sid_props_from_obs(
+                                    svid1, _key2[1], freq_nr_cache
+                                )
+                            props2 = _sid_memo[_key2]
                             if props2 is not None and props2["sid"] not in sid_props:
                                 sid_props[props2["sid"]] = props2
 
@@ -1323,6 +1660,9 @@ class SbfReader(GNSSDataReader):
                             pending["status"],
                             list(pending["satvis"]),
                             list(pending["extra"]),
+                            pending["qualind"],
+                            pending["rfstatus"],
+                            pending["chanstatus"],
                             obs_map,
                         )
                     )
@@ -1332,6 +1672,9 @@ class SbfReader(GNSSDataReader):
                         "status": None,
                         "satvis": [],
                         "extra": [],
+                        "qualind": None,
+                        "rfstatus": None,
+                        "chanstatus": None,
                     }
 
         # Build index structures
@@ -1358,6 +1701,9 @@ class SbfReader(GNSSDataReader):
         cum_loss_cont_arr = np.full((n_epochs, n_sids), np.nan, dtype=np.float32)
         car_mp_corr_arr = np.full((n_epochs, n_sids), np.nan, dtype=np.float32)
         cn0_highres_arr = np.full((n_epochs, n_sids), np.nan, dtype=np.float32)
+        # ChannelStatus raw bitfields, broadcast per-sv (0 = idle / no info)
+        tracking_status_arr = np.zeros((n_epochs, n_sids), dtype=np.uint16)
+        pvt_status_arr = np.zeros((n_epochs, n_sids), dtype=np.uint16)
 
         # (epoch,) scalar coordinate arrays
         pdop_arr = np.full(n_epochs, np.nan, dtype=np.float32)
@@ -1371,46 +1717,88 @@ class SbfReader(GNSSDataReader):
         cpu_load_arr = np.full(n_epochs, -1, dtype=np.int8)
         temp_arr = np.full(n_epochs, np.nan, dtype=np.float32)
         rx_error_arr = np.full(n_epochs, 0, dtype=np.int32)
+        # QualityInd scores (0-10; -1 = unknown / block absent)
+        qual_overall_arr = np.full(n_epochs, -1, dtype=np.int8)
+        qual_gnss_main_arr = np.full(n_epochs, -1, dtype=np.int8)
+        qual_rf_main_arr = np.full(n_epochs, -1, dtype=np.int8)
+        qual_cpu_arr = np.full(n_epochs, -1, dtype=np.int8)
+        qual_scint_arr = np.full(n_epochs, -1, dtype=np.int8)
+        # RFStatus flags (0/1; -1 = block absent)
+        spoofing_arr = np.full(n_epochs, -1, dtype=np.int8)
+        nma_fail_arr = np.full(n_epochs, -1, dtype=np.int8)
 
         timestamps: list[np.datetime64] = []
 
         # Fill arrays from records
-        for t_idx, (ts, pvt, dop, status, satvis, extra, obs_map) in enumerate(records):
+        for t_idx, (
+            ts,
+            pvt,
+            dop,
+            status,
+            satvis,
+            extra,
+            qualind,
+            rfstatus,
+            chanstatus,
+            obs_map,
+        ) in enumerate(records):
             timestamps.append(np.datetime64(ts.replace(tzinfo=None), "ns"))
 
             # DOP block → pdop, hdop, vdop
             if dop is not None:
                 try:
-                    pdop_arr[t_idx] = float(dop["PDOP"]) * 0.01
-                    hdop_arr[t_idx] = float(dop["HDOP"]) * 0.01
-                    vdop_arr[t_idx] = float(dop["VDOP"]) * 0.01
+                    # PDOP/HDOP/VDOP: u2, 0.01/LSB, Do-Not-Use 0 → NaN
+                    raw_pdop = int(dop["PDOP"])
+                    if raw_pdop != 0:
+                        pdop_arr[t_idx] = raw_pdop * 0.01
+                    raw_hdop = int(dop["HDOP"])
+                    if raw_hdop != 0:
+                        hdop_arr[t_idx] = raw_hdop * 0.01
+                    raw_vdop = int(dop["VDOP"])
+                    if raw_vdop != 0:
+                        vdop_arr[t_idx] = raw_vdop * 0.01
                 except KeyError, TypeError, ValueError:
                     pass
 
             # PVTGeodetic → n_sv, accuracy, mode, correction age
             if pvt is not None:
                 try:
-                    n_sv_arr[t_idx] = int(pvt.get("NrSV", pvt.get("NrSVAnt", -1)))
+                    # NrSV: u1, Do-Not-Use 255 → sentinel -1
+                    raw_nrsv = int(pvt.get("NrSV", pvt.get("NrSVAnt", 255)))
+                    n_sv_arr[t_idx] = -1 if raw_nrsv == 255 else raw_nrsv
                     raw_hacc = int(pvt["HAccuracy"])
                     if raw_hacc != 65535:
                         h_acc_arr[t_idx] = raw_hacc * 0.01
                     raw_vacc = int(pvt["VAccuracy"])
                     if raw_vacc != 65535:
                         v_acc_arr[t_idx] = raw_vacc * 0.01
-                    pvt_mode_arr[t_idx] = int(pvt["Mode"])
-                    mean_corr_arr[t_idx] = float(pvt["MeanCorrAge"]) * 0.01
+                    # Mode: bits 0-3 = PVT solution mode; bits 4-7 are
+                    # flag bits (e.g. 2D flag) that must be masked off.
+                    pvt_mode_arr[t_idx] = int(pvt["Mode"]) & 0x0F
+                    # MeanCorrAge: u2, 0.01 s/LSB, Do-Not-Use 65535 → NaN
+                    raw_mca = int(pvt["MeanCorrAge"])
+                    if raw_mca != 65535:
+                        mean_corr_arr[t_idx] = raw_mca * 0.01
                     # Also pick up DOP from PVTGeodetic if DOP block absent
                     if np.isnan(pdop_arr[t_idx]):
-                        pdop_arr[t_idx] = float(pvt["PDOP"]) * 0.01
-                        hdop_arr[t_idx] = float(pvt["HDOP"]) * 0.01
-                        vdop_arr[t_idx] = float(pvt["VDOP"]) * 0.01
+                        raw_pdop = int(pvt["PDOP"])
+                        if raw_pdop != 0:
+                            pdop_arr[t_idx] = raw_pdop * 0.01
+                        raw_hdop = int(pvt["HDOP"])
+                        if raw_hdop != 0:
+                            hdop_arr[t_idx] = raw_hdop * 0.01
+                        raw_vdop = int(pvt["VDOP"])
+                        if raw_vdop != 0:
+                            vdop_arr[t_idx] = raw_vdop * 0.01
                 except KeyError, TypeError, ValueError:
                     pass
 
             # ReceiverStatus → cpu_load, temperature, rx_error
             if status is not None:
                 try:
-                    cpu_load_arr[t_idx] = int(status["CPULoad"])
+                    # CPULoad: u1, %, Do-Not-Use 255 → sentinel -1
+                    raw_cpu = int(status["CPULoad"])
+                    cpu_load_arr[t_idx] = -1 if raw_cpu == 255 else raw_cpu
                     raw_temp = int(status["Temperature"])
                     if raw_temp != 0:  # 0 is DoNotUse (RefGuide p.397)
                         temp_arr[t_idx] = float(raw_temp - 100)
@@ -1426,7 +1814,9 @@ class SbfReader(GNSSDataReader):
                     sv = f"{sys_code}{prn:02d}"
                     theta_deg = 90.0 - int(sat_info["Elevation"]) * 0.01
                     phi_deg = int(sat_info["Azimuth"]) * 0.01
-                    rs = int(sat_info["RiseSet"])
+                    # RiseSet: u1, 255 = unknown → sentinel -1 (int8-safe)
+                    rs_raw = int(sat_info["RiseSet"])
+                    rs = -1 if rs_raw == 255 else rs_raw
                     for s_idx in sids_for_sv.get(sv, []):
                         theta_arr[t_idx, s_idx] = theta_deg
                         phi_arr[t_idx, s_idx] = phi_deg
@@ -1494,6 +1884,32 @@ class SbfReader(GNSSDataReader):
                 except KeyError, TypeError, ValueError:
                     pass
 
+            # QualityInd → receiver quality indicator scores
+            if qualind is not None:
+                q_vals = _decode_quality_indicators(qualind)
+                qual_overall_arr[t_idx] = q_vals.get(0, -1)
+                qual_gnss_main_arr[t_idx] = q_vals.get(1, -1)
+                qual_rf_main_arr[t_idx] = q_vals.get(11, -1)
+                qual_cpu_arr[t_idx] = q_vals.get(21, -1)
+                qual_scint_arr[t_idx] = q_vals.get(29, -1)
+
+            # RFStatus → spoofing / NMA authentication flags
+            if rfstatus is not None:
+                try:
+                    rf_flags = int(rfstatus["Flags"])
+                    spoofing_arr[t_idx] = rf_flags & 0x01
+                    nma_fail_arr[t_idx] = (rf_flags >> 1) & 0x01
+                except KeyError, TypeError, ValueError:
+                    pass
+
+            # ChannelStatus → raw tracking / PVT status bitfields,
+            # broadcast to all SIDs of each satellite (Main antenna only)
+            if chanstatus is not None:
+                for sv_trk, trk_raw, pvt_raw in _extract_tracking_info(chanstatus):
+                    for s_idx in sids_for_sv.get(sv_trk, []):
+                        tracking_status_arr[t_idx, s_idx] = trk_raw
+                        pvt_status_arr[t_idx, s_idx] = pvt_raw
+
         # Build Dataset
         freq_center = np.asarray(
             [sid_props[s]["freq_center"] for s in sorted_sids], dtype=np.float32
@@ -1547,6 +1963,13 @@ class SbfReader(GNSSDataReader):
             "cpu_load": ("epoch", cpu_load_arr, _CPU_LOAD_ATTRS),
             "temperature_c": ("epoch", temp_arr, _TEMPERATURE_ATTRS),
             "rx_error": ("epoch", rx_error_arr, _RX_ERROR_ATTRS),
+            "qual_overall": ("epoch", qual_overall_arr, _QUAL_OVERALL_ATTRS),
+            "qual_gnss_main": ("epoch", qual_gnss_main_arr, _QUAL_GNSS_MAIN_ATTRS),
+            "qual_rf_main": ("epoch", qual_rf_main_arr, _QUAL_RF_MAIN_ATTRS),
+            "qual_cpu": ("epoch", qual_cpu_arr, _QUAL_CPU_ATTRS),
+            "qual_scintillation": ("epoch", qual_scint_arr, _QUAL_SCINT_ATTRS),
+            "spoofing_flag": ("epoch", spoofing_arr, _SPOOFING_FLAG_ATTRS),
+            "nma_fail_flag": ("epoch", nma_fail_arr, _NMA_FAIL_ATTRS),
         }
 
         attrs = self._build_attrs()
@@ -1591,6 +2014,16 @@ class SbfReader(GNSSDataReader):
                     ["epoch", "sid"],
                     cn0_highres_arr,
                     _CN0_HIGHRES_CORRECTION_ATTRS,
+                ),
+                "tracking_status_raw": (
+                    ["epoch", "sid"],
+                    tracking_status_arr,
+                    _TRACKING_STATUS_RAW_ATTRS,
+                ),
+                "pvt_status_raw": (
+                    ["epoch", "sid"],
+                    pvt_status_arr,
+                    _PVT_STATUS_RAW_ATTRS,
                 ),
             },
             coords=coords,
@@ -1649,7 +2082,14 @@ class SbfReader(GNSSDataReader):
         import math
 
         parser = sbf_parser.SbfParser()
-        freq_nr_cache = self._freq_nr_cache.copy()
+        # PERF C4: start with an empty FreqNr map instead of the
+        # _freq_nr_cache pre-scan (which costs a full extra file pass);
+        # the map is filled on-the-fly from ChannelStatus blocks, which
+        # appear within the first epoch in practice.
+        freq_nr_cache: dict[int, int] = {}
+        # PERF C3: memoize (svid, sig_num) → sid props; only a few hundred
+        # unique pairs exist per file vs ~1M observation decodes.
+        _sid_memo: dict[tuple[int, int], dict[str, Any] | None] = {}
         delta_ls: int = _DEFAULT_DELTA_LS
 
         # Separate sid discovery for obs (matches to_ds) and metadata (matches to_metadata_ds)
@@ -1660,7 +2100,12 @@ class SbfReader(GNSSDataReader):
         timestamps_obs: list[np.datetime64] = []
         epoch_rows: list[
             tuple[
-                dict[str, float], dict[str, float], dict[str, float], dict[str, float]
+                dict[str, float],
+                dict[str, float],
+                dict[str, float],
+                dict[str, float],
+                dict[str, int],
+                dict[str, int],
             ]
         ] = []
 
@@ -1671,6 +2116,9 @@ class SbfReader(GNSSDataReader):
             "status": None,
             "satvis": [],
             "extra": [],
+            "qualind": None,
+            "rfstatus": None,
+            "chanstatus": None,
         }
         records: list[tuple[Any, ...]] = []
 
@@ -1680,7 +2128,10 @@ class SbfReader(GNSSDataReader):
                     delta_ls = int(data["DeltaLS"])
 
                 case "ChannelStatus":
-                    for sat in data.get("ChannelSatInfo", []):
+                    pending["chanstatus"] = data
+                    # sbf_parser keys the sub-block list "SatInfo";
+                    # keep "ChannelSatInfo" as a legacy fallback.
+                    for sat in data.get("SatInfo") or data.get("ChannelSatInfo") or []:
                         svid = int(sat["SVID"])
                         if svid != 0:
                             freq_nr_cache[svid] = int(sat["FreqNr"])
@@ -1700,38 +2151,118 @@ class SbfReader(GNSSDataReader):
                 case "MeasExtra":
                     pending["extra"] = list(data.get("MeasExtraChannel", []))
 
+                case "QualityInd":
+                    pending["qualind"] = data
+
+                case "RFStatus":
+                    pending["rfstatus"] = data
+
                 case "MeasEpoch":
-                    # --- Obs side ---
-                    epoch = self._decode_epoch(data, freq_nr_cache, delta_ls)
-                    if epoch is not None:
-                        ts_np = np.datetime64(
-                            epoch.timestamp.replace(tzinfo=None), "ns"
-                        )
-                        timestamps_obs.append(ts_np)
-                        e_snr: dict[str, float] = {}
-                        e_pr: dict[str, float] = {}
-                        e_ph: dict[str, float] = {}
-                        e_dop: dict[str, float] = {}
-                        for obs in epoch.observations:
-                            props = _sid_props_from_obs(
-                                obs.svid, obs.signal_num, freq_nr_cache
+                    # --- Obs side (fast path: zero pint/pydantic allocations) ---
+                    tow_ms_obs = int(data["TOW"])
+                    wn_obs = int(data["WNc"])
+                    ts_np = np.datetime64(
+                        _tow_wn_to_utc(tow_ms_obs, wn_obs, delta_ls).replace(
+                            tzinfo=None
+                        ),
+                        "ns",
+                    )
+                    timestamps_obs.append(ts_np)
+                    e_snr: dict[str, float] = {}
+                    e_pr: dict[str, float] = {}
+                    e_ph: dict[str, float] = {}
+                    e_dop: dict[str, float] = {}
+                    e_smooth: dict[str, int] = {}
+                    e_half: dict[str, int] = {}
+                    for t1 in data.get("Type_1", []):
+                        svid1 = int(t1["SVID"])
+                        obs_info1 = int(t1["ObsInfo"])
+                        sig_num1 = decode_signal_num(int(t1["Type"]), obs_info1)
+                        # Compute T1 scalars even when T1 signal unknown — T2 needs them.
+                        pr1_f = _pseudorange_m_f(int(t1["Misc"]), int(t1["CodeLSB"]))
+                        dop1_f = _doppler_hz_f(int(t1["Doppler"]))
+                        freq1_hz = _resolve_freq_hz(sig_num1, svid1, freq_nr_cache)
+                        # Fill T1 obs when signal is known.
+                        _key1 = (svid1, sig_num1)
+                        if _key1 not in _sid_memo:
+                            _sid_memo[_key1] = _sid_props_from_obs(
+                                svid1, sig_num1, freq_nr_cache
                             )
-                            if props is None:
-                                continue
-                            sid = props["sid"]
-                            if sid not in sid_props_obs:
-                                sid_props_obs[sid] = props
-                            if obs.cn0 is not None:
-                                e_snr[sid] = float(obs.cn0.to(UREG.dBHz).magnitude)
-                            if obs.pseudorange is not None:
-                                e_pr[sid] = float(
-                                    obs.pseudorange.to(UREG.meter).magnitude
+                        props1 = _sid_memo[_key1]
+                        if props1 is not None:
+                            sid1 = props1["sid"]
+                            if sid1 not in sid_props_obs:
+                                sid_props_obs[sid1] = props1
+                            cn0_1f = _cn0_dbhz_f(int(t1["CN0"]), sig_num1)
+                            if cn0_1f is not None:
+                                e_snr[sid1] = cn0_1f
+                            if pr1_f is not None:
+                                e_pr[sid1] = pr1_f
+                            if dop1_f is not None:
+                                e_dop[sid1] = dop1_f
+                            if pr1_f is not None and freq1_hz is not None:
+                                ph1_f = _phase_cycles_f(
+                                    pr1_f,
+                                    int(t1["CarrierMSB"]),
+                                    int(t1["CarrierLSB"]),
+                                    freq1_hz,
                                 )
-                            if obs.phase_cycles is not None:
-                                e_ph[sid] = obs.phase_cycles
-                            if obs.doppler is not None:
-                                e_dop[sid] = float(obs.doppler.to(UREG.Hz).magnitude)
-                        epoch_rows.append((e_snr, e_pr, e_ph, e_dop))
+                                if ph1_f is not None:
+                                    e_ph[sid1] = ph1_f
+                            # ObsInfo bit 0 = smoothing, bit 2 = half-cycle
+                            e_smooth[sid1] = obs_info1 & 0x01
+                            e_half[sid1] = (obs_info1 >> 2) & 0x01
+                        # T2 obs: CN0 always decoded; PR/D/phase need T1 values.
+                        for t2 in t1.get("Type_2", []):
+                            obs_info2 = int(t2["ObsInfo"])
+                            sig_num2 = decode_signal_num(int(t2["Type"]), obs_info2)
+                            _key2 = (svid1, sig_num2)
+                            if _key2 not in _sid_memo:
+                                _sid_memo[_key2] = _sid_props_from_obs(
+                                    svid1, sig_num2, freq_nr_cache
+                                )
+                            props2 = _sid_memo[_key2]
+                            if props2 is None:
+                                continue
+                            sid2 = props2["sid"]
+                            if sid2 not in sid_props_obs:
+                                sid_props_obs[sid2] = props2
+                            cn0_2f = _cn0_dbhz_f(int(t2["CN0"]), sig_num2)
+                            if cn0_2f is not None:
+                                e_snr[sid2] = cn0_2f
+                            code_msb2, dop_msb2 = decode_offsets_msb(
+                                int(t2["OffsetMSB"])
+                            )
+                            code_lsb2 = int(t2["CodeOffsetLSB"])
+                            dop_lsb2 = int(t2["DopplerOffsetLSB"])
+                            pr2_f = None
+                            if pr1_f is not None:
+                                pr2_f = _pr2_m_f(pr1_f, code_msb2, code_lsb2)
+                                if pr2_f is not None:
+                                    e_pr[sid2] = pr2_f
+                            freq2_hz = _resolve_freq_hz(sig_num2, svid1, freq_nr_cache)
+                            if (
+                                dop1_f is not None
+                                and freq1_hz is not None
+                                and freq2_hz is not None
+                            ):
+                                d2_f = _doppler2_hz_f(
+                                    dop1_f, dop_msb2, dop_lsb2, freq2_hz, freq1_hz
+                                )
+                                if d2_f is not None:
+                                    e_dop[sid2] = d2_f
+                            if pr2_f is not None and freq2_hz is not None:
+                                ph2_f = _phase_cycles_f(
+                                    pr2_f,
+                                    int(t2["CarrierMSB"]),
+                                    int(t2["CarrierLSB"]),
+                                    freq2_hz,
+                                )
+                                if ph2_f is not None:
+                                    e_ph[sid2] = ph2_f
+                            e_smooth[sid2] = obs_info2 & 0x01
+                            e_half[sid2] = (obs_info2 >> 2) & 0x01
+                    epoch_rows.append((e_snr, e_pr, e_ph, e_dop, e_smooth, e_half))
 
                     # --- Metadata side (always, even if epoch decoded as None) ---
                     tow_ms = int(data["TOW"])
@@ -1742,19 +2273,27 @@ class SbfReader(GNSSDataReader):
                     # Discover sids from Type1/Type2 sub-blocks (same as to_metadata_ds)
                     for t1 in data.get("Type_1", []):
                         svid1 = int(t1["SVID"])
-                        props1 = _sid_props_from_obs(
+                        _key1 = (
                             svid1,
                             decode_signal_num(int(t1["Type"]), int(t1["ObsInfo"])),
-                            freq_nr_cache,
                         )
+                        if _key1 not in _sid_memo:
+                            _sid_memo[_key1] = _sid_props_from_obs(
+                                svid1, _key1[1], freq_nr_cache
+                            )
+                        props1 = _sid_memo[_key1]
                         if props1 is not None and props1["sid"] not in sid_props_meta:
                             sid_props_meta[props1["sid"]] = props1
                         for t2 in t1.get("Type_2", []):
-                            props2 = _sid_props_from_obs(
+                            _key2 = (
                                 svid1,
                                 decode_signal_num(int(t2["Type"]), int(t2["ObsInfo"])),
-                                freq_nr_cache,
                             )
+                            if _key2 not in _sid_memo:
+                                _sid_memo[_key2] = _sid_props_from_obs(
+                                    svid1, _key2[1], freq_nr_cache
+                                )
+                            props2 = _sid_memo[_key2]
                             if (
                                 props2 is not None
                                 and props2["sid"] not in sid_props_meta
@@ -1769,6 +2308,9 @@ class SbfReader(GNSSDataReader):
                             pending["status"],
                             list(pending["satvis"]),
                             list(pending["extra"]),
+                            pending["qualind"],
+                            pending["rfstatus"],
+                            pending["chanstatus"],
                             obs_map,
                         )
                     )
@@ -1778,6 +2320,9 @@ class SbfReader(GNSSDataReader):
                         "status": None,
                         "satvis": [],
                         "extra": [],
+                        "qualind": None,
+                        "rfstatus": None,
+                        "chanstatus": None,
                     }
 
         # ----------------------------------------------------------------
@@ -1793,8 +2338,13 @@ class SbfReader(GNSSDataReader):
         ph_arr = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Phase"])
         dop_arr = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Doppler"])
         ssi_arr = np.full((n_epochs, n_sids), -1, dtype=DTYPES["SSI"])
+        # ObsInfo flags: -1 = no observation, 0 = flag clear, 1 = flag set
+        smoothing_arr = np.full((n_epochs, n_sids), -1, dtype=np.int8)
+        half_cycle_arr = np.full((n_epochs, n_sids), -1, dtype=np.int8)
 
-        for t_idx, (e_snr, e_pr, e_ph, e_dop) in enumerate(epoch_rows):
+        for t_idx, (e_snr, e_pr, e_ph, e_dop, e_smooth, e_half) in enumerate(
+            epoch_rows
+        ):
             for sid, val in e_snr.items():
                 snr_arr[t_idx, sid_to_idx[sid]] = val
             for sid, val in e_pr.items():
@@ -1803,6 +2353,10 @@ class SbfReader(GNSSDataReader):
                 ph_arr[t_idx, sid_to_idx[sid]] = val
             for sid, val in e_dop.items():
                 dop_arr[t_idx, sid_to_idx[sid]] = val
+            for sid, flag in e_smooth.items():
+                smoothing_arr[t_idx, sid_to_idx[sid]] = flag
+            for sid, flag in e_half.items():
+                half_cycle_arr[t_idx, sid_to_idx[sid]] = flag
 
         freq_center = np.asarray(
             [sid_props_obs[s]["freq_center"] for s in sorted_sids],
@@ -1878,6 +2432,16 @@ class SbfReader(GNSSDataReader):
                 "Phase": (["epoch", "sid"], ph_arr, OBSERVABLES_METADATA["Phase"]),
                 "Doppler": (["epoch", "sid"], dop_arr, OBSERVABLES_METADATA["Doppler"]),
                 "SSI": (["epoch", "sid"], ssi_arr, OBSERVABLES_METADATA["SSI"]),
+                "Smoothing": (
+                    ["epoch", "sid"],
+                    smoothing_arr,
+                    _SMOOTHING_FLAG_ATTRS,
+                ),
+                "HalfCycle": (
+                    ["epoch", "sid"],
+                    half_cycle_arr,
+                    _HALF_CYCLE_ATTRS,
+                ),
             },
             coords=coords_obs,
             attrs=attrs,
@@ -1930,6 +2494,9 @@ class SbfReader(GNSSDataReader):
         cn0_highres_arr = np.full(
             (n_epochs_meta, n_sids_meta), np.nan, dtype=np.float32
         )
+        # ChannelStatus raw bitfields, broadcast per-sv (0 = idle / no info)
+        tracking_status_arr = np.zeros((n_epochs_meta, n_sids_meta), dtype=np.uint16)
+        pvt_status_arr = np.zeros((n_epochs_meta, n_sids_meta), dtype=np.uint16)
 
         pdop_arr = np.full(n_epochs_meta, np.nan, dtype=np.float32)
         hdop_arr = np.full(n_epochs_meta, np.nan, dtype=np.float32)
@@ -1942,41 +2509,83 @@ class SbfReader(GNSSDataReader):
         cpu_load_arr = np.full(n_epochs_meta, -1, dtype=np.int8)
         temp_arr = np.full(n_epochs_meta, np.nan, dtype=np.float32)
         rx_error_arr = np.full(n_epochs_meta, 0, dtype=np.int32)
+        # QualityInd scores (0-10; -1 = unknown / block absent)
+        qual_overall_arr = np.full(n_epochs_meta, -1, dtype=np.int8)
+        qual_gnss_main_arr = np.full(n_epochs_meta, -1, dtype=np.int8)
+        qual_rf_main_arr = np.full(n_epochs_meta, -1, dtype=np.int8)
+        qual_cpu_arr = np.full(n_epochs_meta, -1, dtype=np.int8)
+        qual_scint_arr = np.full(n_epochs_meta, -1, dtype=np.int8)
+        # RFStatus flags (0/1; -1 = block absent)
+        spoofing_arr = np.full(n_epochs_meta, -1, dtype=np.int8)
+        nma_fail_arr = np.full(n_epochs_meta, -1, dtype=np.int8)
 
         timestamps_meta: list[np.datetime64] = []
 
-        for t_idx, (ts, pvt, dop, status, satvis, extra, obs_map) in enumerate(records):
+        for t_idx, (
+            ts,
+            pvt,
+            dop,
+            status,
+            satvis,
+            extra,
+            qualind,
+            rfstatus,
+            chanstatus,
+            obs_map,
+        ) in enumerate(records):
             timestamps_meta.append(np.datetime64(ts.replace(tzinfo=None), "ns"))
 
             if dop is not None:
                 try:
-                    pdop_arr[t_idx] = float(dop["PDOP"]) * 0.01
-                    hdop_arr[t_idx] = float(dop["HDOP"]) * 0.01
-                    vdop_arr[t_idx] = float(dop["VDOP"]) * 0.01
+                    # PDOP/HDOP/VDOP: u2, 0.01/LSB, Do-Not-Use 0 → NaN
+                    raw_pdop = int(dop["PDOP"])
+                    if raw_pdop != 0:
+                        pdop_arr[t_idx] = raw_pdop * 0.01
+                    raw_hdop = int(dop["HDOP"])
+                    if raw_hdop != 0:
+                        hdop_arr[t_idx] = raw_hdop * 0.01
+                    raw_vdop = int(dop["VDOP"])
+                    if raw_vdop != 0:
+                        vdop_arr[t_idx] = raw_vdop * 0.01
                 except KeyError, TypeError, ValueError:
                     pass
 
             if pvt is not None:
                 try:
-                    n_sv_arr[t_idx] = int(pvt.get("NrSV", pvt.get("NrSVAnt", -1)))
+                    # NrSV: u1, Do-Not-Use 255 → sentinel -1
+                    raw_nrsv = int(pvt.get("NrSV", pvt.get("NrSVAnt", 255)))
+                    n_sv_arr[t_idx] = -1 if raw_nrsv == 255 else raw_nrsv
                     raw_hacc = int(pvt["HAccuracy"])
                     if raw_hacc != 65535:
                         h_acc_arr[t_idx] = raw_hacc * 0.01
                     raw_vacc = int(pvt["VAccuracy"])
                     if raw_vacc != 65535:
                         v_acc_arr[t_idx] = raw_vacc * 0.01
-                    pvt_mode_arr[t_idx] = int(pvt["Mode"])
-                    mean_corr_arr[t_idx] = float(pvt["MeanCorrAge"]) * 0.01
+                    # Mode: bits 0-3 = PVT solution mode; bits 4-7 are
+                    # flag bits (e.g. 2D flag) that must be masked off.
+                    pvt_mode_arr[t_idx] = int(pvt["Mode"]) & 0x0F
+                    # MeanCorrAge: u2, 0.01 s/LSB, Do-Not-Use 65535 → NaN
+                    raw_mca = int(pvt["MeanCorrAge"])
+                    if raw_mca != 65535:
+                        mean_corr_arr[t_idx] = raw_mca * 0.01
                     if np.isnan(pdop_arr[t_idx]):
-                        pdop_arr[t_idx] = float(pvt["PDOP"]) * 0.01
-                        hdop_arr[t_idx] = float(pvt["HDOP"]) * 0.01
-                        vdop_arr[t_idx] = float(pvt["VDOP"]) * 0.01
+                        raw_pdop = int(pvt["PDOP"])
+                        if raw_pdop != 0:
+                            pdop_arr[t_idx] = raw_pdop * 0.01
+                        raw_hdop = int(pvt["HDOP"])
+                        if raw_hdop != 0:
+                            hdop_arr[t_idx] = raw_hdop * 0.01
+                        raw_vdop = int(pvt["VDOP"])
+                        if raw_vdop != 0:
+                            vdop_arr[t_idx] = raw_vdop * 0.01
                 except KeyError, TypeError, ValueError:
                     pass
 
             if status is not None:
                 try:
-                    cpu_load_arr[t_idx] = int(status["CPULoad"])
+                    # CPULoad: u1, %, Do-Not-Use 255 → sentinel -1
+                    raw_cpu = int(status["CPULoad"])
+                    cpu_load_arr[t_idx] = -1 if raw_cpu == 255 else raw_cpu
                     raw_temp = int(status["Temperature"])
                     if raw_temp != 0:  # 0 is DoNotUse (RefGuide p.397)
                         temp_arr[t_idx] = float(raw_temp - 100)
@@ -1991,7 +2600,9 @@ class SbfReader(GNSSDataReader):
                     sv = f"{sys_code}{prn:02d}"
                     theta_deg = 90.0 - int(sat_info["Elevation"]) * 0.01
                     phi_deg = int(sat_info["Azimuth"]) * 0.01
-                    rs = int(sat_info["RiseSet"])
+                    # RiseSet: u1, 255 = unknown → sentinel -1 (int8-safe)
+                    rs_raw = int(sat_info["RiseSet"])
+                    rs = -1 if rs_raw == 255 else rs_raw
                     for s_idx in sids_for_sv.get(sv, []):
                         theta_arr[t_idx, s_idx] = theta_deg
                         phi_arr[t_idx, s_idx] = phi_deg
@@ -2058,6 +2669,32 @@ class SbfReader(GNSSDataReader):
                 except KeyError, TypeError, ValueError:
                     pass
 
+            # QualityInd → receiver quality indicator scores
+            if qualind is not None:
+                q_vals = _decode_quality_indicators(qualind)
+                qual_overall_arr[t_idx] = q_vals.get(0, -1)
+                qual_gnss_main_arr[t_idx] = q_vals.get(1, -1)
+                qual_rf_main_arr[t_idx] = q_vals.get(11, -1)
+                qual_cpu_arr[t_idx] = q_vals.get(21, -1)
+                qual_scint_arr[t_idx] = q_vals.get(29, -1)
+
+            # RFStatus → spoofing / NMA authentication flags
+            if rfstatus is not None:
+                try:
+                    rf_flags = int(rfstatus["Flags"])
+                    spoofing_arr[t_idx] = rf_flags & 0x01
+                    nma_fail_arr[t_idx] = (rf_flags >> 1) & 0x01
+                except KeyError, TypeError, ValueError:
+                    pass
+
+            # ChannelStatus → raw tracking / PVT status bitfields,
+            # broadcast to all SIDs of each satellite (Main antenna only)
+            if chanstatus is not None:
+                for sv_trk, trk_raw, pvt_raw in _extract_tracking_info(chanstatus):
+                    for s_idx in sids_for_sv.get(sv_trk, []):
+                        tracking_status_arr[t_idx, s_idx] = trk_raw
+                        pvt_status_arr[t_idx, s_idx] = pvt_raw
+
         freq_center_meta = np.asarray(
             [sid_props_meta[s]["freq_center"] for s in sorted_sids_meta],
             dtype=np.float32,
@@ -2108,6 +2745,13 @@ class SbfReader(GNSSDataReader):
             "cpu_load": ("epoch", cpu_load_arr, _CPU_LOAD_ATTRS),
             "temperature_c": ("epoch", temp_arr, _TEMPERATURE_ATTRS),
             "rx_error": ("epoch", rx_error_arr, _RX_ERROR_ATTRS),
+            "qual_overall": ("epoch", qual_overall_arr, _QUAL_OVERALL_ATTRS),
+            "qual_gnss_main": ("epoch", qual_gnss_main_arr, _QUAL_GNSS_MAIN_ATTRS),
+            "qual_rf_main": ("epoch", qual_rf_main_arr, _QUAL_RF_MAIN_ATTRS),
+            "qual_cpu": ("epoch", qual_cpu_arr, _QUAL_CPU_ATTRS),
+            "qual_scintillation": ("epoch", qual_scint_arr, _QUAL_SCINT_ATTRS),
+            "spoofing_flag": ("epoch", spoofing_arr, _SPOOFING_FLAG_ATTRS),
+            "nma_fail_flag": ("epoch", nma_fail_arr, _NMA_FAIL_ATTRS),
         }
 
         attrs_meta = self._build_attrs()
@@ -2153,6 +2797,16 @@ class SbfReader(GNSSDataReader):
                     cn0_highres_arr,
                     _CN0_HIGHRES_CORRECTION_ATTRS,
                 ),
+                "tracking_status_raw": (
+                    ["epoch", "sid"],
+                    tracking_status_arr,
+                    _TRACKING_STATUS_RAW_ATTRS,
+                ),
+                "pvt_status_raw": (
+                    ["epoch", "sid"],
+                    pvt_status_arr,
+                    _PVT_STATUS_RAW_ATTRS,
+                ),
             },
             coords=coords_meta,
             attrs=attrs_meta,
@@ -2165,6 +2819,10 @@ class SbfReader(GNSSDataReader):
         # rise_set is int8 with sentinel -1; NaN fill promotes to float — cast back.
         if meta_ds["rise_set"].dtype != np.int8:
             meta_ds["rise_set"] = meta_ds["rise_set"].fillna(-1).astype(np.int8)
+        # tracking/PVT status are uint16 bitfields with fill 0 — cast back too.
+        for _tv in ("tracking_status_raw", "pvt_status_raw"):
+            if meta_ds[_tv].dtype != np.uint16:
+                meta_ds[_tv] = meta_ds[_tv].fillna(0).astype(np.uint16)
 
         # Apply CN0HighRes correction from MeasExtra (Block 4000) to SNR.
         # CN0HighRes extends resolution from 0.25 to 0.03125 dB-Hz.
@@ -2285,18 +2943,28 @@ class SbfReader(GNSSDataReader):
 
         for t1 in data.get("Type_1", []):
             t1_obs, t1_freq = self._decode_type1(t1, freq_nr_cache)
+            pr1: pint.Quantity | None = None
+            d1: pint.Quantity | None = None
             if t1_obs is not None:
                 observations.append(t1_obs)
-                # Decode linked Type2 slave observations
                 pr1 = t1_obs.pseudorange
                 d1 = t1_obs.doppler
-                if pr1 is not None and d1 is not None and t1_freq is not None:
-                    for t2 in t1.get("Type_2", []):
-                        t2_obs = self._decode_type2(
-                            t2, int(t1["SVID"]), pr1, d1, t1_freq, freq_nr_cache
-                        )
-                        if t2_obs is not None:
-                            observations.append(t2_obs)
+            # Decode linked Type2 slave observations UNCONDITIONALLY:
+            # CN0 is always self-contained in the Type2 sub-block, so a
+            # Do-Not-Use Type1 pseudorange/Doppler (or an unknown Type1
+            # signal) must not drop the Type2 SNR (primary VOD observable).
+            for t2 in t1.get("Type_2", []):
+                t2_obs = self._decode_type2(
+                    t2,
+                    int(t1["SVID"]),
+                    pr1,
+                    d1,
+                    t1_freq,
+                    int(t1["RxChannel"]),
+                    freq_nr_cache,
+                )
+                if t2_obs is not None:
+                    observations.append(t2_obs)
 
         return SbfEpoch(
             tow_ms=tow_ms,
@@ -2393,7 +3061,7 @@ class SbfReader(GNSSDataReader):
             signal_num=sig_num,
             signal_type=sig_def.signal_type,
             rx_channel=int(t1["RxChannel"]),
-            lock_time_ms=int(t1["LockTime"]),
+            lock_time_s=int(t1["LockTime"]),
             cn0=cn0_dbhz(int(t1["CN0"]), sig_num),
             pseudorange=pr,
             doppler=dop,
@@ -2407,9 +3075,10 @@ class SbfReader(GNSSDataReader):
         self,
         t2: dict[str, Any],
         svid: int,
-        pr1: pint.Quantity,
-        d1: pint.Quantity,
-        freq1: pint.Quantity,
+        pr1: pint.Quantity | None,
+        d1: pint.Quantity | None,
+        freq1: pint.Quantity | None,
+        rx_channel: int,
         freq_nr_cache: dict[int, int],
     ) -> SbfSignalObs | None:
         """Decode a Type2 sub-block dict to an SbfSignalObs.
@@ -2420,12 +3089,16 @@ class SbfReader(GNSSDataReader):
             Raw Type2 sub-block dict.
         svid : int
             SVID of the parent Type1 sub-block.
-        pr1 : pint.Quantity
-            Type1 pseudorange in metres.
-        d1 : pint.Quantity
-            Type1 Doppler in Hz.
-        freq1 : pint.Quantity
-            Type1 carrier frequency.
+        pr1 : pint.Quantity or None
+            Type1 pseudorange in metres, or ``None`` if Do-Not-Use.
+            Only pseudorange-derived fields are skipped in that case.
+        d1 : pint.Quantity or None
+            Type1 Doppler in Hz, or ``None`` if Do-Not-Use.
+        freq1 : pint.Quantity or None
+            Type1 carrier frequency, or ``None`` if unknown.
+        rx_channel : int
+            Receiver channel of the parent Type1 sub-block (Type2
+            sub-blocks carry no RxChannel field on the wire).
         freq_nr_cache : dict of {int: int}
             Current SVID → FreqNr map.
 
@@ -2433,6 +3106,8 @@ class SbfReader(GNSSDataReader):
         -------
         SbfSignalObs or None
             Decoded observation, or ``None`` for unknown signals.
+            CN0 is always decoded; pseudorange / Doppler / phase only
+            when the required Type1 reference values are available.
         """
         type_byte = int(t2["Type"])
         obs_info = int(t2["ObsInfo"])
@@ -2452,10 +3127,12 @@ class SbfReader(GNSSDataReader):
         carrier_msb = int(t2["CarrierMSB"])
         carrier_lsb = int(t2["CarrierLSB"])
 
-        pr2 = pr2_m(pr1, code_msb_signed, code_offset_lsb)
+        pr2: pint.Quantity | None = None
+        if pr1 is not None:
+            pr2 = pr2_m(pr1, code_msb_signed, code_offset_lsb)
 
         d2: pint.Quantity | None = None
-        if freq2 is not None:
+        if d1 is not None and freq1 is not None and freq2 is not None:
             d2 = doppler2_hz(d1, doppler_msb_signed, doppler_offset_lsb, freq2, freq1)
 
         ph: float | None = None
@@ -2468,8 +3145,8 @@ class SbfReader(GNSSDataReader):
             prn=prn,
             signal_num=sig_num,
             signal_type=sig_def.signal_type,
-            rx_channel=int(t2.get("RxChannel", 0)),
-            lock_time_ms=int(t2["LockTime"]),
+            rx_channel=rx_channel,
+            lock_time_s=int(t2["LockTime"]),
             cn0=cn0_dbhz(int(t2["CN0"]), sig_num),
             pseudorange=pr2,
             doppler=d2,
