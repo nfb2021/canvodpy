@@ -125,27 +125,62 @@ sites:
 
 Controls which signal IDs (SIDs) to retain during processing.
 
+Three modes are available:
+
+| Mode | Behaviour |
+|---|---|
+| `all` | Keep every SID observed in the file — no filtering |
+| `preset` | Use a named built-in list (see below) |
+| `custom` | Keep only the SIDs you list explicitly |
+
 === "All signals"
 
     ```yaml
     mode: all
     ```
 
-=== "Named preset"
+=== "Default preset"
+
+    The package ships one built-in preset: `default` — a curated 277-SID
+    multi-GNSS list (GPS + Galileo + BeiDou MEO + GLONASS).
+
+    Hard exclusions: no GEO, no IGSO, no augmentation signals
+    (SBAS/IRNSS/QZSS), no GPS L2W.
 
     ```yaml
     mode: preset
-    preset: gps_galileo
+    preset: default
     ```
+
+    This is the **package default** when no `config/sids.yaml` is present.
+    Use `mode: all` to opt out and keep every observed SID.
 
 === "Custom list"
 
     ```yaml
     mode: custom
-    custom:
+    custom_sids:
       - "G01|L1|C"
       - "E01|E1|C"
     ```
+
+### Release maintenance
+
+The `default` preset is a static file bundled with the package
+(`canvod/utils/config/presets/default.yaml`).
+**It must be reviewed and updated at every new software release** to reflect
+constellation changes since the previous release:
+
+- New satellites launched and declared operational
+- Satellites decommissioned or moved to a different orbit type
+- Orbit reclassifications (e.g. IGSO → MEO)
+- New signal codes added to the RINEX 3 spec
+
+The authoritative source is the [IGS satellite metadata SINEX file](https://files.igs.org/pub/station/general/igs_satellite_metadata.snx)
+(updated every 2–4 weeks by DLR/IGS) and the bundled
+`SatelliteCatalog` in `canvod-readers`.  Cross-check `active_prns(on_date)`
+against the current preset and apply the same exclusion rules (no GEO, no
+IGSO, no augmentation, no GPS L2W) when adding new entries.
 
 ---
 
