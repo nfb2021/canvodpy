@@ -120,6 +120,8 @@ exclude = [
     "**/tests/**",
     "demo/**",
     "dags/**",
+    "dev/**",
+    "prototypes/**",
     "packages/canvod-store/src/canvod/store/grid_adapters/grid_storage.py",
     "packages/canvod-store/src/canvod/store/store.py",
 ]

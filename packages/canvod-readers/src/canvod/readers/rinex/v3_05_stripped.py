@@ -68,7 +68,9 @@ class Rnxv3StrippedObs(Rnxv3Obs):
             )
         return self
 
-    def _create_dataset_single_pass(self) -> xr.Dataset:
+    def _create_dataset_single_pass(
+        self, keep_data_vars: frozenset[str] | None = None
+    ) -> xr.Dataset:
         lines = self._load_file()
         epoch_batches = self.get_epoch_record_batches()
         n_epochs = len(epoch_batches)
