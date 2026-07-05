@@ -16,13 +16,12 @@ aux_data:
   agency: COD
   product_type: final
 
-processing:
+params:
   keep_rnx_vars:
     - SNR
     - Pseudorange
     - Phase
     - Doppler
-  aggregate_glonass_fdma: true
   store_radial_distance: false
   store_delta_snr: false
   store_radial_diff: false

@@ -17,44 +17,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from .loader import find_monorepo_root
 from .models import ProcessingConfig, SidsConfig, SitesConfig
-
-
-def find_monorepo_root() -> Path:
-    """Find the monorepo root by looking for a .git directory.
-
-    Returns
-    -------
-    Path
-        Monorepo root directory.
-
-    Raises
-    ------
-    RuntimeError
-        If the monorepo root cannot be found.
-    """
-    current = Path.cwd().resolve()
-
-    # Walk up directory tree looking for .git
-    for parent in [current, *list(current.parents)]:
-        if (parent / ".git").exists():
-            return parent
-
-    # Fallback: if this file is in
-    # packages/canvod-utils/src/canvod/utils/config/cli.py then monorepo root is
-    # 7 levels up.
-    try:
-        cli_file = Path(__file__).resolve()
-        # cli.py -> config -> utils -> canvod -> src -> canvod-utils ->
-        # packages -> root.
-        monorepo_root = cli_file.parent.parent.parent.parent.parent.parent.parent
-        if (monorepo_root / ".git").exists():
-            return monorepo_root
-    except Exception:
-        pass
-
-    raise RuntimeError("Cannot find monorepo root (no .git directory found)")
-
 
 # Main app
 main_app = typer.Typer(
@@ -445,34 +409,26 @@ def _show_processing(config: ProcessingConfig) -> None:
 
     table.add_row("Agency", config.aux_data.agency)
     table.add_row("Product Type", config.aux_data.product_type)
-    table.add_row("Resource Mode", config.processing.resource_mode)
+    table.add_row("Resource Mode", config.params.resource_mode)
     table.add_row(
         "Max Threads",
-        str(config.processing.n_max_threads or "auto"),
+        str(config.params.n_max_threads or "auto"),
     )
-    glonass_mode = (
-        "Aggregated" if config.processing.aggregate_glonass_fdma else "Individual"
-    )
-    table.add_row("GLONASS FDMA", glonass_mode)
-    table.add_row("Keep RINEX Vars", ", ".join(config.processing.keep_rnx_vars))
-    table.add_row("Batch Hours", str(config.processing.batch_hours))
+    table.add_row("Keep RINEX Vars", ", ".join(config.params.keep_rnx_vars))
+    table.add_row("Batch Hours", str(config.params.batch_hours))
     mem_str = (
-        f"{config.processing.max_memory_gb} GB"
-        if config.processing.max_memory_gb
+        f"{config.params.max_memory_gb} GB"
+        if config.params.max_memory_gb
         else "[dim]no limit[/dim]"
     )
     table.add_row("Max Memory", mem_str)
     affinity_str = (
-        str(config.processing.cpu_affinity)
-        if config.processing.cpu_affinity
+        str(config.params.cpu_affinity)
+        if config.params.cpu_affinity
         else "[dim]no restriction[/dim]"
     )
     table.add_row("CPU Affinity", affinity_str)
-    table.add_row("Nice Priority", str(config.processing.nice_priority))
-    table.add_row(
-        "Dask Dashboard",
-        "[dim]http://localhost:8787 (available when pipeline runs)[/dim]",
-    )
+    table.add_row("Nice Priority", str(config.params.nice_priority))
     console.print(table)
     console.print()
 

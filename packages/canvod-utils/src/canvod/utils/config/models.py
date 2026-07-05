@@ -14,6 +14,7 @@ from typing import Literal
 import yaml
 from pydantic import (
     BaseModel,
+    ConfigDict,
     EmailStr,
     Field,
     ValidationInfo,
@@ -21,12 +22,19 @@ from pydantic import (
     model_validator,
 )
 
+
+class _StrictModel(BaseModel):
+    """Base for all config models — forbids unknown keys so YAML typos are caught."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
 # ============================================================================
 # Processing Configuration
 # ============================================================================
 
 
-class MetadataConfig(BaseModel):
+class MetadataConfig(_StrictModel):
     """Metadata to be written to processed files.
 
     Notes
@@ -75,7 +83,7 @@ class MetadataConfig(BaseModel):
         return attrs
 
 
-class CredentialsConfig(BaseModel):
+class CredentialsConfig(_StrictModel):
     """Credentials for external data services.
 
     Notes
@@ -89,7 +97,7 @@ class CredentialsConfig(BaseModel):
     )
 
 
-class AuxDataConfig(BaseModel):
+class AuxDataConfig(_StrictModel):
     """Auxiliary data source configuration.
 
     Notes
@@ -132,7 +140,7 @@ class AuxDataConfig(BaseModel):
         return [("ftp://gssc.esa.int", None)]
 
 
-class ProcessingParams(BaseModel):
+class ProcessingParams(_StrictModel):
     """Processing parameters.
 
     Notes
@@ -159,10 +167,6 @@ class ProcessingParams(BaseModel):
     keep_rnx_vars: list[str] = Field(
         default_factory=lambda: ["SNR", "Pseudorange", "Phase", "Doppler"],
         description="RINEX variables to keep",
-    )
-    aggregate_glonass_fdma: bool = Field(
-        True,
-        description="Treat GLONASS FDMA bands as one band",
     )
     store_radial_distance: bool = Field(
         False,
@@ -221,15 +225,17 @@ class ProcessingParams(BaseModel):
         le=19,
         description="Process nice value (0=normal, 10=low, 19=lowest)",
     )
+    # TODO: investigate whether threads_per_worker is still needed after the loky /
+    # ProcessPoolExecutor parallelisation refactor replaced Dask. If neither loky nor
+    # the custom process-pool uses it, remove this field and its callsites in api.py.
     threads_per_worker: int | None = Field(
         None,
         ge=1,
         le=8,
         description=(
-            "Threads per Dask worker process. None lets Dask decide (usually 1). "
+            "Threads per worker process. None lets the scheduler decide. "
             "Values >1 help with numpy/xarray ops and I/O (GIL-releasing) but not "
-            "pure-Python RINEX text parsing. Fewer workers x more threads = less "
-            "memory overhead + shared aux data within a worker."
+            "pure-Python RINEX text parsing."
         ),
     )
     ephemeris_source: Literal["final", "broadcast"] = Field(
@@ -307,7 +313,7 @@ class ProcessingParams(BaseModel):
         }
 
 
-class CompressionConfig(BaseModel):
+class CompressionConfig(_StrictModel):
     """Compression settings.
 
     Notes
@@ -319,7 +325,7 @@ class CompressionConfig(BaseModel):
     complevel: int = Field(5, ge=0, le=9, description="Compression level")
 
 
-class ChunkStrategy(BaseModel):
+class ChunkStrategy(_StrictModel):
     """Chunking strategy for a dimension.
 
     Notes
@@ -339,7 +345,7 @@ class ChunkStrategy(BaseModel):
     )
 
 
-class IcechunkConfig(BaseModel):
+class IcechunkConfig(_StrictModel):
     """Icechunk storage configuration.
 
     Notes
@@ -386,7 +392,7 @@ class IcechunkConfig(BaseModel):
     )
 
 
-class StorageConfig(BaseModel):
+class StorageConfig(_StrictModel):
     """Storage strategy configuration.
 
     Notes
@@ -491,7 +497,7 @@ class StorageConfig(BaseModel):
         return Path(gettempdir())
 
 
-class LoggingConfig(BaseModel):
+class LoggingConfig(_StrictModel):
     """Logging configuration.
 
     Notes
@@ -546,7 +552,7 @@ class LoggingConfig(BaseModel):
         return self.get_log_dir() / self.log_file_name
 
 
-class TemporalAggregationConfig(BaseModel):
+class TemporalAggregationConfig(_StrictModel):
     """Temporal aggregation preprocessing settings."""
 
     enabled: bool = Field(True, description="Enable temporal aggregation")
@@ -554,7 +560,7 @@ class TemporalAggregationConfig(BaseModel):
     method: Literal["mean", "median"] = Field("mean", description="Aggregation method")
 
 
-class GridAssignmentConfig(BaseModel):
+class GridAssignmentConfig(_StrictModel):
     """Grid cell assignment preprocessing settings."""
 
     enabled: bool = Field(True, description="Enable grid cell assignment")
@@ -564,7 +570,7 @@ class GridAssignmentConfig(BaseModel):
     )
 
 
-class HistogramBinsConfig(BaseModel):
+class HistogramBinsConfig(_StrictModel):
     """Custom histogram bin specification for a variable."""
 
     low: float = Field(..., description="Lower edge of the first bin")
@@ -572,7 +578,7 @@ class HistogramBinsConfig(BaseModel):
     n_bins: int = Field(..., ge=1, description="Number of bins")
 
 
-class StatisticsConfig(BaseModel):
+class StatisticsConfig(_StrictModel):
     """Streaming statistics configuration."""
 
     enabled: bool = Field(False, description="Enable streaming statistics collection")
@@ -605,7 +611,7 @@ class StatisticsConfig(BaseModel):
     )
 
 
-class PreprocessingConfig(BaseModel):
+class PreprocessingConfig(_StrictModel):
     """Preprocessing pipeline configuration."""
 
     temporal_aggregation: TemporalAggregationConfig = Field(
@@ -619,14 +625,14 @@ class PreprocessingConfig(BaseModel):
     )
 
 
-class PublicationRef(BaseModel):
+class PublicationRef(_StrictModel):
     """A publication reference."""
 
     doi: str
     citation: str | None = None
 
 
-class FundingRef(BaseModel):
+class FundingRef(_StrictModel):
     """A funding reference."""
 
     funder: str
@@ -635,14 +641,14 @@ class FundingRef(BaseModel):
     award_title: str | None = None
 
 
-class ReferencesConfig(BaseModel):
+class ReferencesConfig(_StrictModel):
     """Publications and funding references."""
 
     publications: list[PublicationRef] = Field(default_factory=list)
     funding: list[FundingRef] = Field(default_factory=list)
 
 
-class ProcessingConfig(BaseModel):
+class ProcessingConfig(_StrictModel):
     """Complete processing configuration."""
 
     metadata: MetadataConfig
@@ -651,7 +657,7 @@ class ProcessingConfig(BaseModel):
         description="Credentials for external data services",
     )
     aux_data: AuxDataConfig = Field(default_factory=AuxDataConfig)
-    processing: ProcessingParams = Field(default_factory=ProcessingParams)
+    params: ProcessingParams = Field(default_factory=ProcessingParams)
     compression: CompressionConfig = Field(default_factory=CompressionConfig)
     icechunk: IcechunkConfig = Field(default_factory=IcechunkConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
@@ -664,13 +670,25 @@ class ProcessingConfig(BaseModel):
         description="Publication and funding references",
     )
 
+    @property
+    def processing(self) -> ProcessingParams:
+        """Deprecated: use .params instead."""
+        import warnings
+
+        warnings.warn(
+            "ProcessingConfig.processing is deprecated; use .params",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.params
+
 
 # ============================================================================
 # Sites Configuration
 # ============================================================================
 
 
-class ReceiverConfig(BaseModel):
+class ReceiverConfig(_StrictModel):
     """Receiver configuration."""
 
     type: Literal["reference", "canopy"] = Field(
@@ -729,7 +747,7 @@ class ReceiverConfig(BaseModel):
         return self
 
 
-class VodAnalysisConfig(BaseModel):
+class VodAnalysisConfig(_StrictModel):
     """VOD analysis pair configuration."""
 
     canopy_receiver: str = Field(..., description="Canopy receiver name")
@@ -737,7 +755,7 @@ class VodAnalysisConfig(BaseModel):
     description: str | None = Field(None, description="Analysis description")
 
 
-class SiteConfig(BaseModel):
+class SiteConfig(_StrictModel):
     """Research site configuration."""
 
     gnss_site_data_root: str = Field(
@@ -842,7 +860,7 @@ class SiteConfig(BaseModel):
         return pairs
 
 
-class SitesConfig(BaseModel):
+class SitesConfig(_StrictModel):
     """All research sites."""
 
     sites: dict[str, SiteConfig]
@@ -881,7 +899,7 @@ class SitesConfig(BaseModel):
 # ============================================================================
 
 
-class SidsConfig(BaseModel):
+class SidsConfig(_StrictModel):
     """Signal ID configuration."""
 
     mode: Literal["all", "preset", "custom"] = Field(
@@ -959,7 +977,7 @@ class SidsConfig(BaseModel):
 # ============================================================================
 
 
-class CanvodConfig(BaseModel):
+class CanvodConfig(_StrictModel):
     """
     Complete canvodpy configuration.
 
@@ -971,8 +989,6 @@ class CanvodConfig(BaseModel):
     processing: ProcessingConfig
     sites: SitesConfig
     sids: SidsConfig
-
-    model_config = {"extra": "forbid"}  # Catch typos in config files!
 
     @property
     def nasa_earthdata_acc_mail(self) -> str | None:

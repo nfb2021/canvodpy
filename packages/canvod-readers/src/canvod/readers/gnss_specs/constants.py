@@ -7,7 +7,6 @@ system (canvod.utils.config).
 Removed and moved to config:
 - KEEP_RNX_VARS → processing.keep_rnx_vars
 - COMPRESSION → compression.{zlib, complevel}
-- AGGREGATE_GLONASS_FDMA → processing.aggregate_glonass_fdma
 - AUTHOR, EMAIL, etc. → metadata.{author, email, ...}
 - SOFTWARE → canvod.utils._meta.SOFTWARE_ATTRS
 """

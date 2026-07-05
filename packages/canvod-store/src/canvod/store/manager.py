@@ -538,6 +538,7 @@ class GnssResearchSite:
         analysis_name: str,
         calculator_class: type[VODCalculator] | None = None,
         time_range: tuple[datetime, datetime] | None = None,
+        processing_params=None,
     ) -> xr.Dataset:
         """
         Calculate VOD for a configured analysis pair.
@@ -550,6 +551,9 @@ class GnssResearchSite:
             VOD calculator class to use. If None, uses TauOmegaZerothOrder.
         time_range : tuple of datetime, optional
             (start_time, end_time) for filtering the data
+        processing_params : ProcessingParams, optional
+            Processing parameters controlling derived quantities. If None,
+            falls back to loading from the global config (deprecated path).
 
         Returns
         -------
@@ -585,9 +589,12 @@ class GnssResearchSite:
         )
 
         # Apply config-gated derived quantities
-        from canvod.utils.config import load_config as _load_config
+        if processing_params is None:
+            from canvod.utils.config import load_config as _load_config
 
-        _params = _load_config().processing.processing
+            processing_params = _load_config().processing.params
+
+        _params = processing_params
 
         if not _params.store_delta_snr:
             vod_ds = vod_ds.drop_vars("delta_snr", errors="ignore")

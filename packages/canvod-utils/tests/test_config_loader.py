@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import yaml
 
-from canvod.utils.config.loader import ConfigLoader
+from canvod.utils.config.loader import ConfigLoader, ConfigValidationError
 
 
 class TestDeepMerge:
@@ -161,8 +161,8 @@ class TestConfigLoaderValidationError:
         with open(path, "w") as f:
             yaml.dump(data, f)
 
-    def test_invalid_config_calls_sys_exit(self, tmp_path):
-        """Invalid config should call sys.exit(1) on CanvodConfig validation error."""
+    def test_invalid_config_raises_config_validation_error(self, tmp_path):
+        """Invalid config should raise ConfigValidationError (not sys.exit)."""
         self._write_yaml(
             tmp_path / "processing.yaml",
             {
@@ -183,14 +183,13 @@ class TestConfigLoaderValidationError:
 
         # Force CanvodConfig validation to fail by making _load_sids return
         # an invalid type (string instead of SidsConfig)
+        import pytest
+
         with (
             patch.object(loader, "_load_sids", return_value="not_a_sids_config"),
-            patch("sys.exit") as mock_exit,
+            pytest.raises(ConfigValidationError) as exc_info,
         ):
-            # sys.exit is mocked so it won't halt — execution continues
-            # past the except block and hits `return config` which is unbound.
-            try:
-                loader.load()
-            except UnboundLocalError:
-                pass  # Expected: config var unbound because sys.exit was mocked
-            mock_exit.assert_called_once_with(1)
+            loader.load()
+
+        assert exc_info.value.config_dir == tmp_path
+        assert isinstance(exc_info.value, ValueError)

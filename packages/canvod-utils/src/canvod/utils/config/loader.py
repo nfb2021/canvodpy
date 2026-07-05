@@ -7,8 +7,8 @@ Loads configuration from multiple YAML files with priority:
 """
 
 import functools
+import logging
 import os
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +16,25 @@ import yaml
 from pydantic import ValidationError
 
 from .models import CanvodConfig, ProcessingConfig, SidsConfig, SitesConfig
+
+logger = logging.getLogger("canvod.utils.config")
+
+
+class ConfigValidationError(ValueError):
+    """Raised when configuration YAML fails Pydantic validation.
+
+    Attributes
+    ----------
+    validation_error : ValidationError
+        The underlying Pydantic validation error.
+    config_dir : Path
+        The config directory that was loaded.
+    """
+
+    def __init__(self, error: ValidationError, config_dir: Path) -> None:
+        self.validation_error = error
+        self.config_dir = config_dir
+        super().__init__(str(error))
 
 
 def find_monorepo_root() -> Path:
@@ -99,15 +118,13 @@ class ConfigLoader:
 
         Raises
         ------
-        SystemExit
-            If configuration is invalid or required files are missing.
+        ConfigValidationError
+            If configuration is invalid (wraps Pydantic ValidationError).
         """
-        # Load each section
         processing = self._load_processing()
         sites = self._load_sites()
         sids = self._load_sids()
 
-        # Build complete config
         try:
             config = CanvodConfig(
                 processing=processing,
@@ -115,24 +132,40 @@ class ConfigLoader:
                 sids=sids,
             )
         except ValidationError as e:
-            self._show_validation_error(e)
-            sys.exit(1)
+            raise ConfigValidationError(e, self.config_dir) from e
 
         return config
 
     def _load_processing(self) -> ProcessingConfig:
         """Load processing config with merge."""
-        # Load defaults
         defaults = self._load_yaml(self.defaults_dir / "processing.yaml")
 
-        # Load user config (if exists)
         user_file = self.config_dir / "processing.yaml"
         if user_file.exists():
             user_config = self._load_yaml(user_file)
             defaults = self._deep_merge(defaults, user_config)
         else:
-            print(f"\n⚠️  Warning: {user_file} not found, using defaults")
-            print("   Run: just config-init\n")
+            logger.warning(
+                "Config file %s not found, using defaults. Run: just config-init",
+                user_file,
+            )
+
+        # Backward compat: rename deprecated 'processing' YAML key to 'params'.
+        # After deep-merge, both keys can coexist (package defaults use 'params',
+        # user YAML may still use 'processing'). Merge user's value into 'params'.
+        if "processing" in defaults:
+            import warnings
+
+            warnings.warn(
+                "processing.yaml: rename the 'processing:' key to 'params:' "
+                "(deprecated name will be removed in a future release)",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            user_processing = defaults.pop("processing")
+            defaults["params"] = self._deep_merge(
+                defaults.get("params", {}), user_processing
+            )
 
         return ProcessingConfig(**defaults)
 
@@ -144,8 +177,10 @@ class ConfigLoader:
         user_file = self.config_dir / "sites.yaml"
 
         if not user_file.exists():
-            print(f"\n⚠️  Warning: {user_file} not found, no sites configured")
-            print("   Run: just config-init\n")
+            logger.warning(
+                "Config file %s not found, no sites configured. Run: just config-init",
+                user_file,
+            )
             return SitesConfig(sites={})
 
         data = self._load_yaml(user_file)
@@ -163,8 +198,7 @@ class ConfigLoader:
         return SidsConfig(**defaults)
 
     def _load_yaml(self, path: Path) -> dict[str, Any]:
-        """
-        Load YAML file.
+        """Load YAML file.
 
         Parameters
         ----------
@@ -184,8 +218,7 @@ class ConfigLoader:
         base: dict[str, Any],
         override: dict[str, Any],
     ) -> dict[str, Any]:
-        """
-        Deep merge override dictionary into base dictionary.
+        """Deep merge override dictionary into base dictionary.
 
         Parameters
         ----------
@@ -211,30 +244,10 @@ class ConfigLoader:
                 result[key] = value
         return result
 
-    def _show_validation_error(self, error: ValidationError) -> None:
-        """Show a user-friendly validation error.
-
-        Parameters
-        ----------
-        error : ValidationError
-            Validation error raised by Pydantic.
-
-        Returns
-        -------
-        None
-        """
-        print("\n" + "=" * 70)
-        print("❌ Configuration Validation Error")
-        print("=" * 70)
-        print(f"\nConfig directory: {self.config_dir}\n")
-        print(error)
-        print("\n" + "=" * 70)
-
 
 @functools.lru_cache(maxsize=8)
 def load_config(config_dir: Path | None = None) -> CanvodConfig:
-    """
-    Load configuration from YAML files.
+    """Load configuration from YAML files.
 
     This is the main entry point for loading configuration.
 
@@ -248,6 +261,11 @@ def load_config(config_dir: Path | None = None) -> CanvodConfig:
     -------
     CanvodConfig
         Validated configuration object.
+
+    Raises
+    ------
+    ConfigValidationError
+        If configuration YAML is invalid.
 
     Examples
     --------
