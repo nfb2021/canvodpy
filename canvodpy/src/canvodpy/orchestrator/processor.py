@@ -6,7 +6,7 @@ import contextlib
 import os
 import time
 from collections.abc import Generator
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from datetime import time as dt_time
 from pathlib import Path
@@ -1121,6 +1121,111 @@ class RinexDataProcessor:
         )
         return None
 
+    def _resolve_receiver_positions(
+        self,
+        normalized_configs: list[tuple],
+        files_by_dir: dict,
+    ) -> dict:
+        """Resolve every receiver's ECEF position upfront (Phase 1).
+
+        Returns dict keyed by receiver_name (store group name).
+        Positions are computed once per unique source directory and shared.
+        """
+        position_mode = self._config.processing.processing.receiver_position_mode
+        pos_by_source: dict = {}  # (source_dir, fmt) -> ECEFPosition | None
+        result: dict = {}
+
+        for name, rtype, data_dir, position_data_dir, fmt in normalized_configs:
+            if position_mode == "per_receiver":
+                source_dir = data_dir
+                self._logger.warning(
+                    "receiver_position_mode='per_receiver': using %s's own "
+                    "position (breaks direct SNR comparability)",
+                    name,
+                )
+            else:
+                source_dir = (
+                    position_data_dir if position_data_dir is not None else data_dir
+                )
+
+            key = (source_dir, fmt)
+            if key not in pos_by_source:
+                files = files_by_dir.get(key) or self._get_rinex_files(source_dir, fmt)
+                pos_by_source[key] = self._compute_receiver_position(
+                    files, name, reader_format=fmt
+                )
+            result[name] = pos_by_source[key]
+
+        return result
+
+    def _recompute_scs_for_position(
+        self,
+        cached_datasets: list,
+        aux_zarr_path,
+        receiver_position,
+    ) -> list:
+        """Recompute spherical coordinates for a new receiver position.
+
+        Opens the aux Zarr once (hoisted outside the per-file loop) and
+        recomputes theta/phi/r for every cached dataset using the new position.
+        """
+        if aux_zarr_path is None:
+            raise RuntimeError(
+                "SCS recompute from cache requires an aux zarr; "
+                "not available with SBF geometry"
+            )
+        # Hoist open_zarr outside the per-file loop (was reopened per file)
+        aux_store = xr.open_zarr(
+            aux_zarr_path, decode_timedelta=True, consolidated=False
+        )
+        augmented_datasets = []
+        try:
+            for fpath, ds in cached_datasets:
+                scs_vars = [v for v in ("theta", "phi", "r") if v in ds.data_vars]
+                ds_no_scs = ds.drop_vars(scs_vars)
+                common_sids = sorted(
+                    set(ds_no_scs.sid.values) & set(aux_store.sid.values)
+                )
+                aux_slice = aux_store.sel(epoch=ds_no_scs.epoch, method="nearest").sel(
+                    sid=common_sids
+                )
+                ds_recomputed = _compute_spherical_coords_fast(
+                    ds_no_scs, aux_slice, receiver_position
+                )
+                # Mirror Wave A: drop r if it was absent in the cached dataset
+                if "r" not in scs_vars and "r" in ds_recomputed.data_vars:
+                    ds_recomputed = ds_recomputed.drop_vars("r")
+                augmented_datasets.append((fpath, ds_recomputed))
+        finally:
+            aux_store.close()
+        return augmented_datasets
+
+    @staticmethod
+    def _build_compute_waves(
+        normalized_configs: list,
+        skipped: set,
+    ) -> tuple[list, list, dict]:
+        """Group receivers into Wave A (parse) and Wave B (SCS recompute).
+
+        Returns (wave_a, wave_b, parse_owner) where:
+        - wave_a: [(name, data_dir, fmt)] — one parse job per unique (data_dir, fmt)
+        - wave_b: [(name, data_dir, fmt)] — SCS recompute from Wave A cache
+        - parse_owner: {(data_dir, fmt): name} — which receiver owns each parse job
+        """
+        parse_owner: dict = {}
+        wave_a: list = []
+        wave_b: list = []
+        for name, rtype, data_dir, _pos, fmt in normalized_configs:
+            if name in skipped:
+                continue
+            key = (data_dir, fmt)
+            if key not in parse_owner:
+                parse_owner[key] = name
+                wave_a.append((name, data_dir, fmt))
+            else:
+                wave_b.append((name, data_dir, fmt))
+        return wave_a, wave_b, parse_owner
+
     def _ensure_aux_data_preprocessed(
         self,
         canopy_files: list[Path],
@@ -1208,6 +1313,8 @@ class RinexDataProcessor:
         receiver_position: ECEFPosition,
         receiver_type: str,
         reader_format: str | None = None,
+        show_progress: bool = True,
+        pool_workers: int | None = None,
     ) -> tuple[
         list[tuple[Path, xr.Dataset]],
         dict[Path, dict[str, xr.Dataset]],
@@ -1232,6 +1339,10 @@ class RinexDataProcessor:
             Receiver type
         reader_format : str | None
             Per-receiver reader format. Falls back to ``self._reader_name``.
+        show_progress : bool
+            Whether to show the Rich progress bar (default True).
+        pool_workers : int | None
+            Override for worker count. When None, uses ``self.n_max_workers``.
 
         Returns
         -------
@@ -1252,6 +1363,8 @@ class RinexDataProcessor:
             effective_reader,
             store_r,
             store_raw,
+            show_progress=show_progress,
+            pool_workers=pool_workers,
         )
 
     def _parallel_process_rinex_pool(
@@ -1264,6 +1377,8 @@ class RinexDataProcessor:
         reader_format: str | None = None,
         store_radial_distance: bool = False,
         store_sbf_raw_observables: bool = True,
+        show_progress: bool = True,
+        pool_workers: int | None = None,
     ) -> tuple[
         list[tuple[Path, xr.Dataset]],
         dict[Path, dict[str, xr.Dataset]],
@@ -1271,18 +1386,19 @@ class RinexDataProcessor:
     ]:
         """Fallback: process RINEX files via ProcessPoolExecutor."""
         start_time = time.time()
+        workers = pool_workers if pool_workers is not None else self.n_max_workers
+        effective_workers = workers or os.cpu_count() or 1
         self._logger.info(
             "parallel_processing_started",
-            workers=self.n_max_workers,
+            workers=effective_workers,
             files=len(rinex_files),
             receiver_type=receiver_type,
             executor_type="ProcessPoolExecutor",
         )
 
-        effective_workers = self.n_max_workers or os.cpu_count() or 1
         self._logger.debug(
             "parallel_config",
-            max_workers=self.n_max_workers,
+            max_workers=workers,
             cpu_count=os.cpu_count(),
             files_per_worker=round(len(rinex_files) / effective_workers, 1),
         )
@@ -1293,7 +1409,7 @@ class RinexDataProcessor:
         task_submission_start = time.time()
 
         effective_reader = reader_format or self._reader_name
-        with ProcessPoolExecutor(max_workers=self.n_max_workers) as executor:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
             futures = {
                 executor.submit(
                     preprocess_with_hermite_aux,
@@ -1323,7 +1439,7 @@ class RinexDataProcessor:
 
             yyyydoy = self.matched_data_dirs.yyyydoy.to_str()
             desc = f"{yyyydoy} {receiver_type}"
-            with _processing_progress() as progress:
+            with _processing_progress(disable=not show_progress) as progress:
                 task = progress.add_task(desc, total=len(futures))
                 for fut in as_completed(futures):
                     try:
@@ -2501,186 +2617,242 @@ class RinexDataProcessor:
             )
 
         # ====================================================================
-        # STEP 2: Process each receiver, reusing RINEX parsing for
-        #         reference variants that share the same data_dir
+        # PHASE 0.5 — file discovery upfront (one pass, keyed by (dir, fmt))
         # ====================================================================
-        # Cache: data_dir -> (augmented_datasets, rinex_files)
-        # When multiple store groups share one data_dir (reference variants
-        # with different canopy positions), we parse RINEX once and recompute
-        # only the SCS (theta, phi, r) for each position.
-        _rinex_cache: dict[Path, tuple[list[tuple[Path, xr.Dataset]], list[Path]]] = {}
+        files_by_dir: dict = {}
+        skipped: set = set()
 
-        for (
-            receiver_name,
-            receiver_type,
-            data_dir,
-            position_data_dir,
-            reader_format,
-        ) in normalized_configs:
-            t_rcv_start = time.perf_counter()
+        assert len({c[0] for c in normalized_configs}) == len(normalized_configs), (
+            "Duplicate receiver names in normalized_configs"
+        )
 
-            self._logger.info(
-                "receiver_processing_started",
-                receiver=receiver_name,
-                receiver_type=receiver_type,
-                data_dir=str(data_dir),
-                position_from=str(position_data_dir) if position_data_dir else "self",
-                reader_format=reader_format,
-            )
-
-            # Get GNSS files for this receiver (filtered by reader_format)
-            rinex_files = self._get_rinex_files(data_dir, reader_format)
-            if not rinex_files:
+        for name, rtype, data_dir, pos_dir, fmt in normalized_configs:
+            key = (data_dir, fmt)
+            if key not in files_by_dir:
+                files_by_dir[key] = self._get_rinex_files(data_dir, fmt)
+            if not files_by_dir[key]:
                 self._logger.warning(
                     "no_rinex_files_found",
-                    receiver=receiver_name,
+                    receiver=name,
                     data_dir=str(data_dir),
-                    reader_format=reader_format,
+                    reader_format=fmt,
                 )
-                continue
+                skipped.add(name)
 
-            # Compute receiver position
-            t_pos_start = time.perf_counter()
-            position_mode = self._config.processing.processing.receiver_position_mode
-            if position_mode == "per_receiver":
-                position_files = rinex_files
-                self._logger.warning(
-                    "receiver_position_mode='per_receiver': using %s's own "
-                    "position (breaks direct SNR comparability)",
-                    receiver_name,
-                )
-            else:
-                position_files = (
-                    self._get_rinex_files(position_data_dir, reader_format)
-                    if position_data_dir
-                    else rinex_files
-                )
-            receiver_position = self._compute_receiver_position(
-                position_files, receiver_name, reader_format=reader_format
+        # ====================================================================
+        # PHASE 1 — resolve all receiver positions upfront
+        # ====================================================================
+        active_configs = [c for c in normalized_configs if c[0] not in skipped]
+        # Build position-source files dict (may include position_data_dir entries)
+        pos_files: dict = dict(files_by_dir)
+        for name, rtype, data_dir, position_data_dir, fmt in active_configs:
+            if position_data_dir is not None:
+                key = (position_data_dir, fmt)
+                if key not in pos_files:
+                    pos_files[key] = self._get_rinex_files(position_data_dir, fmt)
+
+        positions = self._resolve_receiver_positions(active_configs, pos_files)
+        for name, pos in positions.items():
+            if pos is None:
+                skipped.add(name)
+
+        # ====================================================================
+        # PHASE 2 — parallel RINEX compute
+        # ====================================================================
+        wave_a, wave_b, parse_owner = self._build_compute_waves(
+            normalized_configs, skipped
+        )
+
+        total_cores = self.n_max_workers or os.cpu_count() or 1
+        outer_workers = min(len(wave_a), total_cores) if wave_a else 1
+        inner_workers = max(1, total_cores // max(1, outer_workers))
+
+        per_receiver_results: dict = {}  # name -> (augmented, aux_datasets, sid_issues)
+        compute_durations: dict = {}  # name -> float (seconds)
+        failed_dirs: set = set()
+
+        def _parse_job(job_name, data_dir, fmt):
+            t = time.perf_counter()
+            result = self._parallel_process_rinex(
+                rinex_files=files_by_dir[(data_dir, fmt)],
+                keep_vars=keep_vars,
+                aux_zarr_path=aux_zarr_path,  # ty: ignore[invalid-argument-type]
+                receiver_position=positions[job_name],
+                receiver_type=job_name,
+                reader_format=fmt,
+                show_progress=(len(wave_a) == 1),
+                pool_workers=inner_workers if len(wave_a) > 1 else None,
             )
-            t_pos_end = time.perf_counter()
-            if receiver_position is None:
-                continue
+            return result, time.perf_counter() - t
 
-            self._logger.info(
-                "receiver_position_computed",
-                receiver=receiver_name,
-                duration_seconds=round(t_pos_end - t_pos_start, 2),
-            )
-
-            t_rinex_start = time.perf_counter()
-            if data_dir not in _rinex_cache:
-                # First time seeing this data_dir — full parallel processing
+        # Wave A: parse (one job per unique data_dir)
+        if len(wave_a) <= 1:
+            # Single receiver — run inline, full pool width, progress bar on
+            for name, data_dir, fmt in wave_a:
                 self._logger.info(
-                    "rinex_files_discovered",
-                    receiver=receiver_name,
-                    files=len(rinex_files),
+                    "receiver_processing_started",
+                    receiver=name,
+                    receiver_type="canopy",
+                    data_dir=str(data_dir),
                 )
-
-                augmented_datasets, aux_datasets, sid_issues = (
-                    self._parallel_process_rinex(
-                        rinex_files=rinex_files,
-                        keep_vars=keep_vars,
-                        aux_zarr_path=aux_zarr_path,  # ty: ignore[invalid-argument-type]
-                        receiver_position=receiver_position,
-                        receiver_type=receiver_name,
-                        reader_format=reader_format,
+                try:
+                    (aug, aux_ds, sid_iss), dur = _parse_job(name, data_dir, fmt)
+                    per_receiver_results[name] = (aug, aux_ds, sid_iss)
+                    compute_durations[name] = dur
+                except Exception as e:
+                    self._logger.error(
+                        "receiver_parse_failed",
+                        receiver=name,
+                        error=str(e),
                     )
-                )
+                    failed_dirs.add((data_dir, fmt))
+        else:
+            with ThreadPoolExecutor(max_workers=outer_workers) as tpe:
+                futs = {}
+                for name, data_dir, fmt in wave_a:
+                    self._logger.info(
+                        "receiver_processing_started",
+                        receiver=name,
+                        receiver_type="parallel",
+                        data_dir=str(data_dir),
+                    )
+                    futs[tpe.submit(_parse_job, name, data_dir, fmt)] = (
+                        name,
+                        data_dir,
+                        fmt,
+                    )
+                for fut in as_completed(futs):
+                    name, data_dir, fmt = futs[fut]
+                    try:
+                        (aug, aux_ds, sid_iss), dur = fut.result()
+                        per_receiver_results[name] = (aug, aux_ds, sid_iss)
+                        compute_durations[name] = dur
+                    except Exception as e:
+                        self._logger.error(
+                            "receiver_parse_failed",
+                            receiver=name,
+                            error=str(e),
+                        )
+                        failed_dirs.add((data_dir, fmt))
 
-                # Cache obs datasets for reuse by other store groups with the same data_dir
-                # (aux_datasets are written immediately; they don't need to be cached)
-                _rinex_cache[data_dir] = (augmented_datasets, rinex_files)
-            else:
-                # Reuse cached RINEX data, only recompute SCS with new position
-                cached_datasets, rinex_files = _rinex_cache[data_dir]
-                aux_datasets = None
-                sid_issues = None
+        # Mark all receivers whose dir failed
+        for name, rtype, data_dir, _pos, fmt in normalized_configs:
+            if (data_dir, fmt) in failed_dirs and name not in skipped:
+                skipped.add(name)
 
+        # Wave B: SCS recompute from cached parse results
+        recompute_jobs = [
+            (name, data_dir, fmt)
+            for name, data_dir, fmt in wave_b
+            if name not in skipped and (data_dir, fmt) not in failed_dirs
+        ]
+        if recompute_jobs:
+
+            def _recompute_job(job_name, data_dir, fmt):
+                owner = parse_owner[(data_dir, fmt)]
+                cached_aug, _, _ = per_receiver_results[owner]
                 self._logger.info(
                     "recomputing_scs_from_cache",
-                    receiver=receiver_name,
-                    cached_files=len(cached_datasets),
-                    new_position=str(receiver_position),
+                    receiver=job_name,
+                    cached_files=len(cached_aug),
+                    new_position=str(positions[job_name]),
                 )
+                t = time.perf_counter()
+                result = self._recompute_scs_for_position(
+                    cached_aug, aux_zarr_path, positions[job_name]
+                )
+                return result, time.perf_counter() - t
 
-                augmented_datasets = []
-                for fpath, ds in cached_datasets:
-                    # Drop old SCS vars and recompute with new position
-                    scs_vars = [v for v in ("theta", "phi", "r") if v in ds.data_vars]
-                    ds_no_scs = ds.drop_vars(scs_vars)
+            if len(recompute_jobs) <= 1:
+                for name, data_dir, fmt in recompute_jobs:
+                    try:
+                        aug, dur = _recompute_job(name, data_dir, fmt)
+                        per_receiver_results[name] = (aug, None, None)
+                        compute_durations[name] = dur
+                    except Exception as e:
+                        self._logger.error(
+                            "scs_recompute_failed",
+                            receiver=name,
+                            error=str(e),
+                        )
+                        skipped.add(name)
+            else:
+                with ThreadPoolExecutor(
+                    max_workers=min(len(recompute_jobs), total_cores)
+                ) as tpe:
+                    futs = {
+                        tpe.submit(_recompute_job, n, d, f): (n, d, f)
+                        for n, d, f in recompute_jobs
+                    }
+                    for fut in as_completed(futs):
+                        name, data_dir, fmt = futs[fut]
+                        try:
+                            aug, dur = fut.result()
+                            per_receiver_results[name] = (aug, None, None)
+                            compute_durations[name] = dur
+                        except Exception as e:
+                            self._logger.error(
+                                "scs_recompute_failed",
+                                receiver=name,
+                                error=str(e),
+                            )
+                            skipped.add(name)
 
-                    # Recompute SCS using the aux data
-                    aux_store = xr.open_zarr(
-                        aux_zarr_path, decode_timedelta=True, consolidated=False
-                    )
-                    aux_slice = aux_store.sel(epoch=ds_no_scs.epoch, method="nearest")
-                    common_sids = sorted(
-                        set(ds_no_scs.sid.values) & set(aux_slice.sid.values)
-                    )
-                    aux_slice = aux_slice.sel(sid=common_sids)
+        # ====================================================================
+        # PHASE 3 — sequential writes + yields (deterministic, original order)
+        # ====================================================================
+        date_obj = self.matched_data_dirs.yyyydoy.date
+        assert date_obj is not None, "yyyydoy.date must not be None"
+        start_time = datetime.combine(date_obj, datetime.min.time())
+        end_time = datetime.combine(date_obj, datetime.max.time())
+        time_range = (start_time, end_time)
 
-                    ds_recomputed = _compute_spherical_coords_fast(
-                        ds_no_scs, aux_slice, receiver_position
-                    )
-                    augmented_datasets.append((fpath, ds_recomputed))
+        n_written = 0
+        for name, rtype, data_dir, _pos, fmt in normalized_configs:
+            if name in skipped:
+                continue
+            augmented, aux_datasets, sid_issues = per_receiver_results[name]
+            rinex_files = files_by_dir[(data_dir, fmt)]
 
-            t_rinex_end = time.perf_counter()
-            self._logger.info(
-                "rinex_parallel_processing_complete",
-                receiver=receiver_name,
-                duration_seconds=round(t_rinex_end - t_rinex_start, 2),
-                datasets=len(augmented_datasets),
-            )
-
-            # Append to Icechunk with receiver_name as group
             t_write_start = time.perf_counter()
             self._append_to_icechunk(
-                augmented_datasets=augmented_datasets,
-                receiver_name=receiver_name,
+                augmented_datasets=augmented,
+                receiver_name=name,
                 rinex_files=rinex_files,
                 aux_datasets=aux_datasets,
                 sid_issues=sid_issues,
-                reader_format=reader_format,
+                reader_format=fmt,
             )
             t_write_end = time.perf_counter()
 
-            # Yield final daily dataset
             t_read_start = time.perf_counter()
-            date_obj = self.matched_data_dirs.yyyydoy.date
-            assert date_obj is not None, "yyyydoy.date must not be None"
-            start_time = datetime.combine(date_obj, datetime.min.time())
-            end_time = datetime.combine(date_obj, datetime.max.time())
-            time_range = (start_time, end_time)
-
             daily_dataset = self.site.read_receiver_data(
-                receiver_name=receiver_name, time_range=time_range
+                receiver_name=name, time_range=time_range
             )
             t_read_end = time.perf_counter()
 
-            t_rcv_end = time.perf_counter()
-            receiver_duration = t_rcv_end - t_rcv_start
-
+            compute_s = compute_durations.get(name, 0.0)
+            total_s = (
+                compute_s + (t_write_end - t_write_start) + (t_read_end - t_read_start)
+            )
             self._logger.info(
                 "receiver_processing_complete",
-                receiver=receiver_name,
-                total_seconds=round(receiver_duration, 2),
-                position_seconds=round(t_pos_end - t_pos_start, 2),
-                rinex_parallel_seconds=round(t_rinex_end - t_rinex_start, 2),
+                receiver=name,
+                total_seconds=round(total_s, 2),
+                rinex_parallel_seconds=round(compute_s, 2),
                 icechunk_write_seconds=round(t_write_end - t_write_start, 2),
                 store_readback_seconds=round(t_read_end - t_read_start, 2),
                 dataset_size=dict(daily_dataset.sizes),
                 epochs=len(daily_dataset.epoch) if "epoch" in daily_dataset.dims else 0,
-                sids=len(daily_dataset.sid) if "sid" in daily_dataset.dims else 0,
             )
+            n_written += 1
+            yield name, daily_dataset, total_s
 
-            yield receiver_name, daily_dataset, receiver_duration
-
-        pipeline_duration = time.perf_counter() - pipeline_start
         self._logger.info(
             "rinex_pipeline_complete",
-            duration_seconds=round(pipeline_duration, 2),
-            receivers=len(normalized_configs),
+            date=self.matched_data_dirs.yyyydoy.to_str(),
+            receivers_written=n_written,
+            receivers_skipped=len(skipped),
         )
 
     def _get_default_receiver_configs(
