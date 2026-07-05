@@ -146,7 +146,7 @@ def diagnose_processing(
         site=site,
         dry_run=False,
         n_max_workers=resources["n_workers"],
-        batch_hours=proc.batch_hours,
+        days_per_batch=proc.days_per_batch,
         max_memory_gb=resources["max_memory_gb"],
         cpu_affinity=resources["cpu_affinity"],
         nice_priority=resources["nice_priority"],
