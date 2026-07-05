@@ -340,8 +340,6 @@ class Pipeline:
             cpu_affinity=cpu_affinity,
             nice_priority=nice_priority,
             threads_per_worker=threads_per_worker,
-            parallelization_strategy=proc.parallelization_strategy,
-            scheduler_address=proc.scheduler_address,
         )
 
         self.log.info(

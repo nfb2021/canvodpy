@@ -264,6 +264,12 @@ class VodComputer:
         for coord in vod_ds.coords:
             vod_ds[coord].encoding.clear()
 
+        # numpy 2.x promotes string arrays to StringDType (kind='T') during
+        # alignment/concat; Zarr stores strings as object and rejects the mismatch.
+        for coord in list(vod_ds.coords):
+            if getattr(vod_ds[coord].dtype, "kind", None) == "T":
+                vod_ds = vod_ds.assign_coords({coord: vod_ds[coord].astype(object)})
+
         # Rechunk for efficient storage
         vod_ds = vod_ds.chunk(self._rechunk)
 

@@ -644,10 +644,10 @@ dependencies = [
     { name = "canvod-virtualiconvname" },
     { name = "canvod-viz" },
     { name = "canvod-vod" },
-    { name = "dask", extra = ["distributed"] },
     { name = "docker" },
     { name = "howfairis" },
     { name = "icechunk" },
+    { name = "loky" },
     { name = "matplotlib" },
     { name = "mystmd" },
     { name = "natsort" },
@@ -682,10 +682,10 @@ requires-dist = [
     { name = "canvod-virtualiconvname", editable = "packages/canvod-virtualiconvname" },
     { name = "canvod-viz", editable = "packages/canvod-viz" },
     { name = "canvod-vod", editable = "packages/canvod-vod" },
-    { name = "dask", extras = ["distributed"], specifier = ">=2026.1.1" },
     { name = "docker", specifier = ">=7.1.0" },
     { name = "howfairis", specifier = ">=0.13.0" },
     { name = "icechunk", specifier = ">=2.0.1" },
+    { name = "loky", specifier = ">=3.5.6" },
     { name = "matplotlib", specifier = ">=3.8.0" },
     { name = "mystmd", specifier = ">=1.8.0" },
     { name = "natsort", specifier = ">=8.0.0" },
@@ -1006,9 +1006,6 @@ complete = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "pyarrow" },
-]
-distributed = [
-    { name = "distributed" },
 ]
 
 [[package]]

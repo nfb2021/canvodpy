@@ -154,6 +154,55 @@ the smaller per-task footprint.
 The config change is immediate; fixing the allocation order and implementing lazy padding
 are medium-effort code changes that unlock S3 and pay off most on Linux.
 
+### Run 4 — Production format benchmarks (S2 only, SNR-only + 277-SID)
+
+Three formats run head-to-head on the same loky/flat S2 strategy with the curated SNR-only
+config. Machine: MacBook 8-core/16 GB. Workers RAM-capped to available headroom.
+
+| Format | DOYs | Workers | Wall(s) | s/DOY | Tasks total | Tasks/s | wkr-CPU% | SysRAM peak | Swap | Write/day |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **rinex3** (24h .rnx) | 14 | 5 | 216.5s | **15.5s** | 28 | 0.13 | 89.3% | 82.9% (13.3 GB) | 778 MB | 0.5s |
+| **rinex3_15min** (15-min .25o) | 7 | 7 | 306.3s | **43.8s** | 1,344 | 4.39 | 87.2% | 66.0% (10.6 GB) | 714 MB | 3.4s |
+| **sbf** (15-min .25_) | 7 | 7 | 1,932.3s | **276.0s** | 1,344 | 0.70 | 99.3% | 59.6% (9.5 GB) | 706 MB | 7.0s |
+
+Notes on coverage: `Sample_data` only has SP3/CLK cached for DOYs 1–7; `Daily_data` has
+DOYs 1–14. RINEX 3 15-min and SBF both ran 7 DOYs. 24h RINEX ran all 14 from `Daily_data`.
+Workers were capped below the requested 8 by the `gb_per_worker` safety formula.
+
+**Key findings:**
+
+**1. SBF is 6.3× slower per DOY than 15-min RINEX (276s vs 44s).**
+Both formats have the same task count (1,344), the same 7 workers, and similar file sizes
+(10–11 MB SBF vs 1–2 MB RINEX 3). The gap is pure CPU cost per task: SBF binary decode +
+SatVisibility processing + the known `sbf_obs` concat bottleneck (noted in memory:
+`processor.py:2744` — `xr.concat(sbf_parts, dim="epoch")` across all 96 parts before write).
+The SBF CPU sparkline is perfectly flat (▇▇▇▇▇▇ throughout) at 99.3% — CPU-saturated
+for the entire 32-minute run, meaning there is no headroom left.
+
+**2. 24h RINEX is the most memory-hungry format — capped to 5 workers.**
+A single 24h file expands to ~1.6 GB in memory (per earlier tracemalloc measurement),
+peaking at 5,002 MB driver RSS and 13.3 GB system RAM at 5 workers. Only 5 workers fit
+within the 70% RAM budget. At 7 workers it would hit 16 GB + swap. 15-min files (~1–2 MB)
+produce much smaller per-task footprints, allowing 7 workers at lower total RAM.
+
+**3. 24h RINEX is the most efficient format per DOY (15.5s), even with fewer workers.**
+Normalised to 7 workers: 24h RINEX ≈ 11s/DOY, vs 44s/DOY for 15-min RINEX. The overhead
+that multiplies with file fragmentation — one aux zarr build per DOY (constant regardless of
+file count), Icechunk commit overhead (0.5s vs 3.4s/DOY for 96 commits), Python task
+dispatch per file — costs ~3× more for 15-min files.
+
+**4. Write overhead scales with fragmentation:**
+0.5s/DOY (1 file) → 3.4s/DOY (96 RINEX files) → 7.0s/DOY (96 SBF files). SBF writes are
+2× slower than RINEX 15-min despite the same commit count — the `sbf_obs` concat-then-write
+adds a costly driver-side step after every commit.
+
+**5. SBF fix is high priority.**
+The sbf_obs bottleneck is fully identified. Fix: write each `sbf_obs` part directly to
+Icechunk as an incremental dataset instead of accumulating all 96 parts in the driver and
+concatenating. This would drop SBF from 276s/DOY to an expected ~50–80s/DOY (matching
+15-min RINEX) and remove the CPU saturation. See `memory/performance_investigation.md`
+for the exact code location.
+
 ---
 
 ## Architectural direction: S3 (split + shared aux zarr)
@@ -188,21 +237,63 @@ naturally before the aux zarr build, validating the day before any expensive com
 
 | Item | Why it matters |
 |---|---|
-| 28-DOY benchmark not yet run | 6-DOY with SNR-only + 277-SID now measured; 28-DOY would confirm at scale |
+| **SBF sbf_obs concat fix** | Highest-ROI single fix: 6.3× slowdown, CPU-saturated, code location known (`processor.py:2744`) |
 | Production server RAM/cores unknown | Determines whether S2 suffices or S3 is needed |
 | 1s resolution not yet benchmarked | 30 GB footprint is extrapolated, not measured |
 | Icechunk write contention not profiled | Could cap S3's real gain below projections |
-| AIUB not in products.toml | Ephemeris download fails without NASA credentials |
+| SP3/CLK only cached for 7 DOYs in Sample_data | Limits SBF/15-min benchmarks; expand cache or add `--sp3-dir` override |
 | Worker process overhead not profiled | macOS spawn adds ~2–3 GB base per worker; Linux fork does not |
+| Linux benchmark not run | macOS projections rely on fork/COW assumptions — validate on production server |
 
 ---
 
 ## Recommendation
 
-**Immediate:** Adopt S2 in the production orchestrator (structural win, no downside).
-Set `keep_rnx_vars: ["SNR"]` in `config/processing.yaml` (already supported) and re-run
-the 28-DOY benchmark — this alone is projected to allow 3–4 workers on the development
-machine and more on Linux where fork reduces per-worker overhead.
-**Next:** Implement lazy padding (defer `pad_to_global_sid` to write boundary via
-`reindex(sid=store_axis)`) to bring in-flight footprint to ~100–150 MB, then S3 if 1s
-resolution files are confirmed as a production requirement.
+**Priority 1 — Fix SBF sbf_obs concat** (high impact, code location known):
+In `processor.py:2744`, replace the accumulate-all-parts-then-concat pattern with
+incremental per-part writes to Icechunk. Expected to drop SBF from 276s/DOY to ~50-80s/DOY.
+
+**Priority 2 — S2 in production + SNR-only config** (structural, no downside):
+S2 loky/flat is already implemented on `explore/performance-review`. Merge it and set
+`keep_rnx_vars: [SNR]` + 277-SID curated list in production `processing.yaml`. This
+unlocks more workers within the RAM budget and eliminates the 95% spawn-overhead waste
+from the current S0 strategy.
+
+**Priority 3 — Linux benchmark** (validate extrapolations):
+All macOS projections about fork/COW and lazy padding rely on OS-level assumptions not
+measurable here. Run S2 on the actual production server to get real numbers before
+committing to S3 architecture.
+
+---
+
+## VOD store overhead (2026-07-05, 28-DOY run)
+
+**Measured:** pure RINEX pipeline 548s → RINEX + VOD 842s → **+294s for 28 days (~10.5s/day)**.
+Actual VOD computation is 0.2s/day. The ~10s/day overhead comes from I/O:
+
+| Step | Estimated cost | Root cause |
+|---|---|---|
+| `read_receiver_data` from RINEX Icechunk store × 2 receivers | ~4s/day | Data already in memory (`date_datasets`) — redundant re-read |
+| VOD Icechunk `write_or_append_group` + `session.commit()` | ~4s/day | 28 × commit overhead on ExFAT external drive |
+| `_normalize_encodings` eager string coord cast | ~2s/day | New from StringDType fix; computes all string coords before write |
+
+**Primary fix — eliminate the re-read (highest ROI):**
+`pipeline.py` stores `date_datasets[date_key][receiver_name]` after the RINEX write. The
+VOD computer currently calls `read_receiver_data` to re-open the same data from Icechunk.
+Instead, pass `date_datasets` directly to the VOD computation path, skipping the store
+read entirely. Expected saving: ~8s/day (4s × 2 receivers) → ~224s total.
+
+**Secondary fix — batch VOD commits:**
+Instead of one Icechunk commit per day (28 commits), accumulate VOD data across days and
+commit every N days or at run end. Trades crash-recovery granularity for throughput.
+Expected saving: ~2-3s/day depending on drive speed.
+
+**Tertiary fix — lazy `_normalize_encodings` for string coords:**
+The StringDType fix forces eager `.compute().values` for all non-numeric coords. For a 277-SID
+dataset these arrays are tiny (<100 KB), but the overhead is still measurable. Consider
+only casting when `dtype.kind not in ('O',)` and skipping already-numpy-object coords
+(the fast path already does this for `da.chunks is None and da.dtype == object`).
+
+**Action:** profile the exact per-step breakdown before implementing — use
+`time.perf_counter()` around each sub-step in `vod_computer._write_to_store()` and
+`pipeline._run_vod_for_day()` (or equivalent entry point).

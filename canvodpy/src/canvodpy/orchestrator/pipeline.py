@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import os
 import time as _time
 from collections import defaultdict
@@ -22,12 +21,12 @@ from canvod.utils.tools import YYYYDOY
 from canvod.virtualiconvname.patterns import BUILTIN_PATTERNS, auto_match_order
 
 try:
-    from dask.distributed import as_completed as dask_as_completed
+    from loky import get_reusable_executor as _loky_reusable
 
-    _HAS_DISTRIBUTED = True
+    _HAS_LOKY = True
 except ImportError:
-    _HAS_DISTRIBUTED = False
-    dask_as_completed = None  # ty: ignore[invalid-assignment]
+    _HAS_LOKY = False
+    _loky_reusable = None  # ty: ignore[invalid-assignment]
 
 from canvodpy.logging import get_logger
 from canvodpy.orchestrator.processor import (
@@ -35,7 +34,7 @@ from canvodpy.orchestrator.processor import (
     _processing_progress,
     preprocess_with_hermite_aux,
 )
-from canvodpy.orchestrator.resources import DaskClusterManager, MemoryMonitor
+from canvodpy.orchestrator.resources import MemoryMonitor
 
 
 class PipelineOrchestrator:
@@ -50,7 +49,7 @@ class PipelineOrchestrator:
         Research site configuration
     n_max_workers : int | None
         Maximum parallel workers per day. ``None`` means auto-detect
-        (Dask/OS picks based on ``os.cpu_count()``).
+        (via ``os.cpu_count()``).
     dry_run : bool
         If True, only simulate processing without executing
     batch_hours : float
@@ -62,12 +61,8 @@ class PipelineOrchestrator:
     nice_priority : int
         Process nice value (0=normal, 19=lowest)
     threads_per_worker : int | None
-        Threads per Dask worker process. None defaults to 1.
-    scheduler_address : str | None
-        Address of an existing Dask scheduler (e.g. ``'tcp://host:8786'``).
-        When set a LocalCluster is NOT created — the client connects to the
-        remote scheduler instead.  Ignored when parallelization_strategy is
-        ``'processpool'``.
+        Threads per worker process (used to cap BLAS thread env vars).
+        None defaults to 1.
 
     """
 
@@ -81,8 +76,6 @@ class PipelineOrchestrator:
         cpu_affinity: list[int] | None = None,
         nice_priority: int = 0,
         threads_per_worker: int | None = None,
-        parallelization_strategy: str = "dask",
-        scheduler_address: str | None = None,
     ) -> None:
         self.site = site
         self.n_max_workers = n_max_workers
@@ -96,45 +89,25 @@ class PipelineOrchestrator:
         self._memory_monitor = MemoryMonitor(max_memory_gb=max_memory_gb)
         self._logger = get_logger(__name__).bind(site=site.site_name)
 
-        # Store cluster config for lazy creation (avoid startup cost for
-        # preview_processing_plan() and dry_run=True).
         if n_max_workers is not None:
-            dask_workers: int | None = min(
+            effective_workers: int | None = min(
                 n_max_workers, os.cpu_count() or n_max_workers
             )
-            memory_limit: str | float = "auto"
-            if max_memory_gb is not None and dask_workers > 0:
-                memory_limit = max_memory_gb / dask_workers * (1024**3)
-
             self._logger.info(
                 "resource_mode_manual",
-                n_workers=dask_workers,
+                n_workers=effective_workers,
                 max_memory_gb=max_memory_gb,
                 cpu_affinity=cpu_affinity,
                 nice_priority=nice_priority,
                 threads_per_worker=threads_per_worker,
             )
         else:
-            dask_workers = None
-            memory_limit = "auto"
-
+            effective_workers = None
             self._logger.info(
                 "resource_mode_auto",
                 detected_cores=os.cpu_count(),
                 threads_per_worker=threads_per_worker,
             )
-
-        self._cluster_config = {
-            "n_workers": dask_workers,
-            "memory_limit_per_worker": memory_limit,
-            "cpu_affinity": cpu_affinity,
-            "nice_priority": nice_priority,
-            "threads_per_worker": threads_per_worker,
-            "scheduler_address": scheduler_address,
-        }
-        self._use_processpool = parallelization_strategy == "processpool"
-        self._cluster_manager: DaskClusterManager | None = None
-        self._cluster_creation_attempted = False
 
         self.pair_matcher = PairDataDirMatcher(
             base_dir=site.site_config["gnss_site_data_root"],
@@ -154,30 +127,9 @@ class PipelineOrchestrator:
             batch_hours=batch_hours,
         )
 
-    @property
-    def cluster_manager(self) -> DaskClusterManager | None:
-        """Lazily create the Dask cluster on first access."""
-        if self._use_processpool:
-            return None
-        if not self._cluster_creation_attempted:
-            self._cluster_creation_attempted = True
-            try:
-                self._cluster_manager = DaskClusterManager(**self._cluster_config)  # ty: ignore[invalid-argument-type]
-            except ImportError:
-                self._logger.warning(
-                    "dask_distributed_unavailable",
-                    message="Falling back to ProcessPoolExecutor",
-                )
-                self._cluster_manager = None
-        return self._cluster_manager
-
     def close(self) -> None:
-        """Shut down the Dask cluster if it was created."""
-        if self._cluster_manager is not None:
-            self._logger.info("pipeline_orchestrator_closing")
-            self._cluster_manager.close()
-            self._cluster_manager = None
-            self._logger.info("pipeline_orchestrator_closed")
+        """Release orchestrator resources (loky's reusable executor is shared and left running)."""
+        self._logger.info("pipeline_orchestrator_closed")
 
     def __enter__(self) -> PipelineOrchestrator:
         return self
@@ -482,18 +434,12 @@ class PipelineOrchestrator:
             yyyydoy=YYYYDOY.from_str(date_key),
         )
 
-        # Use Dask cluster if available; otherwise falls back to PPE inside
-        # RinexDataProcessor.
-        dask_client = (
-            self.cluster_manager.client if self.cluster_manager is not None else None
-        )
         t_init_start = _time.perf_counter()
         try:
             processor = RinexDataProcessor(
                 matched_data_dirs=matched_dirs,
                 site=self.site,
                 n_max_workers=self.n_max_workers,
-                dask_client=dask_client,
             )
         except RuntimeError as e:
             if "Failed to download" in str(e):
@@ -602,14 +548,10 @@ class PipelineOrchestrator:
             reference_data_dir=first_data_dir,
             yyyydoy=YYYYDOY.from_str(date_key),
         )
-        dask_client = (
-            self.cluster_manager.client if self.cluster_manager is not None else None
-        )
         return RinexDataProcessor(
             matched_data_dirs=matched_dirs,
             site=self.site,
             n_max_workers=self.n_max_workers,
-            dask_client=dask_client,
         )
 
     def _prepare_single_date(
@@ -676,10 +618,9 @@ class PipelineOrchestrator:
         """
         days_per_batch = max(1, round(self.batch_hours / 24))
         total_batches = (len(filtered_dates) + days_per_batch - 1) // days_per_batch
-        dask_client = (
-            self.cluster_manager.client if self.cluster_manager is not None else None
-        )
-        use_flat_dask = dask_client is not None and _HAS_DISTRIBUTED
+        # Use loky flat-LPT (S2) when loky is installed. Persistent pool
+        # eliminates per-receiver-day spawn overhead (~17s/call on macOS).
+        use_flat_loky = _HAS_LOKY
 
         self._logger.info(
             "multi_day_batch_strategy",
@@ -687,8 +628,23 @@ class PipelineOrchestrator:
             days_per_batch=days_per_batch,
             total_dates=len(filtered_dates),
             total_batches=total_batches,
-            flat_dask=use_flat_dask,
+            flat_loky=use_flat_loky,
         )
+
+        # One persistent bar per receiver spanning ALL dates — updates in place
+        _receiver_names_ordered: list[str] = []
+        _seen_rn: set[str] = set()
+        for _, _recvs in filtered_dates:
+            for _rn in _recvs:
+                if _rn not in _seen_rn:
+                    _receiver_names_ordered.append(_rn)
+                    _seen_rn.add(_rn)
+        progress = _processing_progress()
+        receiver_tasks: dict[str, TaskID] = {
+            _rn: progress.add_task(f"  {_rn}", total=len(filtered_dates))
+            for _rn in _receiver_names_ordered
+        }
+        progress.start()
 
         # Partition dates into batches
         for batch_idx, batch_start in enumerate(
@@ -710,9 +666,8 @@ class PipelineOrchestrator:
                 context=f"before_batch_{batch_idx + 1}"
             )
 
-            if not use_flat_dask:
-                # Fallback: sequential _process_single_date (batch_hours=24
-                # or no Dask cluster)
+            if not use_flat_loky:
+                # Fallback: sequential _process_single_date (loky not installed)
                 doys_succeeded = 0
                 doys_failed = 0
                 for date_key, receivers in batch:
@@ -818,23 +773,39 @@ class PipelineOrchestrator:
                 for store_group, (_, _, _, fmt) in receivers.items():
                     reader_format_lookup[(date_key, store_group)] = fmt
 
-            # Submit all tasks
-            assert dask_client is not None, "dask_client must be set in Dask path"
+            # ── Phase 2: submit all tasks ─────────────────────────────────────
+            # Cap BLAS/OpenMP thread counts so workers don't each spawn
+            # os.cpu_count() threads (n_workers × blas_threads = oversubscription).
+            _effective_blas_threads = self._threads_per_worker or 1
+            _thread_str = str(_effective_blas_threads)
+            for _var in (
+                "OMP_NUM_THREADS",
+                "MKL_NUM_THREADS",
+                "OPENBLAS_NUM_THREADS",
+                "NUMEXPR_NUM_THREADS",
+                "VECLIB_MAXIMUM_THREADS",
+            ):
+                if _var not in os.environ:
+                    os.environ[_var] = _thread_str
+
+            assert _loky_reusable is not None
             t_submit_start = _time.monotonic()
             future_to_meta: dict = {}
+            n_wrk = self.n_max_workers or os.cpu_count() or 4
+            _pool = _loky_reusable(max_workers=n_wrk)
             for date_key, task_args in all_tasks:
-                fut = dask_client.submit(
-                    preprocess_with_hermite_aux, *task_args, pure=False
-                )
-                receiver_name = task_args[4]  # 5th element
+                fut = _pool.submit(preprocess_with_hermite_aux, *task_args)
+                receiver_name = task_args[4]
                 future_to_meta[fut] = (date_key, receiver_name)
             t_submit_end = _time.monotonic()
             self._logger.info(
-                "phase2_dask_submitted",
+                "phase2_loky_submitted",
                 batch_index=batch_idx + 1,
                 tasks_submitted=len(future_to_meta),
+                n_workers=n_wrk,
                 submit_seconds=round(t_submit_end - t_submit_start, 4),
             )
+            fut_iter = as_completed(future_to_meta)
 
             # Streaming collection: write as groups complete
             pending_results: dict[tuple[str, str], list[tuple[Path, xr.Dataset]]] = (
@@ -859,22 +830,15 @@ class PipelineOrchestrator:
                     f.stat().st_size / 1_048_576 for f in files if f.exists()
                 )
 
-            with _processing_progress() as progress:
-                # Overall batch bar
-                batch_task = progress.add_task(
+            with _processing_progress(disable=True) as _progress_inner:
+                # Stub tasks on the disabled inner progress (no-ops for rendering)
+                _progress_inner.add_task(
                     f"[bold]batch {batch_idx + 1}",
                     total=len(future_to_meta),
                 )
-                # Per-group sub-bars
-                group_tasks: dict[tuple[str, str], TaskID] = {}
-                for gk, exp in sorted(expected_counts.items()):
-                    dk, rn = gk
-                    mb = file_sizes_mb.get(gk, 0)
-                    label = f"  {dk} {rn} ({mb:.0f} MB)"
-                    group_tasks[gk] = progress.add_task(label, total=exp)
 
                 batch_t0 = _time.monotonic()
-                for fut in dask_as_completed(future_to_meta):
+                for fut in fut_iter:
                     date_key, receiver_name = future_to_meta[fut]
                     group_key = (date_key, receiver_name)
 
@@ -887,7 +851,7 @@ class PipelineOrchestrator:
                     except Exception:
                         tasks_failed += 1
                         self._logger.exception(
-                            "dask_task_failed",
+                            "task_failed",
                             date=date_key,
                             receiver=receiver_name,
                             batch_index=batch_idx + 1,
@@ -895,38 +859,6 @@ class PipelineOrchestrator:
 
                     # Count both successes and failures toward completion
                     completed_counts[group_key] += 1
-                    progress.advance(batch_task)
-                    progress.advance(group_tasks[group_key])
-
-                    # Update batch description with worker activity
-                    done = tasks_succeeded + tasks_failed
-                    total_tasks = len(future_to_meta)
-                    elapsed = _time.monotonic() - batch_t0
-                    rate = done / elapsed if elapsed > 0 else 0
-                    active = 0
-                    if dask_client is not None:
-                        with contextlib.suppress(Exception):
-                            active = sum(
-                                len(v) for v in dask_client.processing().values()
-                            )
-                    progress.update(
-                        batch_task,
-                        description=(
-                            f"[bold]batch {batch_idx + 1}  "
-                            f"{done}/{total_tasks} files  "
-                            f"{rate:.1f}/min  "
-                            f"{active} workers"
-                        ),
-                    )
-
-                    # Mark completed groups
-                    if completed_counts[group_key] >= expected_counts.get(group_key, 0):
-                        dk, rn = group_key
-                        mb = file_sizes_mb.get(group_key, 0)
-                        progress.update(
-                            group_tasks[group_key],
-                            description=(f"  {dk} {rn} ({mb:.0f} MB) [green]done"),
-                        )
 
                     # Check if this group is fully complete
                     if completed_counts[group_key] < expected_counts.get(group_key, 0):
@@ -951,7 +883,7 @@ class PipelineOrchestrator:
 
                     t_write_start = _time.monotonic()
                     try:
-                        processor._append_to_icechunk(
+                        skipped = processor._append_to_icechunk(
                             augmented,
                             receiver_name,
                             rinex_files,
@@ -967,25 +899,36 @@ class PipelineOrchestrator:
                         continue
                     t_write_end = _time.monotonic()
 
-                    # Read back daily dataset
+                    # Build the daily dataset: from in-memory parts when nothing
+                    # was skipped by dedup (avoids a full store round-trip), or
+                    # fall back to a store read on resume / overlap runs.
                     date_obj = processor.matched_data_dirs.yyyydoy.date
                     assert date_obj is not None, "yyyydoy.date must not be None"
                     time_range = (
                         datetime.combine(date_obj, datetime.min.time()),
                         datetime.combine(date_obj, datetime.max.time()),
                     )
-                    try:
-                        daily_ds = self.site.read_receiver_data(
-                            receiver_name=receiver_name,
-                            time_range=time_range,
-                        )
-                    except ValueError, OSError, RuntimeError:
-                        self._logger.exception(
-                            "read_back_failed",
-                            date=date_key,
-                            receiver=receiver_name,
-                        )
-                        continue
+                    if len(augmented) == 1:
+                        # Single-file day: use the processed dataset directly.
+                        # The hash railguard guarantees in-memory data == store
+                        # content whether the file was just written or already
+                        # existed (re-run). No store round-trip needed.
+                        daily_ds = augmented[0][1]
+                        assembly_source = "memory"
+                    else:
+                        try:
+                            daily_ds = self.site.read_receiver_data(
+                                receiver_name=receiver_name,
+                                time_range=time_range,
+                            )
+                        except ValueError, OSError, RuntimeError:
+                            self._logger.exception(
+                                "read_back_failed",
+                                date=date_key,
+                                receiver=receiver_name,
+                            )
+                            continue
+                        assembly_source = "store"
                     t_read_end = _time.monotonic()
 
                     self._logger.info(
@@ -993,16 +936,20 @@ class PipelineOrchestrator:
                         date=date_key,
                         receiver=receiver_name,
                         write_seconds=round(t_write_end - t_write_start, 2),
-                        read_back_seconds=round(t_read_end - t_write_end, 2),
+                        assembly_seconds=round(t_read_end - t_write_end, 2),
+                        assembly_source=assembly_source,
                         total_seconds=round(t_read_end - t_write_start, 2),
                     )
 
+                    # Advance the persistent per-receiver bar (one tick per date)
+                    if receiver_name in receiver_tasks:
+                        progress.advance(receiver_tasks[receiver_name])
                     date_datasets[date_key][receiver_name] = daily_ds
                     date_timings[date_key][receiver_name] = t_read_end - t_write_start
                     groups_written.add(group_key)
 
             self._logger.info(
-                "flat_dask_complete",
+                "flat_loky_complete",
                 batch_index=batch_idx + 1,
                 tasks_succeeded=tasks_succeeded,
                 tasks_failed=tasks_failed,
@@ -1053,6 +1000,8 @@ class PipelineOrchestrator:
                 doys_failed=doys_failed,
                 batch_seconds=round(batch_elapsed, 2),
             )
+
+        progress.stop()
 
     def _process_sub_day_batches(
         self,

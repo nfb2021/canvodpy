@@ -1,0 +1,712 @@
+# Deferred Work — canvodpy Performance & Refactoring
+
+**Date:** 2026-07-02. Sourced from Fable Phase 0 (`ragged_sid_feasibility.md`) and
+Phase 1 (`perf_plan_phase1.md`) investigations. All file:line references verified
+against the `explore/performance-review` worktree. Implementation deferred — plan only.
+
+---
+
+## 1. ~~SID universe: make `mode: all` authoritative~~ — RESOLVED (Task A)
+
+**Resolution (2026-07-04):** Three modes kept: `all` (no filtering), `preset` (named
+YAML file), `custom` (explicit list). Implemented `_get_preset_sids()` loading from
+`presets/` via `Path(__file__).parent`. Bundled `presets/default.yaml` — 277-SID
+curated multi-GNSS list (GPS + Galileo + BeiDou MEO + GLONASS; no GEO, no IGSO, no
+augmentation, no GPS L2W). Package default flipped from `mode: all` (3658 SIDs) to
+`mode: preset, preset: default`. Release maintenance process documented in
+`docs/guides/configuration.md`. No cross-package import needed.
+
+**Commits:** `ac5283e8` (implementation), `98a890c1` (docs)
+
+---
+
+## 2. ~~Ragged-in-pipeline: move padding to write boundary~~ — RESOLVED (Task B)
+
+**Resolution (2026-07-04):** Memory win achieved via Task A (277-SID preset default:
+273 MB vs 1662 MB baseline). Lazy padding (pad to ~100 observed SIDs at write boundary)
+benchmarked at 9% *slower* on macOS (Run 3) — the reindex in the driver accumulates
+faster than the sequential Icechunk write can drain. Linux fork/COW would make the math
+different, but that's not actionable here and the main win is already captured.
+Benchmark wiring committed (`b3dad777`). Production flip deferred — not worth the
+complexity without a measured Linux benefit.
+
+**Commit:** `b3dad777` (benchmark implementation)
+
+---
+
+## 3. `canvod-virtualiconvname` — needs drastic redesign (Task C)
+
+**User note:** The current mapping is way too complicated and not intuitive for humans. This needs to change drastically.
+
+**What it is:** filename-convention layer that maps arbitrary receiver filenames to the
+canonical `{SIT}{T}{NN}{AGC}_R_{YYYY}{DOY}{HHMM}_{PERIOD}_{SAMPLING}_{CONTENT}.{TYPE}`
+name. ~1,765 LOC, 9 test modules.
+
+### Problems identified
+
+**Too many overlapping mechanisms — not intuitive:**
+- Three distinct ways to define a mapping: builtin `SourcePattern` regexes, `NamingRecipe`
+  (width-based YAML field extraction, 367 LOC), and per-receiver naming config defaults.
+  Two extension points for the same problem. Users face a non-obvious choice with no
+  clear guidance on which to use.
+- `NamingRecipe` (used in exactly one place: `tasks.py:355-365`) duplicates what a
+  custom `SourcePattern` could express — redundant abstraction, adds cognitive load.
+- The interaction between patterns, recipes, and naming config defaults is not documented
+  in a way a new user can reason about without reading source.
+
+**Dead code pulling in a dependency:**
+- `FilenameCatalog` (DuckDB-backed cache, `catalog.py:79-301`) has **zero consumers**
+  outside its own tests. Pulls in the `duckdb` dep. Duplicates the store metadata
+  table's `canonical_name`/`physical_path` fields. Remove or quarantine explicitly.
+
+**Silent data loss:**
+- `discover_all`/`discover_for_date` swallow `ValueError/KeyError` per file with `continue`
+  and **no logging** (`mapping.py:145, 178`). The L2 fluent path uses `FilenameMapper`
+  directly (bypassing the validator) and can silently omit data files. Unacceptable.
+
+**Correctness edge cases:**
+- Cross-midnight overlaps missed: `detect_overlaps` groups by `(year, doy)` — a 23:45
+  15M file vs the next day's 01D file cannot be flagged (`mapping.py:308-333`).
+- Period inference heuristics: `hour_letter == "0"` → `period = "01D"` (`mapping.py:257`)
+  can silently mis-tag hourly files named with `0`.
+- `NamingRecipe.matches` requires exact filename length (`recipe.py:331-339`); has no
+  compression-extension handling (`.gz`). `_detect_file_type` in mapping handles it;
+  recipe doesn't. Inconsistent.
+
+**Coupling:**
+- Naming config stored as opaque dicts in canvod-utils — validation only surfaces at
+  pipeline runtime, not at `just config-validate`. Errors are late and hard to diagnose.
+- `canvod-readers` depends on the package only for the deprecated
+  `DataDirMatcher`/`PairDataDirMatcher` path — once removed, that dependency edge drops.
+
+**Direction for redesign:**
+- One mechanism, not three. Single, well-documented pattern definition format that
+  covers both the "I have a regex" and "I have fixed-width fields" cases.
+- Discovery must produce a report (like the validator) — never silently drop files.
+- Config validation at load time, not at first use.
+- Remove `FilenameCatalog` and its `duckdb` dependency.
+- Naming should be approachable: a new user should be able to add a custom receiver
+  naming pattern in under 10 minutes without reading source code.
+
+---
+
+## 4. CLI and configuration — package-standalone usage and human ergonomics (Task D)
+
+**User notes:**
+1. Using individual `canvod-*` packages standalone currently errors about config not
+   being set up. Packages must be usable without a full `canvodpy` config stack.
+2. The config itself needs to be more human-friendly.
+
+### Problems identified
+
+**Packages are not standalone:**
+- `load_config()` (`canvod-utils/config/loader.py:233`) walks up to a `.git` directory
+  to find the monorepo root. In a pip-installed package (`import canvod.store`), there is
+  no `.git` → config load fails immediately. `CANVOD_CONFIG_DIR` is the only escape and
+  is not documented in any package README.
+- Library code calls `load_config()` mid-computation (e.g. `manager.py:calculate_vod`)
+  instead of receiving config as a parameter. Any call to these methods outside a full
+  canvodpy install stack fails.
+- `load_config()` calls `sys.exit(1)` on validation error (`loader.py:116-118`) — kills
+  the interpreter in programmatic (L2/L4/standalone) use. Should raise instead.
+- **Goal:** each `canvod-*` package should import and operate with zero config setup.
+  Config is an orchestrator-layer concern; individual packages should accept their
+  required settings as constructor/method arguments and have sensible library defaults.
+
+**Config is not human-friendly:**
+- 24 model classes in one 990-line `models.py` — hard to navigate, hard to understand
+  what belongs where.
+- `ProcessingParams` mixes reproducibility-relevant science settings (`file_pairing`,
+  `store_radial_distance`) with machine-local resource knobs (`n_max_threads`,
+  `parallelization_strategy`, `threads_per_worker`). A config file should be portable
+  between machines without carrying worker counts.
+- Two CLIs both named `canvodpy`: the installed `canvodpy` script is the config tool;
+  the pipeline runner (`canvodpy/src/canvodpy/cli/run.py`) is not registered → `canvodpy --site X`
+  fails for every new user. Confusing at first launch.
+- Override precedence is ad hoc: `--workers`/`--batch-hours` bypass the config model;
+  no general CLI > env > user-yaml > defaults story; no `--set key=value` passthrough
+  for other fields.
+- Config errors from naming sections (C10) only surface at pipeline start — too late.
+
+**Directions:**
+- Make `canvod-*` packages usable without a config file. Pass settings as arguments;
+  use library defaults when not provided. `load_config()` is an orchestrator entrypoint,
+  not a library utility.
+- `sys.exit` → raise throughout `loader.py`.
+- Split `models.py` into focused files (`parallelism.py`, `sids.py`, `sites.py`, etc.).
+- Separate science config (portable, version-controlled) from machine config (local,
+  gitignored or env-overridden). Introduce `ParallelismConfig` as the single home for
+  all resource knobs; deprecate the four scattered `ProcessingParams` resource fields.
+- Merge the two CLIs: `canvodpy config validate`, `canvodpy run --site ...` under one
+  entry point.
+- Validate naming-section config at `SitesConfig` load time, not at first pipeline use.
+- Surface `CANVOD_CONFIG_DIR` in `--help` and all package READMEs.
+
+**Open questions:**
+- Primary operational interface: L3 `Site` API with `run.py` as sugar, or runner as
+  first-class interface for n8n/Airflow?
+- Should `CanvodConfig` snapshots be persisted into store metadata per run (the
+  store-metadata package already has a `config` section) for drift auditability?
+
+---
+
+## 5. Pipeline parallelism (Phase 2+, lower priority)
+
+**What:** replace Dask LocalCluster as default with a long-lived `ProcessPoolExecutor`
+managed by `ParallelismConfig`. RINEX is CPU-bound (pure-Python string parsing), not
+I/O-bound — threads don't help. Both formats need ProcessPool.
+
+**Key design decisions documented in `perf_plan.md`:**
+- `ParallelismConfig` Pydantic model in `canvod-utils`: `mode: backlog|daily`,
+  `max_workers: int | "auto"`, `memory_fraction`, `gil_enabled()` static method.
+- Single long-lived pool per `PipelineOrchestrator`, reused across all days (eliminates
+  ~3s spawn per receiver-day).
+- Deprecate `ProcessingParams` resource fields with bridging warnings.
+- `ParallelismConfig` subsumes (not joins) existing fields: `resource_mode`,
+  `n_max_threads`, `threads_per_worker`, `parallelization_strategy`.
+
+**Deferred until §1 + §2 are merged** (SID padding is the bigger lever).
+
+---
+
+## 6. ~~Streaming write path~~ — CLOSED
+
+**Why closed:** The Layer 3 dedup inversion concern (daily + sub-daily mix) does not
+apply — users always provide 24h files, so mixed-granularity batches never occur.
+Streaming `as_completed()` instead of list-accumulation would be a micro-latency win
+on local FS only; not worth the complexity.
+
+**Note for object storage:** If the store moves to S3/GCS/Azure, Icechunk v2 OCC makes
+concurrent writes viable. The right shape then is a `WriteStrategy` Protocol:
+
+- `SequentialSessionStrategy` — local FS, one session, sequential commits (current)
+- `ConcurrentSessionStrategy` — object storage, one session per worker, concurrent
+  chunk puts, OCC rebase on commit conflict
+
+No implementation needed until object storage is a confirmed target.
+
+---
+
+## 7. Quick wins — can ride any PR
+
+- **Silent discovery skips** (`mapping.py:145, 178`): add structured logging at minimum;
+  consider raising under `file_pairing: complete`.
+- **`sys.exit` in `loader.py:116-118`**: replace with `raise ConfigurationError(...)`.
+- **`FilenameCatalog`** (`catalog.py:79-301`): delete. Zero consumers, pulls in `duckdb`.
+- **Commit metadata annotation**: add `rinex_hash`, `canonical_name`, `start`, `end` to
+  `session.commit(metadata={...})` — self-describing Icechunk history, zero logic change.
+- **`DeltaLS` DNU guard** in `_tow_wn_to_utc`: guard value −128 to prevent ~2-min
+  timestamp shift on unsynchronised receivers.
+
+---
+
+---
+
+## 8. VOD hemisphere visualization — integration plan
+
+**Status (2026-07-04):** Prototype validated end-to-end (204M obs, selftest + golden scan pass) but lives entirely in an untracked scratch directory outside the repo. Zero provenance. Promote before it rots. Fable architecture review commissioned and plan compiled below.
+
+**Source files (currently untracked, outer scratch repo):**
+- `grid_storage/_common.py`, `build_native_full.py`, `build_rollup.py`, `serve_hemisphere.py`, `view_vod_cube.py`, `build_icechunk_cube.py` (contains `build_mesh`)
+- `precompute_vod_summary.py` (outer repo root) — has hard dep on untracked side script
+
+### 8.1 Soundness review
+
+**Sound, keep as-is:**
+- S² Cartesian unit vectors for mesh nodes — KDTree in R³ is correct; no pole/seam. Standard uxarray/UGRID approach.
+- Gridded-in-space, native-in-time — preserves full fidelity; rollup provides O(1) aggregation without baking time bins at build time.
+- Prefix-sum rollup for O(1) windowing — sound in principle, with known edge cases below.
+- Serve from rollup groups, not raw obs — O(cells) per request regardless of window length. Correct at scale.
+- Serve-from-source (rollup groups inside obs store) — single commit = atomicity; no two-store sync. Verify `scan_stores`/viewer tolerate non-(epoch,sid) groups.
+- Additive moments (sum/sumsq/count) — correct. **Float64 required** (float32 loses precision at 10⁸ cumulative sum).
+
+**Must fix during promotion (all already flagged in `REVIEW_AND_PROVENANCE.md`):**
+
+1. **No θ cutoff / rejection radius on KDTree.** Obs at/beyond horizon snap to rim cells → horizon inflation + biased VOD. Fix: drop `theta > theta_max` before assignment; reject KDTree matches beyond `1.5 × cell_radius` (return `cell_id = -1`). Add `theta_max_deg` and `rejection_factor` to `RollupConfig`.
+2. **`cons` param unvalidated** → `KeyError` → HTTP 500. Fix: `Literal["G","E","C","R","all"]` on the FastAPI query param → automatic 422.
+3. **Population vs sample std — decide and document.** Use `ddof=0`, record in group attrs `"std_ddof": 0` and in JSON response. Mask cells where `count < min_count` (config, default 2).
+4. **Cumulative dtype.** `cum_sum`/`cum_sumsq` must be float64; counts int64. Float32 cumulative over 2×10⁸ obs loses precision. Assert dtype in `RollupWriter`.
+5. **NaN poisoning.** A single NaN VOD corrupts all subsequent cumulative edges. Drop NaNs before accumulation; assert `isfinite` on each appended slice.
+6. **Out-of-order ingest / backfill.** If a day older than `edge_time[-1]` is ingested, appending is invalid. Detect and fall back to `build_from_scratch()` (see §8.3).
+7. **Window semantics — define once.** `[a, b] = cum[i_b] - cum[i_a]` covers obs in `(edge_a, edge_b]`. Document in group attrs; test for off-by-one.
+8. **`sid_code` registry must be append-only** and committed atomically with the obs that use it. Make it a method on the store class, not a dict in a script.
+
+**Note on streamstats wiring:** `canvod-streamstats` exists (`packages/canvod-streamstats/src/canvod/streamstats/accumulators/`) and `StatisticsConfig` is defined in `models.py:592` but **neither is wired into the orchestrator** (confirmed by grep). The rollup hook below is the first real instance of the post-commit-step pattern; design it so `StatisticsConfig` can later reuse the same hook point.
+
+### 8.2 Package placement
+
+| Component | Destination | Reasoning |
+|---|---|---|
+| `build_mesh()` (equal-area → UGRID, Cartesian nodes) | `canvod-grids`, new `packages/canvod-grids/src/canvod/grids/mesh.py` | Pure grid geometry; sits beside `grid_to_dataset`/`store_grid`. Build only from existing `GridData` to enforce no-re-tessellation. |
+| `open_session`/`day_bounds`/`vod_for_day` (VOD source iterator) | Folded into `VodComputer.iter_days(pair)` in `canvodpy/src/canvodpy/vod_computer.py` | Duplicate VOD-from-store path; `VodComputer.compute_bulk()` already does this. Reuse internals and `TauOmegaZerothOrder` (never reimplemented). |
+| Native obs store schema + writer | `canvod-store`, new `packages/canvod-store/src/canvod/store/vodgrid.py` (`VodGridStore`: `write_grid_mesh()`, `append_day_obs()`, sid-code registry) | Store schema + icechunk R/W = canvod-store's job. KDTree cell assignment (with θ fix) lives in canvod-grids; called from here. |
+| Rollup math (additive moments) | `canvod-streamstats`, `canvod/streamstats/accumulators/moments.py` | Math is streaming statistics; testable without a store. |
+| Rollup writer/orchestration | `canvod-store`, `vodgrid.py` (`RollupWriter.append_slice()`, `build_from_scratch()`) | Store I/O belongs in canvod-store. |
+| `serve_hemisphere.py` | **New package `canvod-serve`** (`packages/canvod-serve/`, deps: xpublish, fastapi, uvicorn) | Not viz (no rendering) and not ops. xpublish/fastapi/uvicorn are heavy deps that must not leak into canvod-viz (imported in notebooks). A dedicated package matches the monorepo's small-package pattern. |
+| `view_vod_cube.py` (marimo viewer) | Repo notebooks directory (verify path via `just notebooks` recipe) | Thin HTTP client + Plotly, not library code. |
+| `RollupConfig` (Pydantic model) | `canvod-utils`, `models.py` next to `StatisticsConfig` (line 592), referenced from `ProcessingConfig` | Config models are centralized here by convention. |
+
+### 8.3 Pipeline integration design
+
+**Open question (must resolve first):** The rollup consumes VOD per pair. `_append_to_icechunk()` writes raw observables — not VOD. The hook belongs to the **VOD persistence stage**, not the ingest commit. Determine whether per-day VOD is already persisted (check `site.process()` / workflows), or if `VodGridStage` is the first VOD persistence stage. This determines the hook point.
+
+**`RollupConfig` fields:**
+```python
+class RollupConfig(BaseModel):
+    enabled: bool = False
+    pairs: list[str] | Literal["auto"] = "auto"  # auto = derive from vod_analyses keys
+    freq: str = "1D"
+    theta_max_deg: float = 90.0            # KDTree assignment cutoff
+    rejection_factor: float = 1.5          # × cell radius for rejection
+    min_count: int = 2                     # serving-side mask threshold
+    constellations: list[str] = ["G", "E", "C", "R"]
+    # dtype: float64/int64 enforced in RollupWriter, not configurable
+```
+
+**Hook placement:** inside `VodGridStage`, after `append_day_obs()`, **before** `session.commit()` — same commit. Atomicity of obs+rollup is the whole point.
+
+**Append-one-slice mechanics:**
+1. Read last cumulative edge: `{cum_count[-1], cum_sum[-1], cum_sumsq[-1], cum_count_{G,E,C,R}[-1]}` — shape `(cell,)`.
+2. Drop NaNs; assert `isfinite`.
+3. Guard: `day_end > edge_time[-1]` else `raise RollupOrderError` → caller runs `build_from_scratch()`.
+4. Compute delta via `np.bincount(cell_id, ...)` (vectorized `sid_code→letter` via `meta/`).
+5. Append `last + delta` + new `edge_time`.
+
+**Idempotency:** per-edge `built_from_commit` array (same `edge` dim) + group attr `schema_version: 2`. Before appending for day D with commit X: if D exists with same X → skip (no-op); if D exists with different X → full rebuild.
+
+**Backfill:** `RollupWriter.build_from_scratch(pair, freq)` — the promoted `build_rollup.py` becomes exactly this. Expose as `just rollup-rebuild <store> <pair>`. Auto-trigger when rollup group missing, invariant fails, or `RollupOrderError`.
+
+### 8.4 Numbered implementation plan
+
+1. **Promote prototype (provenance first).** Move per §8.2: `_common.py` → split to `canvod/grids/mesh.py` + `canvod/streamstats/accumulators/moments.py`; `precompute_vod_summary.py` → `VodComputer.iter_days()`; builders → `canvod/store/vodgrid.py`; `serve_hemisphere.py` → `packages/canvod-serve/`; `view_vod_cube.py` → notebooks. Apply fixes #1–#5 (θ cutoff, cons validation, ddof decision, float64, NaN drop) *during* the move — do not port broken behavior. Port selftest as integration test.
+
+2. **Phase 1 — rollup schema v2 + golden tests.** Changes from prototype: per-constellation `cum_sum_{G,E,C,R}` / `cum_sumsq_{G,E,C,R}` (not just counts); `built_from_commit` per-edge array; group attrs `schema_version=2`, `std_ddof=0`, window semantics string. Golden tests (pytest): (a) prefix-window diff vs brute-force recompute, all window positions; (b) `(a, b]` inclusivity; (c) NaN rejection; (d) float64 dtype assertion; (e) real-day fixture round-trip; (f) `cum_count[-1].sum() == len(obs)` invariant.
+
+3. **Pipeline integration.** `RollupConfig` in canvod-utils, `VodGridStage` in canvodpy orchestrator (resolve open question first), idempotent `append_slice` with `built_from_commit` skip, `build_from_scratch` backfill + `just rollup-rebuild`. This establishes the post-processing hook that `StatisticsConfig`/streamstats wiring can later reuse.
+
+4. **Deferred work (Phases 2–6 from `MATURATION.md`).** Phase 2 (catalog, per-site layout, object storage): premature, no second site in production. Phase 3 (multi-tenant serving, LRU, multi-resolution): single-site serving works; LRU matters at >~3 sites × 3 pairs × 90 MB. Phase 4 (24h self-updating job): nearly free after Phase 3 — wire into automation backend chosen by n8n/canvod-automate decision. Phases 5–6 (frontends, productionization): blocked on Phase 3. Float64 sumsq cancellation mitigation (block re-anchoring): adequate at current 10⁸ obs scale; revisit only on test failure.
+
+### 8.5 Open questions
+
+- Does the pipeline already persist per-day VOD to a store? (Determines hook point — §8.3 prerequisite.)
+- Same icechunk repo as RINEX store, or separate per-site repo? Recommend **separate** (RINEX dedup guardrails assume (epoch, sid) dims, incompatible with (edge, cell) rollup groups).
+- Notebooks directory exact path — verify via `just notebooks` recipe.
+- Should `canvod-serve` selftest run in CI (needs fixture store) or as a manual `just` target?
+
+---
+
+---
+
+## 9. Production pipeline config — revisit before next run
+
+**Context (2026-07-04):** First production config written for rosalia/January 2025 RINEX run. Two fields added that need review:
+
+- **`batch_hours: 24`** — matches the 24h daily file structure (one `_01D_` file per day per receiver). Probably correct, but confirm whether the pipeline uses this to split sub-day batches or to group multi-day batches. If the pipeline already handles 24h files as atomic units, this field may be redundant or set wrong.
+- **`resource_mode: auto`** — Dask auto-detects workers and memory. On an M-series Mac this is fine for a single overnight run, but on a shared server this could claim all cores. Before running on a server, switch to `resource_mode: manual` and set explicit `n_max_threads`.
+- **`preprocessing.grid_assignment`** — 2° equal-area grid assignment is currently baked into preprocessing. Confirm this is the intended behavior (vs. doing grid assignment only at VOD time) and that it doesn't conflict with the rollup-native store's own `cell_id` assignment.
+
+---
+
+## Combined implementation order (when ready)
+
+```
+§2 scaffold  (store reindex helper + tests — inert, safe to ship first)
+  → §1       (SidsConfig + universe builder)
+  → §2 flip  (pad_global_sid=False in orchestrator + region path)
+  → audit + Tier-2 regression
+§5 + §6     (parallelism + streaming) — after §1/§2
+§3 / §12    (virtualiconvname — larger, §12 has the detailed plan)
+§4 / §10–11 (config: standalone warnings fix first, then UX modernization)
+Quick wins  — ride alongside any of the above
+```
+
+---
+
+## 10. Standalone sub-package install — config warnings leak (Fable review, 2026-07-05)
+
+**Problem:** Installing only `canvod-readers` or `canvod-grids` (without the full canvodpy pipeline) produces 4–6 lines of `⚠️ Warning` noise on stdout per `.to_ds()` call, each telling the user to run `just config-init` — a command that doesn't exist in their environment.
+
+### Current behaviour (Fable-verified file:line)
+
+- `loader.py:133–134` — `_load_processing()`: bare `print()` to stdout when `processing.yaml` absent
+- `loader.py:146–147` — `_load_sites()`: bare `print()` to stdout when `sites.yaml` absent
+- `loader.py:116–118` — `sys.exit(1)` on `ValidationError` — a library function killing the interpreter
+- `loader.py:20–55` — `find_monorepo_root()` walks up from cwd looking for `.git`; in a scientist's own repo the warning names a directory in _their_ project
+- No caching: `load_config()` (loader.py:233–262) re-reads YAML every call; warnings print every single time
+
+**Trigger chain for `canvod-readers` standalone user:**
+
+1. `readers/base.py:421` — `_build_attrs()` → `get_global_attrs()` → `metadata.py:254` → `load_config()` (fires on every `.to_ds()`)
+2. `rinex/v3_04.py:1816` — `keep_data_vars is None` → `load_config().processing.keep_rnx_vars`
+3. `rinex/v3_04.py:1847` — if `outname` given → `load_config().processing.compression`
+4. `v2_11.py:1392` — `_create_basic_attrs()` → `get_global_attrs()` again
+
+Net: 2–3 `load_config()` calls, 4–6 warning lines, every `.to_ds()`.
+
+**Secondary failure mode:** `canvod-store/reader.py:161` and `manager.py:884` — `next(iter(config.sites.sites))` crashes with bare `StopIteration` when sites is empty (no config). Completely cryptic for a user who just wants to open a store.
+
+**Oddity:** `canvod-utils/config/defaults/sites.yaml` exists but `_load_sites()` never reads it (unlike the other two loaders). Dead file or missing merge.
+
+### Root cause
+
+`load_config()` conflates two audiences: (a) the orchestrator's "you must configure your pipeline" gate and (b) a silent defaults provider for library internals (attrs, compression, keep-vars). The warning text assumes audience (a); the callers in canvod-readers are audience (b).
+
+Good pattern already in-tree to copy: `canvod-store/store.py:139–149` and `canvod-ops/registry.py:29–33` both wrap `load_config()` in `try/except` and fall back to Pydantic model defaults.
+
+### Fix strategy (~55–70 lines, 5–6 files)
+
+**Tier 1 — fix the loader (canvod-utils, eliminates 90% of noise):**
+1. Replace the four `print()` lines (loader.py:133–134, 146–147) with `logging.getLogger("canvod.utils.config").info(...)` — silent by default for library users, visible to orchestrator/CLI. ~8 lines.
+2. Add `strict` semantics: `load_config(config_dir=None, *, strict=False)`. `strict=True` (used by canvodpy CLI entry points) raises `ConfigFilesMissingError` with the `just config-init` hint. Default `strict=False` returns defaults silently. ~15 lines in loader.py + ~6 call-site updates in `canvodpy/src/canvodpy/` (orchestrator, workflows/tasks.py, cli.py).
+3. Add `@lru_cache` wrapper keyed on resolved `config_dir`. ~10 lines.
+4. Replace `sys.exit(1)` at loader.py:118 with `raise ConfigValidationError`; catch-and-exit moves to `cli.py`. ~10 lines.
+5. Either use `defaults/sites.yaml` in `_load_sites()` or delete it. ~3 lines.
+
+**Tier 2 — decouple readers from config (canvod-readers):**
+6. `metadata.py:254`: wrap in `try/except Exception: meta = MetadataConfig()`. ~6 lines.
+
+**Tier 3 — fix cryptic crashes (canvod-store):**
+7. `reader.py:161` and `manager.py:884`: replace bare `next(iter(...))` with a clear `ValueError("No sites configured. Create config/sites.yaml or pass site_name explicitly.")`. ~8 lines.
+
+### Packages affected
+
+| Package | Change | Required? |
+|---|---|---|
+| **canvod-utils** | loader.py: logging, strict mode, lru_cache, no sys.exit | Yes — root fix |
+| **canvod-readers** | metadata.py:254 fallback to `MetadataConfig()` | Recommended |
+| **canvod-store** | reader.py:161, manager.py:884 clear error | Recommended |
+| **canvodpy** | switch entry points to `load_config(strict=True)` | Yes if strict mode added |
+| canvod-grids, canvod-vod, canvod-viz, canvod-virtualiconvname, canvod-store-metadata | no changes — no `load_config()` usage | — |
+
+---
+
+## 11. Config UX overhaul + TUI redesign — unified implementation plan
+
+> **§11 and §13 are merged here.** The config wizard IS the TUI entry point. §13 below is a cross-reference stub.
+>
+> **Design principle:** scientists do not write config files. The wizard scans their data directory, infers structure, shows a confirmation table, then asks the 5 non-discoverable facts. The YAML file is the wizard's output artifact, not a prerequisite. Everything else — Icechunk layout, Dask scheduler, chunk sizes — uses opinionated defaults never visible to scientists.
+
+### The 5 non-discoverable facts
+
+Everything else is auto-detected (file naming, temporal extent, SID universe) or set by opinionated defaults scientists never need to touch. The wizard asks only:
+
+1. Which receiver is under the canopy (pairing)
+2. Output path for Icechunk stores
+3. Author name + email (FAIR/DataCite metadata)
+4. VOD model to use (default: `tau_omega_zeroth_order`)
+5. (Optional) site lat/lon, altitude — fillable later
+
+### Phase 0 — Silent trap fixes (~1 day) — PREREQUISITE
+
+Files: `packages/canvod-utils/src/canvod/utils/config/loader.py`, `models.py`.
+
+1. `loader.py:118` — replace `sys.exit(1)` with `raise ConfigValidationError`; add `strict: bool = True` param to `load_config()` (L233). Lenient mode (strict=False) returns defaults silently — used by library internals. Strict mode used by CLI entry points.
+2. Replace all `print()` warnings in `loader.py` with `logging.getLogger("canvod.config")` — silent by default for library users.
+3. `@lru_cache(maxsize=4)` on `load_config` keyed on resolved `config_dir`.
+4. `model_config = {"extra": "forbid"}` on **every** nested model in `models.py` — today only root `CanvodConfig` (L990) has it; `bach_hours: 6` in nested sections passes silently. Ship a `canvod-config validate` migration hint listing rejected keys.
+5. Path-existence `@field_validator` on `stores_root_dir`, `gnss_site_data_root` — reject sentinel values (`/path/to/stores`, `Unknown`, `user@example.com`) at load time.
+
+**Risk:** item 4 will break existing user YAMLs with stale keys on upgrade — migration hint is mandatory.
+
+### Phase 1 — Config simplification (~3 days)
+
+Files: `models.py`, `defaults/` templates, `canvod-utils/src/canvod/utils/config/cli.py`, `docs/guides/configuration.md`.
+
+1. Collapse `processing.yaml` + `sids.yaml` into `sites.yaml` optional sections. Infrastructure fields (Icechunk `inline_threshold`, Dask scheduler address, chunk strategies) move to `defaults/advanced.yaml` — never shown to scientists. Template shrinks from 217 lines to ~40.
+2. Rename `ReceiverConfig.scs_from` (models.py:698) → `pairs_with_canopy`; keep `scs_from` as deprecated `AliasChoices` alias for one release. Update `validate_scs_from` (L738), `resolve_scs_from` (L818), and `cli.py:569–575` display.
+3. Implement `SidsConfig._get_preset_sids()` (models.py:967 TODO stub returning `[]`) from packaged `presets/` dir, or remove `preset` from the `Literal` entirely and fix `sids.yaml.example:31–36`.
+4. Docstring the 5 non-discoverable facts on `SiteConfig` / `ReceiverConfig` / `MetadataConfig` — these become the wizard's question prompts verbatim.
+5. Fix documentation drift: `configuration.md:91` `base_dir` → `gnss_site_data_root`; `configuration.md:145` `custom:` → `custom_sids`; correct `scs_from` receiver example (L103–107).
+
+**Risk:** field rename ripples into `canvodpy/src/canvodpy/orchestrator/pipeline.py` and `workflows/tasks.py` — grep `scs_from` across the workspace before merging. Depends on Phase 0 item 4.
+
+### Phase 2 — Discovery wizard: `canvodpy init` (~3–4 days)
+
+Files: `packages/canvod-utils/src/canvod/utils/config/cli.py` (upgrade `init` command), new `wizard.py` alongside it. New dep: `questionary` (MIT, actively maintained, prompt_toolkit 3.x).
+
+1. `canvodpy init` flow:
+   - `questionary.path` → data directory
+   - Scan with `canvod.virtualiconvname.patterns.BUILTIN_PATTERNS`
+   - Align a sample filename against `CanVODFilename` (canvod-virtualiconvname/convention.py:109) → emit `config/recipes/<name>.yaml`
+   - Build Rich confirmation table: inferred receivers, temporal extent, format — **show before asking**, never silently commit
+   - Ask the 5 non-discoverable facts
+   - Write `sites.yaml` (Phase 1's single-file format, ~25 lines)
+   - Re-run `load_config(strict=True)` immediately; render `ConfigValidationError` as plain English (map Pydantic `loc` tuples to YAML paths)
+2. Non-TTY guard: `if not sys.stdin.isatty(): print instructions; sys.exit(2)` — never hang on prompts in cron/CI.
+3. `canvodpy run` after `init` needs no further config — just `--site <name> --start --end`.
+
+**Risk:** heterogeneous data dirs (daily + sub-daily files) confuse inference → reuse `FilenameMapper` dedup logic already in the codebase. Hard-depends on Phase 0 (strict load) and Phase 1 (small template = small wizard output).
+
+### Phase 3 — TUI dashboard + `canvodpy vod` subcommand (~3–5 days)
+
+Files: new `canvodpy/src/canvodpy/cli/dashboard.py` (Textual app), `cli/run.py`, new `cli/vod.py`, `vod_computer.py`, `factories.py`, root `pyproject.toml`.
+
+**TUI library choice:** Textual v8.x (36k stars, Textualize/commercially backed, asyncio-first). Three built-in widgets match the pipeline's needs exactly: `ProgressBar` (one per data stream), `RichLog` (scrollable, appendable from workers), `Collapsible` (warning section). TTY detection gate: `if not sys.stdout.isatty()` → keep existing Rich/print path unchanged — cron and CI are unaffected.
+
+1. Textual app with three panes: per-stream progress + day counter, scrollable log (`RichLog`), collapsible warnings. Orchestrator emits events via an `asyncio.Queue` consumed by the app; existing Rich `_processing_progress()` (processor.py:67) remains as the non-TTY fallback.
+2. `canvodpy vod` subcommand: `--site`, `--analysis`, `--start`, `--end`, `--calculator`. Thread `calculator_cls` through `VodComputer.compute_bulk()` (vod_computer.py:127) — currently hardcoded `TauOmegaZerothOrder` at L236.
+3. Calculator registry in `VODFactory` (factories.py:362): resolve `importlib.metadata.entry_points(group="canvodpy.calculators")` first; if `":"` in the name, import dotted path (`mylab.module:MyClass`). Register `tau_omega_zeroth_order` (`canvod-vod/.../calculator.py:148`) in `pyproject.toml` `[project.entry-points."canvodpy.calculators"]`.
+
+**Constraint:** no `xr.concat()` anywhere in `compute_bulk` changes.
+
+**Risk:** Textual + Dask worker stdout interleaving — route worker logs through the queue, never direct prints. Textual is an early adopter choice for scientific Python; degrade gracefully to Rich if Textual causes dependency issues.
+
+**Total effort: ~11–14 days.** Phase 0 is the prerequisite; Phases 1–2 deliver the biggest scientist-visible wins and can ship before Phase 3.
+
+---
+
+**Minimum a scientist must write:** ~13 YAML keys / 2 files at absolute minimum; ~35 keys / 4–5 files in practice (vendor filenames → recipes; provenance metadata; NASA credentials).
+
+### Pain points (Fable-verified, with file:line)
+
+1. **Conceptual split is developer logic, not scientist logic.** "Where my data lives" (`gnss_site_data_root`, sites.yaml) vs. "where results go" (`storage.stores_root_dir`, processing.yaml) — in different files. A scientist thinks per-site.
+2. **Silent placeholder failure.** `defaults/processing.yaml:57` ships `stores_root_dir: /path/to/stores  # MUST be set by user!`. Pydantic accepts it; `config validate` passes; pipeline fails at runtime. Same for `author: Unknown` / `email: user@example.com` which end up in FAIR/DataCite metadata.
+3. **Typos silently ignored in every nested section.** `model_config = {"extra": "forbid"}` exists only on top-level `CanvodConfig` (models.py:990). All nested models (`ProcessingParams`, `StorageConfig`, `SiteConfig`, …) use Pydantic's default `extra="ignore"` — `bach_hours: 6` or `angular_resoluton: 1.0` gets no error, just the default value.
+4. **`scs_from` is cryptic and asymmetric.** Required for reference receivers, forbidden for canopy (models.py:737–746). No scientist knows what "SCS" means. The docs (`docs/guides/configuration.md:103–107`) show `scs_from` on canopy receivers — copying that fails validation with a confusing error.
+5. **Documentation drift → guaranteed first-run failures.** `configuration.md:91` uses `base_dir`; model requires `gnss_site_data_root` (models.py:760). `configuration.md:145` uses `custom:`; model field is `custom_sids` (models.py:912). Two validation errors on first try following the official guide.
+6. **Redundant declaration.** `vod_analyses` (models.py:769) restates the pairing already encoded in `scs_from`. Users say "canopy_01 pairs with reference_01" twice, in two syntaxes.
+7. **`sids: mode: preset` documented but not implemented.** `SidsConfig._get_preset_sids()` is a TODO returning `[]` (models.py:959–969); `config/sids.yaml.example:31–36` advertises three presets. User selecting `preset: gps_galileo` silently filters to nothing.
+8. **Overwhelming template.** `config/processing.yaml.example` is 217 lines exposing Icechunk `inline_threshold`, chunk strategies, Dask scheduler addresses — pure infrastructure jargon for an ecologist whose only real decisions are "where is my data, where do results go."
+9. **`sys.exit(1)` in a library.** `loader.py:118` kills a Jupyter/marimo kernel session on validation error instead of raising.
+10. **Git-checkout coupling.** `find_monorepo_root()` requires a `.git` directory (loader.py:20–55); a scientist who `pip install`s canvodpy without cloning lands in a poorly documented `cwd/config` fallback.
+
+### Minimum viable config (current)
+
+```yaml
+# config/processing.yaml (everything else from packaged defaults)
+metadata:
+  author: Jane Forester
+  email: jane@boku.ac.at
+  institution: BOKU
+storage:
+  stores_root_dir: /data/stores   # required in practice; default is a fake path
+```
+
+```yaml
+# config/sites.yaml (no defaults; entirely user-written)
+sites:
+  mysite:
+    gnss_site_data_root: /data/mysite
+    receivers:
+      reference_01:
+        type: reference
+        directory: 01_reference
+        scs_from: all
+      canopy_01:
+        type: canopy
+        directory: 02_canopy
+    vod_analyses:
+      canopy_vs_reference:
+        canopy_receiver: canopy_01
+        reference_receiver: reference_01
+```
+
+`config/sids.yaml` can be omitted. That is 13 keys / 2 files at absolute minimum.
+
+### Alternative approaches
+
+**Option A — `canvod init` interactive wizard** (upgrade the existing template-copier in `cli.py:90–198`):
+Replace template copy with typer/rich Q&A: site name → data root → scan subdirs → detect format → ask "which receiver is under the canopy?" → author/email → stores dir. Recipe inference as a stretch goal.
+- Pros: zero YAML knowledge at bootstrap; live path/data validation during setup; builds on existing CLI
+- Cons: helps only at first run; recipe inference is genuinely hard; wizard needs maintenance alongside models
+- Effort: 3–4 days wizard, +3–4 days recipe inference. Fit for scientists: excellent day one, neutral afterwards.
+
+**Option B — single consolidated `canvod.yaml`, site-centric** (recommended structural fix):
+One file; site is the top-level concept; `processing`/`sids`/`storage` become optional override sections. Loader already deep-merges (loader.py:181–211) — mostly re-plumb `_load_*` to read one file, keep 3-file path as deprecated fallback. Pair with convention-over-configuration: derive `vod_analyses` from `scs_from`; rename `scs_from` to something human; default `directory` to receiver name.
+- Pros: one file = one mental model; minimal config shrinks to ~10 lines; matches Snakemake/nf-core convention scientists already know; fixes the "which file does this go in?" question permanently
+- Cons: migration shim needed; doesn't fix recipes by itself; docs rewrite
+- Effort: 2–3 days loader + models, 1 day docs. Fit for scientists: high — this is the structural fix.
+
+**Option C — hardening + honesty pass** (no structural change; prerequisite for A and B):
+`extra="forbid"` on all nested models; sentinel detection for placeholder paths/author; raise instead of `sys.exit`; implement or remove SID presets; fix 3 documentation drifts; auto-derive `vod_analyses`.
+- Pros: cheapest, immediately reduces silent-failure incidents
+- Cons: scientists still face 3+N files and a 217-line template
+- Effort: 1–1.5 days. Necessary but not sufficient.
+
+**Field consensus** (Snakemake, Dask, nf-core): one user-facing file, everything defaulted, interactive wizard for bootstrap.
+
+### Recommendation: C → B → A
+
+Do C first (fixes silent traps that would poison any new UX), then B (structural fix that matches how scientists think; makes wizard output trivially small), then A wizard (with B in place, wizard asks ~6 questions and writes a ~12-line file; recipe inference ships as a follow-up).
+
+### Implementation plan
+
+**Phase 1 — hardening (1–1.5 days):**
+- `models.py`: add `model_config = ConfigDict(extra="forbid")` to all nested models (shared base class); add `@model_validator` on `StorageConfig`/`MetadataConfig` rejecting sentinel values (`/path/to/stores`, `Unknown`, `user@example.com`) with plain-language messages; auto-derive `vod_analyses` in `SiteConfig` when omitted (from `get_reference_canopy_pairs()`, models.py:845).
+- `loader.py:110–119`: raise `ConfigError` instead of `sys.exit(1)`; keep pretty-printing in CLI layer only.
+- `models.py:959–969`: implement `_get_preset_sids()` from packaged `presets/` dir (port `canvodpy-perf/.../presets/default.yaml`), or delete preset mode from `sids.yaml.example:29–36`.
+- `docs/guides/configuration.md`: fix `base_dir`→`gnss_site_data_root` (L91), `custom`→`custom_sids` (L145), correct `scs_from` semantics (L103–120).
+
+**Phase 2 — single `canvod.yaml` (3–4 days):**
+- `loader.py`: new resolution order — `$CANVOD_CONFIG` → `./canvod.yaml` → `config/canvod.yaml` → legacy 3-file mode (deprecation notice). Sections: `site:`/`sites:`, optional `processing:`, `storage:`, `sids:`, `metadata:`.
+- `models.py`: rename `scs_from` with Pydantic `AliasChoices` so old files keep working.
+- New `config/canvod.yaml.example` (~25 lines); demote 217-line `processing.yaml.example` to `docs/reference/config-full.md`.
+- Update `justfile` targets `config-validate`/`config-init` (justfile:104–116).
+
+**Phase 3 — wizard (3–4 days; +3–4 later for recipe inference):**
+- `cli.py`: `canvod config init --interactive` (make it default; `--templates` keeps old behaviour). Reuse directory/format detection from `validate` (cli.py:246–309). Writes minimal `canvod.yaml`, runs validation immediately.
+- Follow-up: recipe inference — user pastes one filename, wizard aligns it against `CanVODFilename` fields and emits `config/recipes/<name>.yaml`.
+
+**Tests/docs (1–2 days):** extend `packages/canvod-utils/tests/test_config_models.py`; rewrite `docs/guides/configuration.md` around the single file; add "5-minute setup" to `docs/guides/getting-started.md`.
+
+**Total: ~8–11 days.** Phase 1+2 (~5 days) deliver the biggest scientist-visible wins.
+
+---
+
+## 12. canvod-virtualiconvname split → `canvod-preflight` + optional virtual renaming
+
+**Architecture decision (2026-07-05):** the package is split into two. The virtual renaming engine stays in `canvod-virtualiconvname` as an optional standalone package — not auto-used by the pipeline, manually slotted in by users who need it (e.g. Septentrio SBF / RINEX v2 with non-standard names). The validation and convention logic moves to a new mandatory package: **`canvod-preflight`**.
+
+**Why the virtual renaming can't be the default:** there is no reliable "standard" GNSS filename convention across manufacturers (Trimble, Leica, NovAtel, u-blox, Javad all differ), receiver firmware versions, and lab naming practices. The 5 BUILTIN_PATTERNS cover Septentrio output and the IGS RINEX v3 long-name convention — a subset of real-world deployments. The `NamingRecipe` character-offset escape hatch is too complex for scientists and fails silently. Making virtual renaming optional and explicit is more honest than pretending it covers everything.
+
+**Pipeline default (Strategy A):** canvodpy requires RINEX v3 long-name files (`SITE00CTY_R_YYYYDDDHHMM_PER_SAMP_CONTENT.rnx`). `canvod-preflight validate` checks that the data directory contains files in this format before ingestion. `gfzrnx` (already installed) converts any RINEX format to long-name convention as a one-time per-site step.
+
+**`canvod-virtualiconvname` (optional, standalone, no pipeline dependency):**
+- Keeps: `FilenameMapper`, `VirtualFile`, `NamingRecipe`, `BUILTIN_PATTERNS`, `mapping.py`, `recipe.py`, `config_models.py`
+- Use: user installs separately, manually wraps the pipeline's file discovery step when their data uses non-standard names
+- Integration: TBD — open question is what hook point in `canvodpy` allows a custom file mapper to be injected (e.g. `site.pipeline(file_mapper=...)` or a pre-processing step that produces a staging dir with canonical names)
+- The package name stays as-is; it accurately describes what it does for users who need it
+
+**`canvod-preflight` (new, mandatory in canon repo):**
+
+Extracts from current `canvod-virtualiconvname`:
+- `convention.py` → `canvod.preflight.convention` (`CanVODFilename`, `FileType`, `ReceiverType`)
+- `validator.py` → `canvod.preflight.validator` (`DataDirectoryValidator`, `ValidationReport`, `detect_overlaps`)
+- `catalog.py` → `canvod.preflight.catalog` (`FilenameCatalog`)
+
+New additions (from §12 pain-point analysis below):
+- Plain-language error messages (replace canonical-name exposure in validator.py:135–159)
+- `ValidationReport.is_valid` hard-fails on zero matched files (currently returns True — worst bug)
+- Overlap detection in recipe path (tasks.py:402–407 — currently missing)
+- Log every skipped file at WARNING (mapping.py:145–146 silent drops)
+- RINEX header peek: sampling rate in header vs filename
+- Gap detection: missing days in date range
+- Standalone CLI: `canvod-preflight validate <data-dir>` producing the plain-language report shown below
+
+**Open question:** what other a priori checks belong here over time? File size sanity (24h at 5s → expected N epochs), receiver firmware metadata from RINEX header, coordinate consistency across days?
+
+**Supersedes §3** (implementation ticket stub, which remains). The pain-point analysis below is the Fable-verified input to `canvod-preflight` design.
+
+### Pain points (P1–P6, Fable-verified)
+
+**P1 — Two parallel config systems exposed to users.** `validate_data_dirs()` (tasks.py:436–577) supports "Recipe mode" (`recipe:` key → `NamingRecipe`) and "Legacy mode" (`naming:` dict). The docstring explains both. A scientist has no basis for choosing. Vocabulary is inconsistent between them (`directory_layout` vs `layout`, `source_pattern` vs `glob` + `fields`).
+
+**P2 — The recipe asks scientists to hand-write a parser.** `NamingRecipe.fields` (recipe.py:135–137) requires a character-position spec (`skip: 4`, `doy: 3`, `hour_letter: 1`…). This requires knowing what a glob is, what DOY is, what a RINEX "hour letter" is, and counting character offsets. This is regex-by-another-name. A forester cannot produce this.
+
+**P3 — Documented escape hatches don't exist.**
+- tasks.py:344: `Create it with: just naming-init {recipe_name}` — **no such recipe in the justfile**.
+- `config/sites.yaml.example:9`: "See config/recipes/ for examples" — **`config/recipes/` does not exist**.
+A new user following the official breadcrumbs hits two dead ends before their first run.
+
+**P4 — All config fields are software-internal, not scientist-facing.** `ReceiverNamingConfig` (config_models.py:35–54): `source_pattern` (name of an internal regex), `directory_layout` (enum of glob strategies), `agency` (3-char code only used to build the canonical filename), `sampling`/`period`/`content` (duration codes like `05S`, `01D`, `AA`). None describe the scientist's reality.
+
+**P5 — Silent data loss; "valid" with zero files.**
+- `FilenameMapper.discover_all/discover_for_date` (mapping.py:145–146, 178–179): swallows `ValueError`/`KeyError` with bare `continue` — unmappable files vanish silently.
+- `ValidationReport.is_valid` (validator.py:37–40) returns `True` when `matched` is **empty**. Wrong `directory_layout` → finds nothing → reports "0 files, all valid". The scientist's worst failure (misconfiguration) is reported as success.
+- Recipe mode: `_validate_receiver_with_recipe` ignores its `reader_format` parameter (tasks.py:353); checks only duplicate canonical names (tasks.py:402–407), not temporal overlaps — weaker guardrails than legacy mode.
+
+**P6 — Errors speak canonical-name, users speak filenames.** `_format_validation_error()` (validator.py:135–159) says "3 file(s) could not be mapped to canonical names" and shows overlaps as `ROSA01TUW_R_20250010000_01D_05S_AA.rnx overlaps …` — strings the user never created and cannot decode.
+
+### User journey (where confusion occurs)
+
+1. Copy `config/sites.yaml.example` — fine until `recipe:` line. Referenced examples dir doesn't exist. ❌
+2. Create a recipe — must hand-author `fields:` char-offsets and a glob. Most users stall or copy-paste a wrong one. ❌
+3. Run pre-flight (`just config-check-data`) — missing recipe suggests a nonexistent command. Wrong layout → 0 files → "all valid". ❌❌
+4. Fix filename mismatches — error lists canonical names and counts, not causes or fixes. ❌
+5. Run pipeline — `discover_*` silently drops unmapped files; partial data with no warning. ❌
+
+### Auto-detection opportunities
+
+| Field | Auto-detectable? | How | Effort |
+|---|---|---|---|
+| `directory_layout` | **Yes, trivially** | Probe subdirs: `\d{5}` → YYDDD_SUBDIRS; `\d{7}` → YYYYDDD_SUBDIRS; data files at top → FLAT. Warn on ambiguity. Reuse existing regexes at mapping.py:350–352. | ~0.5 day |
+| `source_pattern` | **Yes — already is** | Default is `"auto"` (config_models.py:45). No user case requires overriding it. Deprecate the field; keep as hidden expert override. | ~0 (deprecate) |
+| `receiver_number` | **Yes** | Derive from trailing digits of the receiver key (`reference_01` → 1). | Trivial |
+| `agency`, `site_id` | **Yes** | Only used to build the canonical filename internally. Derive `site_id` from the site key (first 3 chars, uppercased); `agency` from one global institution setting. | Trivial |
+| `recipe fields:` | **Mostly** | Sample N filenames → try `BUILTIN_PATTERNS`. On miss: interactive wizard that highlights filename segments and asks which part is the day/year/hour. | 2–3 days |
+| `source_station` | **Semi** | Auto-learn dominant 4-char code per directory; only require explicit value when two codes coexist. | 0.5 day |
+
+**Confirmed from previous session:** working minimal config requires only `receiver_number` + `type` + `directory` — nothing else is load-bearing. The remaining `ReceiverNamingConfig` fields should all become auto-detected or optional expert overrides.
+
+### Canonical name exposure
+
+The canonical name (`CanVODFilename`, convention.py:109) is a database key. Users never type one and never need to read one. It must be **fully hidden at every user boundary**: errors should say "data from receiver canopy_01 covering 1 Jan 2025, 00:15–00:30", never `ROSA01TUW_R_20250010015_15M_05S_AA.rnx`. Only current exposures: `sample_canonical_names` in validation output (tasks.py:432, 540–542) and error messages — both fixable presentation layers.
+
+### Proposed scientist-facing config
+
+```yaml
+sites:
+  rosalia:
+    data_folder: /data/gnss/rosalia
+    latitude: 47.7
+    longitude: 16.3
+
+    receivers:
+      reference_01:
+        role: above canopy          # was: type: reference
+        folder: 01_reference        # subfolder with this receiver's files
+        # canvodpy figures out file format, folder structure, and naming automatically
+
+      canopy_01:
+        role: below canopy          # was: type: canopy
+        folder: 02_canopy
+        station_code: ract          # ONLY if two receivers share one folder
+
+    compare:
+      - below: canopy_01
+        above: reference_01
+```
+
+Plus one pre-run command: `canvod check rosalia` that prints in plain language:
+```
+rosalia / canopy_01 (/data/gnss/rosalia/02_canopy)
+  Found 412 data files — Septentrio RINEX (15-min files, 5-sec sampling)
+  Folder structure: day folders like 25001/ (year 2025, day 001)
+  Coverage: 1 Jan 2025 – 14 Mar 2025, no gaps, no double-counted periods
+  Ignored 3 non-data files: notes.txt, receiver_log.old, .DS_Store
+```
+
+### Error message redesign
+
+**Unmatched files** (validator.py:137–147):
+> Current: `3 file(s) could not be mapped to canonical names`
+> Proposed: `I don't recognise 3 files as GNSS data: session_notes.txt (not a GNSS file), ract001a15.25o.bak (looks like a backup — move it out). If they ARE data files, run "canvod identify /data/…" and I'll walk you through describing the filenames.`
+
+**Temporal overlap** (validator.py:150–157):
+> Current: `ROSA01TUW_R_20250010000_01D_05S_AA.rnx overlaps ROSA01TUW_R_20250010015_15M_05S_AA.rnx`
+> Proposed: `Two files cover the same time: rosl0010.25o (all of 1 Jan 2025) and ract001a15.25o (1 Jan 2025, 00:15–00:30). Keep EITHER the daily file OR the 15-minute files for that day — not both.`
+
+**Zero files found** (must become a hard failure, not "valid"):
+> Proposed: `No data files found in /data/rosalia/02_canopy. Check that 'folder: 02_canopy' points at the folder containing your receiver files.`
+
+**Missing recipe** (tasks.py:341–346, currently points to nonexistent command):
+> Proposed: `canvodpy hasn't learned the filename style for receiver "reference_01" yet. Run: canvod identify rosalia reference_01 — this looks at your files and sets everything up automatically.`
+
+### Implementation plan (revised — reflects split decision above)
+
+**Phase 1 — create `canvod-preflight` package (~2 days):**
+1. New workspace package `packages/canvod-preflight/`.
+2. Move `convention.py`, `validator.py`, `catalog.py` out of `canvod-virtualiconvname` into `canvod.preflight.*`. Update all import sites in `canvodpy` and `canvod-store` (grep: `from canvod.virtualiconvname.convention`, `.validator`, `.catalog`).
+3. Fix `ValidationReport.is_valid` (validator.py:37–40): fail hard on zero matched files — this is the most dangerous silent bug.
+4. Rewrite `_format_validation_error()` (validator.py:135–159) using the plain-language templates from the "Error message redesign" section above. Hide canonical names from all user-facing output.
+5. Standalone CLI entry point: `canvod-preflight = "canvod.preflight.cli:app"` in pyproject.toml.
+
+**Phase 2 — harden remaining `canvod-virtualiconvname` (~1 day):**
+6. Remove the moved files; add `canvod-preflight` as an explicit dependency.
+7. Log every file skipped by `discover_all/discover_for_date` (mapping.py:145–146, 178–179) at WARNING with filename and reason.
+8. Port `detect_overlaps()` into recipe validation path (tasks.py:402–407) — equal guardrails on both paths.
+9. Remove phantom `just naming-init` reference (tasks.py:344); add `config/recipes/` with 2 commented examples.
+10. Document the manual integration hook in the package README (open question: `site.pipeline(file_mapper=...)` or staging-dir approach).
+
+**Phase 3 — `canvod-preflight` new checks (~2 days):**
+11. RINEX header peek: open first few KB, parse `SYS / # / OBS TYPES` and `INTERVAL`, compare against filename-declared sampling and period.
+12. Gap detection: given a date range, report missing days in plain language.
+13. Expand CLI to produce the full plain-language report shown in "Proposed scientist-facing config" section above.
+
+**Files touched:** new `packages/canvod-preflight/`, updated `packages/canvod-virtualiconvname/` (remove moved files, add dep), `canvodpy/src/canvodpy/workflows/tasks.py` (import updates), root `pyproject.toml` (new workspace member).
+
+---
+
+## 13. CLI: TUI + `canvodpy vod` subcommand
+
+> **Merged into §11 (Phase 3).** All detail — Textual app design, three-pane layout, TTY detection, `canvodpy vod` subcommand, `--calculator` registry, `VodComputer.compute_bulk(calculator_cls=...)` threading — is documented in §11 Phase 3. This stub remains for section numbering.

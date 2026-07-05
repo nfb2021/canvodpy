@@ -1,7 +1,7 @@
-"""Tests for Dask serialization of flat batch processing arguments.
+"""Tests for loky/pickle serialization of flat batch processing arguments.
 
 Verifies that all argument types passed to ``preprocess_with_hermite_aux``
-via Dask workers can round-trip through pickle (the default Dask serializer).
+via loky workers can round-trip through pickle.
 """
 
 from __future__ import annotations
@@ -40,8 +40,8 @@ def sample_task_args(tmp_path: Path) -> tuple:
     )
 
 
-class TestDaskSerialization:
-    """Verify that task arguments survive pickle round-trip (Dask default)."""
+class TestTaskSerialization:
+    """Verify that task arguments survive pickle round-trip (loky default)."""
 
     def test_task_args_pickle_roundtrip(self, sample_task_args: tuple):
         """Full task_args tuple must survive pickle serialization."""
@@ -79,27 +79,6 @@ class TestDaskSerialization:
         args = (*sample_task_args[:5], None)
         restored = pickle.loads(pickle.dumps(args))
         assert restored[5] is None
-
-    @pytest.mark.integration
-    def test_dask_submit_roundtrip(self, sample_task_args: tuple):
-        """Verify Dask can serialize/deserialize the args via a real LocalCluster."""
-        distributed = pytest.importorskip("dask.distributed")
-
-        def echo(*args):
-            return args
-
-        with (
-            distributed.LocalCluster(
-                n_workers=1, threads_per_worker=1, memory_limit="1GiB"
-            ) as cluster,
-            distributed.Client(cluster) as client,
-        ):
-            fut = client.submit(echo, *sample_task_args, pure=False)
-            result = fut.result(timeout=30)
-
-        assert len(result) == len(sample_task_args)
-        assert result[0] == sample_task_args[0]
-        assert result[4] == sample_task_args[4]
 
 
 class TestSamplingIntervalFromFilename:

@@ -210,3 +210,24 @@ class TestVodComputerComputeAndWrite:
 
         assert vod_ds["VOD"].encoding == {}
         mock_site._site.store_vod_analysis.assert_called_once()
+
+    def test_write_to_store_casts_string_dtype_to_object(self):
+        if not hasattr(np.dtypes, "StringDType"):
+            pytest.skip("requires numpy >= 2.0")
+
+        cfg = _make_analysis_cfg()
+        mock_site = _make_site({"a": cfg})
+        vc = VodComputer(mock_site)
+
+        sv_values = np.array(["G01", "G02"], dtype=np.dtypes.StringDType())
+        vod_ds = xr.Dataset(
+            {"VOD": (["epoch", "sid"], np.zeros((5, 2)))},
+            coords={"sv": ("sid", sv_values)},
+        )
+        assert vod_ds["sv"].dtype.kind == "T"
+
+        vc._write_to_store(vod_ds, "a")
+
+        call_kwargs = mock_site._site.store_vod_analysis.call_args.kwargs
+        written_ds = call_kwargs["vod_dataset"]
+        assert written_ds["sv"].dtype == object

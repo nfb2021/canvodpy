@@ -40,6 +40,47 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _concat_epoch_datasets(datasets: list) -> Any:
+    """Concatenate xarray Datasets along 'epoch' without xr.concat overhead.
+
+    Direct numpy concatenation bypasses xarray's alignment checks and
+    intermediate copies. Safe when all datasets share the same 'sid' axis,
+    which is guaranteed after pad_to_global_sid=True (the default).
+    """
+    import numpy as np
+    import xarray as xr
+
+    if len(datasets) == 1:
+        return datasets[0]
+
+    first = datasets[0]
+    merged_vars: dict = {}
+    for var in first.data_vars:
+        epoch_ax = list(first[var].dims).index("epoch")
+        merged_vars[var] = (
+            first[var].dims,
+            np.concatenate([ds[var].values for ds in datasets], axis=epoch_ax),
+        )
+
+    coords: dict = {}
+    for k, coord in first.coords.items():
+        if "epoch" in coord.dims:
+            ax = list(coord.dims).index("epoch")
+            coords[k] = (
+                coord.dims,
+                np.concatenate([ds.coords[k].values for ds in datasets], axis=ax),
+            )
+        else:
+            coords[k] = coord
+
+    return xr.Dataset(merged_vars, coords=coords, attrs=first.attrs)
+
+
+# ---------------------------------------------------------------------------
 # Decorators
 # ---------------------------------------------------------------------------
 
@@ -156,8 +197,6 @@ class FluentWorkflow:
 
         from pathlib import Path
 
-        import xarray as xr
-
         from canvod.utils.config import load_config
 
         config = load_config()
@@ -197,7 +236,7 @@ class FluentWorkflow:
                 datasets_for_recv.append(ds)
 
             if datasets_for_recv:
-                self._datasets[name] = xr.concat(datasets_for_recv, dim="epoch")
+                self._datasets[name] = _concat_epoch_datasets(datasets_for_recv)
                 log.info("read_complete", receiver=name, files=len(datasets_for_recv))
 
         return self  # never reached (decorator returns self), but aids type checkers

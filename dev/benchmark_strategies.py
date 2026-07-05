@@ -70,14 +70,21 @@ except ImportError:
     _loky_reusable = None  # type: ignore[assignment]
 
 # ── constants ─────────────────────────────────────────────────────────────────
-DEFAULT_DAYS_DIR = Path("/Volumes/ExtremePro/Daily_data")
+DEFAULT_DAYS_DIR_DAILY = Path("/Volumes/ExtremePro/Daily_data")
+DEFAULT_DAYS_DIR_SAMPLE = Path("/Volumes/ExtremePro/Sample_data")
 DEFAULT_WORKERS = os.cpu_count() or 4
 DOYS = [f"25{i:03d}" for i in range(1, 29)]  # 28 days: 25001–25028
 RECEIVERS = [
     ("reference", "01_reference"),
     ("canopy", "02_canopy"),
 ]
-READER_NAME = "rinex3"
+# Format → (reader_name, glob_pattern, default_days_dir)
+# Note: *.25o files from Septentrio are RINEX 3.04, not RINEX 2 — reader is "rinex3".
+FORMAT_CONFIG: dict[str, tuple[str, str, Path]] = {
+    "rinex3": ("rinex3", "*.rnx", DEFAULT_DAYS_DIR_DAILY),
+    "rinex3_15min": ("rinex3", "*.25o", DEFAULT_DAYS_DIR_SAMPLE),
+    "sbf": ("sbf", "*.25_", DEFAULT_DAYS_DIR_SAMPLE),
+}
 
 
 # ── module-level sentinel for pool warm-up (must be picklable) ────────────────
@@ -126,16 +133,18 @@ def parse_sampling_s(fname: str) -> float:
     return 5.0
 
 
-def discover_files(days_dir: Path, n_days: int) -> dict[str, dict[str, list[Path]]]:
-    """Return ``{doy: {rx_name: [sorted .rnx files]}}``."""
+def discover_files(
+    days_dir: Path, n_days: int, glob_pattern: str = "*.rnx"
+) -> dict[str, dict[str, list[Path]]]:
+    """Return ``{doy: {rx_name: [sorted files]}}``."""
     result: dict[str, dict[str, list[Path]]] = {}
     for doy in DOYS[:n_days]:
         result[doy] = {}
         for rx_name, subdir in RECEIVERS:
             d = days_dir / subdir / doy
-            files = sorted(d.glob("*.rnx"))
+            files = sorted(d.glob(glob_pattern))
             if not files:
-                raise FileNotFoundError(f"No .rnx files in {d}")
+                raise FileNotFoundError(f"No {glob_pattern} files in {d}")
             result[doy][rx_name] = files
             sizes = [f.stat().st_size // 1_048_576 for f in files]
             print(
@@ -145,12 +154,16 @@ def discover_files(days_dir: Path, n_days: int) -> dict[str, dict[str, list[Path
     return result
 
 
-def read_receiver_position(rnx_file: Path) -> ECEFPosition:
-    """Extract ECEF position from a RINEX file's header attributes."""
+def read_receiver_position(
+    data_file: Path, reader_name: str = "rinex3"
+) -> ECEFPosition:
+    """Extract ECEF position from a GNSS data file's header attributes."""
     from canvodpy.factories import ReaderFactory
 
-    reader = ReaderFactory.create(READER_NAME, fpath=rnx_file)
-    ds = reader.to_ds(keep_data_vars=[], write_global_attrs=True)
+    reader = ReaderFactory.create(reader_name, fpath=data_file)
+    # Don't pass keep_data_vars=[] — RINEX 2 pad_to_global_sid fails on empty datasets.
+    # Only called once per receiver type so full read is acceptable.
+    ds = reader.to_ds(write_global_attrs=True)
     return ECEFPosition.from_ds_metadata(ds)
 
 
@@ -472,6 +485,7 @@ def make_task(
     aux_path: Path,
     pos: ECEFPosition,
     rx_name: str,
+    reader_name: str = "rinex3",
     keep_vars: list[str] | None = None,
     keep_sids: list[str] | None = None,
     lazy_pad: bool = False,
@@ -489,7 +503,7 @@ def make_task(
             pos,
             rx_name,
             None,  # keep_sids unused when pad_global_sid=False
-            READER_NAME,
+            reader_name,
             False,  # use_sbf_geometry
             False,  # store_radial_distance
             False,  # store_sbf_raw_observables
@@ -504,7 +518,7 @@ def make_task(
         pos,
         rx_name,
         keep_sids,
-        READER_NAME,
+        reader_name,
         False,  # use_sbf_geometry
         False,  # store_radial_distance
         False,  # store_sbf_raw_observables
@@ -523,6 +537,7 @@ def run_s0(
     n_workers: int,
     store_base: Path,
     dry_run: bool,
+    reader_name: str = "rinex3",
     keep_vars: list[str] | None = None,
     keep_sids: list[str] | None = None,
     lazy_pad: bool = False,
@@ -568,7 +583,14 @@ def run_s0(
                     executor.submit(
                         _timed_preprocess,
                         *make_task(
-                            f, aux_path, pos, rx_name, keep_vars, keep_sids, lazy_pad
+                            f,
+                            aux_path,
+                            pos,
+                            rx_name,
+                            reader_name,
+                            keep_vars,
+                            keep_sids,
+                            lazy_pad,
                         ),
                     ): (f, time.perf_counter())
                     for f in files
@@ -635,6 +657,7 @@ def run_s1(
     n_workers: int,
     store_base: Path,
     dry_run: bool,
+    reader_name: str = "rinex3",
     keep_vars: list[str] | None = None,
     keep_sids: list[str] | None = None,
     lazy_pad: bool = False,
@@ -677,7 +700,16 @@ def run_s1(
                 results_rx: list[tuple[Path, xr.Dataset]] = []
 
                 tasks = [
-                    make_task(f, aux_path, pos, rx_name, keep_vars, keep_sids, lazy_pad)
+                    make_task(
+                        f,
+                        aux_path,
+                        pos,
+                        rx_name,
+                        reader_name,
+                        keep_vars,
+                        keep_sids,
+                        lazy_pad,
+                    )
                     for f in files
                 ]
                 _ev("tasks_submitted", f"{rx_name}/{doy} n={len(tasks)}")
@@ -737,6 +769,7 @@ def run_s2(
     n_workers: int,
     store_base: Path,
     dry_run: bool,
+    reader_name: str = "rinex3",
     keep_vars: list[str] | None = None,
     keep_sids: list[str] | None = None,
     lazy_pad: bool = False,
@@ -785,7 +818,14 @@ def run_s2(
                     (
                         f.stat().st_size,
                         make_task(
-                            f, aux_path, pos, rx_name, keep_vars, keep_sids, lazy_pad
+                            f,
+                            aux_path,
+                            pos,
+                            rx_name,
+                            reader_name,
+                            keep_vars,
+                            keep_sids,
+                            lazy_pad,
                         ),
                         doy,
                         rx_name,
@@ -1119,10 +1159,16 @@ def main() -> None:
         help=f"Number of parallel workers (default: {DEFAULT_WORKERS})",
     )
     parser.add_argument(
+        "--format",
+        choices=["rinex3", "rinex3_15min", "sbf"],
+        default="rinex3",
+        help="Input file format: rinex3 (24h .rnx), rinex3_15min (15-min .25o RINEX 3 from Septentrio), sbf (15-min .25_). Default: rinex3",
+    )
+    parser.add_argument(
         "--days-dir",
         type=Path,
-        default=DEFAULT_DAYS_DIR,
-        help=f"Root data directory (default: {DEFAULT_DAYS_DIR})",
+        default=None,
+        help="Root data directory (default: Daily_data for rinex3, Sample_data for rinex3_15min/sbf)",
     )
     parser.add_argument(
         "--dry-run",
@@ -1151,7 +1197,9 @@ def main() -> None:
     args = parser.parse_args()
 
     n_workers = args.workers
-    days_dir = args.days_dir
+    fmt = args.format
+    reader_name, glob_pattern, default_days_dir = FORMAT_CONFIG[fmt]
+    days_dir = args.days_dir if args.days_dir is not None else default_days_dir
     dry_run = args.dry_run
     s2_only = args.s2_only
     n_days = 1 if dry_run else (args.days if args.days is not None else len(DOYS))
@@ -1199,6 +1247,7 @@ def main() -> None:
     print("canvodpy parallelization benchmark")
     print(f"  workers  : {n_workers}  (avail RAM: {avail_gb:.0f}/{total_gb:.0f} GB)")
     print(f"  window   : {n_workers * 2} tasks in-flight max")
+    print(f"  format   : {fmt}  (reader={reader_name}, glob={glob_pattern})")
     print(f"  days-dir : {days_dir}")
     print(f"  days     : {n_days}")
     print(f"  dry-run  : {dry_run}")
@@ -1212,9 +1261,9 @@ def main() -> None:
 
     # ── Discover files ────────────────────────────────────────────────────────
     print("Discovering files...")
-    file_map = discover_files(days_dir, n_days)
+    file_map = discover_files(days_dir, n_days, glob_pattern)
     total_files = sum(len(f) for rx in file_map.values() for f in rx.values())
-    print(f"  total: {total_files} RINEX file(s)")
+    print(f"  total: {total_files} file(s)  ({fmt})")
 
     # ── Receiver positions (read once from first file per receiver) ───────────
     print("\nReading receiver ECEF positions...")
@@ -1222,7 +1271,7 @@ def main() -> None:
     first_doy = next(iter(file_map))
     for rx_name, files in file_map[first_doy].items():
         print(f"  {rx_name}: {files[0].name}")
-        positions[rx_name] = read_receiver_position(files[0])
+        positions[rx_name] = read_receiver_position(files[0], reader_name)
         lat, lon, alt = positions[rx_name].to_geodetic()
         print(f"    → lat={lat:.4f}°  lon={lon:.4f}°  alt={alt:.1f} m")
 
@@ -1253,6 +1302,7 @@ def main() -> None:
                     n_workers,
                     store_base,
                     dry_run,
+                    reader_name=reader_name,
                     keep_vars=keep_vars,
                     keep_sids=keep_sids,
                     lazy_pad=lazy_pad,
@@ -1272,6 +1322,7 @@ def main() -> None:
                     n_workers,
                     store_base,
                     dry_run,
+                    reader_name=reader_name,
                     keep_vars=keep_vars,
                     keep_sids=keep_sids,
                     lazy_pad=lazy_pad,
@@ -1291,6 +1342,7 @@ def main() -> None:
                 n_workers,
                 store_base,
                 dry_run,
+                reader_name=reader_name,
                 keep_vars=keep_vars,
                 keep_sids=keep_sids,
                 lazy_pad=lazy_pad,

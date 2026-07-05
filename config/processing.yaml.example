@@ -111,13 +111,7 @@ processing:
   # threads_per_worker: 1      # Threads per worker (1 for 24h files, 2-4 for 15-min files)
 
   # Shared/remote Dask cluster (optional)
-  # Leave commented to spin up a LocalCluster automatically (default).
-  # Set this to connect to an existing Dask scheduler instead — useful on
-  # shared machines where one cluster serves multiple pipelines.
-  # parallelization_strategy: dask  # must be 'dask' when scheduler_address is set
-  # scheduler_address: "tcp://scheduler.local:8786"
 
-  # Dask dashboard: http://localhost:8787/status
 
 # =============================================================================
 # Preprocessing Pipeline

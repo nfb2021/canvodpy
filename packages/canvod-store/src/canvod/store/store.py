@@ -229,17 +229,83 @@ class MyIcechunkStore:
         for v in ds.data_vars:
             if "dtype" in ds[v].encoding:
                 ds[v].encoding["dtype"] = np.dtype(ds[v].dtype)
-        # Cast StringDType / fixed-width unicode to object for Zarr V3
-        for name in list(ds.coords) + list(ds.data_vars):
+        # Cast string-like / non-numeric coords to numpy object for Zarr V3.
+        #
+        # Why np.array(raw, dtype=object) instead of raw.astype(object):
+        # In numpy 2.x, StringDType.astype(object) can silently return StringDType
+        # when the array is a Dask lazy computation. np.array() box-constructs a
+        # new object array from scratch, guaranteeing object dtype regardless of
+        # input type or lazy-evaluation state.
+        #
+        # Batching strategy: collect all Dask-backed coords first, compute them in
+        # one dask.compute() call (one scheduler pass), then handle numpy-backed
+        # coords. Reduces ~7 separate graph walks to 1 on a lazy VOD dataset.
+        _numeric_kinds = frozenset("fiucbmMV")
+        str_coords: dict = {}
+        dask_coords: dict = {}
+        numpy_coords: dict = {}
+
+        for name in list(ds.coords):
+            da = ds[name]
+            if da.dtype.kind in _numeric_kinds:
+                continue
+            if da.chunks is None and da.dtype == object:
+                continue  # already correct numpy object
+            if da.chunks is not None:
+                dask_coords[name] = da
+            else:
+                numpy_coords[name] = da
+
+        # Batch-compute all dask-backed string coords in ONE scheduler pass
+        if dask_coords:
+            try:
+                import dask
+
+                computed = dask.compute(*dask_coords.values())
+                for name, computed_da in zip(dask_coords.keys(), computed):
+                    raw = (
+                        computed_da.values
+                        if hasattr(computed_da, "values")
+                        else np.asarray(computed_da)
+                    )
+                    if raw.dtype != object:
+                        raw = np.array(raw, dtype=object)
+                    str_coords[name] = (
+                        dask_coords[name].dims,
+                        raw,
+                        dask_coords[name].attrs,
+                    )
+            except Exception:
+                for name, da in dask_coords.items():
+                    try:
+                        raw = da.compute().values
+                        if raw.dtype != object:
+                            raw = np.array(raw, dtype=object)
+                        str_coords[name] = (da.dims, raw, da.attrs)
+                    except Exception:
+                        continue
+
+        # Numpy-backed non-object coords (StringDType, unicode kind 'U')
+        for name, da in numpy_coords.items():
+            try:
+                raw = da.values
+                if raw.dtype != object:
+                    raw = np.array(raw, dtype=object)
+                str_coords[name] = (da.dims, raw, da.attrs)
+            except Exception:
+                continue
+
+        if str_coords:
+            ds = ds.assign_coords(str_coords)
+        for name in list(ds.data_vars):
             if ds[name].dtype.kind in ("U", "T"):
                 ds[name] = ds[name].astype(object)
-        # Eagerly compute Dask-backed object arrays to avoid SerializationWarning
-        # (rechunking after write can leave string coords as dask object arrays)
+        # Eagerly compute any remaining Dask-backed object data variables
         try:
-            import dask.array as da
+            import dask.array as da_mod
 
-            for name in list(ds.coords) + list(ds.data_vars):
-                if ds[name].dtype == object and isinstance(ds[name].data, da.Array):
+            for name in list(ds.data_vars):
+                if ds[name].dtype == object and isinstance(ds[name].data, da_mod.Array):
                     ds[name] = ds[name].compute()
         except ImportError:
             pass

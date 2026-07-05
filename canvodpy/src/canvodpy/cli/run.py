@@ -186,7 +186,6 @@ def _print_header(args: argparse.Namespace, config, start: str, end: str) -> Non
 def _compute_vod_for_day(
     datasets: dict[str, xr.Dataset],
     vod_analyses: dict,
-    research_site,
     date_key: str,
 ) -> dict[str, xr.Dataset]:
     """Compute VOD for all configured analysis pairs.
@@ -252,13 +251,6 @@ def _compute_vod_for_day(
                 vod_ds[var].encoding = {}
 
             dt = time.perf_counter() - t0
-
-            # Write to VOD store via GnssResearchSite (handles write-or-append)
-            research_site.store_vod_analysis(
-                vod_dataset=vod_ds,
-                analysis_name=analysis_name,
-                commit_message=f"VOD {analysis_name} {date_key}",
-            )
 
             n_valid = int((~vod_ds["VOD"].isnull()).sum())
             n_total = vod_ds["VOD"].size
@@ -329,30 +321,49 @@ def main(argv: list[str] | None = None) -> int:
         batch_hours=args.batch_hours,
         dry_run=False,
     ) as pipeline:
-        for date_key, datasets in pipeline.process_range(
-            start=start,
-            end=end,
-        ):
+        gen = pipeline.process_range(start=start, end=end)
+        while True:
+            # Time the pipeline step (RINEX read + augment + store write + dedup)
+            # separately from VOD computation and VOD store write.
+            t_pipeline = time.perf_counter()
+            try:
+                date_key, datasets = next(gen)
+            except StopIteration:
+                break
+            dt_pipeline = time.perf_counter() - t_pipeline
+
             total_days += 1
             t_day = time.perf_counter()
 
-            # Print observation summary
             print(f"\n--- {date_key} ---")
             for group, ds in datasets.items():
                 e, s = ds.sizes.get("epoch", 0), ds.sizes.get("sid", 0)
                 print(f"  {group}: {e} epochs x {s} sids")
 
-            # VOD — datasets are read back from the store after write,
-            # so they're Zarr-backed. Still cheaper than a separate pass
-            # because the data is hot in OS page cache.
+            dt_vod = 0.0
+            dt_vod_store = 0.0
             if vod_analyses:
-                vod_results = _compute_vod_for_day(
-                    datasets, vod_analyses, research_site, date_key
-                )
+                t_vod = time.perf_counter()
+                vod_results = _compute_vod_for_day(datasets, vod_analyses, date_key)
+                dt_vod = time.perf_counter() - t_vod
+
+                t_vod_store = time.perf_counter()
+                for analysis_name, vod_ds in vod_results.items():
+                    research_site.store_vod_analysis(
+                        vod_dataset=vod_ds,
+                        analysis_name=analysis_name,
+                        commit_message=f"VOD {analysis_name} {date_key}",
+                    )
+                dt_vod_store = time.perf_counter() - t_vod_store
                 total_vod += len(vod_results)
 
             dt_day = time.perf_counter() - t_day
-            print(f"  day total: {dt_day:.1f}s")
+            print(
+                f"  pipeline={dt_pipeline:.1f}s"
+                f"  vod={dt_vod:.1f}s"
+                f"  vod_store={dt_vod_store:.1f}s"
+                f"  day={dt_pipeline + dt_day:.1f}s"
+            )
 
     dt_total = time.perf_counter() - t_total
     print()

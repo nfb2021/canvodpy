@@ -7,16 +7,6 @@ import os
 import time
 from collections.abc import Generator
 from concurrent.futures import ProcessPoolExecutor, as_completed
-
-try:
-    from dask.distributed import Client
-    from dask.distributed import as_completed as dask_as_completed
-
-    _HAS_DISTRIBUTED = True
-except ImportError:
-    _HAS_DISTRIBUTED = False
-    Client = None  # ty: ignore[invalid-assignment]
-    dask_as_completed = None  # ty: ignore[invalid-assignment]
 from datetime import UTC, datetime
 from datetime import time as dt_time
 from pathlib import Path
@@ -64,7 +54,7 @@ from canvodpy.orchestrator.interpolator import (
 # ============================================================================
 
 
-def _processing_progress() -> Progress:
+def _processing_progress(disable: bool = False) -> Progress:
     """Create a Rich progress bar for RINEX processing tasks."""
     return Progress(
         SpinnerColumn(),
@@ -74,6 +64,7 @@ def _processing_progress() -> Progress:
         TimeElapsedColumn(),
         TextColumn("eta"),
         TimeRemainingColumn(),
+        disable=disable,
     )
 
 
@@ -568,10 +559,6 @@ class RinexDataProcessor:
         Maximum parallel workers (CPUs) for RINEX processing.
         ``None`` lets ``ProcessPoolExecutor`` auto-detect via
         ``os.cpu_count()``.
-    dask_client : dask.distributed.Client, optional
-        Dask distributed client for parallel task submission.
-        When provided, tasks are submitted to the long-lived cluster.
-        When ``None``, falls back to a short-lived ``ProcessPoolExecutor``.
 
     """
 
@@ -581,7 +568,6 @@ class RinexDataProcessor:
         site: GnssResearchSite,
         aux_file_path: Path | None = None,
         n_max_workers: int | None = None,
-        dask_client: Client | None = None,
         reader_name: str = "rinex3",
         use_sbf_geometry: bool = False,
     ) -> None:
@@ -594,7 +580,6 @@ class RinexDataProcessor:
             self.n_max_workers = min(n_max_workers, os.cpu_count() or n_max_workers)
         else:
             self.n_max_workers = None
-        self._dask_client = dask_client
         self._reader_name = reader_name  # fallback; prefer per-receiver reader_format
         # use_sbf_geometry: explicit param wins, otherwise read from config
         self._use_sbf_geometry_override = use_sbf_geometry
@@ -1173,7 +1158,13 @@ class RinexDataProcessor:
         # is cheap and this avoids stale caches when SIDs change.
         had_cache = aux_zarr_path.exists()
         if had_cache:
-            shutil.rmtree(aux_zarr_path)
+            try:
+                shutil.rmtree(aux_zarr_path)
+            except OSError as _rmtree_err:
+                if _rmtree_err.errno == 66:  # ENOTEMPTY — macOS Finder race; retry
+                    shutil.rmtree(aux_zarr_path, ignore_errors=True)
+                else:
+                    raise
 
         t1 = time.perf_counter()
         self._logger.info(
@@ -1222,14 +1213,10 @@ class RinexDataProcessor:
         dict[Path, dict[str, xr.Dataset]],
         dict[str, list[str]],
     ]:
-        """Parallel process RINEX files using Dask or ProcessPoolExecutor fallback.
+        """Parallel process RINEX files using ProcessPoolExecutor.
 
         Uses TRUE parallelism (no GIL) with separate processes.
         Each worker reads only its time slice from the Zarr store.
-
-        When a Dask client is available (``self._dask_client``), tasks are
-        submitted to the long-lived cluster. Otherwise falls back to a
-        short-lived ``ProcessPoolExecutor``.
 
         Parameters
         ----------
@@ -1256,17 +1243,6 @@ class RinexDataProcessor:
         effective_reader = reader_format or self._reader_name
         store_r = self._config.processing.processing.store_radial_distance
         store_raw = self._config.processing.processing.store_sbf_raw_observables
-        if self._dask_client is not None and _HAS_DISTRIBUTED:
-            return self._parallel_process_rinex_dask(
-                rinex_files,
-                keep_vars,
-                aux_zarr_path,
-                receiver_position,
-                receiver_type,
-                effective_reader,
-                store_r,
-                store_raw,
-            )
         return self._parallel_process_rinex_pool(
             rinex_files,
             keep_vars,
@@ -1277,136 +1253,6 @@ class RinexDataProcessor:
             store_r,
             store_raw,
         )
-
-    def _parallel_process_rinex_dask(
-        self,
-        rinex_files: list[Path],
-        keep_vars: list[str],
-        aux_zarr_path: Path,
-        receiver_position: ECEFPosition,
-        receiver_type: str,
-        reader_format: str | None = None,
-        store_radial_distance: bool = False,
-        store_sbf_raw_observables: bool = True,
-    ) -> tuple[
-        list[tuple[Path, xr.Dataset]],
-        dict[Path, dict[str, xr.Dataset]],
-        dict[str, list[str]],
-    ]:
-        """Process RINEX files via the Dask distributed client."""
-        start_time = time.time()
-        client = self._dask_client
-        assert client is not None, (
-            "_dask_client must be set before calling _parallel_process_rinex_dask"
-        )
-
-        self._logger.info(
-            "parallel_processing_started",
-            workers=self.n_max_workers,
-            files=len(rinex_files),
-            receiver_type=receiver_type,
-            executor_type="dask.distributed",
-        )
-
-        effective_workers = self.n_max_workers or os.cpu_count() or 1
-        self._logger.debug(
-            "parallel_config",
-            max_workers=self.n_max_workers,
-            cpu_count=os.cpu_count(),
-            files_per_worker=round(len(rinex_files) / effective_workers, 1),
-        )
-
-        results: list[tuple[Path, xr.Dataset]] = []
-        aux_datasets_by_file: dict[Path, dict[str, xr.Dataset]] = {}
-        sid_issues_agg: dict[str, set] = {}
-        task_submission_start = time.time()
-
-        # Submit all tasks to the Dask cluster
-        effective_reader = reader_format or self._reader_name
-        future_to_file = {
-            client.submit(
-                preprocess_with_hermite_aux,
-                rinex_file,
-                keep_vars,
-                aux_zarr_path,
-                receiver_position,
-                receiver_type,
-                self.keep_sids,
-                effective_reader,
-                self.use_sbf_geometry,
-                store_radial_distance,
-                store_sbf_raw_observables,
-                pure=False,
-            ): rinex_file
-            for rinex_file in rinex_files
-        }
-
-        task_submission_time = time.time() - task_submission_start
-        self._logger.debug(
-            "tasks_submitted",
-            task_count=len(future_to_file),
-            submission_time_seconds=round(task_submission_time, 3),
-        )
-
-        # Collect results with progress bar
-        completed_count = 0
-        failed_count = 0
-
-        yyyydoy = self.matched_data_dirs.yyyydoy.to_str()
-        desc = f"{yyyydoy} {receiver_type}"
-        with _processing_progress() as progress:
-            task = progress.add_task(desc, total=len(future_to_file))
-            for fut in dask_as_completed(future_to_file):
-                try:
-                    fname, ds_augmented, aux, sids = fut.result()
-                    results.append((fname, ds_augmented))
-                    aux_datasets_by_file[fname] = aux
-                    for key, vals in sids.items():
-                        sid_issues_agg.setdefault(key, set()).update(vals)
-                    completed_count += 1
-
-                    if completed_count % 10 == 0:
-                        self._logger.debug(
-                            "processing_progress",
-                            completed=completed_count,
-                            total=len(future_to_file),
-                            failed=failed_count,
-                            progress_pct=round(
-                                100 * completed_count / len(future_to_file), 1
-                            ),
-                        )
-                except (OSError, RuntimeError, ValueError) as e:
-                    failed_file = future_to_file[fut].name
-                    failed_count += 1
-                    self._logger.error(
-                        "file_processing_failed",
-                        file=failed_file,
-                        error=str(e),
-                        exception=type(e).__name__,
-                        failed_count=failed_count,
-                    )
-                progress.advance(task)
-
-        # Sort chronologically by filename
-        self._logger.debug("sorting_results_chronologically")
-        results.sort(key=lambda x: x[0].name)
-
-        duration = time.time() - start_time
-        self._logger.info(
-            "parallel_processing_complete",
-            files_processed=len(results),
-            files_total=len(rinex_files),
-            files_failed=len(rinex_files) - len(results),
-            duration_seconds=round(duration, 2),
-            avg_time_per_file=round(duration / len(rinex_files), 2)
-            if rinex_files
-            else 0,
-            throughput_files_per_sec=round(len(results) / duration, 2)
-            if duration > 0
-            else 0,
-        )
-        sid_issues_final = {k: sorted(v) for k, v in sid_issues_agg.items()}
-        return results, aux_datasets_by_file, sid_issues_final
 
     def _parallel_process_rinex_pool(
         self,
@@ -1752,8 +1598,13 @@ class RinexDataProcessor:
         aux_datasets: dict[Path, dict[str, xr.Dataset]] | None = None,
         sid_issues: dict[str, list[str]] | None = None,
         reader_format: str | None = None,
-    ) -> None:
+    ) -> set[str]:
         """Batch append with single commit.
+
+        Returns the set of file hashes that were skipped due to dedup (already
+        in the store). An empty set means all files were written successfully.
+        Callers can use this to decide whether to build the daily dataset from
+        in-memory parts (empty) or fall back to a store read (non-empty).
 
         This method:
         1. Opens ONE session for all data writes
@@ -2173,6 +2024,8 @@ class RinexDataProcessor:
             finally:
                 with contextlib.suppress(Exception):
                     self.site.rinex_store.repo.delete_branch(temp_branch)
+
+        return existing_hashes
 
     def _resolve_receiver_paths(self, receiver_type: str) -> tuple[Path, str | None]:
         """Resolve paths and receiver name for receiver type.
@@ -3100,15 +2953,14 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
 
         remote_sessions = []
 
-        if self._dask_client is not None and _HAS_DISTRIBUTED:
-            client = self._dask_client
-            self._logger.info(
-                "cooperative_writing_started",
-                executor_type="dask.distributed",
-                files=len(rinex_files_sorted),
-            )
+        self._logger.info(
+            "cooperative_writing_started",
+            executor_type="ProcessPoolExecutor",
+            files=len(rinex_files_sorted),
+        )
+        with ProcessPoolExecutor(max_workers=self.n_max_workers) as ex:
             futures = [
-                client.submit(
+                ex.submit(
                     worker_task_with_region_auto,
                     rinex_file,
                     keep_vars,
@@ -3120,7 +2972,6 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
                     self.keep_sids,
                     self._reader_name,
                     store_raw,
-                    pure=False,
                 )
                 for rinex_file in rinex_files_sorted
             ]
@@ -3129,42 +2980,10 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
             desc = f"{yyyydoy} Writing {receiver_name}"
             with _processing_progress() as progress:
                 task = progress.add_task(desc, total=len(futures))
-                for fut in dask_as_completed(futures):
+                for fut in as_completed(futures):
                     returned_fork = fut.result()
                     remote_sessions.append(returned_fork)
                     progress.advance(task)
-        else:
-            self._logger.info(
-                "cooperative_writing_started",
-                executor_type="ProcessPoolExecutor",
-                files=len(rinex_files_sorted),
-            )
-            with ProcessPoolExecutor(max_workers=self.n_max_workers) as ex:
-                futures = [
-                    ex.submit(
-                        worker_task_with_region_auto,
-                        rinex_file,
-                        keep_vars,
-                        aux_zarr_path,
-                        receiver_position,
-                        receiver_type,
-                        receiver_name,
-                        fork,
-                        self.keep_sids,
-                        self._reader_name,
-                        store_raw,
-                    )
-                    for rinex_file in rinex_files_sorted
-                ]
-
-                yyyydoy = self.matched_data_dirs.yyyydoy.to_str()
-                desc = f"{yyyydoy} Writing {receiver_name}"
-                with _processing_progress() as progress:
-                    task = progress.add_task(desc, total=len(futures))
-                    for fut in as_completed(futures):
-                        returned_fork = fut.result()
-                        remote_sessions.append(returned_fork)
-                        progress.advance(task)
 
         # Merge all remote sessions
         session.merge(*remote_sessions)
