@@ -848,7 +848,7 @@ def process_rinex(
             store_groups = [recv_name]
         else:
             # Reference receivers write to {ref}_{canopy} store groups
-            canopy_names = site_cfg.resolve_scs_from(recv_name)
+            canopy_names = site_cfg.resolve_paired_canopies(recv_name)
             store_groups = [f"{recv_name}_{cn}" for cn in canopy_names]
 
         # Resolve RINEX files
@@ -1017,7 +1017,7 @@ def process_sbf(
         if recv_type == "canopy":
             store_groups = [recv_name]
         else:
-            canopy_names = site_cfg.resolve_scs_from(recv_name)
+            canopy_names = site_cfg.resolve_paired_canopies(recv_name)
             store_groups = [f"{recv_name}_{cn}" for cn in canopy_names]
 
         # Resolve SBF files

@@ -116,11 +116,21 @@ class TestProcessingParams:
         with pytest.raises(ValidationError):
             ProcessingParams(resource_mode="manual", n_max_threads=101)  # le=100
 
-    def test_batch_hours_bounds(self):
+    def test_days_per_batch_bounds(self):
         with pytest.raises(ValidationError):
-            ProcessingParams(batch_hours=0)  # gt=0
+            ProcessingParams(days_per_batch=0)  # ge=1
         with pytest.raises(ValidationError):
-            ProcessingParams(batch_hours=721)  # le=720
+            ProcessingParams(days_per_batch=31)  # le=30
+
+    def test_batch_hours_deprecated_migrates(self):
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            p = ProcessingParams(batch_hours=48)
+        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert p.days_per_batch == 2
+        assert p.batch_hours is None
 
     def test_nice_priority_bounds(self):
         with pytest.raises(ValidationError):
@@ -183,34 +193,45 @@ class TestAuxDataConfig:
 
 
 # ===================================================================
-# ReceiverConfig — scs_from validation
+# ReceiverConfig — paired_canopies validation
 # ===================================================================
 
 
 class TestReceiverConfig:
-    def test_canopy_without_scs_from(self):
+    def test_canopy_without_paired_canopies(self):
         rc = ReceiverConfig(type="canopy", directory="can/raw")
-        assert rc.scs_from is None
+        assert rc.paired_canopies is None
 
-    def test_canopy_with_scs_from_raises(self):
+    def test_canopy_with_paired_canopies_raises(self):
         with pytest.raises(ValidationError, match="must not be set for canopy"):
-            ReceiverConfig(type="canopy", directory="can/raw", scs_from="all")
+            ReceiverConfig(type="canopy", directory="can/raw", paired_canopies="all")
 
-    def test_reference_requires_scs_from(self):
+    def test_reference_requires_paired_canopies(self):
         with pytest.raises(ValidationError, match="required for reference"):
             ReceiverConfig(type="reference", directory="ref/raw")
 
-    def test_reference_with_scs_from_all(self):
-        rc = ReceiverConfig(type="reference", directory="ref/raw", scs_from="all")
-        assert rc.scs_from == "all"
+    def test_reference_with_paired_canopies_all(self):
+        rc = ReceiverConfig(
+            type="reference", directory="ref/raw", paired_canopies="all"
+        )
+        assert rc.paired_canopies == "all"
 
-    def test_reference_with_scs_from_list(self):
+    def test_reference_with_paired_canopies_list(self):
         rc = ReceiverConfig(
             type="reference",
             directory="ref/raw",
-            scs_from=["canopy_01", "canopy_02"],
+            paired_canopies=["canopy_01", "canopy_02"],
         )
-        assert rc.scs_from == ["canopy_01", "canopy_02"]
+        assert rc.paired_canopies == ["canopy_01", "canopy_02"]
+
+    def test_scs_from_deprecated_migrates(self):
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            rc = ReceiverConfig(type="reference", directory="ref/raw", scs_from="all")
+        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert rc.paired_canopies == "all"
 
 
 # ===================================================================
@@ -225,7 +246,7 @@ class TestSiteConfig:
             "receivers": {
                 "canopy_01": ReceiverConfig(type="canopy", directory="can/raw"),
                 "reference_01": ReceiverConfig(
-                    type="reference", directory="ref/raw", scs_from="all"
+                    type="reference", directory="ref/raw", paired_canopies="all"
                 ),
             },
         }
@@ -240,28 +261,40 @@ class TestSiteConfig:
         site = self._make_site()
         assert site.get_canopy_receiver_names() == ["canopy_01"]
 
-    def test_resolve_scs_from_all(self):
+    def test_resolve_paired_canopies_all(self):
         site = self._make_site()
-        result = site.resolve_scs_from("reference_01")
+        result = site.resolve_paired_canopies("reference_01")
         assert result == ["canopy_01"]
 
-    def test_resolve_scs_from_specific_list(self):
+    def test_resolve_paired_canopies_specific_list(self):
         site = SiteConfig(
             gnss_site_data_root="/data",
             receivers={
                 "c1": ReceiverConfig(type="canopy", directory="c1"),
                 "c2": ReceiverConfig(type="canopy", directory="c2"),
-                "r1": ReceiverConfig(type="reference", directory="r1", scs_from=["c1"]),
+                "r1": ReceiverConfig(
+                    type="reference", directory="r1", paired_canopies=["c1"]
+                ),
             },
         )
-        assert site.resolve_scs_from("r1") == ["c1"]
+        assert site.resolve_paired_canopies("r1") == ["c1"]
 
-    def test_resolve_scs_from_on_canopy_raises(self):
+    def test_resolve_paired_canopies_on_canopy_raises(self):
         site = self._make_site()
         with pytest.raises(ValueError, match="only applies to reference"):
-            site.resolve_scs_from("canopy_01")
+            site.resolve_paired_canopies("canopy_01")
 
-    def test_scs_from_references_nonexistent_canopy_raises(self):
+    def test_resolve_scs_from_deprecated(self):
+        import warnings
+
+        site = self._make_site()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = site.resolve_scs_from("reference_01")
+        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert result == ["canopy_01"]
+
+    def test_paired_canopies_references_nonexistent_canopy_raises(self):
         with pytest.raises(ValidationError, match="not a canopy receiver"):
             SiteConfig(
                 gnss_site_data_root="/data",
@@ -270,7 +303,7 @@ class TestSiteConfig:
                     "r1": ReceiverConfig(
                         type="reference",
                         directory="r1",
-                        scs_from=["nonexistent"],
+                        paired_canopies=["nonexistent"],
                     ),
                 },
             )
@@ -281,7 +314,9 @@ class TestSiteConfig:
             receivers={
                 "c1": ReceiverConfig(type="canopy", directory="c1"),
                 "c2": ReceiverConfig(type="canopy", directory="c2"),
-                "r1": ReceiverConfig(type="reference", directory="r1", scs_from="all"),
+                "r1": ReceiverConfig(
+                    type="reference", directory="r1", paired_canopies="all"
+                ),
             },
         )
         pairs = site.get_reference_canopy_pairs()
@@ -426,7 +461,7 @@ class TestSitesConfig:
                     receivers={
                         "c1": ReceiverConfig(type="canopy", directory="c1"),
                         "r1": ReceiverConfig(
-                            type="reference", directory="r1", scs_from="all"
+                            type="reference", directory="r1", paired_canopies="all"
                         ),
                     },
                 )
@@ -458,7 +493,9 @@ class TestCanvodConfig:
                             receivers={
                                 "c": ReceiverConfig(type="canopy", directory="c"),
                                 "r": ReceiverConfig(
-                                    type="reference", directory="r", scs_from="all"
+                                    type="reference",
+                                    directory="r",
+                                    paired_canopies="all",
                                 ),
                             },
                         )
@@ -482,7 +519,7 @@ class TestCanvodConfig:
                         receivers={
                             "c": ReceiverConfig(type="canopy", directory="c"),
                             "r": ReceiverConfig(
-                                type="reference", directory="r", scs_from="all"
+                                type="reference", directory="r", paired_canopies="all"
                             ),
                         },
                     )

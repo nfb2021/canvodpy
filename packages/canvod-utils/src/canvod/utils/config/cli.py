@@ -152,8 +152,11 @@ def init(
 
     # Next steps
     console.print("\n[bold]Next steps:[/bold]")
-    console.print("  1. Edit config/processing.yaml:")
-    console.print("     - Set nasa_earthdata_acc_mail (optional, for NASA CDDIS)")
+    console.print("  1. Edit config/processing.yaml (general settings)")
+    console.print("  1b. For NASA CDDIS access, add to config/.env (gitignored):")
+    console.print(
+        "      CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com"
+    )
     console.print("  2. Edit config/sites.yaml with your research sites")
     console.print("     - Set gnss_site_data_root for each site")
     console.print("     - Set recipe: <name> for each receiver")
@@ -415,7 +418,7 @@ def _show_processing(config: ProcessingConfig) -> None:
         str(config.params.n_max_threads or "auto"),
     )
     table.add_row("Keep RINEX Vars", ", ".join(config.params.keep_rnx_vars))
-    table.add_row("Batch Hours", str(config.params.batch_hours))
+    table.add_row("Days per Batch", str(config.params.days_per_batch))
     mem_str = (
         f"{config.params.max_memory_gb} GB"
         if config.params.max_memory_gb
@@ -522,13 +525,13 @@ def _show_sites(config: SitesConfig) -> None:
             console.print(f"        dir: {abs_dir}")
             if recv.recipe:
                 console.print(f"        recipe: {recv.recipe}")
-            if recv.scs_from is not None:
-                if recv.scs_from == "all":
-                    console.print(f"        scs_from: all -> {canopy_names}")
+            if recv.paired_canopies is not None:
+                if recv.paired_canopies == "all":
+                    console.print(f"        paired_canopies: all -> {canopy_names}")
                 else:
-                    console.print(f"        scs_from: {recv.scs_from}")
+                    console.print(f"        paired_canopies: {recv.paired_canopies}")
 
-        # Reference-canopy pairs (expanded from scs_from)
+        # Reference-canopy pairs (expanded from paired_canopies)
         pairs = site.get_reference_canopy_pairs()
         if pairs:
             console.print(

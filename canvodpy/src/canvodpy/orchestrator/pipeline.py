@@ -52,8 +52,8 @@ class PipelineOrchestrator:
         (via ``os.cpu_count()``).
     dry_run : bool
         If True, only simulate processing without executing
-    batch_hours : float
-        Hours of data per processing batch (default: 24.0)
+    days_per_batch : int
+        Number of DOYs pooled per loky wave (default: 1)
     max_memory_gb : float | None
         Soft RAM limit in GB (None = no limit)
     cpu_affinity : list[int] | None
@@ -71,7 +71,7 @@ class PipelineOrchestrator:
         site: GnssResearchSite,
         n_max_workers: int | None = None,
         dry_run: bool = False,
-        batch_hours: float = 24.0,
+        days_per_batch: int = 1,
         max_memory_gb: float | None = None,
         cpu_affinity: list[int] | None = None,
         nice_priority: int = 0,
@@ -80,8 +80,8 @@ class PipelineOrchestrator:
         self.site = site
         self.n_max_workers = n_max_workers
         self.dry_run = dry_run
-        self.batch_hours = batch_hours
-        self._batch_duration: pint.Quantity = batch_hours * UREG.hour
+        self.days_per_batch = days_per_batch
+        self._batch_duration: pint.Quantity = days_per_batch * 24 * UREG.hour
         self._max_memory_gb = max_memory_gb
         self._cpu_affinity = cpu_affinity
         self._nice_priority = nice_priority
@@ -124,7 +124,7 @@ class PipelineOrchestrator:
             analysis_pairs=len(site.active_vod_analyses),
             n_max_workers=n_max_workers,
             dry_run=dry_run,
-            batch_hours=batch_hours,
+            days_per_batch=days_per_batch,
         )
 
     def close(self) -> None:
@@ -212,7 +212,7 @@ class PipelineOrchestrator:
                 ref_fmt = ref_cfg.reader_format
                 if ref_fmt == "auto":
                     ref_fmt = self._detect_reader_format(pair_dirs.reference_data_dir)
-                canopy_names = site_config.resolve_scs_from(ref_name)
+                canopy_names = site_config.resolve_paired_canopies(ref_name)
                 for canopy_name in canopy_names:
                     store_group = f"{ref_name}_{canopy_name}"
                     if store_group not in grouped[date_key]:
@@ -343,47 +343,6 @@ class PipelineOrchestrator:
                 break
             filtered.append((date_key, receivers))
         return filtered
-
-    def _validate_batch_floor(
-        self,
-        n_files: int,
-    ) -> pint.Quantity:
-        """Validate batch_hours is at least the duration of one file.
-
-        If the configured batch duration is smaller than one file's duration,
-        clamp up to the file duration with a warning.
-
-        Parameters
-        ----------
-        n_files : int
-            Number of RINEX files per day for a receiver.
-
-        Returns
-        -------
-        pint.Quantity
-            Effective batch duration (in hours), clamped if necessary.
-
-        """
-        file_duration: pint.Quantity = (24 * UREG.hour) / n_files
-        batch_duration = self._batch_duration
-
-        if batch_duration < file_duration:
-            self._logger.warning(
-                "batch_duration_clamped",
-                requested=str(batch_duration),
-                min_file_duration=str(file_duration),
-                n_files=n_files,
-            )
-            batch_duration = file_duration
-        else:
-            self._logger.info(
-                "batch_duration_validated",
-                batch_duration=str(batch_duration),
-                file_duration=str(file_duration),
-                n_files=n_files,
-            )
-
-        return batch_duration
 
     def _process_single_date(
         self,
@@ -616,7 +575,7 @@ class PipelineOrchestrator:
             ``(date_key, datasets, timings)`` per DOY.
 
         """
-        days_per_batch = max(1, round(self.batch_hours / 24))
+        days_per_batch = self.days_per_batch
         total_batches = (len(filtered_dates) + days_per_batch - 1) // days_per_batch
         # Use loky flat-LPT (S2) when loky is installed. Persistent pool
         # eliminates per-receiver-day spawn overhead (~17s/call on macOS).
@@ -624,7 +583,6 @@ class PipelineOrchestrator:
 
         self._logger.info(
             "multi_day_batch_strategy",
-            batch_hours=self.batch_hours,
             days_per_batch=days_per_batch,
             total_dates=len(filtered_dates),
             total_batches=total_batches,
@@ -1003,72 +961,6 @@ class PipelineOrchestrator:
 
         progress.stop()
 
-    def _process_sub_day_batches(
-        self,
-        filtered_dates: list[tuple[str, dict[str, tuple[Path, str, Path | None, str]]]],
-        keep_vars: list[str] | None,
-    ) -> Generator[tuple[str, dict[str, xr.Dataset], dict[str, float]]]:
-        """Process dates with sub-day file batching (batch_hours < 24).
-
-        Splits RINEX files within each day into smaller chunks based on
-        ``batch_hours``, processing each chunk separately. Still yields
-        per-DOY and commits to Icechunk per-DOY.
-
-        Parameters
-        ----------
-        filtered_dates : list
-            Filtered ``(date_key, receivers)`` pairs.
-        keep_vars : list[str] | None
-            Variables to keep in datasets.
-
-        Yields
-        ------
-        tuple[str, dict[str, xr.Dataset], dict[str, float]]
-            ``(date_key, datasets, timings)`` per DOY.
-
-        """
-        self._logger.info(
-            "sub_day_batch_strategy",
-            batch_hours=self.batch_hours,
-            total_dates=len(filtered_dates),
-        )
-
-        # For sub-day batches, we still process per-date but the processor
-        # handles smaller file chunks. The current processor already processes
-        # all files for a date, so we delegate to the single-date processor
-        # which internally uses ProcessPoolExecutor for parallelism.
-        # The sub-day batch_hours primarily controls how many files are
-        # submitted to the pool at once.
-        dates_succeeded = 0
-        dates_failed = 0
-        for date_idx, (date_key, receivers) in enumerate(filtered_dates):
-            self._memory_monitor.log_memory_stats(context=f"before_sub_day_{date_key}")
-            self._logger.info(
-                "sub_day_date_started",
-                date=date_key,
-                date_index=date_idx + 1,
-                total_dates=len(filtered_dates),
-            )
-
-            result = self._process_single_date(date_key, receivers, keep_vars)
-            if result is not None:
-                dates_succeeded += 1
-                yield result
-            else:
-                dates_failed += 1
-                self._logger.warning(
-                    "sub_day_date_failed",
-                    date=date_key,
-                    date_index=date_idx + 1,
-                )
-
-        self._logger.info(
-            "sub_day_strategy_complete",
-            dates_succeeded=dates_succeeded,
-            dates_failed=dates_failed,
-            total_dates=len(filtered_dates),
-        )
-
     def process_by_date(
         self,
         keep_vars: list[str] | None = None,
@@ -1117,39 +1009,18 @@ class PipelineOrchestrator:
             total_dates=len(filtered_dates),
             date_range_start=filtered_dates[0][0],
             date_range_end=filtered_dates[-1][0],
-            batch_hours=self.batch_hours,
+            days_per_batch=self.days_per_batch,
             n_max_workers=self.n_max_workers,
         )
 
         overall_start = _time.monotonic()
 
-        # Validate batch floor against first receiver's file count
-        _first_date_key, first_receivers = filtered_dates[0]
-        first_receiver_info = next(iter(first_receivers.values()))
-        first_data_dir = first_receiver_info[0]
-        n_files = len(
-            list(first_data_dir.glob("*.2*o")) or list(first_data_dir.glob("*.??o"))
-        )
-        if n_files > 0:
-            self._validate_batch_floor(n_files)
-
-        strategy = "multi_day" if self.batch_hours >= 24 else "sub_day"
-        self._logger.info(
-            "batch_strategy_selected",
-            strategy=strategy,
-            batch_hours=self.batch_hours,
-        )
-
-        if self.batch_hours >= 24:
-            yield from self._process_multi_day_batches(filtered_dates, keep_vars)
-        else:
-            yield from self._process_sub_day_batches(filtered_dates, keep_vars)
+        yield from self._process_multi_day_batches(filtered_dates, keep_vars)
 
         overall_elapsed = _time.monotonic() - overall_start
         self._logger.info(
             "process_by_date_complete",
             total_dates=len(filtered_dates),
-            strategy=strategy,
             total_seconds=round(overall_elapsed, 2),
         )
 
@@ -1280,7 +1151,7 @@ if __name__ == "__main__":
         site=site,
         dry_run=False,
         n_max_workers=resources["n_workers"],
-        batch_hours=proc.batch_hours,
+        days_per_batch=proc.days_per_batch,
         max_memory_gb=resources["max_memory_gb"],
         cpu_affinity=resources["cpu_affinity"],
         nice_priority=resources["nice_priority"],

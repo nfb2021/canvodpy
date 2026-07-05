@@ -232,8 +232,8 @@ class AuxFile(ABC):
             raise RuntimeError(
                 f"No FTP servers available for {product_spec.prefix}.\n"
                 f"All servers require authentication: {server_names}\n"
-                f"Set nasa_earthdata_acc_mail in config/processing.yaml to "
-                f"enable NASA CDDIS access.\n"
+                f"Set CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL "
+                f"in config/.env to enable NASA CDDIS access.\n"
                 f"Register at: https://urs.earthdata.nasa.gov/users/new"
             )
 
@@ -276,8 +276,8 @@ class AuxFile(ABC):
             )
             auth_hint = (
                 f"\n\nSkipped servers (no credentials):\n{skip_detail}\n"
-                f"Set nasa_earthdata_acc_mail in config/processing.yaml "
-                f"to enable these servers."
+                f"Set CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL "
+                f"in config/.env to enable these servers."
             )
         else:
             auth_hint = ""

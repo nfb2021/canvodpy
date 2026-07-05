@@ -77,10 +77,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Number of Dask workers (default: from config)",
     )
     p.add_argument(
-        "--batch-hours",
-        type=float,
+        "--days-per-batch",
+        type=int,
         default=None,
-        help="Hours per processing batch (default: from config)",
+        help="Number of DOYs per loky wave (default: from config)",
     )
     return p
 
@@ -166,7 +166,7 @@ def _resolve_date_range(args, site) -> tuple[str, str]:
 
 
 def _print_header(args: argparse.Namespace, config, start: str, end: str) -> None:
-    proc = config.processing.processing
+    proc = config.processing.params
     storage = config.processing.storage
     print("=" * 72)
     print(f"canvodpy  site={args.site}  {start} .. {end}")
@@ -174,7 +174,7 @@ def _print_header(args: argparse.Namespace, config, start: str, end: str) -> Non
     print(f"  started        {datetime.now():%Y-%m-%d %H:%M:%S}")
     print(f"  ephemeris      {proc.ephemeris_source}")
     print(f"  keep_vars      {proc.keep_rnx_vars}")
-    print(f"  batch_hours    {args.batch_hours or proc.batch_hours}")
+    print(f"  days_per_batch {args.days_per_batch or proc.days_per_batch}")
     print(f"  resource_mode  {proc.resource_mode}")
     print(f"  store_strategy {storage.rinex_store_strategy}")
     print(f"  rinex_store    {storage.rinex_store_name or 'rinex'}")
@@ -294,7 +294,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         with site.pipeline(
             n_workers=args.workers,
-            batch_hours=args.batch_hours,
+            days_per_batch=args.days_per_batch,
             dry_run=True,
         ) as pipeline:
             plan = pipeline.preview()
@@ -318,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
 
     with site.pipeline(
         n_workers=args.workers,
-        batch_hours=args.batch_hours,
+        days_per_batch=args.days_per_batch,
         dry_run=False,
     ) as pipeline:
         gen = pipeline.process_range(start=start, end=end)

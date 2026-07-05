@@ -2889,12 +2889,12 @@ class RinexDataProcessor:
             if cfg.type == "canopy" and name in canopy_data_dirs:
                 configs.append((name, "canopy", canopy_data_dirs[name], None))
 
-        # Add reference receivers — one entry per canopy in scs_from
+        # Add reference receivers — one entry per canopy in paired_canopies
         for name, cfg in site_config.receivers.items():
             if cfg.type != "reference":
                 continue
             ref_data_dir = base_path / cfg.directory / _yydoy
-            canopy_names = site_config.resolve_scs_from(name)
+            canopy_names = site_config.resolve_paired_canopies(name)
             for canopy_name in canopy_names:
                 store_group = f"{name}_{canopy_name}"
                 position_dir = canopy_data_dirs.get(canopy_name)

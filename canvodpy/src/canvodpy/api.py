@@ -129,7 +129,7 @@ class Site:
         aux_agency: str | None = None,
         n_workers: int | None = None,
         dry_run: bool = False,
-        batch_hours: float | None = None,
+        days_per_batch: int | None = None,
         max_memory_gb: float | None = None,
         cpu_affinity: list[int] | None = None,
         nice_priority: int | None = None,
@@ -151,22 +151,20 @@ class Site:
             Analysis center for auxiliary data (COD, ESA, GFZ, JPL).
             Default: from config.
         n_workers : int, optional
-            Number of parallel Dask workers. Default: from config
-            (``processing.n_max_threads``).
+            Number of parallel workers. Default: from config.
         dry_run : bool, default False
             If True, simulate processing without execution.
-        batch_hours : float, optional
-            Hours of data per processing batch. Default: from config.
+        days_per_batch : int, optional
+            Number of DOYs per loky wave. Default: from config.
         max_memory_gb : float, optional
-            Total RAM budget across all workers. Divided by ``n_workers``
-            for per-worker Dask memory limit. Default: from config.
+            Total RAM budget across all workers. Default: from config.
         cpu_affinity : list[int], optional
             Pin workers to specific CPU core IDs (Linux only).
             Default: from config.
         nice_priority : int, optional
             Process nice value (0=normal, 19=lowest). Default: from config.
         threads_per_worker : int, optional
-            Threads per Dask worker process. Default: from config.
+            Threads per worker process. Default: from config.
 
         Returns
         -------
@@ -186,7 +184,7 @@ class Site:
             aux_agency=aux_agency,
             n_workers=n_workers,
             dry_run=dry_run,
-            batch_hours=batch_hours,
+            days_per_batch=days_per_batch,
             max_memory_gb=max_memory_gb,
             cpu_affinity=cpu_affinity,
             nice_priority=nice_priority,
@@ -263,7 +261,7 @@ class Pipeline:
         aux_agency: str | None = None,
         n_workers: int | None = None,
         dry_run: bool = False,
-        batch_hours: float | None = None,
+        days_per_batch: int | None = None,
         max_memory_gb: float | None = None,
         cpu_affinity: list[int] | None = None,
         nice_priority: int | None = None,
@@ -278,15 +276,15 @@ class Pipeline:
         from canvod.utils.config import load_config
 
         config = load_config()
-        proc = config.processing.processing
+        proc = config.processing.params
 
         # All params default to config values; explicit values override
         if keep_vars is None:
             keep_vars = proc.keep_rnx_vars
         if aux_agency is None:
             aux_agency = config.processing.aux_data.agency
-        if batch_hours is None:
-            batch_hours = proc.batch_hours
+        if days_per_batch is None:
+            days_per_batch = proc.days_per_batch
 
         # Resource resolution: explicit n_workers overrides everything,
         # otherwise use resolve_resources() which respects resource_mode.
@@ -317,7 +315,7 @@ class Pipeline:
         self.aux_agency = aux_agency
         self.n_workers = n_workers
         self.dry_run = dry_run
-        self.batch_hours = batch_hours
+        self.days_per_batch = days_per_batch
 
         # Setup logging
         from canvodpy.logging import get_logger
@@ -335,7 +333,7 @@ class Pipeline:
             site=site._site,
             n_max_workers=n_workers,
             dry_run=dry_run,
-            batch_hours=batch_hours,
+            days_per_batch=days_per_batch,
             max_memory_gb=max_memory_gb,
             cpu_affinity=cpu_affinity,
             nice_priority=nice_priority,
@@ -348,7 +346,7 @@ class Pipeline:
             n_workers=n_workers,
             keep_vars=len(self.keep_vars),
             dry_run=dry_run,
-            batch_hours=batch_hours,
+            days_per_batch=days_per_batch,
             max_memory_gb=max_memory_gb,
             nice_priority=nice_priority,
             threads_per_worker=threads_per_worker,
@@ -557,7 +555,7 @@ class Pipeline:
             f"Pipeline(site='{self.site.name}', "
             f"keep_vars={len(self.keep_vars)} vars, "
             f"workers={self.n_workers}, "
-            f"batch_hours={self.batch_hours})"
+            f"days_per_batch={self.days_per_batch})"
         )
 
 

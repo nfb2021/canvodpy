@@ -21,6 +21,11 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 
 class _StrictModel(BaseModel):
@@ -204,12 +209,34 @@ class ProcessingParams(_StrictModel):
             "'paired': only process dates where both receivers in an analysis pair have data."
         ),
     )
-    batch_hours: float = Field(
-        24.0,
+    days_per_batch: int = Field(
+        1,
+        ge=1,
+        le=30,
+        description="Number of DOYs pooled per loky wave (1 = one day at a time)",
+    )
+    batch_hours: float | None = Field(
+        None,
         gt=0,
         le=720,
-        description="Hours of data per processing batch",
+        description="Deprecated: use days_per_batch (int, days) instead",
+        exclude=True,
     )
+
+    @model_validator(mode="after")
+    def _migrate_batch_hours(self) -> ProcessingParams:
+        if self.batch_hours is not None:
+            import warnings
+
+            warnings.warn(
+                "ProcessingParams.batch_hours is deprecated; use days_per_batch instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            self.days_per_batch = max(1, round(self.batch_hours / 24))
+            self.batch_hours = None
+        return self
+
     max_memory_gb: float | None = Field(
         None,
         gt=0,
@@ -696,10 +723,10 @@ class ReceiverConfig(_StrictModel):
         description="Receiver type",
     )
     directory: str = Field(..., description="Subdirectory for receiver data")
-    scs_from: str | list[str] | None = Field(
+    paired_canopies: str | list[str] | None = Field(
         None,
         description=(
-            "Which canopy receiver(s) to use for SCS computation. "
+            "Which canopy receiver(s) to pair with this reference. "
             "Required for reference receivers: 'all' or a list of canopy names. "
             "Must not be set for canopy receivers."
         ),
@@ -735,14 +762,29 @@ class ReceiverConfig(_StrictModel):
         ),
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_scs_from(cls, data: object) -> object:
+        if isinstance(data, dict) and "scs_from" in data:
+            import warnings
+
+            warnings.warn(
+                "ReceiverConfig: 'scs_from' is deprecated; use 'paired_canopies' instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            data = dict(data)
+            data["paired_canopies"] = data.pop("scs_from")
+        return data
+
     @model_validator(mode="after")
-    def validate_scs_from(self) -> ReceiverConfig:
-        """Validate scs_from is required for reference, forbidden for canopy."""
-        if self.type == "reference" and self.scs_from is None:
-            msg = "scs_from is required for reference receivers"
+    def validate_paired_canopies(self) -> ReceiverConfig:
+        """Validate paired_canopies is required for reference, forbidden for canopy."""
+        if self.type == "reference" and self.paired_canopies is None:
+            msg = "paired_canopies is required for reference receivers"
             raise ValueError(msg)
-        if self.type == "canopy" and self.scs_from is not None:
-            msg = "scs_from must not be set for canopy receivers"
+        if self.type == "canopy" and self.paired_canopies is not None:
+            msg = "paired_canopies must not be set for canopy receivers"
             raise ValueError(msg)
         return self
 
@@ -777,19 +819,23 @@ class SiteConfig(_StrictModel):
     )
 
     @model_validator(mode="after")
-    def validate_scs_from_targets(self) -> SiteConfig:
-        """Validate that scs_from entries reference existing canopy receivers."""
+    def validate_paired_canopies_targets(self) -> SiteConfig:
+        """Validate that paired_canopies entries reference existing canopy receivers."""
         canopy_names = self.get_canopy_receiver_names()
         for name, cfg in self.receivers.items():
-            if cfg.type != "reference" or cfg.scs_from is None:
+            if cfg.type != "reference" or cfg.paired_canopies is None:
                 continue
-            if isinstance(cfg.scs_from, str) and cfg.scs_from == "all":
+            if isinstance(cfg.paired_canopies, str) and cfg.paired_canopies == "all":
                 continue
-            targets = cfg.scs_from if isinstance(cfg.scs_from, list) else [cfg.scs_from]
+            targets = (
+                cfg.paired_canopies
+                if isinstance(cfg.paired_canopies, list)
+                else [cfg.paired_canopies]
+            )
             for target in targets:
                 if target not in canopy_names:
                     msg = (
-                        f"Receiver '{name}' scs_from references '{target}' "
+                        f"Receiver '{name}' paired_canopies references '{target}' "
                         f"which is not a canopy receiver. "
                         f"Available canopy receivers: {canopy_names}"
                     )
@@ -816,8 +862,8 @@ class SiteConfig(_StrictModel):
         """
         return [name for name, cfg in self.receivers.items() if cfg.type == "canopy"]
 
-    def resolve_scs_from(self, receiver_name: str) -> list[str]:
-        """Resolve scs_from for a reference receiver to a list of canopy names.
+    def resolve_paired_canopies(self, receiver_name: str) -> list[str]:
+        """Resolve paired_canopies for a reference receiver to a list of canopy names.
 
         Parameters
         ----------
@@ -827,24 +873,35 @@ class SiteConfig(_StrictModel):
         Returns
         -------
         list[str]
-            List of canopy receiver names for SCS computation.
+            List of canopy receiver names paired with this reference.
         """
         cfg = self.receivers[receiver_name]
         if cfg.type != "reference":
-            msg = f"resolve_scs_from only applies to reference receivers, got '{cfg.type}'"
+            msg = f"resolve_paired_canopies only applies to reference receivers, got '{cfg.type}'"
             raise ValueError(msg)
-        if cfg.scs_from == "all":
+        if cfg.paired_canopies == "all":
             return self.get_canopy_receiver_names()
-        if isinstance(cfg.scs_from, list):
-            return cfg.scs_from
+        if isinstance(cfg.paired_canopies, list):
+            return cfg.paired_canopies
         # Single canopy name as string
-        if cfg.scs_from is None:
-            msg = f"Receiver '{receiver_name}' has no scs_from configured"
+        if cfg.paired_canopies is None:
+            msg = f"Receiver '{receiver_name}' has no paired_canopies configured"
             raise ValueError(msg)
-        return [cfg.scs_from]
+        return [cfg.paired_canopies]
+
+    def resolve_scs_from(self, receiver_name: str) -> list[str]:
+        """Deprecated: use resolve_paired_canopies instead."""
+        import warnings
+
+        warnings.warn(
+            "SiteConfig.resolve_scs_from is deprecated; use resolve_paired_canopies instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.resolve_paired_canopies(receiver_name)
 
     def get_reference_canopy_pairs(self) -> list[tuple[str, str]]:
-        """Expand scs_from into (reference_name, canopy_name) pairs.
+        """Expand paired_canopies into (reference_name, canopy_name) pairs.
 
         Returns
         -------
@@ -855,7 +912,7 @@ class SiteConfig(_StrictModel):
         for name, cfg in self.receivers.items():
             if cfg.type != "reference":
                 continue
-            for canopy_name in self.resolve_scs_from(name):
+            for canopy_name in self.resolve_paired_canopies(name):
                 pairs.append((name, canopy_name))
         return pairs
 
@@ -977,18 +1034,47 @@ class SidsConfig(_StrictModel):
 # ============================================================================
 
 
-class CanvodConfig(_StrictModel):
+class CanvodConfig(BaseSettings):
     """
     Complete canvodpy configuration.
 
-    This is the top-level configuration object that combines all
-    configuration sections. It's fully serializable and can be used
-    for local development (YAML files) or API-based configuration.
+    Loaded from YAML files by ConfigLoader; individual fields can be
+    overridden via environment variables using the ``CANVOD__`` prefix
+    and ``__`` as the nested delimiter.  Environment variables take
+    priority over YAML-file values.
+
+    Examples
+    --------
+    Override a single nested field without touching the YAML::
+
+        CANVOD__PROCESSING__PARAMS__DAYS_PER_BATCH=7 canvodpy run ...
+        CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=me@x.com canvodpy run ...
     """
+
+    model_config = SettingsConfigDict(
+        env_prefix="CANVOD__",
+        env_nested_delimiter="__",
+        extra="forbid",
+        env_file=["config/.env", ".env"],
+        env_file_encoding="utf-8",
+        env_ignore_empty=True,
+    )
 
     processing: ProcessingConfig
     sites: SitesConfig
     sids: SidsConfig
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Env vars beat YAML-loaded init kwargs; dotenv/secrets not used.
+        return (env_settings, init_settings)
 
     @property
     def nasa_earthdata_acc_mail(self) -> str | None:

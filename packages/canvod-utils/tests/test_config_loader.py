@@ -90,7 +90,7 @@ class TestConfigLoaderRoundTrip:
                             "reference_01": {
                                 "type": "reference",
                                 "directory": "reference",
-                                "scs_from": "all",
+                                "paired_canopies": "all",
                             },
                         },
                     }
