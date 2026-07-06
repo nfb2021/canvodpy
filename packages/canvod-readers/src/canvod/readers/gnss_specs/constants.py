@@ -5,7 +5,7 @@ never change. User-configurable settings have been moved to the configuration
 system (canvod.utils.config).
 
 Removed and moved to config:
-- KEEP_RNX_VARS → processing.keep_rnx_vars
+- KEEP_RNX_VARS → processing.keep_gnss_observables
 - COMPRESSION → compression.{zlib, complevel}
 - AUTHOR, EMAIL, etc. → metadata.{author, email, ...}
 - SOFTWARE → canvod.utils._meta.SOFTWARE_ATTRS

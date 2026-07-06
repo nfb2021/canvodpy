@@ -207,7 +207,7 @@ def format_config(meta: StoreMetadata) -> str:
         "processing",
         "preprocessing",
         "aux_data",
-        "compression",
+        "netcdf_compression",
         "icechunk",
         "sids",
     ):

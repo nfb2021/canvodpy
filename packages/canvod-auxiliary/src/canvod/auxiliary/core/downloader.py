@@ -86,8 +86,10 @@ class FtpDownloader(FileDownloader):
         self,
         alt_servers: list[str] | None = None,
         user_email: str | None = None,
+        timeout_s: int = 30,
     ):
         """Initialize downloader with optional alternate servers."""
+        self.timeout_s = timeout_s
         if alt_servers is None:
             if user_email is not None:
                 # Primary is NASA (set by caller); fallback to ESA
@@ -282,7 +284,7 @@ class FtpDownloader(FileDownloader):
         filename = parts[-1]
 
         print(f"Connecting to {host} using FTPS...")
-        ftps = FTP_TLS(host=host, timeout=30)
+        ftps = FTP_TLS(host=host, timeout=self.timeout_s)
         ftps.login(user="anonymous", passwd=self.user_email)
         ftps.prot_p()
 

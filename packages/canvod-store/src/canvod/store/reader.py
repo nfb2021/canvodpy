@@ -13,7 +13,7 @@ import xarray as xr
 from canvod.auxiliary.preprocessing import prep_aux_ds
 from canvod.readers import MatchedDirs, Rnxv3Obs
 from canvod.utils.config import load_config
-from canvod.utils.tools import get_version_from_pyproject
+from canvod.utils.tools import _worker_init, get_version_from_pyproject
 from canvodpy.logging import get_logger
 from natsort import natsorted
 from tqdm import tqdm
@@ -189,8 +189,11 @@ class IcechunkDataReader:
         self._time_range = (self._start_time, self._end_time)
 
         # ✅ single persistent pool
+        _res = load_config().processing.params.resolve_resources()
         self._pool = ProcessPoolExecutor(
             max_workers=min(self.n_max_workers, 16),
+            initializer=_worker_init,
+            initargs=(_res["nice_priority"], _res["cpu_affinity"]),
         )
 
         self._logger.info(

@@ -30,11 +30,10 @@ from pathlib import Path
 
 import numpy as np
 
-# Add tests dir to path so we can import conftest helpers
 _TESTS_DIR = Path(__file__).parent
 sys.path.insert(0, str(_TESTS_DIR))
 
-from conftest import (  # noqa: E402
+from _helpers import (  # noqa: E402
     _FIXTURES_DIR,
     DAY0_STORE_PATH,
     GROUP,

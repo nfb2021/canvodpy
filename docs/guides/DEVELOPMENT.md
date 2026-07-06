@@ -46,21 +46,21 @@ just check-dev-tools   # verify both are present
 
 canVODpy uses three YAML files in `config/`:
 
-| File | Purpose |
-|------|---------|
-| `sites.yaml` | Research sites, receiver definitions, data root paths, VOD analysis pairs |
-| `processing.yaml` | Processing parameters, NASA Earthdata credentials, storage strategies, Icechunk config |
-| `sids.yaml` | Signal ID filtering — `all`, a named `preset`, or `custom` list |
+| Section | Purpose |
+|---------|---------|
+| `processing:` | Processing parameters, NASA Earthdata credentials, storage strategies, Icechunk config |
+| `sites:` | Research sites, receiver definitions, data root paths, VOD analysis pairs |
+| `sids:` | Signal ID filtering — `all`, a named `preset`, or `custom` list |
 
-Each file has a `.example` template in the same directory.
+All three sections live in a single `config/canvod.yaml`. Template: `config/canvod.yaml.example`.
 
 === "First-time setup"
 
     ```bash
-    just config-init        # copy .example templates → YAML files
-    # edit config/sites.yaml and config/processing.yaml
-    just config-validate    # check for errors
-    just config-show        # print resolved config
+    canvod config init      # scaffold canvod.yaml from template
+    # edit config/canvod.yaml
+    canvod config validate  # check for errors
+    canvod config show      # print resolved config
     ```
 
 === "Daily use"
@@ -278,7 +278,7 @@ just test                # run all tests
 just sync                # install/update dependencies
 just clean               # remove build artifacts
 just hooks               # install pre-commit hooks
-just config-init         # initialize config files
+canvod config init       # scaffold canvod.yaml from template
 just config-validate     # validate configuration
 just config-show         # view resolved configuration
 just docs                # preview documentation (localhost:3000)

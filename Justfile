@@ -100,7 +100,7 @@ ci PYTHON="3.13":
 # Configuration
 # ============================================================================
 
-# validate the sites.yaml configuration
+# validate canvod.yaml configuration
 config-validate:
     uv run canvodpy config validate
 

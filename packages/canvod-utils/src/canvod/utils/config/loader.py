@@ -83,9 +83,16 @@ class ConfigLoader:
     ----------
     config_dir : Path | None, optional
         Directory containing config files. If None, uses monorepo_root/config.
+    config_file : Path | None, optional
+        Optional overlay YAML file applied on top of the main config.
+        Keys in the overlay take precedence over the main file.
     """
 
-    def __init__(self, config_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        config_dir: Path | None = None,
+        config_file: Path | None = None,
+    ) -> None:
         """Initialize the loader with an optional config directory.
 
         Parameters
@@ -93,6 +100,8 @@ class ConfigLoader:
         config_dir : Path | None, optional
             Directory containing config files. If None, uses the monorepo
             root config directory or a local fallback.
+        config_file : Path | None, optional
+            Optional overlay YAML file applied on top of the main config.
         """
         if config_dir is None:
             try:
@@ -104,12 +113,21 @@ class ConfigLoader:
 
         self.config_dir = Path(config_dir)
         self.defaults_dir = Path(__file__).parent / "defaults"
+        self.config_file: Path | None = None
+        if config_file is not None:
+            p = Path(config_file)
+            if not p.exists():
+                msg = f"Overlay config file not found: {p}"
+                raise FileNotFoundError(msg)
+            self.config_file = p
 
     def load(self) -> CanvodConfig:
         """
         Load complete configuration.
 
-        Priority: Package defaults < User config files
+        Checks for ``canvod.yaml`` first (new unified format); falls back to
+        the legacy trio (``processing.yaml`` / ``sites.yaml`` / ``sids.yaml``)
+        with a ``DeprecationWarning``.
 
         Returns
         -------
@@ -121,20 +139,98 @@ class ConfigLoader:
         ConfigValidationError
             If configuration is invalid (wraps Pydantic ValidationError).
         """
+        canvod_yaml = self.config_dir / "canvod.yaml"
+        if canvod_yaml.exists():
+            return self._load_single_file(canvod_yaml)
+
+        if any(
+            (self.config_dir / f).exists()
+            for f in ("processing.yaml", "sites.yaml", "sids.yaml")
+        ):
+            import warnings
+
+            warnings.warn(
+                "Separate config files (processing.yaml / sites.yaml / sids.yaml) "
+                "are deprecated. Run 'canvod config migrate' to consolidate into "
+                "a single canvod.yaml.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        return self._load_legacy()
+
+    def _load_legacy(self) -> CanvodConfig:
+        """Load from the three-file legacy layout."""
         processing = self._load_processing()
         sites = self._load_sites()
         sids = self._load_sids()
 
         try:
-            config = CanvodConfig(
-                processing=processing,
-                sites=sites,
-                sids=sids,
-            )
+            return CanvodConfig(processing=processing, sites=sites, sids=sids)
         except ValidationError as e:
             raise ConfigValidationError(e, self.config_dir) from e
 
-        return config
+    def _load_single_file(self, path: Path) -> CanvodConfig:
+        """Load from a unified canvod.yaml.
+
+        Expected top-level keys: ``processing:``, ``sites:``, ``sids:``.
+        ``sites:`` values are site names directly (no nested ``sites:`` wrapper).
+        """
+        data = self._load_yaml(path)
+
+        # Processing: merge user section with package defaults.
+        proc_defaults = self._load_yaml(self.defaults_dir / "processing.yaml")
+        proc_data = self._deep_merge(proc_defaults, data.get("processing", {}))
+
+        # Apply overlay file if set.
+        if self.config_file is not None:
+            overlay = self._load_yaml(self.config_file)
+            overlay_proc = overlay.get("processing", {})
+            # Normalize deprecated 'processing:' key in overlay before merging.
+            if "processing" in overlay_proc:
+                nested = overlay_proc.pop("processing")
+                overlay_proc["params"] = self._deep_merge(
+                    overlay_proc.get("params", {}), nested
+                )
+            proc_data = self._deep_merge(proc_data, overlay_proc)
+            sids_overlay = overlay.get("sids", {})
+            sites_raw_overlay = overlay.get("sites", {})
+        else:
+            sids_overlay: dict = {}
+            sites_raw_overlay: dict = {}
+
+        # Handle deprecated 'processing.processing:' → 'processing.params:' rename.
+        if "processing" in proc_data:
+            import warnings
+
+            warnings.warn(
+                "canvod.yaml: rename 'processing.processing:' to "
+                "'processing.params:' (deprecated key will be removed in a "
+                "future release)",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            nested = proc_data.pop("processing")
+            proc_data["params"] = self._deep_merge(proc_data.get("params", {}), nested)
+
+        # Sids: merge user section with package defaults, then overlay.
+        sids_defaults = self._load_yaml(self.defaults_dir / "sids.yaml")
+        sids_data = self._deep_merge(sids_defaults, data.get("sids", {}))
+        if sids_overlay:
+            sids_data = self._deep_merge(sids_data, sids_overlay)
+
+        # Sites: top-level keys in the 'sites:' section are site names.
+        sites_raw = data.get("sites", {})
+        if sites_raw_overlay:
+            sites_raw = self._deep_merge(sites_raw, sites_raw_overlay)
+
+        try:
+            return CanvodConfig(
+                processing=ProcessingConfig(**proc_data),
+                sites=SitesConfig(sites=sites_raw),
+                sids=SidsConfig(**sids_data),
+            )
+        except ValidationError as e:
+            raise ConfigValidationError(e, self.config_dir) from e
 
     def _load_processing(self) -> ProcessingConfig:
         """Load processing config with merge."""
@@ -246,7 +342,10 @@ class ConfigLoader:
 
 
 @functools.lru_cache(maxsize=8)
-def load_config(config_dir: Path | None = None) -> CanvodConfig:
+def load_config(
+    config_dir: Path | None = None,
+    config_file: Path | None = None,
+) -> CanvodConfig:
     """Load configuration from YAML files.
 
     This is the main entry point for loading configuration.
@@ -256,6 +355,9 @@ def load_config(config_dir: Path | None = None) -> CanvodConfig:
     config_dir : Path | None, optional
         Directory containing config files. If None, automatically finds
         monorepo root and uses {monorepo_root}/config.
+    config_file : Path | None, optional
+        Optional overlay YAML file applied on top of the main config.
+        Can also be set via the ``CANVOD_CONFIG_FILE`` environment variable.
 
     Returns
     -------
@@ -266,6 +368,8 @@ def load_config(config_dir: Path | None = None) -> CanvodConfig:
     ------
     ConfigValidationError
         If configuration YAML is invalid.
+    FileNotFoundError
+        If ``config_file`` is specified but does not exist.
 
     Examples
     --------
@@ -278,5 +382,9 @@ def load_config(config_dir: Path | None = None) -> CanvodConfig:
         env_dir = os.environ.get("CANVOD_CONFIG_DIR")
         if env_dir:
             config_dir = Path(env_dir)
-    loader = ConfigLoader(config_dir)
+    if config_file is None:
+        env_file = os.environ.get("CANVOD_CONFIG_FILE")
+        if env_file:
+            config_file = Path(env_file)
+    loader = ConfigLoader(config_dir, config_file=config_file)
     return loader.load()

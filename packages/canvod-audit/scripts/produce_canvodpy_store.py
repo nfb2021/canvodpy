@@ -27,8 +27,8 @@ processing.yaml::
       ephemeris_source: final
     storage:
       aux_data_dir: <repo>/packages/canvod-readers/tests/test_data/valid/rinex_v3_04/01_Rosalia
-      rinex_store_name: canvodpy_Rinex_Icechunk_Store
-      rinex_store_strategy: append
+      gnss_store_name: canvodpy_Rinex_Icechunk_Store
+      gnss_store_strategy: append
 
 Input data
 ----------

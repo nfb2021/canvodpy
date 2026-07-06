@@ -139,7 +139,7 @@ canVODpy uses a modern Python toolchain built almost entirely on the [Astral](ht
     just check            # Lint + format + type-check
     just hooks            # Install pre-commit hooks
     just docs             # Build and serve documentation locally
-    just config-init      # Initialize YAML config from templates
+    canvod config init    # Scaffold canvod.yaml from template
     just config-validate  # Validate config files
     just --list           # Show all available commands
     ```

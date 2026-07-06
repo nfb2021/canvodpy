@@ -254,7 +254,7 @@ class Rnxv3StrippedObs(Rnxv3Obs):
         if outname:
             from canvod.utils.config import load_config as _load_config
 
-            comp = _load_config().processing.compression
+            comp = _load_config().processing.netcdf_compression
             encoding = {
                 var: {"zlib": comp.zlib, "complevel": comp.complevel}
                 for var in ds.data_vars

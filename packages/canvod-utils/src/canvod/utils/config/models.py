@@ -8,6 +8,7 @@ These models provide:
 - IDE autocomplete and type hints
 """
 
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -115,6 +116,9 @@ class AuxDataConfig(_StrictModel):
         "final",
         description="Product type",
     )
+    ftp_timeout_s: int = Field(
+        30, ge=1, description="FTP connection timeout in seconds"
+    )
 
     def get_ftp_servers(
         self,
@@ -169,9 +173,26 @@ class ProcessingParams(_StrictModel):
             "Ignored in 'auto'."
         ),
     )
-    keep_rnx_vars: list[str] = Field(
-        default_factory=lambda: ["SNR", "Pseudorange", "Phase", "Doppler"],
-        description="RINEX variables to keep",
+    auto_uncapped: bool = Field(
+        False,
+        description=(
+            "Remove the automatic CPU core cap in resource_mode='auto'. "
+            "WARNING: enabling this on a shared machine can starve other users' "
+            "processes. Only set True when the machine is exclusively yours."
+        ),
+    )
+    keep_gnss_observables: list[str] = Field(
+        default_factory=lambda: ["SNR"],
+        description="GNSS observables to keep (SNR, Pseudorange, Phase, Doppler)",
+    )
+    aggregate_glonass_fdma: bool = Field(
+        True,
+        description=(
+            "Aggregate GLONASS FDMA sub-bands into effective G1*/G2* bands. "
+            "When False, each satellite keeps its precise frequency — increases "
+            "SID count and changes the store SID axis. Do not change on an "
+            "existing store without understanding append-compatibility implications."
+        ),
     )
     store_radial_distance: bool = Field(
         False,
@@ -215,28 +236,6 @@ class ProcessingParams(_StrictModel):
         le=30,
         description="Number of DOYs pooled per loky wave (1 = one day at a time)",
     )
-    batch_hours: float | None = Field(
-        None,
-        gt=0,
-        le=720,
-        description="Deprecated: use days_per_batch (int, days) instead",
-        exclude=True,
-    )
-
-    @model_validator(mode="after")
-    def _migrate_batch_hours(self) -> ProcessingParams:
-        if self.batch_hours is not None:
-            import warnings
-
-            warnings.warn(
-                "ProcessingParams.batch_hours is deprecated; use days_per_batch instead",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            self.days_per_batch = max(1, round(self.batch_hours / 24))
-            self.batch_hours = None
-        return self
-
     max_memory_gb: float | None = Field(
         None,
         gt=0,
@@ -319,15 +318,20 @@ class ProcessingParams(_StrictModel):
         dict
             Resolved resource values with keys: ``n_workers``,
             ``max_memory_gb``, ``cpu_affinity``, ``nice_priority``.
-            In auto mode, ``n_workers`` and ``max_memory_gb`` are ``None``
-            (let Dask/OS decide).
+            In auto mode with ``auto_uncapped=False``, ``n_workers`` is
+            ``max(1, cpu_count - 2)`` to leave headroom for the OS.
+            With ``auto_uncapped=True``, ``n_workers`` is ``None`` (no cap).
         """
         if self.resource_mode == "auto":
+            if self.auto_uncapped:
+                n_workers = None
+            else:
+                n_workers = max(1, (os.cpu_count() or 2) - 2)
             return {
-                "n_workers": None,
+                "n_workers": n_workers,
                 "max_memory_gb": None,
                 "cpu_affinity": None,
-                "nice_priority": 0,
+                "nice_priority": 3,
                 "threads_per_worker": self.threads_per_worker,
             }
         # manual mode
@@ -340,8 +344,8 @@ class ProcessingParams(_StrictModel):
         }
 
 
-class CompressionConfig(_StrictModel):
-    """Compression settings.
+class NetcdfCompressionConfig(_StrictModel):
+    """NetCDF compression settings used by RINEX readers when writing .nc files.
 
     Notes
     -----
@@ -350,6 +354,9 @@ class CompressionConfig(_StrictModel):
 
     zlib: bool = Field(True, description="Use zlib compression")
     complevel: int = Field(5, ge=0, le=9, description="Compression level")
+
+
+CompressionConfig = NetcdfCompressionConfig  # deprecated alias
 
 
 class ChunkStrategy(_StrictModel):
@@ -380,13 +387,28 @@ class IcechunkConfig(_StrictModel):
     This is a Pydantic model for configuration validation.
     """
 
-    compression_level: int = Field(5, ge=0, le=22)
-    compression_algorithm: Literal["zstd", "lz4", "gzip"] = "zstd"
-    inline_threshold: int = Field(512, ge=0)
-    get_concurrency: int = Field(1, ge=1)
+    compression_level: int = Field(3, ge=0, le=22)
+    compression_algorithm: Literal["zstd"] = "zstd"
+    inline_chunk_threshold_bytes: int = Field(512, ge=0)
+    get_partial_values_concurrency: int = Field(1, ge=1)
+    max_concurrent_requests: int | None = Field(
+        None,
+        ge=1,
+        description="Maximum number of concurrent object-store requests (None = icechunk default)",
+    )
+    cache_num_chunk_refs: int | None = Field(
+        None,
+        ge=0,
+        description="Maximum number of chunk references to cache in memory (None = icechunk default)",
+    )
+    cache_num_bytes_chunks: int | None = Field(
+        None,
+        ge=0,
+        description="Maximum bytes of chunk data to cache in memory (None = icechunk default)",
+    )
     chunk_strategies: dict[str, ChunkStrategy] = Field(
         default_factory=lambda: {
-            "rinex_store": ChunkStrategy(epoch=34560, sid=-1),
+            "gnss_store": ChunkStrategy(epoch=34560, sid=-1),
             "vod_store": ChunkStrategy(epoch=34560, sid=-1),
         },
     )
@@ -395,27 +417,30 @@ class IcechunkConfig(_StrictModel):
         description="Enable manifest preloading for faster chunk access",
     )
     manifest_preload_max_refs: int = Field(
-        100_000_000,
+        10_000,
         ge=0,
-        description="Maximum total refs to preload",
+        description="Maximum total chunk refs to preload across all matched arrays",
+    )
+    manifest_preload_max_arrays_to_scan: int = Field(
+        500,
+        ge=1,
+        description="Maximum number of arrays to scan for preload candidates",
     )
     manifest_preload_pattern: str = Field(
-        "epoch|sid",
-        description="Regex pattern for coordinate names to preload",
+        r"^(epoch|sid)$",
+        description="Regex pattern matched against array names to select preload candidates",
     )
     manifest_splitting_enabled: bool = Field(
-        False,
-        description="Enable manifest splitting for stores with >100k chunks per array",
-    )
-    manifest_splitting_chunk_refs: int = Field(
-        1000,
-        ge=1,
-        description="Split a manifest when it has more than this many chunk refs",
+        True,
+        description="Enable manifest splitting for stores with large arrays (recommended)",
     )
     manifest_splitting_epoch_range: int = Field(
         34560,
         ge=1,
-        description="Split obs/snr manifests along epoch dim every N indices (default: 1 day at 2.5 s)",
+        description=(
+            "Split arrays along the epoch dimension every N indices. "
+            "Set to match your epoch chunk size (e.g. 34560 for 24 h at 2.5 s)."
+        ),
     )
 
 
@@ -431,9 +456,9 @@ class StorageConfig(_StrictModel):
         ...,
         description="Root directory for all IceChunk stores",
     )
-    rinex_store_name: str = Field(
+    gnss_store_name: str = Field(
         "rinex",
-        description="Name of the RINEX Icechunk store directory",
+        description="Name of the GNSS observation Icechunk store directory",
     )
     vod_store_name: str = Field(
         "vod",
@@ -451,8 +476,8 @@ class StorageConfig(_StrictModel):
             "each run. Defaults to system temp directory if not set."
         ),
     )
-    rinex_store_strategy: Literal["skip", "overwrite", "append"] = "skip"
-    rinex_store_expire_days: int = Field(2, ge=1)
+    gnss_store_strategy: Literal["skip", "overwrite", "append"] = "skip"
+    gnss_store_expire_days: int = Field(2, ge=1)
     vod_store_strategy: Literal["skip", "overwrite", "append"] = "overwrite"
 
     @field_validator("stores_root_dir", mode="before")
@@ -463,8 +488,8 @@ class StorageConfig(_StrictModel):
             return Path(v).expanduser()
         return v
 
-    def get_rinex_store_path(self, site_name: str) -> Path:
-        """Get the RINEX store path for a site.
+    def get_gnss_store_path(self, site_name: str) -> Path:
+        """Get the GNSS observation store path for a site.
 
         Parameters
         ----------
@@ -474,9 +499,20 @@ class StorageConfig(_StrictModel):
         Returns
         -------
         Path
-            Path to the site's RINEX store.
+            Path to the site's GNSS observation store.
         """
-        return self.stores_root_dir / site_name / self.rinex_store_name
+        return self.stores_root_dir / site_name / self.gnss_store_name
+
+    def get_rinex_store_path(self, site_name: str) -> Path:
+        """Deprecated: use get_gnss_store_path instead."""
+        import warnings
+
+        warnings.warn(
+            "StorageConfig.get_rinex_store_path is deprecated; use get_gnss_store_path",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.get_gnss_store_path(site_name)
 
     def get_vod_store_path(self, site_name: str) -> Path:
         """Get the VOD store path for a site.
@@ -685,7 +721,10 @@ class ProcessingConfig(_StrictModel):
     )
     aux_data: AuxDataConfig = Field(default_factory=AuxDataConfig)
     params: ProcessingParams = Field(default_factory=ProcessingParams)
-    compression: CompressionConfig = Field(default_factory=CompressionConfig)
+    netcdf_compression: NetcdfCompressionConfig = Field(
+        default_factory=NetcdfCompressionConfig,
+        description="Compression settings for NetCDF output from RINEX readers",
+    )
     icechunk: IcechunkConfig = Field(default_factory=IcechunkConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
@@ -708,6 +747,18 @@ class ProcessingConfig(_StrictModel):
             stacklevel=2,
         )
         return self.params
+
+    @property
+    def compression(self) -> NetcdfCompressionConfig:
+        """Deprecated: use .netcdf_compression instead."""
+        import warnings
+
+        warnings.warn(
+            "ProcessingConfig.compression is deprecated; use .netcdf_compression",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.netcdf_compression
 
 
 # ============================================================================

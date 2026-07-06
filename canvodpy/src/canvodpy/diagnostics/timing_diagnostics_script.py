@@ -117,10 +117,10 @@ def diagnose_processing(
     print("=" * 80)
     print(f"Start time: {datetime.now()}")
     cfg = load_config()
-    keep_vars = cfg.processing.processing.keep_rnx_vars
-    rinex_store_strategy = cfg.processing.storage.rinex_store_strategy
-    print(f"rinex_store_strategy: {rinex_store_strategy}")
-    print(f"keep_rnx_vars: {keep_vars}")
+    keep_vars = cfg.processing.params.keep_gnss_observables
+    gnss_store_strategy = cfg.processing.storage.gnss_store_strategy
+    print(f"gnss_store_strategy: {gnss_store_strategy}")
+    print(f"keep_gnss_observables: {keep_vars}")
     if start_from:
         print(f"Starting from: {start_from}")
     if end_at:

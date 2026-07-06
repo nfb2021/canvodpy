@@ -131,7 +131,7 @@ class VODWorkflow:
         if keep_vars is None:
             from canvod.utils.config import load_config
 
-            keep_vars = load_config().processing.processing.keep_rnx_vars
+            keep_vars = load_config().processing.params.keep_gnss_observables
         self.keep_vars = keep_vars
 
         # Create grid using factory (cached for workflow)

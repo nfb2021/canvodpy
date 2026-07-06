@@ -165,7 +165,7 @@ class FluentWorkflow:
         if keep_vars is None:
             from canvod.utils.config import load_config
 
-            keep_vars = load_config().processing.processing.keep_rnx_vars
+            keep_vars = load_config().processing.params.keep_gnss_observables
         self._keep_vars = keep_vars
 
         self.log = get_logger(__name__).bind(site=self._site.name)

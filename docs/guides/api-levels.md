@@ -213,7 +213,7 @@ flowchart LR
 ### Usage across levels
 
 ```python
-# Level 1/3: config-driven (processing.yaml)
+# Level 1/3: config-driven (canvod.yaml → processing.params.ephemeris_source)
 # ephemeris_source: "final" | "broadcast" | "auto"
 
 # Level 2: explicit step

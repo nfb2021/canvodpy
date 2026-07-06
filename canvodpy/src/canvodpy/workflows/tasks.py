@@ -825,7 +825,7 @@ def process_rinex(
     _cap_blas_threads(config.processing.processing.threads_per_worker or 1)
     site_cfg = config.sites.sites[site]
     date_obj = _resolve_date(yyyydoy)
-    keep_vars = config.processing.processing.keep_rnx_vars
+    keep_vars = config.processing.params.keep_gnss_observables
     keep_sids = config.sids.get_sids()
     base = site_cfg.get_base_path()
     aux_path = Path(aux_zarr_path)
@@ -996,7 +996,7 @@ def process_sbf(
     _cap_blas_threads(config.processing.processing.threads_per_worker or 1)
     site_cfg = config.sites.sites[site]
     date_obj = _resolve_date(yyyydoy)
-    keep_vars = config.processing.processing.keep_rnx_vars
+    keep_vars = config.processing.params.keep_gnss_observables
     keep_sids = config.sids.get_sids()
     base = site_cfg.get_base_path()
 

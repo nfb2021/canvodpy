@@ -211,7 +211,7 @@ No user action is required — metadata collection is a side effect of the stand
 
 Store metadata draws from two config sections:
 
-### `processing.yaml` — Creator and publisher
+### `canvod.yaml` — Creator and publisher (`processing.metadata:`)
 
 ```yaml
 processing:
@@ -227,7 +227,7 @@ processing:
     naming_authority: "at.ac.tuwien.geo"
 ```
 
-### `sites.yaml` — Spatial extent
+### `canvod.yaml` — Spatial extent (`sites.<name>:`)
 
 ```yaml
 sites:

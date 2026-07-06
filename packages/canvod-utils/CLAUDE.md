@@ -13,12 +13,13 @@ Configuration, date parsing, diagnostics, and shared utilities.
 
 ## Config hierarchy
 
-User config files (NEVER committed):
-- `config/processing.yaml` — processing parameters
-- `config/sites.yaml` — site definitions
-- `config/sids.yaml` — SID filters
+User config file (NEVER committed):
+- `config/canvod.yaml` — unified config: processing, sites, sids
 
-Templates (committed): `config/*.example`
+Templates (committed): `config/canvod.yaml.example`
+
+Legacy trio (`processing.yaml` / `sites.yaml` / `sids.yaml`) still loads with a
+`DeprecationWarning`. Migrate with `canvod config migrate`.
 
 ## Pydantic conventions
 

@@ -170,7 +170,7 @@ def collect_config_snapshot(config: Any) -> ConfigSnapshot:
         "processing",
         "preprocessing",
         "aux_data",
-        "compression",
+        "netcdf_compression",
         "icechunk",
         "sids",
     )

@@ -225,8 +225,8 @@ class Pipeline:
         (``processing.n_max_threads``).
     dry_run : bool, default False
         If True, simulate without execution.
-    batch_hours : float, optional
-        Hours of data per processing batch. Default: from config.
+    days_per_batch : int, optional
+        Calendar days to pool per processing wave. Default: from config.
     max_memory_gb : float, optional
         Total RAM budget across all workers. Default: from config.
     cpu_affinity : list[int], optional
@@ -280,7 +280,7 @@ class Pipeline:
 
         # All params default to config values; explicit values override
         if keep_vars is None:
-            keep_vars = proc.keep_rnx_vars
+            keep_vars = proc.keep_gnss_observables
         if aux_agency is None:
             aux_agency = config.processing.aux_data.agency
         if days_per_batch is None:

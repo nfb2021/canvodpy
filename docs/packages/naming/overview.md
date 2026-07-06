@@ -88,7 +88,7 @@ name for metadata, deduplication, and storage keys.
 ## NamingRecipe
 
 A **NamingRecipe** tells the system how to parse an arbitrary physical filename
-into a canonical name. Recipes are defined in YAML and referenced from `sites.yaml`.
+into a canonical name. Recipes are defined in YAML and referenced from `canvod.yaml` under `sites:`.
 
 ### How it works
 
@@ -150,7 +150,7 @@ fields:
 
 ### Using recipes
 
-Reference a recipe file from `sites.yaml`:
+Reference a recipe file from `canvod.yaml` (`sites.<name>.receivers.<receiver>.recipe`):
 
 ```yaml
 sites:
@@ -160,7 +160,7 @@ sites:
         recipe: rosalia_reference.yaml
 ```
 
-When `just config-init` copies configuration templates, recipe files are included.
+When `canvod config init` creates the configuration, recipe templates are included.
 
 ---
 
@@ -235,7 +235,7 @@ filenames are parsed (that is determined by the source pattern or recipe).
 
 #### Configuration
 
-In `sites.yaml` (legacy naming config):
+In `canvod.yaml` under `sites.<name>.receivers`:
 
 ```yaml
 receivers:

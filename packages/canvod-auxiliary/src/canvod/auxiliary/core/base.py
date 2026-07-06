@@ -46,6 +46,7 @@ class AuxFile(ABC):
     file_type: list[str] = Field(default_factory=list)
     fpath: Path | None = None
     user_email: str | None = None
+    ftp_timeout_s: int = 30
     downloader: FileDownloader | None = None
     _data: xr.Dataset | None = Field(default=None, init=False)
 
@@ -60,7 +61,9 @@ class AuxFile(ABC):
         self.local_dir.mkdir(parents=True, exist_ok=True)
 
         if self.downloader is None:
-            self.downloader = FtpDownloader(user_email=self.user_email)
+            self.downloader = FtpDownloader(
+                user_email=self.user_email, timeout_s=self.ftp_timeout_s
+            )
 
         self.fpath = self.check_file_exists()
 

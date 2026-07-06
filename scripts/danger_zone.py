@@ -167,7 +167,7 @@ def cmd_delete_store(args: argparse.Namespace) -> None:
     store_type = args.store
 
     if store_type == "rinex":
-        store_path = storage.get_rinex_store_path(site)
+        store_path = storage.get_gnss_store_path(site)
     elif store_type == "vod":
         store_path = storage.get_vod_store_path(site)
     else:
@@ -198,7 +198,7 @@ def cmd_delete_all_stores(args: argparse.Namespace) -> None:
     storage = config.processing.storage
     site = args.site
 
-    rinex_path = storage.get_rinex_store_path(site)
+    rinex_path = storage.get_gnss_store_path(site)
     vod_path = storage.get_vod_store_path(site)
 
     paths = [

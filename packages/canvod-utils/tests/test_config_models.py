@@ -122,16 +122,6 @@ class TestProcessingParams:
         with pytest.raises(ValidationError):
             ProcessingParams(days_per_batch=31)  # le=30
 
-    def test_batch_hours_deprecated_migrates(self):
-        import warnings
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            p = ProcessingParams(batch_hours=48)
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
-        assert p.days_per_batch == 2
-        assert p.batch_hours is None
-
     def test_nice_priority_bounds(self):
         with pytest.raises(ValidationError):
             ProcessingParams(nice_priority=-1)  # ge=0
@@ -139,10 +129,18 @@ class TestProcessingParams:
             ProcessingParams(nice_priority=20)  # le=19
 
     def test_resolve_resources_auto(self):
+        import os
+
         p = ProcessingParams(resource_mode="auto")
         r = p.resolve_resources()
-        assert r["n_workers"] is None
+        assert r["n_workers"] == max(1, (os.cpu_count() or 2) - 2)
         assert r["max_memory_gb"] is None
+        assert r["nice_priority"] == 3
+
+    def test_resolve_resources_auto_uncapped(self):
+        p = ProcessingParams(resource_mode="auto", auto_uncapped=True)
+        r = p.resolve_resources()
+        assert r["n_workers"] is None
 
     def test_resolve_resources_manual(self):
         p = ProcessingParams(
@@ -156,9 +154,9 @@ class TestProcessingParams:
         assert r["max_memory_gb"] == 32.0
         assert r["nice_priority"] == 10
 
-    def test_default_keep_rnx_vars(self):
+    def test_default_keep_gnss_observables(self):
         p = ProcessingParams()
-        assert p.keep_rnx_vars == ["SNR", "Pseudorange", "Phase", "Doppler"]
+        assert p.keep_gnss_observables == ["SNR"]
 
 
 # ===================================================================
@@ -363,10 +361,20 @@ class TestSidsConfig:
 class TestStorageConfig:
     def test_store_paths(self, tmp_path):
         sc = StorageConfig(stores_root_dir=tmp_path)
-        rinex = sc.get_rinex_store_path("rosalia")
+        gnss = sc.get_gnss_store_path("rosalia")
         vod = sc.get_vod_store_path("rosalia")
-        assert rinex == tmp_path / "rosalia" / "rinex"
+        assert gnss == tmp_path / "rosalia" / "rinex"
         assert vod == tmp_path / "rosalia" / "vod"
+
+    def test_deprecated_get_rinex_store_path(self, tmp_path):
+        import warnings
+
+        sc = StorageConfig(stores_root_dir=tmp_path)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = sc.get_rinex_store_path("rosalia")
+        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert result == tmp_path / "rosalia" / "rinex"
 
     def test_placeholder_path_not_validated(self):
         """Placeholder paths starting with /path/ skip existence check."""
@@ -394,9 +402,13 @@ class TestStorageConfig:
 class TestIcechunkConfig:
     def test_defaults(self):
         ic = IcechunkConfig()
-        assert ic.compression_level == 5
+        assert ic.compression_level == 3
         assert ic.compression_algorithm == "zstd"
-        assert ic.inline_threshold == 512
+        assert ic.inline_chunk_threshold_bytes == 512
+        assert ic.get_partial_values_concurrency == 1
+        assert ic.manifest_splitting_enabled is True
+        assert ic.manifest_preload_max_refs == 10_000
+        assert ic.manifest_preload_max_arrays_to_scan == 500
 
     def test_compression_level_bounds(self):
         with pytest.raises(ValidationError):
@@ -411,7 +423,10 @@ class TestIcechunkConfig:
     def test_manifest_preload_defaults(self):
         ic = IcechunkConfig()
         assert ic.manifest_preload_enabled is False
-        assert ic.manifest_preload_max_refs == 100_000_000
+        assert ic.manifest_preload_max_refs == 10_000
+        assert ic.manifest_preload_max_arrays_to_scan == 500
+        assert ic.manifest_preload_pattern == r"^(epoch|sid)$"
+        assert ic.manifest_splitting_enabled is True
 
 
 # ===================================================================

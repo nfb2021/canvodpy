@@ -43,10 +43,10 @@ Once both RINEX files and orbit/clock products are available, the full chain com
 
 ## Directory Structure
 
-Task functions expect the directory layout defined in `sites.yaml`:
+Task functions expect the directory layout defined in `canvod.yaml` under `sites:`:
 
 ```
-gnss_site_data_root/              # from sites.yaml → gnss_site_data_root
+gnss_site_data_root/              # from sites.<name>.gnss_site_data_root
 ├── 01_reference/                 # from receivers.reference_01.directory
 │   ├── 25001/                    # YYDDD date subdirectory
 │   │   ├── ROSA00TUW_R_...rnx
@@ -114,7 +114,7 @@ The sampling interval is auto-detected from the RINEX v3 long filename (e.g. `05
 
 !!! warning "FTP credentials"
     Downloads from NASA CDDIS require an Earthdata account email.
-    Set `nasa_earthdata_acc_mail` in `config/processing.yaml`.
+    Set `nasa_earthdata_acc_mail` in `config/.env` (preferred) or `config/canvod.yaml`.
     Without it, the pipeline falls back to ESA/BKG mirrors.
 
 ---
@@ -166,7 +166,7 @@ result = calculate_vod(site="Rosalia", yyyydoy="2025001")
 
 ## DAG Template
 
-The file `dags/gnss_daily_processing.py` uses Airflow's TaskFlow API (`@dag` / `@task` decorators). It reads all configured sites from `sites.yaml` and creates one DAG per site, named `canvod_{site_name}`.
+The file `dags/gnss_daily_processing.py` uses Airflow's TaskFlow API (`@dag` / `@task` decorators). It reads all configured sites from `canvod.yaml` and creates one DAG per site, named `canvod_{site_name}`.
 
 ```python
 # Simplified — see dags/gnss_daily_processing.py for the full version
@@ -207,8 +207,8 @@ ln -s /path/to/canvodpy/dags /path/to/airflow/dags/canvod
 
 ### 3. Verify configuration
 
-The DAGs read site definitions from canvodpy's YAML config files.
-Ensure `config/sites.yaml` and `config/processing.yaml` are accessible
+The DAGs read site definitions from canvodpy's config.
+Ensure `config/canvod.yaml` (or the legacy trio) is accessible
 from the Airflow worker. The `gnss_site_data_root` for each site must
 point to the directory containing receiver subdirectories.
 
@@ -343,7 +343,7 @@ from airflow.models.param import Param
         "config_path": Param(
             default="/etc/canvod/sites_rinex_agency.yaml",
             type="string",
-            description="Path to sites.yaml — override per run if needed",
+            description="Path to canvod.yaml — override per run if needed",
         )
     },
     ...
@@ -358,7 +358,7 @@ the DAG manually, so ad-hoc overrides remain possible without CLI flags.
 
 ### Config differences between scenarios
 
-The two scenarios typically differ in these `processing.yaml` fields:
+The two scenarios typically differ in these `canvod.yaml` `processing.params:` fields:
 
 ```yaml
 # Scenario a — RINEX + agency ephemeris

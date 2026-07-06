@@ -27,6 +27,7 @@ from .date_utils import YYDOY, YYYYDOY, get_gps_week_from_filename
 from .hashing import file_hash
 from .validation import isfloat
 from .version import get_version_from_pyproject
+from .worker import _worker_init
 
 # Backwards compatibility: gpsweekday is now a static method on YYYYDOY
 # Provide as standalone function for backwards compatibility
@@ -35,6 +36,7 @@ gpsweekday = YYYYDOY.gpsweekday
 __all__ = [
     "YYDOY",
     "YYYYDOY",
+    "_worker_init",
     "file_hash",
     "get_gps_week_from_filename",
     "get_version_from_pyproject",

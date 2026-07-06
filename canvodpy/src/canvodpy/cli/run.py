@@ -21,6 +21,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from datetime import UTC, datetime
@@ -81,6 +82,12 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Number of DOYs per loky wave (default: from config)",
+    )
+    p.add_argument(
+        "--config",
+        default=None,
+        metavar="FILE",
+        help="Overlay config YAML applied on top of the main canvod.yaml",
     )
     return p
 
@@ -173,11 +180,11 @@ def _print_header(args: argparse.Namespace, config, start: str, end: str) -> Non
     print("=" * 72)
     print(f"  started        {datetime.now():%Y-%m-%d %H:%M:%S}")
     print(f"  ephemeris      {proc.ephemeris_source}")
-    print(f"  keep_vars      {proc.keep_rnx_vars}")
+    print(f"  keep_vars      {proc.keep_gnss_observables}")
     print(f"  days_per_batch {args.days_per_batch or proc.days_per_batch}")
     print(f"  resource_mode  {proc.resource_mode}")
-    print(f"  store_strategy {storage.rinex_store_strategy}")
-    print(f"  rinex_store    {storage.rinex_store_name or 'rinex'}")
+    print(f"  store_strategy {storage.gnss_store_strategy}")
+    print(f"  gnss_store     {storage.gnss_store_name or 'rinex'}")
     print(f"  vod_store      {storage.vod_store_name or 'vod'}")
     print(f"  vod            {'skip' if args.no_vod else 'enabled'}")
     print()
@@ -278,9 +285,21 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
+    from pathlib import Path
+
     from canvod.utils.config import load_config
 
-    config = load_config()
+    config_file: Path | None = None
+    if args.config is not None:
+        config_file = Path(args.config)
+        if not config_file.exists():
+            print(
+                f"Error: overlay config file not found: {config_file}", file=sys.stderr
+            )
+            return 1
+        os.environ["CANVOD_CONFIG_FILE"] = str(config_file.expanduser().resolve())
+
+    config = load_config(config_file=config_file)
 
     from canvodpy.api import Site
 

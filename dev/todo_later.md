@@ -538,7 +538,7 @@ Do C first (fixes silent traps that would poison any new UX), then B (structural
 - `docs/guides/configuration.md`: fix `base_dir`→`gnss_site_data_root` (L91), `custom`→`custom_sids` (L145), correct `scs_from` semantics (L103–120).
 
 **Phase 2 — single `canvod.yaml` (3–4 days):**
-- `loader.py`: new resolution order — `$CANVOD_CONFIG` → `./canvod.yaml` → `config/canvod.yaml` → legacy 3-file mode (deprecation notice). Sections: `site:`/`sites:`, optional `processing:`, `storage:`, `sids:`, `metadata:`.
+- `loader.py`: new resolution order — `$CANVOD_CONFIG` → `./canvod.yaml` → `config/canvod.yaml` → legacy 3-file mode (deprecation notice). Sections: `site:`/`sites:`, optional `processing:`, `storage:`, `sids:`, `metadata:`. **Mechanism: use `pydantic-settings` `BaseSettings` to implement env-var override layer — see §16 for details.**
 - `models.py`: rename `scs_from` with Pydantic `AliasChoices` so old files keep working.
 - New `config/canvod.yaml.example` (~25 lines); demote 217-line `processing.yaml.example` to `docs/reference/config-full.md`.
 - Update `justfile` targets `config-validate`/`config-init` (justfile:104–116).
@@ -710,3 +710,176 @@ rosalia / canopy_01 (/data/gnss/rosalia/02_canopy)
 ## 13. CLI: TUI + `canvodpy vod` subcommand
 
 > **Merged into §11 (Phase 3).** All detail — Textual app design, three-pane layout, TTY detection, `canvodpy vod` subcommand, `--calculator` registry, `VodComputer.compute_bulk(calculator_cls=...)` threading — is documented in §11 Phase 3. This stub remains for section numbering.
+
+---
+
+## 14. Visual design language — Rich/Textual aesthetic spec
+
+**Context (2026-07-05):** Agreed design direction: clean, modern, instrument-like.
+No emoji (render inconsistently, look cheap). All marks are plain Unicode or ASCII.
+Nordic Green palette from `docs/assets/canvod-nordic.css` carried into the terminal.
+
+### Symbol system
+
+| Context | Symbol | Meaning |
+|---|---|---|
+| Header / brand mark | `─[◉]─` | Satellite with solar panels — appears once in run header only |
+| Active task | `◉` | Receiver currently computing |
+| Waiting / queued | `◎` | Receiver waiting to start |
+| Complete | `●` | Finished — row goes dim immediately after |
+| Step arrow | `▸` | Prefixes current stage label (`▸ Augmenting ephemeris`) |
+| Inline divider | `─` | Separators in single-line contexts |
+
+Progress bars use Rich's `━` (thick fill) character — not the default `█` — for a
+lighter weight that matches the symbol set.
+
+### ASCII art header (startup banner, shown once per run)
+
+Placeholder until the full logo is designed (see §15):
+
+```
+  ─[◉]─  canvod  v0.x.x
+   |||   GNSS-T Vegetation Pipeline
+```
+
+Rendered as `Panel(..., box=ROUNDED, border_style="dim green")`.
+Two lines, no more. Suppressed in `--no-progress` / non-TTY mode.
+
+### Colour palette (Rich style names — no other colours)
+
+| Role | Rich style | Use |
+|---|---|---|
+| Progress fill (active) | `green3` | Bar fill while running |
+| Progress fill (done) | `dim green` | Bar fill after completion |
+| Completed row text | `dim` | Entire row dims on finish |
+| Header / panel border | `dim green` | Panel border |
+| Stage label | `bold` | Current stage name |
+| Warning | `yellow` | Non-fatal (e.g. overwrite strategy warn) |
+| Error header | `bold red` | ValidationError table header only |
+
+Background stays terminal-default. No forced dark/light mode.
+
+### Target progress layout (§11 Phase 3)
+
+```
+╭──────────────────────────────────────────────────────╮
+│  ─[◉]─  canvod · ROSA · 2025-003 · day 3 of 28      │
+╰──────────────────────────────────────────────────────╯
+
+  ◉ canopy_01     ▸ Augmenting ephemeris  ━━━━━━━━━░░  80%  0:12
+  ◎ reference_01  ▸ Augmenting ephemeris  ━━━━━━━━━━━  done
+  · vod_01        ▸ Computing VOD         ━━━━━━░░░░░  55%  0:06
+
+  Overall  ━━━━━━━━░░░░░░░░░░░  3/28 days  elapsed 0:54
+```
+
+`Live(Group(header_panel, receiver_progress, overall_progress))`.
+`SpinnerColumn(spinner_name="dots")` on active rows; removed on completion.
+
+### Rich column config (reference for implementation in `cli/dashboard.py`)
+
+```python
+from rich.progress import (
+    BarColumn, MofNCompleteColumn, SpinnerColumn,
+    TaskProgressColumn, TextColumn, TimeElapsedColumn,
+    TimeRemainingColumn,
+)
+
+receiver_columns = [
+    TextColumn("{task.fields[symbol]} {task.fields[name]:<16}"),
+    TextColumn("▸ {task.fields[stage]:<28}"),
+    BarColumn(bar_width=None, complete_style="green3",
+              finished_style="dim green"),
+    TaskProgressColumn(),
+    TimeRemainingColumn(),
+]
+
+overall_columns = [
+    TextColumn("  Overall"),
+    BarColumn(bar_width=None, complete_style="green3",
+              finished_style="dim green"),
+    MofNCompleteColumn(),
+    TextColumn("days  elapsed"),
+    TimeElapsedColumn(),
+]
+```
+
+### ValidationError renderer layout (§11 Phase 0 / §10 item 4)
+
+```
+╭─ Config error — config/sites.yaml ──────────────────╮
+│  Field                          Problem       Got    │
+│  sites.rosalia.receivers                            │
+│  .canopy_01.scs_from            not allowed  canopy  │
+│  storage.stores_root_dir        must be set  (none)  │
+╰──────────────────────────────────────────────────────╯
+```
+
+`Panel` with `border_style="bold red"`, body plain white.
+One table row per Pydantic `ValidationError.errors()` entry.
+No raw Python tracebacks surfaced to the user.
+
+---
+
+## 15. ASCII logo (deferred design task)
+
+Design a proper multi-line ASCII art logo to replace the `─[◉]─` placeholder
+header. This is a creative task — do it once the CLI is stable so the logo
+doesn't predate the UX it decorates.
+
+**Requirements:**
+- 4–6 lines tall, ~40 chars wide — fits an 80-col terminal cleanly
+- Works in monochrome (no colour dependency)
+- Domain legible without labels: satellite + signal or vegetation theme
+- The inline `─[◉]─` mark remains in progress rows; this logo is startup-only
+
+**Candidates to explore:**
+
+```
+  ═[◉]═         /\  ─[◉]─      ─[◉]─
+    |           /  \   |          |
+   /|\           ||  ─ · ─      ~/ \~
+    |            |              ~ · ~
+  option A   option B        option C
+ (satellite)  (sat+tree)    (sat+signal)
+```
+
+**Process:** sketch candidates in `dev/ux/logo-candidates.txt`, render each
+inside a Rich `Panel` at real terminal width (80 and 120 cols), pick the one
+that holds up at both widths. Then commit as a constant in a new
+`canvod.utils.branding` module so every CLI entry point imports the same mark.
+
+---
+
+## 16. pydantic-settings: 12-factor config resolution (mechanism for §11 Option B)
+
+**Context:** §11 identifies "no general CLI > env > user-yaml > defaults story"
+as a pain point and proposes Option B (single `canvod.yaml`). `pydantic-settings`
+is the concrete mechanism that implements Option B's resolution order with
+minimal code.
+
+**What it adds over bare Pydantic:**
+- `ProcessingConfig(BaseSettings)` instead of `BaseModel` — env vars override
+  YAML automatically with zero custom parsing.
+- Resolution order (standard 12-factor):
+  `env vars → .env file → canvod.yaml → defaults/canvod.yaml`
+- Nested override via double-underscore separator:
+  `CANVOD__STORAGE__STORES_ROOT_DIR=/nfs/stores canvodpy run --site rosalia`
+- `.env` file support: scientists keep a per-machine `.env` (gitignored) for
+  paths and credentials; the committed `canvod.yaml` stays portable.
+- HPC/cloud/n8n deployment: pipeline step sets env vars, no config file needed
+  on the compute node — directly enables the n8n/Airflow integration track (§4).
+
+**Migration:** `BaseModel` → `BaseSettings` on `ProcessingConfig` and the new
+unified `CanvodConfig`. Add `settings_customise_sources()` to insert two YAML
+sources (defaults then user file) below env vars. `pydantic-settings` ships
+with pydantic v2 — no new dependency in practice.
+
+**Effort:** ~1 day (base class swap + source registration + env var tests).
+Sequence after §11 Phase 2 (single `canvod.yaml` must exist before env var
+overrides of it make sense).
+
+**Files:** `packages/canvod-utils/src/canvod/utils/config/models.py` (base
+class swap); `packages/canvod-utils/src/canvod/utils/config/loader.py`
+(source registration); `packages/canvod-utils/pyproject.toml` (add
+`pydantic-settings` dep if not already pulled in by pydantic v2 extras).

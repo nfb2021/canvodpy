@@ -1317,7 +1317,7 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
         if keep_data_vars is None:
             from canvod.utils.config import load_config
 
-            keep_data_vars = load_config().processing.processing.keep_rnx_vars
+            keep_data_vars = load_config().processing.params.keep_gnss_observables
 
         ds = self.create_rinex_netcdf_with_signal_id()
 
@@ -1351,7 +1351,7 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
         if outname:
             from canvod.utils.config import load_config as _load_config
 
-            comp = _load_config().processing.compression
+            comp = _load_config().processing.netcdf_compression
             encoding = {
                 var: {"zlib": comp.zlib, "complevel": comp.complevel}
                 for var in ds.data_vars

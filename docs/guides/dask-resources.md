@@ -51,7 +51,7 @@ scheduler distributes files across workers and collects results.
 | `auto` | Local machine, single user | Dask detects available cores and memory automatically |
 | `manual` | Shared server, HPC node | You set explicit limits on workers, memory, and CPU cores |
 
-Configure the mode in `processing.yaml`:
+Configure the mode in `canvod.yaml` under `processing.params:`:
 
 ```yaml
 processing:

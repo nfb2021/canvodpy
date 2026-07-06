@@ -1840,7 +1840,7 @@ class Rnxv3Obs(GNSSDataReader):
         if keep_data_vars is None:
             from canvod.utils.config import load_config
 
-            keep_data_vars = load_config().processing.processing.keep_rnx_vars
+            keep_data_vars = load_config().processing.params.keep_gnss_observables
 
         ds = self._create_dataset_single_pass(frozenset(keep_data_vars))
 
@@ -1866,7 +1866,7 @@ class Rnxv3Obs(GNSSDataReader):
         if outname:
             from canvod.utils.config import load_config as _load_config
 
-            comp = _load_config().processing.compression
+            comp = _load_config().processing.netcdf_compression
             encoding = {
                 var: {"zlib": comp.zlib, "complevel": comp.complevel}
                 for var in ds.data_vars

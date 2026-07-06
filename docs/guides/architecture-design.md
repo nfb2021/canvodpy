@@ -199,10 +199,9 @@ canvodpy exposes four API levels — all backed by the same packages:
 
 ```mermaid
 flowchart TD
-    subgraph FILES["YAML Files"]
-        PROC["processing.yaml"]
-        SITES["sites.yaml"]
-        SIDS["sids.yaml"]
+    subgraph FILES["Config Sources"]
+        YAML["canvod.yaml"]
+        ENV[".env / env vars"]
         DEF["Package defaults"]
     end
 
@@ -218,7 +217,7 @@ flowchart TD
         SIC["SidsConfig"]
     end
 
-    PROC & SITES & SIDS & DEF --> MERGE --> PYDANTIC
+    YAML & ENV & DEF --> MERGE --> PYDANTIC
     PYDANTIC --> PC & SC & SIC
 ```
 
@@ -231,9 +230,9 @@ cfg.processing.storage.stores_root_dir
 ```
 
 ```bash
-just config-init      # Create config files from templates
-just config-validate  # Validate current config
-just config-show      # Print resolved config
+canvod config init      # Scaffold canvod.yaml from template
+canvod config validate  # Validate current config
+canvod config show      # Print resolved config
 ```
 
 ---

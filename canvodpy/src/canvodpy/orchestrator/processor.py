@@ -40,7 +40,7 @@ from canvod.auxiliary.position import (
 from canvod.readers import DataDirMatcher, MatchedDirs
 from canvod.store import GnssResearchSite
 from canvod.utils.config import load_config
-from canvod.utils.tools import get_version_from_pyproject
+from canvod.utils.tools import _worker_init, get_version_from_pyproject
 from canvodpy.logging import get_logger
 from canvodpy.orchestrator.interpolator import (
     ClockConfig,
@@ -613,7 +613,7 @@ class RinexDataProcessor:
         self._product_type = aux_cfg.product_type
         servers = aux_cfg.get_ftp_servers(config.nasa_earthdata_acc_mail)
         self._ftp_server = servers[0][0]
-        self._rinex_store_strategy = config.processing.storage.rinex_store_strategy
+        self._rinex_store_strategy = config.processing.storage.gnss_store_strategy
         t_config_end = time.perf_counter()
 
         self._logger.info(
@@ -717,7 +717,12 @@ class RinexDataProcessor:
         """
         from canvodpy.factories import ReaderFactory
 
-        return ReaderFactory.create(reader_format or self._reader_name, fpath=fpath)
+        aggregate = self._config.processing.params.aggregate_glonass_fdma
+        return ReaderFactory.create(
+            reader_format or self._reader_name,
+            fpath=fpath,
+            aggregate_glonass_fdma=aggregate,
+        )
 
     @staticmethod
     def _parse_sampling_interval_from_filename(filename: str) -> float | None:
@@ -1409,7 +1414,12 @@ class RinexDataProcessor:
         task_submission_start = time.time()
 
         effective_reader = reader_format or self._reader_name
-        with ProcessPoolExecutor(max_workers=workers) as executor:
+        _res = self._config.processing.params.resolve_resources()
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            initializer=_worker_init,
+            initargs=(_res["nice_priority"], _res["cpu_affinity"]),
+        ) as executor:
             futures = {
                 executor.submit(
                     preprocess_with_hermite_aux,
@@ -1501,7 +1511,7 @@ class RinexDataProcessor:
     ) -> None:
         """Warn if the store has different variables than the current batch.
 
-        Detects stale variables from previous runs with different keep_rnx_vars.
+        Detects stale variables from previous runs with different keep_gnss_observables.
         """
         try:
             ds_store = xr.open_zarr(
@@ -1525,9 +1535,9 @@ class RinexDataProcessor:
                 receiver=receiver_name,
                 stale_vars=sorted(stale_vars),
                 hint=(
-                    "The store contains variables not in the current keep_rnx_vars. "
+                    "The store contains variables not in the current keep_gnss_observables. "
                     "This causes dimension conflicts on read-back. "
-                    "With rinex_store_strategy='overwrite', stale vars will be "
+                    "With gnss_store_strategy='overwrite', stale vars will be "
                     "dropped automatically. Otherwise delete the store and reprocess."
                 ),
             )
@@ -2208,7 +2218,7 @@ class RinexDataProcessor:
             receiver_types = ["canopy", "reference"]
 
         if keep_vars is None:
-            keep_vars = load_config().processing.processing.keep_rnx_vars
+            keep_vars = load_config().processing.params.keep_gnss_observables
 
         self._logger.info(
             "Starting RINEX processing pipeline for: %s",
@@ -2375,7 +2385,7 @@ class RinexDataProcessor:
         """
         t_batch_start = time.perf_counter()
         if keep_vars is None:
-            keep_vars = self._config.processing.processing.keep_rnx_vars
+            keep_vars = self._config.processing.params.keep_gnss_observables
 
         # Get first receiver files to infer sampling rate for aux preprocessing
         first_receiver_name, _first_type, first_data_dir, _, first_fmt = (
@@ -2577,7 +2587,7 @@ class RinexDataProcessor:
                 normalized_configs.append(cfg)
 
         if keep_vars is None:
-            keep_vars = load_config().processing.processing.keep_rnx_vars
+            keep_vars = load_config().processing.params.keep_gnss_observables
 
         pipeline_start = time.perf_counter()
         self._logger.info(
@@ -3130,7 +3140,12 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
             executor_type="ProcessPoolExecutor",
             files=len(rinex_files_sorted),
         )
-        with ProcessPoolExecutor(max_workers=self.n_max_workers) as ex:
+        _res2 = self._config.processing.params.resolve_resources()
+        with ProcessPoolExecutor(
+            max_workers=self.n_max_workers,
+            initializer=_worker_init,
+            initargs=(_res2["nice_priority"], _res2["cpu_affinity"]),
+        ) as ex:
             futures = [
                 ex.submit(
                     worker_task_with_region_auto,
@@ -3199,7 +3214,7 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
             receiver_types = ["canopy", "reference"]
 
         if keep_vars is None:
-            keep_vars = load_config().processing.processing.keep_rnx_vars
+            keep_vars = load_config().processing.params.keep_gnss_observables
 
         self._logger.info(
             "Starting RINEX processing pipeline for: %s",

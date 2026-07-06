@@ -107,8 +107,8 @@ class MyIcechunkStore:
 
             cfg = load_config()
             ic_cfg = cfg.processing.icechunk
-            _rinex_store_strategy = cfg.processing.storage.rinex_store_strategy
-            _rinex_store_expire_days = cfg.processing.storage.rinex_store_expire_days
+            _rinex_store_strategy = cfg.processing.storage.gnss_store_strategy
+            _rinex_store_expire_days = cfg.processing.storage.gnss_store_expire_days
             _vod_store_strategy = cfg.processing.storage.vod_store_strategy
             _log_path_depth = cfg.processing.logging.log_path_depth
         except Exception:
@@ -125,12 +125,9 @@ class MyIcechunkStore:
         # Site name is parent directory name
         self.site_name = self.store_path.parent.name
 
-        # Compression
+        # Compression — icechunk v2 only supports zstd
         self.compression_level = compression_level or ic_cfg.compression_level
-        compression_alg = compression_algorithm or ic_cfg.compression_algorithm
-        self.compression_algorithm = getattr(
-            icechunk.CompressionAlgorithm, compression_alg.capitalize()
-        )
+        self.compression_algorithm = icechunk.CompressionAlgorithm.Zstd
 
         # Chunk strategy
         chunk_strategies = {
@@ -150,19 +147,38 @@ class MyIcechunkStore:
         self.config.compression = icechunk.CompressionConfig(
             level=self.compression_level, algorithm=self.compression_algorithm
         )
-        self.config.inline_chunk_threshold_bytes = ic_cfg.inline_threshold
-        self.config.get_partial_values_concurrency = ic_cfg.get_concurrency
+        self.config.inline_chunk_threshold_bytes = ic_cfg.inline_chunk_threshold_bytes
+        self.config.get_partial_values_concurrency = (
+            ic_cfg.get_partial_values_concurrency
+        )
+
+        if ic_cfg.max_concurrent_requests is not None:
+            self.config.max_concurrent_requests = ic_cfg.max_concurrent_requests
+
+        if (
+            ic_cfg.cache_num_chunk_refs is not None
+            or ic_cfg.cache_num_bytes_chunks is not None
+        ):  # noqa: E501
+            caching = icechunk.CachingConfig.default()
+            if ic_cfg.cache_num_chunk_refs is not None:
+                caching.num_chunk_refs = ic_cfg.cache_num_chunk_refs
+            if ic_cfg.cache_num_bytes_chunks is not None:
+                caching.num_bytes_chunks = ic_cfg.cache_num_bytes_chunks
+            self.config.caching = caching
 
         preload_cfg = None
         if ic_cfg.manifest_preload_enabled:
             preload_cfg = icechunk.ManifestPreloadConfig(
                 max_total_refs=ic_cfg.manifest_preload_max_refs,
+                max_arrays_to_scan=ic_cfg.manifest_preload_max_arrays_to_scan,
                 preload_if=icechunk.ManifestPreloadCondition.name_matches(
                     ic_cfg.manifest_preload_pattern
                 ),
             )
             self._logger.info(
-                f"Manifest preload enabled: {ic_cfg.manifest_preload_pattern}"
+                "Manifest preload enabled: "
+                f"pattern={ic_cfg.manifest_preload_pattern!r}, "
+                f"max_refs={ic_cfg.manifest_preload_max_refs}"
             )
 
         splitting_cfg = None
@@ -173,21 +189,17 @@ class MyIcechunkStore:
                 ManifestSplittingConfig,
             )
 
-            _n_refs = ic_cfg.manifest_splitting_chunk_refs
             _n_ep = ic_cfg.manifest_splitting_epoch_range
+            # Split all arrays that have an "epoch" dimension every _n_ep indices.
+            # Arrays without that dimension (e.g. coordinate arrays) are unaffected.
             splitting_cfg = ManifestSplittingConfig.from_dict(
                 {
                     ManifestSplitCondition.name_matches(".*"): {
-                        ManifestSplitDimCondition.Any(): _n_refs,
-                    },
-                    ManifestSplitCondition.name_matches("obs|snr"): {
-                        ManifestSplitDimCondition.Axis(0): _n_ep,
+                        ManifestSplitDimCondition.DimensionName("epoch"): _n_ep,
                     },
                 }
             )
-            self._logger.info(
-                f"Manifest splitting enabled: chunk_refs={_n_refs}, epoch_range={_n_ep}"
-            )
+            self._logger.info(f"Manifest splitting enabled: epoch_range={_n_ep}")
 
         if preload_cfg is not None or splitting_cfg is not None:
             self.config.manifest = icechunk.ManifestConfig(

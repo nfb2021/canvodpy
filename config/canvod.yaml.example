@@ -1,0 +1,283 @@
+# =============================================================================
+# canVODpy Configuration — single unified file
+# =============================================================================
+# Copy this file to config/canvod.yaml and customize for your setup.
+# Run: canvod config init   (scaffolds canvod.yaml from this template)
+#      canvod config migrate (converts legacy processing/sites/sids.yaml)
+#
+# Top-level sections:
+#   processing:  General settings, metadata, storage, parallelism
+#   sites:       Research sites and receivers
+#   sids:        Signal-ID filtering
+#
+# Environment variable overrides (via .env or shell):
+#   CANVOD__PROCESSING__STORAGE__STORES_ROOT_DIR=/nfs/stores
+#   CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com
+# =============================================================================
+
+
+# =============================================================================
+# Processing
+# =============================================================================
+
+processing:
+
+  # ---------------------------------------------------------------------------
+  # Metadata  (written to processed files / store attributes)
+  # ---------------------------------------------------------------------------
+  metadata:
+    author: Your Name
+    email: your.email@example.com
+    orcid: null                          # e.g. "0000-0001-2345-6789"
+    institution: Your Institution
+    institution_ror: null                # e.g. "https://ror.org/04d836q62"
+    department: Your Department          # Optional
+    research_group: Your Research Group  # Optional
+    website: https://your-institution.edu  # Optional
+    license: CC-BY-4.0                   # SPDX identifier
+    publisher: Your Institution          # Optional
+    publisher_url: null                  # Optional
+    naming_authority: null               # e.g. "at.ac.tuwien"
+
+  # ---------------------------------------------------------------------------
+  # Credentials
+  # ---------------------------------------------------------------------------
+  credentials:
+    # NASA Earthdata email for CDDIS FTP authentication (optional)
+    # Preferred: set via CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL
+    #            in config/.env (gitignored) rather than here.
+    # Register at: https://urs.earthdata.nasa.gov/users/new
+    # If set: NASA CDDIS primary, ESA fallback
+    # If not set: ESA only (no auth required)
+    nasa_earthdata_acc_mail: null
+
+  # ---------------------------------------------------------------------------
+  # Auxiliary Data
+  # ---------------------------------------------------------------------------
+  aux_data:
+    agency: COD              # Analysis center: COD, GFZ, IGS, ESA, etc.
+    product_type: final      # final, rapid, ultra-rapid
+    # ftp_timeout_s: 30      # FTP connection timeout in seconds
+
+  # ---------------------------------------------------------------------------
+  # Processing Parameters
+  # ---------------------------------------------------------------------------
+  params:
+
+    # GNSS observables to keep
+    # Each maps to a GNSS obs code prefix:
+    #   SNR         - Signal-to-Noise Ratio (dBHz)   [S-codes: S1C, S2W, ...]
+    #   Pseudorange - Code pseudorange (metres)       [C-codes: C1C, C2W, ...]
+    #   Phase       - Carrier phase (cycles)          [L-codes: L1C, L2W, ...]
+    #   Doppler     - Doppler shift (Hz)              [D-codes: D1C, D2W, ...]
+    keep_gnss_observables:
+      - SNR
+      # - Pseudorange
+      # - Phase
+      # - Doppler
+
+    # Aggregate GLONASS FDMA sub-bands into effective G1*/G2* bands (recommended).
+    # Set false only if you need per-satellite precise frequencies and understand
+    # that this changes the SID axis (append-incompatible with existing stores).
+    aggregate_glonass_fdma: true
+
+    store_radial_distance: false   # Store satellite-receiver distance (r)
+    store_delta_snr: false         # Store delta SNR (canopy − reference, dB) in VOD store
+    store_radial_diff: false       # Store r_canopy − r_reference (m); requires store_radial_distance: true
+
+    # 'shared'       — all receivers use canopy position (default, enables 1:1 SNR comparison)
+    # 'per_receiver' — each receiver uses its own RINEX header position
+    receiver_position_mode: shared
+
+    # 'complete' — discover files per-receiver independently (all data ingested)
+    # 'paired'   — only process dates where both receivers have data
+    file_pairing: complete
+
+    # 'final'     — satellite coords from SP3/CLK agency products (~3 cm, 12-18 day latency)
+    # 'broadcast' — broadcast ephemerides from SBF SatVisibility (SBF only, faster but ~1-2 m)
+    ephemeris_source: final
+
+    # How many calendar days to pool per loky wave (ge=1, le=30)
+    days_per_batch: 1
+
+    # 'auto'   — Dask/OS auto-detects workers and memory (personal machines)
+    # 'manual' — hard caps below are enforced (shared servers)
+    resource_mode: auto
+
+    # In auto mode, workers are capped at max(1, cpu_count - 2) to leave headroom.
+    # Set auto_uncapped: true ONLY when the machine is exclusively yours.
+    # WARNING: uncapped on a shared server can starve other users' processes.
+    # auto_uncapped: false
+
+    # Manual-mode caps (ignored when resource_mode: auto)
+    # n_max_threads: 8           # Worker processes (≤ your core count)
+    # max_memory_gb: 16          # Total RAM budget (null = no limit)
+    # cpu_affinity: [0, 1, 2, 3] # Pin to CPU core IDs, Linux only
+    # nice_priority: 10          # OS priority (0 = normal, 19 = lowest)
+
+  # ---------------------------------------------------------------------------
+  # Preprocessing Pipeline
+  # ---------------------------------------------------------------------------
+  preprocessing:
+    temporal_aggregation:
+      enabled: true
+      freq: "1min"           # pandas offset alias: "1min", "30s", "5min", etc.
+      method: "mean"         # "mean" or "median"
+
+    grid_assignment:
+      enabled: true
+      grid_type: "equal_area"
+      angular_resolution: 2.0  # degrees (0 < value ≤ 90)
+
+  # ---------------------------------------------------------------------------
+  # Compression
+  # ---------------------------------------------------------------------------
+  compression:
+    zlib: true
+    complevel: 5
+
+  # ---------------------------------------------------------------------------
+  # Icechunk Storage
+  # ---------------------------------------------------------------------------
+  icechunk:
+    compression_level: 5
+    compression_algorithm: zstd  # zstd, lz4, gzip
+    inline_threshold: 512        # Bytes; chunks ≤ this are inlined into the manifest
+    get_concurrency: 1           # Concurrent partial-value reads (increase for S3/GCS)
+
+    chunk_strategies:
+      gnss_store:
+        epoch: 34560  # 2 days of 5s data
+        sid: -1       # Don't chunk along sid
+      vod_store:
+        epoch: 34560
+        sid: -1
+
+  # ---------------------------------------------------------------------------
+  # Storage Paths and Strategies
+  # ---------------------------------------------------------------------------
+  storage:
+    # Root directory for all Icechunk stores.
+    # Preferred: set via CANVOD__PROCESSING__STORAGE__STORES_ROOT_DIR in .env
+    stores_root_dir: /path/to/your/gnss/stores
+
+    # Custom store directory names (defaults: "rinex" and "vod")
+    # gnss_store_name: rinex
+    # vod_store_name: vod
+
+    # Directory for downloaded SP3/CLK files and transient Zarr caches.
+    # If not set, uses system temp directory.
+    # aux_data_dir: /path/to/aux_data
+
+    gnss_store_strategy: skip      # skip, overwrite, append
+    gnss_store_expire_days: 2
+    vod_store_strategy: overwrite
+
+  # ---------------------------------------------------------------------------
+  # Logging
+  # ---------------------------------------------------------------------------
+  logging:
+    # log_dir: /path/to/logs    # defaults to .logs/ in monorepo root
+    log_file_name: canvodpy.log
+    log_path_depth: 6
+
+  # ---------------------------------------------------------------------------
+  # References (Publications & Funding)
+  # ---------------------------------------------------------------------------
+  references:
+    publications: []
+      # - doi: "10.1234/example"
+      #   citation: "Author et al. (2026). Title. Journal."
+    funding: []
+      # - funder: "Austrian Science Fund (FWF)"
+      #   funder_ror: "https://ror.org/013tf3c58"
+      #   grant_number: "P12345"
+      #   award_title: "GNSS-VOD for forest monitoring"
+
+
+# =============================================================================
+# Sites
+# =============================================================================
+# Each top-level key is a site name.  Receivers go under each site.
+# Recipe files live in config/recipes/{recipe_name}.yaml.
+
+sites:
+  rosalia:
+    gnss_site_data_root: /path/to/your/gnss/data/01_Rosalia
+
+    # Site geospatial metadata (used by canvod-store-metadata)
+    description: Mixed forest GNSS-T research site
+    country: AT                # ISO 3166-1 alpha-2 country code
+    latitude: 47.7             # WGS84 latitude (decimal degrees)
+    longitude: 16.3            # WGS84 longitude (decimal degrees)
+    altitude_m: 680.0          # Altitude above WGS84 ellipsoid (metres)
+
+    receivers:
+      reference_01:
+        type: reference
+        directory: 01_reference
+        reader_format: auto                 # 'auto', 'rinex3', or 'sbf'
+        scs_from: all                       # 'all' or list of canopy receiver names
+        description: First reference receiver (open sky)
+        recipe: rosalia_reference           # → config/recipes/rosalia_reference.yaml
+        metadata:
+          site_url: https://forschung.boku.ac.at/rosalia
+          antenna_height: 2.0
+
+      canopy_01:
+        type: canopy
+        directory: 02_canopy
+        reader_format: auto
+        description: First canopy receiver (under vegetation)
+        recipe: rosalia_canopy              # → config/recipes/rosalia_canopy.yaml
+        metadata:
+          site_url: https://forschung.boku.ac.at/rosalia
+          antenna_height: 1.5
+          species: Fagus sylvatica
+
+    vod_analyses:
+      canopy_01_vs_reference_01:
+        canopy_receiver: canopy_01
+        reference_receiver: reference_01
+        description: VOD analysis canopy_01 vs reference_01
+
+  # Add more sites as needed:
+  # tuw:
+  #   gnss_site_data_root: /path/to/your/gnss/data/02_TUW
+  #   receivers:
+  #     reference_01:
+  #       type: reference
+  #       directory: 01_reference
+  #       scs_from: all
+  #       recipe: tuw_reference
+  #     canopy_01:
+  #       type: canopy
+  #       directory: 02_canopy
+  #       recipe: tuw_canopy
+  #   vod_analyses:
+  #     canopy_01_vs_reference_01:
+  #       canopy_receiver: canopy_01
+  #       reference_receiver: reference_01
+
+
+# =============================================================================
+# Signal IDs (SIDs)
+# =============================================================================
+# SID Format: PRN|Band|Code
+#   PRN  — G=GPS, E=Galileo, R=GLONASS, C=BeiDou, I=IRNSS, S=SBAS, J=QZSS
+#   Band — L1, L2, E1, E5a, E5b, B1I, B2b, B3I, G1, G2, L5
+#   Code — C=C/A, W=P(Y) codeless, L=L2C, Q=pilot, I=I-channel, A=A-channel
+#
+# Example: G01|L1|C = GPS PRN01, L1 band, C/A code
+
+sids:
+  # 'all'    — keep every SID in the RINEX/SBF file (no filtering)
+  # 'preset' — use a named preset (see presets/ directory)
+  # 'custom' — keep only the SIDs listed in custom_sids below
+  mode: preset
+  preset: default
+
+  # custom_sids:
+  #   - G01|L1|C
+  #   - G02|L1|C
+  #   - E01|E1|C

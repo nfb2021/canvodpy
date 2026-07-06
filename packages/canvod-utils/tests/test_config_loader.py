@@ -132,7 +132,7 @@ class TestConfigLoaderRoundTrip:
         # User value should override default
         assert config.processing.aux_data.agency == "GFZ"
         # Default values should still be present
-        assert config.processing.compression.zlib is True
+        assert config.processing.netcdf_compression.zlib is True
 
 
 class TestConfigLoaderDefaults:

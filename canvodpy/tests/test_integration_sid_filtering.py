@@ -77,7 +77,7 @@ def test_sid_filtering_integration():
 
     counter = 0
     for date_key, _datasets, _receiver_times in orchestrator.process_by_date(
-        keep_vars=load_config().processing.processing.keep_rnx_vars,
+        keep_vars=load_config().processing.params.keep_gnss_observables,
         start_from=None,
         end_at=None,
     ):

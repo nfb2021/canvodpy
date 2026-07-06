@@ -17,7 +17,8 @@ from rich.progress import TaskID
 from canvod.readers import MatchedDirs, PairDataDirMatcher
 from canvod.readers.gnss_specs.constants import UREG
 from canvod.store import GnssResearchSite
-from canvod.utils.tools import YYYYDOY
+from canvod.utils.config import load_config
+from canvod.utils.tools import YYYYDOY, _worker_init
 from canvod.virtualiconvname.patterns import BUILTIN_PATTERNS, auto_match_order
 
 try:
@@ -551,7 +552,7 @@ class PipelineOrchestrator:
         filtered_dates: list[tuple[str, dict[str, tuple[Path, str, Path | None, str]]]],
         keep_vars: list[str] | None,
     ) -> Generator[tuple[str, dict[str, xr.Dataset], dict[str, float]]]:
-        """Process dates in multi-day batches (batch_hours >= 24).
+        """Process dates in multi-day batches (days_per_batch > 1).
 
         When ``days_per_batch > 1`` and a Dask cluster is available, RINEX
         files from ALL DOYs in a batch are submitted to Dask as one flat
@@ -750,7 +751,12 @@ class PipelineOrchestrator:
             t_submit_start = _time.monotonic()
             future_to_meta: dict = {}
             n_wrk = self.n_max_workers or os.cpu_count() or 4
-            _pool = _loky_reusable(max_workers=n_wrk)
+            _res = load_config().processing.params.resolve_resources()
+            _pool = _loky_reusable(
+                max_workers=n_wrk,
+                initializer=_worker_init,
+                initargs=(_res["nice_priority"], _res["cpu_affinity"]),
+            )
             for date_key, task_args in all_tasks:
                 fut = _pool.submit(preprocess_with_hermite_aux, *task_args)
                 receiver_name = task_args[4]
@@ -971,7 +977,7 @@ class PipelineOrchestrator:
 
         Each unique receiver is processed once per day with its actual name
         as the Icechunk group name. Dispatches to multi-day or sub-day batch
-        strategies based on ``batch_hours``.
+        strategies based on ``days_per_batch``.
 
         Parameters
         ----------
@@ -1141,11 +1147,11 @@ if __name__ == "__main__":
     from canvod.utils.config import load_config
 
     cfg = load_config()
-    proc = cfg.processing.processing
+    proc = cfg.processing.params
     site = GnssResearchSite(site_name="Rosalia")
 
     # All params from config — no hardcoded defaults
-    keep_vars = proc.keep_rnx_vars
+    keep_vars = proc.keep_gnss_observables
     resources = proc.resolve_resources()
     with PipelineOrchestrator(
         site=site,

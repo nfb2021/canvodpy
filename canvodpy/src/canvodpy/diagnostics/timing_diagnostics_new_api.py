@@ -121,16 +121,16 @@ def diagnose_processing_new_api(
     print("=" * 80)
     print(f"Start time: {datetime.now()}")
     cfg = load_config()
-    proc = cfg.processing.processing
-    keep_vars = proc.keep_rnx_vars
-    print(f"keep_rnx_vars: {keep_vars}")
+    proc = cfg.processing.params
+    keep_vars = proc.keep_gnss_observables
+    print(f"keep_gnss_observables: {keep_vars}")
     print(f"resource_mode: {proc.resource_mode}")
     print(f"n_max_threads (workers): {proc.n_max_threads}")
-    print(f"batch_hours: {proc.batch_hours}")
+    print(f"days_per_batch: {proc.days_per_batch}")
     print(f"max_memory_gb: {proc.max_memory_gb}")
     print(f"cpu_affinity: {proc.cpu_affinity}")
     print(f"nice_priority: {proc.nice_priority}")
-    print(f"rinex_store_strategy: {cfg.processing.storage.rinex_store_strategy}")
+    print(f"gnss_store_strategy: {cfg.processing.storage.gnss_store_strategy}")
     if start_from:
         print(f"Starting from: {start_from}")
     if end_at:

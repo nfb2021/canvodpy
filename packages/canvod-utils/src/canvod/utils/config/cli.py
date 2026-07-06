@@ -8,12 +8,14 @@ Provides commands for:
 - Editing configuration files
 """
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Annotated
 
 import typer
+import yaml
 from rich.console import Console
 from rich.table import Table
 
@@ -51,6 +53,24 @@ CONFIG_DIR_OPTION = typer.Option(
 )
 
 
+@config_app.callback()
+def config_callback(
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            help="Overlay config file applied on top of the main canvod.yaml",
+            show_default=False,
+        ),
+    ] = None,
+) -> None:
+    if config is not None:
+        if not config.exists():
+            typer.echo(f"Error: overlay config file not found: {config}", err=True)
+            raise typer.Exit(1)
+        os.environ["CANVOD_CONFIG_FILE"] = str(config.expanduser().resolve())
+
+
 @config_app.command()
 def init(
     config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
@@ -61,12 +81,10 @@ def init(
         help="Overwrite existing files",
     ),
 ) -> None:
-    """Initialize configuration files from templates.
+    """Initialize configuration from the canvod.yaml template.
 
     Creates:
-      - config/processing.yaml
-      - config/sites.yaml
-      - config/sids.yaml
+      - config/canvod.yaml
       - config/recipes/*.yaml (example naming recipes)
 
     Parameters
@@ -105,25 +123,17 @@ def init(
     files_created = []
     files_skipped = []
 
-    # Copy templates
-    templates = [
-        ("processing.yaml.example", config_dir / "processing.yaml"),
-        ("sites.yaml.example", config_dir / "sites.yaml"),
-        ("sids.yaml.example", config_dir / "sids.yaml"),
-    ]
-
-    for template_name, dest_path in templates:
-        template_path = template_dir / template_name
-
-        if dest_path.exists() and not force:
-            files_skipped.append(dest_path)
-            continue
-
-        if template_path.exists():
-            shutil.copy(template_path, dest_path)
-            files_created.append(dest_path)
+    # Copy unified template (canvod.yaml.example → canvod.yaml)
+    canvod_example = template_dir / "canvod.yaml.example"
+    canvod_dest = config_dir / "canvod.yaml"
+    if canvod_example.exists():
+        if canvod_dest.exists() and not force:
+            files_skipped.append(canvod_dest)
         else:
-            console.print(f"[yellow]⚠️  Template not found: {template_path}[/yellow]")
+            shutil.copy(canvod_example, canvod_dest)
+            files_created.append(canvod_dest)
+    else:
+        console.print(f"[yellow]⚠️  Template not found: {canvod_example}[/yellow]")
 
     # Copy example recipe files
     recipes_src = template_dir / "recipes"
@@ -152,17 +162,119 @@ def init(
 
     # Next steps
     console.print("\n[bold]Next steps:[/bold]")
-    console.print("  1. Edit config/processing.yaml (general settings)")
-    console.print("  1b. For NASA CDDIS access, add to config/.env (gitignored):")
+    console.print("  1. Edit config/canvod.yaml:")
+    console.print("     - processing.metadata: fill in author, email, institution")
+    console.print("     - processing.storage.stores_root_dir: set your store path")
+    console.print("     - sites: replace the example site with your own")
+    console.print("  2. For NASA CDDIS access, add to config/.env (gitignored):")
     console.print(
-        "      CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com"
+        "       CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com"
     )
-    console.print("  2. Edit config/sites.yaml with your research sites")
-    console.print("     - Set gnss_site_data_root for each site")
-    console.print("     - Set recipe: <name> for each receiver")
     console.print("  3. Edit config/recipes/*.yaml to match your filename format")
-    console.print("     - See existing recipes for examples")
-    console.print("  4. Run: just config-validate\n")
+    console.print("  4. Run: canvod config validate\n")
+
+
+@config_app.command()
+def migrate(
+    config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Print merged config without writing")
+    ] = False,
+    force: Annotated[
+        bool, typer.Option("--force", "-f", help="Overwrite existing canvod.yaml")
+    ] = False,
+) -> None:
+    """Merge legacy config files into a single canvod.yaml.
+
+    Reads processing.yaml + sites.yaml + sids.yaml from the config directory
+    and writes a unified canvod.yaml. Legacy files are left in place so you
+    can review the result before removing them.
+
+    Parameters
+    ----------
+    config_dir : Path
+        Directory containing legacy config files.
+    dry_run : bool
+        Print the merged config to stdout without writing anything.
+    force : bool
+        Overwrite an existing canvod.yaml.
+
+    Returns
+    -------
+    None
+    """
+    out_path = config_dir / "canvod.yaml"
+
+    if out_path.exists() and not force and not dry_run:
+        console.print(
+            f"[yellow]⚠  {out_path} already exists. "
+            "Use --force to overwrite or --dry-run to preview.[/yellow]"
+        )
+        raise typer.Exit(1)
+
+    sections: dict = {}
+    found: list[Path] = []
+
+    def _read(fpath: Path) -> dict:
+        with open(fpath) as fh:
+            return yaml.safe_load(fh) or {}
+
+    # processing.yaml — top-level keys map directly to the 'processing:' section
+    proc_file = config_dir / "processing.yaml"
+    if proc_file.exists():
+        sections["processing"] = _read(proc_file)
+        found.append(proc_file)
+    else:
+        console.print(f"[yellow]⊘  {proc_file} not found — skipping.[/yellow]")
+
+    # sites.yaml — unwrap the top-level 'sites:' key so canvod.yaml has site
+    # names directly under 'sites:' (one less level of nesting).
+    sites_file = config_dir / "sites.yaml"
+    if sites_file.exists():
+        raw = _read(sites_file)
+        sections["sites"] = raw.get("sites", raw)
+        found.append(sites_file)
+    else:
+        console.print(f"[yellow]⊘  {sites_file} not found — skipping.[/yellow]")
+
+    # sids.yaml — top-level keys map directly to the 'sids:' section
+    sids_file = config_dir / "sids.yaml"
+    if sids_file.exists():
+        sections["sids"] = _read(sids_file)
+        found.append(sids_file)
+    else:
+        console.print(f"[yellow]⊘  {sids_file} not found — skipping.[/yellow]")
+
+    if not sections:
+        console.print("[red]No legacy config files found. Nothing to migrate.[/red]")
+        raise typer.Exit(1)
+
+    header = (
+        "# canvodpy configuration (migrated from legacy three-file layout)\n"
+        "# Run: canvod config validate\n\n"
+    )
+    content = yaml.dump(
+        sections, default_flow_style=False, allow_unicode=True, sort_keys=False
+    )
+
+    if dry_run:
+        console.print(f"[bold]# Would write to {out_path}:[/bold]\n")
+        console.print(header + content)
+        return
+
+    with open(out_path, "w") as fh:
+        fh.write(header + content)
+
+    console.print(f"[green]✓ Written:[/green] {out_path}")
+    console.print("\n[dim]Sources merged:[/dim]")
+    for f in found:
+        console.print(f"  {f}")
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print("  1. Review canvod.yaml to confirm it looks correct")
+    console.print("  2. Run: canvod config validate")
+    console.print("  3. Once confirmed, remove the legacy files:")
+    names = "  ".join(f.name for f in found)
+    console.print(f"       {names}\n")
 
 
 @config_app.command()
@@ -417,7 +529,9 @@ def _show_processing(config: ProcessingConfig) -> None:
         "Max Threads",
         str(config.params.n_max_threads or "auto"),
     )
-    table.add_row("Keep RINEX Vars", ", ".join(config.params.keep_rnx_vars))
+    table.add_row(
+        "Keep GNSS Observables", ", ".join(config.params.keep_gnss_observables)
+    )
     table.add_row("Days per Batch", str(config.params.days_per_batch))
     mem_str = (
         f"{config.params.max_memory_gb} GB"
@@ -439,12 +553,12 @@ def _show_processing(config: ProcessingConfig) -> None:
     console.print("[bold]Storage:[/bold]")
     st = config.storage
     console.print(f"  Stores root:       {st.stores_root_dir}")
-    console.print(f"  RINEX store name:  {st.rinex_store_name}")
+    console.print(f"  GNSS store name:   {st.gnss_store_name}")
     console.print(f"  VOD store name:    {st.vod_store_name}")
     aux_dir = str(st.aux_data_dir) if st.aux_data_dir else "[dim]system temp[/dim]"
     console.print(f"  Aux data dir:      {aux_dir}")
     console.print(
-        f"  RINEX strategy:    {st.rinex_store_strategy} (expire: {st.rinex_store_expire_days}d)"
+        f"  GNSS strategy:     {st.gnss_store_strategy} (expire: {st.gnss_store_expire_days}d)"
     )
     console.print(f"  VOD strategy:      {st.vod_store_strategy}")
     console.print()
@@ -455,8 +569,8 @@ def _show_processing(config: ProcessingConfig) -> None:
     console.print(
         f"  Compression:       {ic.compression_algorithm} (level {ic.compression_level})"
     )
-    console.print(f"  Inline threshold:  {ic.inline_threshold} bytes")
-    console.print(f"  Get concurrency:   {ic.get_concurrency}")
+    console.print(f"  Inline threshold:  {ic.inline_chunk_threshold_bytes} bytes")
+    console.print(f"  Get concurrency:   {ic.get_partial_values_concurrency}")
     for store_name, strategy in ic.chunk_strategies.items():
         console.print(
             f"  Chunks ({store_name}): epoch={strategy.epoch}, sid={strategy.sid}"
@@ -503,7 +617,7 @@ def _show_sites(config: SitesConfig) -> None:
 
         # Store paths
         if storage:
-            console.print(f"    RINEX store: {storage.get_rinex_store_path(site_name)}")
+            console.print(f"    GNSS store:  {storage.get_gnss_store_path(site_name)}")
             console.print(f"    VOD store:   {storage.get_vod_store_path(site_name)}")
 
         # Receivers table

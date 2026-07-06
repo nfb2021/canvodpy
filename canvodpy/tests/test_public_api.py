@@ -82,8 +82,8 @@ class TestPipelineAPI:
         ):
             # Set up config mock
             mock_proc = MagicMock()
-            mock_proc.keep_rnx_vars = ["SNR"]
-            mock_proc.batch_hours = 24
+            mock_proc.keep_gnss_observables = ["SNR"]
+            mock_proc.days_per_batch = 1
             mock_proc.resolve_resources.return_value = {
                 "n_workers": 2,
                 "max_memory_gb": 8.0,
@@ -91,7 +91,7 @@ class TestPipelineAPI:
                 "nice_priority": 0,
                 "threads_per_worker": 1,
             }
-            mock_config.return_value.processing.processing = mock_proc
+            mock_config.return_value.processing.params = mock_proc
             mock_config.return_value.processing.aux_data.agency = "COD"
 
             site = Site("Rosalia")
@@ -110,8 +110,8 @@ class TestPipelineAPI:
             patch("canvodpy.orchestrator.PipelineOrchestrator"),
         ):
             mock_proc = MagicMock()
-            mock_proc.keep_rnx_vars = ["SNR"]
-            mock_proc.batch_hours = 24
+            mock_proc.keep_gnss_observables = ["SNR"]
+            mock_proc.days_per_batch = 1
             mock_proc.resolve_resources.return_value = {
                 "n_workers": 2,
                 "max_memory_gb": 8.0,
@@ -119,7 +119,7 @@ class TestPipelineAPI:
                 "nice_priority": 0,
                 "threads_per_worker": 1,
             }
-            mock_config.return_value.processing.processing = mock_proc
+            mock_config.return_value.processing.params = mock_proc
             mock_config.return_value.processing.aux_data.agency = "COD"
 
             pipeline = Pipeline("Rosalia")
@@ -137,8 +137,8 @@ class TestPipelineAPI:
             patch("canvodpy.orchestrator.PipelineOrchestrator"),
         ):
             mock_proc = MagicMock()
-            mock_proc.keep_rnx_vars = ["SNR"]
-            mock_proc.batch_hours = 24
+            mock_proc.keep_gnss_observables = ["SNR"]
+            mock_proc.days_per_batch = 1
             mock_proc.resolve_resources.return_value = {
                 "n_workers": 2,
                 "max_memory_gb": 8.0,
@@ -146,7 +146,7 @@ class TestPipelineAPI:
                 "nice_priority": 0,
                 "threads_per_worker": 1,
             }
-            mock_config.return_value.processing.processing = mock_proc
+            mock_config.return_value.processing.params = mock_proc
             mock_config.return_value.processing.aux_data.agency = "COD"
 
             pipeline = Pipeline("Rosalia")
@@ -215,8 +215,8 @@ class TestAPICoexistence:
             patch("canvodpy.orchestrator.PipelineOrchestrator"),
         ):
             mock_proc = MagicMock()
-            mock_proc.keep_rnx_vars = ["SNR"]
-            mock_proc.batch_hours = 24
+            mock_proc.keep_gnss_observables = ["SNR"]
+            mock_proc.days_per_batch = 1
             mock_proc.resolve_resources.return_value = {
                 "n_workers": 2,
                 "max_memory_gb": 8.0,
@@ -224,7 +224,7 @@ class TestAPICoexistence:
                 "nice_priority": 0,
                 "threads_per_worker": 1,
             }
-            mock_config.return_value.processing.processing = mock_proc
+            mock_config.return_value.processing.params = mock_proc
             mock_config.return_value.processing.aux_data.agency = "COD"
 
             pipeline = Pipeline("Rosalia")
@@ -264,15 +264,15 @@ class TestAPIExports:
 class TestConfigurationCompatibility:
     """Test configuration access via public API."""
 
-    def test_keep_rnx_vars_available_via_config(self):
-        """KEEP_RNX_VARS should be available via load_config()."""
+    def test_keep_gnss_observables_available_via_config(self):
+        """keep_gnss_observables should be available via load_config()."""
         from canvod.utils.config import load_config
 
         try:
             cfg = load_config()
         except (FileNotFoundError, Exception) as e:
             pytest.skip(f"Config not available: {e}")
-        keep_vars = cfg.processing.processing.keep_rnx_vars
+        keep_vars = cfg.processing.params.keep_gnss_observables
         assert keep_vars is not None
         assert isinstance(keep_vars, list)
 

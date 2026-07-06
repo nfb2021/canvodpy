@@ -10,7 +10,7 @@ obs store and the desired vod store name, e.g.::
 
     storage:
       stores_root_dir: /Volumes/ExtremePro/canvod_audit_output/tier0_rinex
-      rinex_store_name: canvodpy_RINEX_store
+      gnss_store_name: canvodpy_RINEX_store
       vod_store_name: canvodpy_VOD_store
 
 The obs store must already exist (run the appropriate produce_*_store.py

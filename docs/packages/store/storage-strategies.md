@@ -1,6 +1,6 @@
 # Storage Strategies
 
-The write strategy controls how `MyIcechunkStore` handles the time range already in the store. Choose once per store type — set it in `processing.yaml`.
+The write strategy controls how `MyIcechunkStore` handles the time range already in the store. Choose once per store type — set it in `canvod.yaml` under `processing.storage:`.
 
 <div class="grid cards" markdown>
 
@@ -71,10 +71,11 @@ The write strategy controls how `MyIcechunkStore` handles the time range already
     )
     ```
 
-=== "processing.yaml"
+=== "canvod.yaml"
 
     ```yaml
-    storage:
+    processing:
+      storage:
       rinex_store_strategy: skip      # raw observations are immutable
       vod_store_strategy: overwrite   # recompute as algorithms improve
     ```

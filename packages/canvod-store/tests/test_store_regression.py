@@ -24,8 +24,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 import xarray as xr
+from _helpers import GROUP, make_synthetic_dataset
 from build_day0_store import build_store
-from conftest import GROUP, make_synthetic_dataset
 
 from canvod.store import MyIcechunkStore
 

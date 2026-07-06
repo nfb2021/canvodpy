@@ -406,6 +406,7 @@ class AuxDataPipeline:
         # Use defaults from config if not provided
         agency = agency or aux_cfg.agency
         product_type = product_type or aux_cfg.product_type
+        ftp_timeout_s = aux_cfg.ftp_timeout_s
         user_email = user_email or cfg.nasa_earthdata_acc_mail
         if ftp_server is None:
             servers = aux_cfg.get_ftp_servers(user_email)
@@ -430,6 +431,7 @@ class AuxDataPipeline:
             ftp_server=ftp_server,
             local_dir=sp3_dir,
             user_email=user_email,
+            ftp_timeout_s=ftp_timeout_s,
         )
         pipeline.register("ephemerides", sp3_file, required=True)
 
@@ -441,6 +443,7 @@ class AuxDataPipeline:
             ftp_server=ftp_server,
             local_dir=clk_dir,
             user_email=user_email,
+            ftp_timeout_s=ftp_timeout_s,
         )
         pipeline.register("clock", clk_file, required=True)
 

@@ -337,24 +337,24 @@ just hooks
 
 ## 10. Configure the project
 
-canVODpy uses three YAML configuration files in the `config/` directory:
+canVODpy is configured through a single `config/canvod.yaml` with three sections:
 
-| File | Purpose |
+| Section | Purpose |
 |------|---------|
-| `sites.yaml` | Defines research sites: data root paths, receiver definitions (name, type, directory), and VOD analysis pairs. Each receiver's `directory` is the full relative path from the site data root to the raw RINEX date folders (e.g. `01_reference/01_GNSS/01_raw`). |
-| `processing.yaml` | Processing parameters: metadata, credentials (NASA Earthdata), auxiliary data settings (agency, product type), time aggregation, compression, Icechunk storage, and store strategies. |
-| `sids.yaml` | Signal ID (SID) filtering: choose `all`, a named `preset` (e.g. `gps_galileo`), or list `custom` SIDs to keep. |
+| `sites:` | Research sites: data root paths, receiver definitions (name, type, directory), and VOD analysis pairs. Each receiver's `directory` is relative to the site's `gnss_site_data_root`. |
+| `processing:` | Processing parameters: metadata, credentials (NASA Earthdata), auxiliary data settings (agency, product type), time aggregation, compression, Icechunk storage, and store strategies. |
+| `sids:` | Signal ID (SID) filtering: choose `all`, a named `preset` (e.g. `default`), or list `custom` SIDs to keep. |
 
-Each file has a corresponding `.example` template. To initialize them:
+To initialize from the template:
 
 ```bash
-just config-init
+canvod config init
 ```
 
 After editing, validate your configuration:
 
 ```bash
-just config-validate
+canvod config validate
 ```
 
 To view the resolved configuration:
@@ -772,7 +772,7 @@ just test-coverage
     | `just check`           | Lint, format, and type-check all code             |
     | `just hooks`           | Install pre-commit hooks                          |
     | `just check-dev-tools` | Verify uv, just, and python3 are installed        |
-    | `just config-init`     | Initialize configuration files from templates     |
+    | `canvod config init`   | Scaffold canvod.yaml from template                |
     | `just config-validate` | Validate the current configuration                |
     | `just config-show`     | Show the resolved configuration                   |
     | `just docs`            | Preview documentation locally                     |
