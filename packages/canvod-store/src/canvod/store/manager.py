@@ -888,4 +888,10 @@ def create_default_site() -> GnssResearchSite:
     """
     from canvod.utils.config import load_config
 
-    return GnssResearchSite(next(iter(load_config().sites.sites)))
+    _sites = load_config().sites.sites
+    if not _sites:
+        raise ValueError(
+            "No sites configured — create canvod-settings.yaml "
+            "or pass site_name explicitly."
+        )
+    return GnssResearchSite(next(iter(_sites)))

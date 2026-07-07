@@ -363,7 +363,10 @@ Good pattern already in-tree to copy: `canvod-store/store.py:139–149` and `can
    `Field(...)`), so the fallback is a minimal attrs dict rather than a default model.
 
 **Tier 3 — fix cryptic crashes (canvod-store):**
-7. `reader.py:161` and `manager.py:884`: replace bare `next(iter(...))` with a clear `ValueError("No sites configured. Create config/sites.yaml or pass site_name explicitly.")`. ~8 lines.
+7. ~~`reader.py:161` and `manager.py:884`: replace bare `next(iter(...))` with a clear `ValueError("No sites configured. Create config/sites.yaml or pass site_name explicitly.")`. ~8 lines.~~
+   **DONE (2026-07-08):** Both sites guard `if not _sites: raise ValueError(...)` before
+   calling `next(iter(...))`. Message: "No sites configured — create canvod-settings.yaml
+   or pass site_name explicitly."
 
 ### Packages affected
 

@@ -160,7 +160,13 @@ class IcechunkDataReader:
         """
         config = load_config()
         if site_name is None:
-            site_name = next(iter(config.sites.sites))
+            _sites = config.sites.sites
+            if not _sites:
+                raise ValueError(
+                    "No sites configured — create canvod-settings.yaml "
+                    "or pass site_name explicitly."
+                )
+            site_name = next(iter(_sites))
         if n_max_workers is None:
             resources = config.processing.processing.resolve_resources()
             n_max_workers = resources["n_workers"]
