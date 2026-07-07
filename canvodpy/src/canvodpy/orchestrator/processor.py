@@ -2009,7 +2009,25 @@ class RinexDataProcessor:
 
                 log.info("Committing: %s", summary)
                 t7 = time.time()
-                snapshot_id = session.commit(commit_msg)
+                _commit_meta: dict = {
+                    "receiver": receiver_name,
+                    "date": self.matched_data_dirs.yyyydoy,
+                    "files": str(len(metadata_records)),
+                }
+                if metadata_records:
+                    _commit_meta["start"] = str(
+                        min(r["start"] for r in metadata_records)
+                    )
+                    _commit_meta["end"] = str(max(r["end"] for r in metadata_records))
+                    _commit_meta["rinex_hashes"] = ",".join(
+                        r["rinex_hash"] for r in metadata_records if r.get("rinex_hash")
+                    )
+                    _commit_meta["canonical_names"] = ",".join(
+                        r["canonical_name"]
+                        for r in metadata_records
+                        if r.get("canonical_name")
+                    )
+                snapshot_id = session.commit(commit_msg, metadata=_commit_meta)
                 t8 = time.time()
                 log.info(
                     "Commit complete in %.2fs (snapshot: %s...)",
