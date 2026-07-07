@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal, cast
 
 import typer
 
@@ -62,6 +63,13 @@ def validate(
         )
         raise typer.Exit(1) from None
 
+    if receiver_type not in ("canopy", "reference"):
+        typer.echo(
+            f"Unknown receiver type '{receiver_type}'. Valid values: canopy, reference",
+            err=True,
+        )
+        raise typer.Exit(1) from None
+
     site_naming = SiteNamingConfig(site_id=site_id, agency=agency)
     receiver_naming = ReceiverNamingConfig(
         receiver_number=receiver_number,
@@ -73,7 +81,7 @@ def validate(
         report = validator.validate_receiver(
             site_naming=site_naming,
             receiver_naming=receiver_naming,
-            receiver_type=receiver_type,
+            receiver_type=cast(Literal["reference", "canopy"], receiver_type),
             receiver_base_dir=data_dir,
             reader_format=reader_format if reader_format != "auto" else None,
         )
