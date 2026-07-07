@@ -1273,7 +1273,9 @@ class SbfReader(GNSSDataReader):
         for name, data in parser.read(str(self.fpath)):
             match name:
                 case "ReceiverTime":
-                    delta_ls = int(data["DeltaLS"])
+                    _dls = int(data["DeltaLS"])
+                    if _dls != -128:  # -128 = DNU sentinel in SBF spec
+                        delta_ls = _dls
 
                 case "ChannelStatus":
                     # sbf_parser keys the sub-block list "SatInfo";
@@ -1586,7 +1588,9 @@ class SbfReader(GNSSDataReader):
         for name, data in parser.read(str(self.fpath)):
             match name:
                 case "ReceiverTime":
-                    delta_ls = int(data["DeltaLS"])
+                    _dls = int(data["DeltaLS"])
+                    if _dls != -128:  # -128 = DNU sentinel in SBF spec
+                        delta_ls = _dls
 
                 case "ChannelStatus":
                     pending["chanstatus"] = data
@@ -2125,7 +2129,9 @@ class SbfReader(GNSSDataReader):
         for name, data in parser.read(str(self.fpath)):
             match name:
                 case "ReceiverTime":
-                    delta_ls = int(data["DeltaLS"])
+                    _dls = int(data["DeltaLS"])
+                    if _dls != -128:  # -128 = DNU sentinel in SBF spec
+                        delta_ls = _dls
 
                 case "ChannelStatus":
                     pending["chanstatus"] = data
