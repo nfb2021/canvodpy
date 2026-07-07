@@ -159,7 +159,10 @@ class RichReporter:
         )
 
     def _render(self):
-        from rich.group import Group
+        try:
+            from rich.group import Group  # rich >= 12.0
+        except ImportError:
+            from rich.console import Group  # rich < 12.0
         from rich.panel import Panel
 
         site4 = self._site[:4].upper()
