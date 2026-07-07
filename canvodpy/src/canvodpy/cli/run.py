@@ -172,28 +172,11 @@ def _resolve_date_range(args, site) -> tuple[str, str]:
     return start, end
 
 
-def _print_header(args: argparse.Namespace, config, start: str, end: str) -> None:
-    proc = config.processing.params
-    storage = config.processing.storage
-    print("=" * 72)
-    print(f"canvodpy  site={args.site}  {start} .. {end}")
-    print("=" * 72)
-    print(f"  started        {datetime.now():%Y-%m-%d %H:%M:%S}")
-    print(f"  ephemeris      {proc.ephemeris_source}")
-    print(f"  keep_vars      {proc.keep_gnss_observables}")
-    print(f"  days_per_batch {args.days_per_batch or proc.days_per_batch}")
-    print(f"  resource_mode  {proc.resource_mode}")
-    print(f"  store_strategy {storage.gnss_store_strategy}")
-    print(f"  gnss_store     {storage.gnss_store_name or 'rinex'}")
-    print(f"  vod_store      {storage.vod_store_name or 'vod'}")
-    print(f"  vod            {'skip' if args.no_vod else 'enabled'}")
-    print()
-
-
 def _compute_vod_for_day(
     datasets: dict[str, xr.Dataset],
     vod_analyses: dict,
     date_key: str,
+    reporter=None,
 ) -> dict[str, xr.Dataset]:
     """Compute VOD for all configured analysis pairs.
 
@@ -261,12 +244,13 @@ def _compute_vod_for_day(
 
             n_valid = int((~vod_ds["VOD"].isnull()).sum())
             n_total = vod_ds["VOD"].size
-            print(
-                f"  VOD {analysis_name}: "
-                f"{n_valid}/{n_total} valid "
-                f"({100 * n_valid / n_total:.0f}%)  "
-                f"{dt:.1f}s"
-            )
+            if reporter:
+                reporter.on_vod_result(analysis_name, n_valid, n_total, dt)
+            else:
+                pct = 100 * n_valid / n_total if n_total else 0
+                print(
+                    f"  VOD {analysis_name}: {n_valid}/{n_total} valid ({pct:.0f}%)  {dt:.1f}s"
+                )
             results[analysis_name] = vod_ds
 
         except Exception as e:
@@ -276,7 +260,10 @@ def _compute_vod_for_day(
                 date=date_key,
                 error=str(e),
             )
-            print(f"  VOD {analysis_name}: FAILED — {e}")
+            if reporter:
+                reporter.on_vod_failed(analysis_name, str(e))
+            else:
+                print(f"  VOD {analysis_name}: FAILED — {e}")
 
     return results
 
@@ -308,7 +295,7 @@ def main(argv: list[str] | None = None) -> int:
     # Resolve date range (auto-detect from store if not specified)
     start, end = _resolve_date_range(args, site)
 
-    _print_header(args, config, start, end)
+    from canvodpy.cli.dashboard import make_reporter
 
     if args.dry_run:
         with site.pipeline(
@@ -324,9 +311,6 @@ def main(argv: list[str] | None = None) -> int:
 
     # Resolve VOD analysis pairs
     vod_analyses = site.vod_analyses if not args.no_vod else {}
-    if vod_analyses:
-        print(f"VOD analyses: {list(vod_analyses.keys())}")
-        print()
 
     # Access the underlying GnssResearchSite for VOD store writes
     research_site = site._site
@@ -335,60 +319,54 @@ def main(argv: list[str] | None = None) -> int:
     total_vod = 0
     t_total = time.perf_counter()
 
-    with site.pipeline(
-        n_workers=args.workers,
-        days_per_batch=args.days_per_batch,
-        dry_run=False,
-    ) as pipeline:
-        gen = pipeline.process_range(start=start, end=end)
-        while True:
-            # Time the pipeline step (RINEX read + augment + store write + dedup)
-            # separately from VOD computation and VOD store write.
-            t_pipeline = time.perf_counter()
-            try:
-                date_key, datasets = next(gen)
-            except StopIteration:
-                break
-            dt_pipeline = time.perf_counter() - t_pipeline
+    with make_reporter(args.site, start, end) as reporter:
+        reporter.print_header(args.site, start, end, config, args)
 
-            total_days += 1
-            t_day = time.perf_counter()
+        if vod_analyses:
+            reporter.log(f"  VOD analyses: {list(vod_analyses.keys())}")
 
-            print(f"\n--- {date_key} ---")
-            for group, ds in datasets.items():
-                e, s = ds.sizes.get("epoch", 0), ds.sizes.get("sid", 0)
-                print(f"  {group}: {e} epochs x {s} sids")
+        with site.pipeline(
+            n_workers=args.workers,
+            days_per_batch=args.days_per_batch,
+            dry_run=False,
+        ) as pipeline:
+            gen = pipeline.process_range(start=start, end=end)
+            while True:
+                t_pipeline = time.perf_counter()
+                try:
+                    date_key, datasets = next(gen)
+                except StopIteration:
+                    break
+                dt_pipeline = time.perf_counter() - t_pipeline
 
-            dt_vod = 0.0
-            dt_vod_store = 0.0
-            if vod_analyses:
-                t_vod = time.perf_counter()
-                vod_results = _compute_vod_for_day(datasets, vod_analyses, date_key)
-                dt_vod = time.perf_counter() - t_vod
+                total_days += 1
+                reporter.on_day_start(date_key, total_days, total_days)
+                reporter.on_datasets(datasets)
 
-                t_vod_store = time.perf_counter()
-                for analysis_name, vod_ds in vod_results.items():
-                    research_site.store_vod_analysis(
-                        vod_dataset=vod_ds,
-                        analysis_name=analysis_name,
-                        commit_message=f"VOD {analysis_name} {date_key}",
+                dt_vod = 0.0
+                dt_vod_store = 0.0
+                if vod_analyses:
+                    t_vod = time.perf_counter()
+                    vod_results = _compute_vod_for_day(
+                        datasets, vod_analyses, date_key, reporter
                     )
-                dt_vod_store = time.perf_counter() - t_vod_store
-                total_vod += len(vod_results)
+                    dt_vod = time.perf_counter() - t_vod
 
-            dt_day = time.perf_counter() - t_day
-            print(
-                f"  pipeline={dt_pipeline:.1f}s"
-                f"  vod={dt_vod:.1f}s"
-                f"  vod_store={dt_vod_store:.1f}s"
-                f"  day={dt_pipeline + dt_day:.1f}s"
-            )
+                    t_vod_store = time.perf_counter()
+                    for analysis_name, vod_ds in vod_results.items():
+                        research_site.store_vod_analysis(
+                            vod_dataset=vod_ds,
+                            analysis_name=analysis_name,
+                            commit_message=f"VOD {analysis_name} {date_key}",
+                        )
+                    dt_vod_store = time.perf_counter() - t_vod_store
+                    total_vod += len(vod_results)
 
-    dt_total = time.perf_counter() - t_total
-    print()
-    print("=" * 72)
-    print(f"Done  {total_days} days  {total_vod} VOD analyses  {dt_total:.0f}s total")
-    print("=" * 72)
+                reporter.on_timing(dt_pipeline, dt_vod, dt_vod_store)
+
+        dt_total = time.perf_counter() - t_total
+        reporter.on_done(total_days, total_vod, dt_total)
+
     return 0
 
 
