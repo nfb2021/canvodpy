@@ -1,22 +1,18 @@
-# canvod-filemap
+# canvod-preflight
 
-## Purpose
-
-The `canvod-filemap` package maps arbitrary GNSS observation filenames
-to a canonical naming convention. Physical files on disk keep their original names
--- the package creates a **virtual** mapping layer that gives every file a unique,
-self-describing canonical name.
+`canvod-preflight` enforces the canVOD filename convention at the pipeline boundary.
+Before any data is read, it validates that every file in a receiver directory can be
+unambiguously identified and that no two files cover the same time window.
 
 ---
 
 ## The CanVODFilename Convention
 
-Every canonical filename follows this format:
+Every canVOD-compatible GNSS file follows this naming format:
 
 ```
 {SIT}{T}{NN}{AGC}_R_{YYYY}{DOY}{HHMM}_{PERIOD}_{SAMPLING}_{CONTENT}.{TYPE}[.{COMPRESSION}]
 ```
-
 
 <iframe src="../../diagrams/naming-convention-embed.html" style="width:100%;height:320px;border:none;display:block;margin:1.5rem 0;" loading="lazy"></iframe>
 
@@ -68,49 +64,57 @@ ROSR01TUW_R_20250010000_01D_05S_AA.rnx
 
 ---
 
-## VirtualFile
+## Pre-pipeline validation
 
-A **VirtualFile** pairs a physical file path with its canonical name:
+`canvod-preflight` is a **mandatory hard gate** that runs before any data is read.
+It checks two things for each receiver directory:
 
-```python
-from canvod.filemap import VirtualFile
+1. **Every file can be identified** — each filename matches a known naming pattern.
+   Unrecognised files block processing with a diagnostic listing the problem files.
+2. **No temporal overlaps** — no two files cover the same time window.
+   Overlapping files are ambiguous; they block processing until resolved.
 
-vf.physical_path    # Path("/data/rref001a00.25_")
-vf.canonical_str    # "ROSR01TUW_R_20250010000_15M_05S_AA.sbf"
-vf.open("rb")       # opens the physical file
+```bash
+# CLI — validate a single receiver directory
+canvod-preflight validate /data/my_site/01_reference \
+    --site ROS --agency TUW --receiver 1 --role reference
+
+# Shortcut for a site configured in canvod-settings.yaml
+just config-check-data <site>
 ```
 
-The physical file is never renamed. All downstream processing uses the canonical
-name for metadata, deduplication, and storage keys.
+Validation is also triggered automatically by `just config-validate` (which calls
+`uv run canvodpy config validate`).
 
 ---
 
-## NamingRecipe
+## Files that don't follow the convention
 
-A **NamingRecipe** tells the system how to parse an arbitrary physical filename
-into a canonical name. Recipes are defined in YAML and referenced from `canvod-settings.yaml` under `sites:`.
+If your GNSS receiver outputs files in a proprietary or legacy format (RINEX v2
+short names, Septentrio binary, etc.), the optional
+[`canvod-filemap`](https://github.com/nfb2021/canvodpy-extensions) package provides
+a **recipe-based mapping layer** that virtualises physical filenames to canonical names
+without renaming anything on disk.
 
-### How it works
+Install it separately from the extensions repo:
 
-```mermaid
-flowchart TD
-    PHYS["`**Physical file**
-    rref001a00.25_`"]
-    PHYS --> RECIPE["`**NamingRecipe**
-    field extraction`"]
-    RECIPE --> VF["VirtualFile"]
-    VF --> CANON["`**Canonical name**
-    ROSR01TUW_R_20250010000_15M_05S_AA.sbf`"]
+```bash
+uv add canvod-filemap
 ```
 
-The recipe defines:
+Then reference a recipe from `canvod-settings.yaml`:
 
-1. **Identity fields** -- site, agency, receiver number/type (constant for a receiver)
-2. **Discovery** -- glob pattern and directory layout to find files
-3. **Field extraction** -- a sequence of `{field: width}` entries that parse the
-   physical filename left-to-right
+```yaml
+sites:
+  my_site:
+    receivers:
+      reference_01:
+        recipe: my_site_reference   # → config/recipes/my_site_reference.yaml
+```
 
-### YAML example
+### NamingRecipe YAML format
+
+A recipe tells the mapper how to extract canonical fields from a physical filename:
 
 ```yaml
 name: rosalia_reference
@@ -122,7 +126,7 @@ receiver_type: reference
 sampling: "05S"
 period: "15M"
 file_type: rnx
-layout: yyddd_subdirs
+layout: yyddd_subdirs   # or yyyyddd_subdirs, flat
 glob: "*.??o"
 fields:
   - skip: 4          # "rref"
@@ -134,210 +138,18 @@ fields:
   - skip: 1          # "o"
 ```
 
-### Recognized fields
-
-| Field | Description |
-|-------|-------------|
+| Field key | Description |
+|-----------|-------------|
 | `year` | 4-digit year |
 | `yy` | 2-digit year (80--99 = 19xx, 00--79 = 20xx) |
 | `doy` | Day of year |
-| `month` | Month (converted to DOY with `day`) |
-| `day` | Day of month |
+| `month` / `day` | Month + day of month (converted to DOY) |
 | `hour` | Hour (0--23) |
-| `hour_letter` | RINEX hour letter (a--x = 0--23) |
+| `hour_letter` | RINEX v2 hour letter (a--x = 0--23) |
 | `minute` | Minute (0--59) |
 | `skip` | Ignore N characters |
 
-### Using recipes
-
-Reference a recipe file from `canvod-settings.yaml` (`sites.<name>.receivers.<receiver>.recipe`):
-
-```yaml
-sites:
-  rosalia:
-    receivers:
-      reference_01:
-        recipe: rosalia_reference.yaml
-```
-
-When `canvod config init` creates the configuration, recipe templates are included.
-
----
-
-## FilenameMapper
-
-The `FilenameMapper` discovers physical files and maps them to VirtualFiles. It
-handles three directory layouts, configured via `directory_layout` in the receiver
-config or recipe.
-
-### Directory layouts
-
-Most GNSS receivers output files into per-day subdirectories named by day-of-year.
-The `directory_layout` setting tells the mapper where to look for files.
-
-| Layout | Structure | When to use |
-|--------|-----------|-------------|
-| `yyddd_subdirs` | `25001/`, `25002/`, ... | **Default.** Septentrio and most receivers output into 5-digit YYDDD subdirectories. |
-| `yyyyddd_subdirs` | `2025001/`, `2025002/`, ... | Some post-processing tools or manual organisation use 7-digit YYYYDDD subdirectories. |
-| `flat` | All files in one directory | Data dumped into a single folder (e.g. copied from USB, downloaded archive). |
-
-#### How discovery differs
-
-The layout controls **where** the mapper searches — it does **not** affect how
-filenames are parsed (that is determined by the source pattern or recipe).
-
-=== "yyddd_subdirs (default)"
-
-    ```
-    receiver_base_dir/
-    ├── 25001/
-    │   ├── rref001a00.25_     ← discovered
-    │   └── rref001a15.25_     ← discovered
-    ├── 25002/
-    │   └── rref002a00.25_     ← discovered
-    └── rref003a00.25_         ← NOT discovered (at root level)
-    ```
-
-    Only files **inside** `YYDDD/` subdirectories are found.
-    Files at the root level are silently ignored.
-
-=== "yyyyddd_subdirs"
-
-    ```
-    receiver_base_dir/
-    ├── 2025001/
-    │   └── rref001a00.25_     ← discovered
-    └── 2025002/
-        └── rref002a00.25_     ← discovered
-    ```
-
-    Same behaviour, but expects 7-digit directory names.
-
-=== "flat"
-
-    ```
-    receiver_base_dir/
-    ├── rref001a00.25_         ← discovered
-    ├── rref002a00.25_         ← discovered
-    └── notes.txt              ← ignored (not a GNSS file)
-    ```
-
-    All GNSS files directly in `receiver_base_dir` are found.
-    Subdirectories are **not** traversed.
-
-!!! warning "Choosing the wrong layout"
-
-    If you set `flat` but your files are in `25001/` subdirectories (or vice
-    versa), the mapper will find **zero files** and the directory will appear
-    empty. The validator will pass (empty is valid), but no data will be
-    processed. If you expect data but the pipeline produces nothing, check
-    `directory_layout` first.
-
-#### Configuration
-
-In `canvod-settings.yaml` under `sites.<name>.receivers`:
-
-```yaml
-receivers:
-  reference_01:
-    receiver_number: 1
-    source_pattern: auto
-    directory_layout: yyddd_subdirs   # or flat, yyyyddd_subdirs
-```
-
-In a NamingRecipe:
-
-```yaml
-layout: yyddd_subdirs   # default if omitted
-```
-
-### Usage
-
-```python
-from canvod.filemap import FilenameMapper
-
-mapper = FilenameMapper(
-    site_naming=site_config,
-    receiver_naming=receiver_config,
-    receiver_type="reference",
-    receiver_base_dir=Path("/data/rosalia/reference"),
-)
-
-# Discover and map all files
-virtual_files = mapper.discover_all()
-
-# Or for a specific date
-virtual_files = mapper.discover_for_date(year=2025, doy=1)
-```
-
-### Built-in patterns
-
-The `BUILTIN_PATTERNS` registry handles common GNSS filename formats automatically:
-
-| Pattern | Example filename | Description |
-|---------|-----------------|-------------|
-| `canvod` | `ROSR01TUW_R_...` | Already canonical |
-| `rinex_v3_long` | `ROSA00TUW_R_...` | RINEX v3.04 long names |
-| `septentrio_rinex_v2` | `ract001a15.25o` | Septentrio RINEX v2 with minute |
-| `rinex_v2_short` | `rosl001a.25o` | Standard RINEX v2 |
-| `septentrio_sbf` | `rref001a00.25_` | Septentrio binary |
-
-When `source_pattern: auto` (the default), patterns are tried in order until one
-matches. Use a NamingRecipe for formats not covered by built-in patterns.
-
----
-
-## DataDirectoryValidator
-
-The `DataDirectoryValidator` is a **pre-pipeline hard gate**. Before any processing
-begins, it checks that:
-
-1. **All files can be mapped** -- every file in the receiver directory matches a
-   naming pattern or recipe
-2. **No temporal overlaps** -- no two files cover the same time window
-
-If validation fails, the pipeline is blocked with a diagnostic message listing
-the unmatched files and/or overlapping pairs.
-
-```python
-from canvod.filemap import DataDirectoryValidator
-
-report = DataDirectoryValidator.validate_receiver(
-    site_naming=site_config,
-    receiver_naming=receiver_config,
-    receiver_type="reference",
-    receiver_base_dir=Path("/data/rosalia/reference"),
-    reader_format="rinex3",  # optional filter
-)
-
-report.is_valid     # True if no unmatched or overlaps
-report.matched      # list[VirtualFile]
-report.unmatched    # list[Path]
-report.overlaps     # list[tuple[VirtualFile, VirtualFile]]
-```
-
----
-
-## FilenameCatalog
-
-The `FilenameCatalog` persists file mappings in a local DuckDB database, enabling
-fast lookups without re-scanning directories.
-
-```python
-from canvod.filemap import FilenameCatalog
-
-with FilenameCatalog(db_path) as catalog:
-    catalog.record_batch(virtual_files)
-
-    # Lookup by canonical name
-    path = catalog.lookup_by_conventional("ROSR01TUW_R_20250010000_01D_05S_AA.rnx")
-
-    # Query a date range
-    files = catalog.query_date_range(2025, 1, 2025, 31, receiver_type="R")
-
-    # Export to Polars DataFrame
-    df = catalog.to_polars()
-```
-
-The catalog stores file hashes (SHA-256 of first 64 KiB), sizes, and modification
-times alongside the canonical mapping.
+`uv run canvodpy config init` copies recipe templates to `config/recipes/`
+alongside `canvod-settings.yaml`. See the
+[canvod-filemap documentation](https://github.com/nfb2021/canvodpy-extensions)
+for the full API (`FilenameMapper`, `VirtualFile`, `FilenameCatalog`).

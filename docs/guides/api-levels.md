@@ -465,4 +465,4 @@ retrieval, and the result is written to the site's VOD store (pass
 
 ---
 
-**Next in the trail:** [Getting Started](getting-started.md) · [Audit Suite](../packages/audit/overview.md) · [Architecture](../architecture.md) · [AI Development](ai-development.md)
+**Next in the trail:** [Quickstart](quickstart.md) · [Audit Suite](../packages/audit/overview.md) · [Architecture](../architecture.md) · [AI Development](ai-development.md)

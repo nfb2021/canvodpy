@@ -38,7 +38,7 @@ Two tools must be installed outside `uv`:
 just check-dev-tools   # verify both are present
 ```
 
-[:octicons-arrow-right-24: Full installation guide](getting-started.md)
+[:octicons-arrow-right-24: Full installation guide](contributor-setup.md)
 
 ---
 
@@ -122,7 +122,7 @@ If `upstream` is not configured, add it once:
 git remote add upstream git@github.com:nfb2021/canvodpy.git
 ```
 
-[:octicons-arrow-right-24: Detailed fork sync guide](getting-started.md#12-keeping-your-fork-up-to-date)
+[:octicons-arrow-right-24: Detailed fork sync guide](contributor-setup.md#12-keeping-your-fork-up-to-date)
 
 ---
 
@@ -158,7 +158,7 @@ git commit -m "type(scope): description"
 uv sync && git add uv.lock && git commit -m "feat(readers): your message"
 ```
 
-[:octicons-arrow-right-24: Full troubleshooting guide](getting-started.md#14-pre-commit-hooks-and-why-your-commit-may-be-rejected)
+[:octicons-arrow-right-24: Full troubleshooting guide](contributor-setup.md#14-pre-commit-hooks-and-why-your-commit-may-be-rejected)
 
 ---
 
@@ -295,7 +295,7 @@ just deps-graph          # mermaid dependency graph
     Run `uv sync` to install/reinstall packages in editable mode.
 
 ??? failure "`Command not found: just`"
-    Install just: `brew install just` (macOS) or see [getting-started](getting-started.md).
+    Install just: `brew install just` (macOS) or see [contributor-setup](contributor-setup.md).
 
 ??? failure "Tests fail after dependency changes"
     ```bash

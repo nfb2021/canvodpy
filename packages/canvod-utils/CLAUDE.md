@@ -7,7 +7,7 @@ Configuration, date parsing, diagnostics, and shared utilities.
 | Module | Purpose |
 |---|---|
 | `config/` | 40+ Pydantic models: `CanvodConfig`, `SiteConfig`, `ProcessingParams`, `StorageConfig`, `MetadataConfig`, `LoggingConfig` |
-| `config/loader.py` | `ConfigLoader` — YAML/JSON/TOML config loading |
+| `config/loader.py` | `ConfigLoader` — YAML config loading with overlay support |
 | `tools/` | `YYYYDOY`, `YYDOY` date parsing, `file_hash()` |
 | `diagnostics/` | `TaskMetrics`, `track_memory`, `track_time`, `BatchTracker`, `DatasetReport` |
 
@@ -18,8 +18,7 @@ User config file (NEVER committed):
 
 Templates (committed): `config/canvod-settings.yaml.example`
 
-Legacy trio (`processing.yaml` / `sites.yaml` / `sids.yaml`) still loads with a
-`DeprecationWarning`. Migrate with `canvod config migrate`.
+Precedence: env var > overlay file (`--config` / `CANVOD_CONFIG_FILE`) > `canvod-settings.yaml` > package defaults.
 
 ## Pydantic conventions
 

@@ -2,8 +2,9 @@
 # canVODpy Settings — single unified file
 # =============================================================================
 # Copy this file to config/canvod-settings.yaml and customize for your setup.
-# Run: canvod config init   (scaffolds canvod-settings.yaml from this template)
-#      canvod config migrate (converts legacy processing/sites/sids.yaml)
+# Run: canvod config init      (scaffolds canvod-settings.yaml from this template)
+#      canvod config validate  (validates the file against Pydantic models)
+#      canvod config show      (prints the fully resolved configuration)
 #
 # Top-level sections:
 #   processing:  General settings, metadata, storage, parallelism

@@ -317,4 +317,4 @@ and **do not** need renaming under this scheme.
 
 ---
 
-**Next in the trail:** [API Levels](guides/api-levels.md) · [Getting Started](guides/getting-started.md) · [Architecture](architecture.md) · [AI Development](guides/ai-development.md)
+**Next in the trail:** [API Levels](guides/api-levels.md) · [Contributor Setup](guides/contributor-setup.md) · [Architecture](architecture.md) · [AI Development](guides/ai-development.md)

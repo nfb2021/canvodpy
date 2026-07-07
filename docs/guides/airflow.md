@@ -363,8 +363,8 @@ The two scenarios typically differ in these `canvod-settings.yaml` `processing.p
 ```yaml
 # Scenario a — RINEX + agency ephemeris
 processing:
-  ephemeris_source: final          # SP3/CLK, ~12-18 day lag
-  keep_rnx_vars: [SNR, Pseudorange, Phase, Doppler]
+  ephemeris_source: final          # SP3/CLK agency products
+  keep_gnss_observables: [SNR, Pseudorange, Phase, Doppler]
   store_radial_distance: true
 
 # Scenario b — SBF + broadcast ephemeris

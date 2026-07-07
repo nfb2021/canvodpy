@@ -9,8 +9,10 @@ canVODpy distributes that work and how to configure resource limits for your mac
 
 ## The parallelism model
 
-canVODpy uses Python's standard `concurrent.futures` library — no external scheduler
-required. The pipeline applies two levels of parallelism:
+canVODpy uses Python's standard `concurrent.futures.ThreadPoolExecutor` at the outer
+level and a **persistent [loky](https://loky.readthedocs.io/) process pool** at the
+inner level — no external scheduler required. The pipeline applies two levels of
+parallelism:
 
 ```
 ┌─────────────────────────────────────────┐
@@ -18,7 +20,7 @@ required. The pipeline applies two levels of parallelism:
 │  ┌──────────────┐  ┌──────────────┐     │
 │  │  Receiver A  │  │  Receiver B  │     │
 │  │ ─────────── │  │ ─────────── │     │
-│  │ProcessPool  │  │ProcessPool  │     │
+│  │  loky pool  │  │  loky pool  │     │
 │  │(file parse) │  │(file parse) │     │
 │  └──────────────┘  └──────────────┘     │
 └─────────────────────────────────────────┘
@@ -28,13 +30,32 @@ required. The pipeline applies two levels of parallelism:
 ```
 
 **Wave A/B**: the outer `ThreadPoolExecutor` runs two groups of receivers
-concurrently. Within each receiver, an inner `ProcessPoolExecutor` parses
-individual GNSS files in parallel.
+concurrently. Within each receiver, a persistent loky pool parses individual GNSS
+files in parallel using **flat LPT scheduling** — all tasks are submitted upfront
+and workers pick them up in Longest Processing Time order, which keeps CPU utilisation
+high across unevenly-sized files.
 
 **Sequential writes**: Icechunk on a local filesystem cannot accept concurrent
 commits. Every write is performed sequentially after parsing completes, with one
 commit per receiver-day. This is a hard constraint of the local storage model
 and ensures data integrity through Icechunk's snapshot mechanism.
+
+### Why loky instead of standard ProcessPoolExecutor?
+
+Python's built-in `ProcessPoolExecutor` re-spawns a fresh worker pool on each call.
+For a pipeline that processes hundreds of files across many days, the cost of
+importing Python and all scientific dependencies (numpy, xarray, icechunk, …) into
+fresh processes on every batch dominates wall time.
+
+**loky** (`pip install loky`, also the backend behind [joblib](https://joblib.readthedocs.io/))
+provides a **reusable process pool** that stays alive between batches:
+
+- Workers are started once at pipeline launch and reused across all tasks.
+- Module imports pay their cost exactly once per worker, not once per day.
+- The pool is shared across the run, not created and destroyed per receiver-day.
+
+This makes the overhead of spawning scale with the number of workers (a one-time cost),
+not with the number of files or days being processed.
 
 !!! note "Reading from the store is always fast"
     `xarray.open_zarr()` loads only the array chunks you actually access — the

@@ -1,10 +1,4 @@
-"""
-Configuration loader for canvodpy.
-
-Loads configuration from multiple YAML files with priority:
-1. Package defaults (lowest priority)
-2. User configuration files (highest priority)
-"""
+"""Configuration loader for canvodpy."""
 
 import functools
 import logging
@@ -147,17 +141,6 @@ class ConfigLoader:
             )
         return self._load_single_file(settings_yaml)
 
-    def _load_legacy(self) -> CanvodConfig:
-        """Load from the three-file legacy layout."""
-        processing = self._load_processing()
-        sites = self._load_sites()
-        sids = self._load_sids()
-
-        try:
-            return CanvodConfig(processing=processing, sites=sites, sids=sids)
-        except ValidationError as e:
-            raise ConfigValidationError(e, self.config_dir) from e
-
     def _load_single_file(self, path: Path) -> CanvodConfig:
         """Load from a unified settings file (canvod-settings.yaml).
 
@@ -187,20 +170,6 @@ class ConfigLoader:
             sids_overlay: dict = {}
             sites_raw_overlay: dict = {}
 
-        # Handle deprecated 'processing.processing:' → 'processing.params:' rename.
-        if "processing" in proc_data:
-            import warnings
-
-            warnings.warn(
-                "canvod.yaml: rename 'processing.processing:' to "
-                "'processing.params:' (deprecated key will be removed in a "
-                "future release)",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            nested = proc_data.pop("processing")
-            proc_data["params"] = self._deep_merge(proc_data.get("params", {}), nested)
-
         # Sids: merge user section with package defaults, then overlay.
         sids_defaults = self._load_yaml(self.defaults_dir / "sids.yaml")
         sids_data = self._deep_merge(sids_defaults, data.get("sids", {}))
@@ -220,67 +189,6 @@ class ConfigLoader:
             )
         except ValidationError as e:
             raise ConfigValidationError(e, self.config_dir) from e
-
-    def _load_processing(self) -> ProcessingConfig:
-        """Load processing config with merge."""
-        defaults = self._load_yaml(self.defaults_dir / "processing.yaml")
-
-        user_file = self.config_dir / "processing.yaml"
-        if user_file.exists():
-            user_config = self._load_yaml(user_file)
-            defaults = self._deep_merge(defaults, user_config)
-        else:
-            logger.warning(
-                "Config file %s not found, using defaults. Run: just config-init",
-                user_file,
-            )
-
-        # Backward compat: rename deprecated 'processing' YAML key to 'params'.
-        # After deep-merge, both keys can coexist (package defaults use 'params',
-        # user YAML may still use 'processing'). Merge user's value into 'params'.
-        if "processing" in defaults:
-            import warnings
-
-            warnings.warn(
-                "processing.yaml: rename the 'processing:' key to 'params:' "
-                "(deprecated name will be removed in a future release)",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            user_processing = defaults.pop("processing")
-            defaults["params"] = self._deep_merge(
-                defaults.get("params", {}), user_processing
-            )
-
-        return ProcessingConfig(**defaults)
-
-    def _load_sites(self) -> SitesConfig:
-        """Load sites config.
-
-        Returns an empty SitesConfig if sites.yaml is missing (e.g. CI, tests).
-        """
-        user_file = self.config_dir / "sites.yaml"
-
-        if not user_file.exists():
-            logger.warning(
-                "Config file %s not found, no sites configured. Run: just config-init",
-                user_file,
-            )
-            return SitesConfig(sites={})
-
-        data = self._load_yaml(user_file)
-        return SitesConfig(**data)
-
-    def _load_sids(self) -> SidsConfig:
-        """Load SIDs config with defaults."""
-        defaults = self._load_yaml(self.defaults_dir / "sids.yaml")
-
-        user_file = self.config_dir / "sids.yaml"
-        if user_file.exists():
-            user_config = self._load_yaml(user_file)
-            defaults = self._deep_merge(defaults, user_config)
-
-        return SidsConfig(**defaults)
 
     def _load_yaml(self, path: Path) -> dict[str, Any]:
         """Load YAML file.

@@ -49,7 +49,7 @@ CLAUDE.md (auto-loaded)
     ├── docs/architecture.md           ← system design & data flow
     ├── docs/principles.md             ← design philosophy
     ├── docs/guides/api-levels.md      ← L1-L4 API explanation
-    ├── docs/guides/getting-started.md ← setup & first run
+    ├── docs/guides/contributor-setup.md ← contributor setup & first run
     ├── docs/findings/                 ← scientific comparison results
     └── docs/packages/*/overview.md    ← per-package deep dives
 ```
@@ -204,6 +204,6 @@ It uses real GNSS test data from a git submodule.
 ## Related pages
 
 - [Architecture](../architecture.md) — system design and data flow
-- [Getting Started](getting-started.md) — setup and first run
+- [Contributor Setup](contributor-setup.md) — contributor setup and first run
 - [API Levels](api-levels.md) — the four API levels explained
 - [Audit Overview](../packages/audit/overview.md) — three-tier verification suite

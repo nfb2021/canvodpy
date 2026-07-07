@@ -372,4 +372,4 @@ See [API Levels](guides/api-levels.md) for details.
 
 ---
 
-**Next in the trail:** [Design Principles](principles.md) · [API Levels](guides/api-levels.md) · [Getting Started](guides/getting-started.md) · [AI Development](guides/ai-development.md)
+**Next in the trail:** [Design Principles](principles.md) · [API Levels](guides/api-levels.md) · [Contributor Setup](guides/contributor-setup.md) · [AI Development](guides/ai-development.md)

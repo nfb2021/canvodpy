@@ -139,31 +139,79 @@ Icechunk is a cloud-native transactional storage format for multidimensional arr
 
 ## Configuration
 
+All knobs live under `processing.icechunk:` in `canvod-settings.yaml`, backed by
+`IcechunkConfig` in `canvod-utils`.
+
 ```yaml
 # config/canvod-settings.yaml
 processing:
   icechunk:
-  compression_algorithm: zstd
-  compression_level: 5
-  inline_threshold: 512
-  get_concurrency: 1
+    compression_algorithm: zstd          # only valid value in icechunk ≥ 2.0
+    compression_level: 3                 # 0 = off, 1–22; 3 is the recommended default
+    inline_chunk_threshold_bytes: 512    # chunks ≤ this are inlined into the manifest
+    get_partial_values_concurrency: 1    # concurrent range-request parallelism
+    max_concurrent_requests: null        # null = icechunk picks a platform default
 
-  # Manifest preloading — loads coordinate manifests into memory at session open.
-  # Worth enabling once stores grow beyond a few hundred commits.
-  # manifest_preload_enabled: false
-  # manifest_preload_max_refs: 100000000
-  # manifest_preload_pattern: "epoch|sid"
+    chunk_strategies:
+      gnss_store:
+        epoch: 34560   # ≈ 24 h at 2.5 s cadence
+        sid: -1        # no chunking along sid axis
+      vod_store:
+        epoch: 34560
+        sid: -1
+
+    # Manifest splitting (enabled by default; keeps manifests bounded for long deployments)
+    manifest_splitting_enabled: true
+    manifest_splitting_epoch_range: 34560   # match chunk_strategies epoch
+
+    # Manifest preloading (off by default; useful for S3 read-heavy workloads)
+    # manifest_preload_enabled: false
+    # manifest_preload_max_refs: 10_000
+    # manifest_preload_max_arrays_to_scan: 500
+    # manifest_preload_pattern: "^(epoch|sid)$"
+
+    # Chunk cache (relevant for S3; local FS uses OS page cache)
+    # cache_num_chunk_refs: null
+    # cache_num_bytes_chunks: null
 ```
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `compression_algorithm` | `zstd` | Icechunk internal compression — `zstd`, `lz4`, or `gzip` |
-| `compression_level` | `5` | Compressor level (1 = fast, 22 = max for zstd) |
-| `inline_threshold` | `512` | Bytes below which chunks are stored inline in the manifest |
-| `get_concurrency` | `1` | Concurrent partial-value reads (increase for S3/GCS) |
-| `manifest_preload_enabled` | `false` | Pre-load coordinate manifests into memory at session open |
-| `manifest_preload_max_refs` | `100000000` | Cap on chunk refs preloaded |
-| `manifest_preload_pattern` | `"epoch\|sid"` | Regex for arrays to preload |
+| `compression_algorithm` | `zstd` | Only `zstd` is supported in icechunk ≥ 2.0 |
+| `compression_level` | `3` | 1 = fastest, 22 = maximum; 3 is the recommended write-heavy default |
+| `inline_chunk_threshold_bytes` | `512` | Chunks ≤ this are stored inline in the manifest (coordinate arrays only) |
+| `get_partial_values_concurrency` | `1` | Concurrent GET requests for partial array reads; increase for S3 |
+| `max_concurrent_requests` | `null` | Global cap on concurrent object-store connections; `null` = icechunk default |
+| `chunk_strategies.*.epoch` | `34560` | Epochs per chunk; `-1` = no chunking |
+| `chunk_strategies.*.sid` | `-1` | No chunking along sid axis (all SIDs in one chunk) |
+| `manifest_splitting_enabled` | `true` | Split manifests every `manifest_splitting_epoch_range` indices |
+| `manifest_splitting_epoch_range` | `34560` | Should match `chunk_strategies.epoch` |
+| `manifest_preload_enabled` | `false` | Eagerly fetch coordinate manifests at store-open time |
+| `manifest_preload_max_refs` | `10_000` | Cap on chunk refs preloaded |
+| `manifest_preload_max_arrays_to_scan` | `500` | Arrays scanned during preload |
+| `manifest_preload_pattern` | `^(epoch\|sid)$` | Regex for arrays to preload |
+| `cache_num_chunk_refs` | `null` | LRU chunk-reference cache size; `null` = unlimited |
+| `cache_num_bytes_chunks` | `null` | LRU decompressed-data cache in bytes; `null` = unlimited |
+
+### Migrating to S3
+
+The storage backend (bucket, credentials, endpoint) is passed separately to
+`icechunk.Repository.open(storage=...)` and is not part of `IcechunkConfig`.
+Once the backend is wired up, tune these knobs in order of impact:
+
+| Knob | Local default | Recommended S3 starting point |
+|---|---|---|
+| `get_partial_values_concurrency` | `1` | `10` |
+| `max_concurrent_requests` | `null` | `50` |
+| `cache_num_bytes_chunks` | `null` | `2_000_000_000` (2 GB) |
+| `cache_num_chunk_refs` | `null` | `500_000` |
+| `manifest_preload_enabled` | `false` | `true` |
+| `manifest_preload_pattern` | `^(epoch\|sid)$` | `^(obs\|snr\|epoch\|sid)$` |
+| `manifest_preload_max_refs` | `10_000` | `50_000` |
+| `chunk_strategies.gnss_store.epoch` | `34560` | profile before changing |
+| `compression_level` | `3` | `3` (no change) |
+| `inline_chunk_threshold_bytes` | `512` | `512` (no change) |
+| `manifest_splitting_enabled` | `true` | `true` (no change) |
 
 ---
 

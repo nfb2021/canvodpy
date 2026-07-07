@@ -116,9 +116,9 @@ config-show:
 config-init:
     uv run canvodpy config init
 
-# edit a configuration file (processing, sites, sids)
-config-edit FILE:
-    uv run canvodpy config edit {{ FILE }}
+# open canvod-settings.yaml in $EDITOR
+config-edit:
+    uv run canvodpy config edit
 
 # ============================================================================
 # Store Metadata
