@@ -134,6 +134,7 @@ name. ~1,765 LOC, 9 test modules.
 - ~~Merge the two CLIs.~~ **RESOLVED (c7bcad13):** `find_monorepo_root()` deduplicated; CLI unified under one entry point.
 - Validate naming-section config at `SitesConfig` load time — still open (§12 preflight).
 - ~~Surface `CANVOD_CONFIG_DIR` in `--help` and all package READMEs.~~ **RESOLVED (96e58c73 + prior):** `CANVOD_CONFIG_FILE` + `CANVOD_CONFIG_DIR` both handled in `load_config()`; `@lru_cache(maxsize=8)`, `logger.warning()` (no print()), `ConfigValidationError` (no sys.exit) all in place. **Still open:** mention both env vars in each `canvod-*` package README.
+- ~~`defaults/sites.yaml` never read by `_load_sites()`.~~ **RESOLVED (moot):** With the unified `canvod-settings.yaml`, sites are always user-defined — `defaults/sites.yaml` contains `sites: {}` and there is nothing to merge. Dead file; delete or leave as a stub.
 
 **Open questions:**
 - Primary operational interface: L3 `Site` API with `run.py` as sugar, or runner as
@@ -169,14 +170,26 @@ No implementation needed until object storage is a confirmed target.
 
 ## 7. Quick wins — can ride any PR
 
-- **Silent discovery skips** (`mapping.py:145, 178`): add structured logging at minimum;
-  consider raising under `file_pairing: complete`.
-- **`sys.exit` in `loader.py:116-118`**: replace with `raise ConfigurationError(...)`.
-- **`FilenameCatalog`** (`catalog.py:79-301`): delete. Zero consumers, pulls in `duckdb`.
-- **Commit metadata annotation**: add `rinex_hash`, `canonical_name`, `start`, `end` to
-  `session.commit(metadata={...})` — self-describing Icechunk history, zero logic change.
-- **`DeltaLS` DNU guard** in `_tow_wn_to_utc`: guard value −128 to prevent ~2-min
-  timestamp shift on unsynchronised receivers.
+- ~~**Silent discovery skips** (`mapping.py:145, 178`)~~ **DONE:** `logger.warning("Could not map %s — skipping", path.name)` at lines 149 and 183.
+- ~~**`sys.exit` in `loader.py:116-118`**~~ **DONE (c7bcad13):** raises `ConfigValidationError`.
+- ~~**`FilenameCatalog`** (`catalog.py:79-301`): delete. Zero consumers, pulls in `duckdb`.~~
+  **DONE (2026-07-08):** Deleted `catalog.py` and `tests/test_catalog.py`. Removed
+  `from .catalog import FilenameCatalog` and `"FilenameCatalog"` from `__init__.py`.
+  Dropped `duckdb>=1.0` from `canvod-virtualiconvname/pyproject.toml`. ruff clean.
+
+- ~~**Commit metadata annotation**: add `rinex_hash`, `canonical_name`, `start`, `end` to
+  `session.commit(metadata={...})` — self-describing Icechunk history, zero logic change.~~
+  **DONE (2026-07-08):** `processor.py:2010–2024` — builds `_commit_meta` dict with
+  `receiver`, `date`, `files`, `start`, `end`, `rinex_hashes`, `canonical_names` from
+  `metadata_records` and passes it to `session.commit(commit_msg, metadata=_commit_meta)`.
+  icechunk v2 `Session.commit()` signature: `(message, metadata: dict[str, Any] | None)`.
+
+- ~~**`DeltaLS` DNU guard** in `_tow_wn_to_utc` (`reader.py:1276`): guard `delta_ls == -128`
+  to prevent ~2-min timestamp shift on unsynchronised receivers.~~
+  **DONE (2026-07-08):** Fixed at all three `ReceiverTime` match arms (lines ~1276, ~1589,
+  ~2128). Pattern: `_dls = int(data["DeltaLS"]); if _dls != -128: delta_ls = _dls`.
+  -128 is the SBF DNU sentinel (0xFF signed); keeping the previous/default value prevents
+  a ~2-minute UTC timestamp jump when the receiver hasn't yet synchronised to GPS time.
 
 ---
 
@@ -211,7 +224,7 @@ No implementation needed until object storage is a confirmed target.
 7. **Window semantics — define once.** `[a, b] = cum[i_b] - cum[i_a]` covers obs in `(edge_a, edge_b]`. Document in group attrs; test for off-by-one.
 8. **`sid_code` registry must be append-only** and committed atomically with the obs that use it. Make it a method on the store class, not a dict in a script.
 
-**Note on streamstats wiring:** `canvod-streamstats` exists (`packages/canvod-streamstats/src/canvod/streamstats/accumulators/`) and `StatisticsConfig` is defined in `models.py:592` but **neither is wired into the orchestrator** (confirmed by grep). The rollup hook below is the first real instance of the post-commit-step pattern; design it so `StatisticsConfig` can later reuse the same hook point.
+**Note on streamstats wiring:** `canvod-streamstats` does **not** exist as a package in this repo (verified 2026-07-08 — not in `packages/`). `StatisticsConfig` is defined in `models.py:592` but is not wired into the orchestrator. The rollup hook below is the first real instance of the post-commit-step pattern; design it so `StatisticsConfig` can later reuse the same hook point.
 
 ### 8.2 Package placement
 
@@ -340,7 +353,7 @@ Good pattern already in-tree to copy: `canvod-store/store.py:139–149` and `can
 2. ~~Add `strict` semantics~~ — **DONE:** defaults silently when config absent; `ConfigValidationError` raised on bad YAML.
 3. ~~Add `@lru_cache`~~ — **DONE:** `@functools.lru_cache(maxsize=8)` on `load_config()`.
 4. ~~Replace `sys.exit(1)` with `raise ConfigValidationError`~~ — **DONE.**
-5. Either use `defaults/sites.yaml` in `_load_sites()` or delete it. ~3 lines. ← still open
+5. ~~Either use `defaults/sites.yaml` in `_load_sites()` or delete it.~~ **RESOLVED (moot):** unified config makes this irrelevant — see §4.
 
 **Tier 2 — decouple readers from config (canvod-readers):**
 6. `metadata.py:254`: wrap in `try/except Exception: meta = MetadataConfig()`. ~6 lines.
@@ -384,7 +397,7 @@ Everything else is auto-detected (file naming, temporal extent, SID universe) or
 2. ~~Replace all `print()` warnings in `loader.py` with `logging.getLogger("canvod.config")`~~ **RESOLVED (c7bcad13)**
 3. ~~`@lru_cache(maxsize=4)` on `load_config` keyed on resolved `config_dir`.~~ **RESOLVED (e8275bc6):** `@functools.lru_cache(maxsize=8)`
 4. ~~`model_config = {"extra": "forbid"}` on **every** nested model~~ **RESOLVED (c7bcad13):** `_StrictModel` base class, all 24 config classes inherit it.
-5. Path-existence `@field_validator` on `stores_root_dir`, `gnss_site_data_root` — reject sentinel values (`/path/to/stores`, `Unknown`, `user@example.com`) at load time. ← **still open**
+5. Path-existence `@field_validator` on `stores_root_dir`, `gnss_site_data_root` — reject sentinel values (`/path/to/stores`, `Unknown`, `user@example.com`) at load time. ← **still open** (verified 2026-07-08: no such validator in models.py)
 
 ### Phase 1 — Config simplification (~3 days)
 
@@ -417,17 +430,55 @@ Files: `packages/canvod-utils/src/canvod/utils/config/cli.py` (upgrade `init` co
 
 ### Phase 3 — TUI dashboard + `canvodpy vod` subcommand (~3–5 days)
 
-Files: new `canvodpy/src/canvodpy/cli/dashboard.py` (Textual app), `cli/run.py`, new `cli/vod.py`, `vod_computer.py`, `factories.py`, root `pyproject.toml`.
+#### Dashboard — DONE (2026-07-08)
 
-**TUI library choice:** Textual v8.x (36k stars, Textualize/commercially backed, asyncio-first). Three built-in widgets match the pipeline's needs exactly: `ProgressBar` (one per data stream), `RichLog` (scrollable, appendable from workers), `Collapsible` (warning section). TTY detection gate: `if not sys.stdout.isatty()` → keep existing Rich/print path unchanged — cron and CI are unaffected.
+**What was built:** Pure Rich (not Textual) `Reporter` abstraction in
+`canvodpy/src/canvodpy/cli/dashboard.py`.  `run.py` updated to use it.
 
-1. Textual app with three panes: per-stream progress + day counter, scrollable log (`RichLog`), collapsible warnings. Orchestrator emits events via an `asyncio.Queue` consumed by the app; existing Rich `_processing_progress()` (processor.py:67) remains as the non-TTY fallback.
+**How it works:**
+- TTY auto-detected via `sys.stdout.isatty()` — no flag needed.
+- **Non-TTY** (`PlainReporter`): identical output to before, plain `print()`.
+- **TTY** (`RichReporter`): `Live(Group(Panel, Progress))` pinned at the bottom;
+  per-day lines scroll above via `live.console.print()`.
+
+**Invoke:**
+```bash
+# TTY → Rich Live display
+uv run python -m canvodpy.cli.run --site Rosalia --start 2025001 --end 2025007
+
+# Force plain output (e.g. when piping)
+uv run python -m canvodpy.cli.run --site Rosalia 2>&1 | tee run.log
+```
+
+**What you see in TTY mode:**
+```
+  ephemeris=final  resource_mode=auto  strategy=skip
+  VOD analyses: ['canopy_01_vs_reference_01']
+
+─── 2025001
+  canopy_01: 17280×277  reference_01_canopy_01: 17120×277
+  VOD canopy_01_vs_reference_01: 1204k/1204k valid (98%)  1.2s
+  pipeline=42.3s  vod=1.2s  vod_store=0.3s
+
+╭─────────────────────────────────────────────────────╮
+│  ─[◉]─  canvod · ROSA · 2025001–2025007 · day 3    │
+╰─────────────────────────────────────────────────────╯
+  Overall  ━━━━░░░░░░░░  3/7 days  0:02:06  eta 1:55:14
+```
+
+**What's deferred (Phase 3b):**
+- Per-receiver progress bars (◉/◎ step labels from §14) — require orchestrator
+  event hooks (asyncio.Queue into processor.py) not yet wired.
+- Decision against Textual: pure Rich `Live` covers the need without the heavy
+  dep; Textual adds value only if we need interactive widgets (keyboard nav,
+  mouse, collapsible sections). Revisit if those become a requirement.
+
+#### Still open in Phase 3
+
 2. `canvodpy vod` subcommand: `--site`, `--analysis`, `--start`, `--end`, `--calculator`. Thread `calculator_cls` through `VodComputer.compute_bulk()` (vod_computer.py:127) — currently hardcoded `TauOmegaZerothOrder` at L236.
 3. Calculator registry in `VODFactory` (factories.py:362): resolve `importlib.metadata.entry_points(group="canvodpy.calculators")` first; if `":"` in the name, import dotted path (`mylab.module:MyClass`). Register `tau_omega_zeroth_order` (`canvod-vod/.../calculator.py:148`) in `pyproject.toml` `[project.entry-points."canvodpy.calculators"]`.
 
 **Constraint:** no `xr.concat()` anywhere in `compute_bulk` changes.
-
-**Risk:** Textual + Dask worker stdout interleaving — route worker logs through the queue, never direct prints. Textual is an early adopter choice for scientific Python; degrade gracefully to Rich if Textual causes dependency issues.
 
 **Total effort: ~11–14 days.** Phase 0 is the prerequisite; Phases 1–2 deliver the biggest scientist-visible wins and can ship before Phase 3.
 
@@ -662,19 +713,19 @@ rosalia / canopy_01 (/data/gnss/rosalia/02_canopy)
 
 ### Implementation plan (revised — reflects split decision above)
 
-**Phase 1 — create `canvod-preflight` package (~2 days):**
-1. New workspace package `packages/canvod-preflight/`.
-2. Move `convention.py`, `validator.py`, `catalog.py` out of `canvod-virtualiconvname` into `canvod.preflight.*`. Update all import sites in `canvodpy` and `canvod-store` (grep: `from canvod.virtualiconvname.convention`, `.validator`, `.catalog`).
-3. Fix `ValidationReport.is_valid` (validator.py:37–40): fail hard on zero matched files — this is the most dangerous silent bug.
-4. Rewrite `_format_validation_error()` (validator.py:135–159) using the plain-language templates from the "Error message redesign" section above. Hide canonical names from all user-facing output.
-5. Standalone CLI entry point: `canvod-preflight = "canvod.preflight.cli:app"` in pyproject.toml.
+**~~Phase 1 — create `canvod-preflight` package (~2 days):~~ DONE (2026-07-08)**
+1. ~~New workspace package `packages/canvod-preflight/`.~~ **DONE** — exists with `convention.py`, `validator.py`, `mapping.py`, `config_models.py`, `patterns.py`, `cli.py`.
+2. ~~Move `convention.py`, `validator.py`, `catalog.py` out of `canvod-virtualiconvname`.~~ **DONE** (note: `catalog.py` was NOT moved — still in virtualiconvname only).
+3. ~~Fix `ValidationReport.is_valid` (validator.py:37–40): fail hard on zero matched files.~~ **DONE** — zero-match guard at `canvod-preflight/validator.py:52`.
+4. Rewrite `_format_validation_error()` using plain-language templates. ← **still open**
+5. ~~Standalone CLI entry point.~~ **DONE** — `canvod-preflight validate` via typer in `cli.py`.
 
 **Phase 2 — harden remaining `canvod-virtualiconvname` (~1 day):**
-6. Remove the moved files; add `canvod-preflight` as an explicit dependency.
-7. Log every file skipped by `discover_all/discover_for_date` (mapping.py:145–146, 178–179) at WARNING with filename and reason.
-8. Port `detect_overlaps()` into recipe validation path (tasks.py:402–407) — equal guardrails on both paths.
-9. Remove phantom `just naming-init` reference (tasks.py:344); add `config/recipes/` with 2 commented examples.
-10. Document the manual integration hook in the package README (open question: `site.pipeline(file_mapper=...)` or staging-dir approach).
+6. Remove the moved files from virtualiconvname; add `canvod-preflight` as an explicit dependency. ← **still open** (convention.py/validator.py still duplicated in both packages)
+7. ~~Log every file skipped by `discover_all/discover_for_date` (mapping.py:145–146, 178–179).~~ **DONE** — `logger.warning()` at lines 149 and 183.
+8. Port `detect_overlaps()` into recipe validation path (tasks.py:402–407) — equal guardrails on both paths. ← **still open**
+9. Remove phantom `just naming-init` reference (tasks.py:344); add `config/recipes/` with 2 commented examples. ← **still open**
+10. Document the manual integration hook in the package README. ← **still open**
 
 **Phase 3 — `canvod-preflight` new checks (~2 days):**
 11. RINEX header peek: open first few KB, parse `SYS / # / OBS TYPES` and `INTERVAL`, compare against filename-declared sampling and period.
@@ -829,7 +880,7 @@ that holds up at both widths. Then commit as a constant in a new
 
 ---
 
-## 16. pydantic-settings: 12-factor config resolution (mechanism for §11 Option B)
+## 16. ~~pydantic-settings: 12-factor config resolution~~ — DONE (2026-07-08)
 
 **Context:** §11 identifies "no general CLI > env > user-yaml > defaults story"
 as a pain point and proposes Option B (single `canvod-settings.yaml`). `pydantic-settings`
@@ -848,10 +899,12 @@ minimal code.
 - HPC/cloud/n8n deployment: pipeline step sets env vars, no config file needed
   on the compute node — directly enables the n8n/Airflow integration track (§4).
 
-**Migration:** `BaseModel` → `BaseSettings` on `ProcessingConfig` and the new
+**DONE (verified 2026-07-08):** `CanvodConfig(BaseSettings)` with `settings_customise_sources()` at `models.py:1087`. `pydantic_settings` imported at `models.py:25`.
+
+~~**Migration:** `BaseModel` → `BaseSettings` on `ProcessingConfig` and the new
 unified `CanvodConfig`. Add `settings_customise_sources()` to insert two YAML
 sources (defaults then user file) below env vars. `pydantic-settings` ships
-with pydantic v2 — no new dependency in practice.
+with pydantic v2 — no new dependency in practice.~~
 
 **Effort:** ~1 day (base class swap + source registration + env var tests).
 Sequence after §11 Phase 2 (single `canvod-settings.yaml` must exist before env var
