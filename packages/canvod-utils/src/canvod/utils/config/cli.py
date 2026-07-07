@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-import yaml
 from rich.console import Console
 from rich.table import Table
 
@@ -172,111 +171,6 @@ def init(
     )
     console.print("  3. Edit config/recipes/*.yaml to match your filename format")
     console.print("  4. Run: canvod config validate\n")
-
-
-@config_app.command()
-def migrate(
-    config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
-    dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Print merged config without writing")
-    ] = False,
-    force: Annotated[
-        bool,
-        typer.Option("--force", "-f", help="Overwrite existing canvod-settings.yaml"),
-    ] = False,
-) -> None:
-    """Merge legacy config files into a single canvod-settings.yaml.
-
-    Reads processing.yaml + sites.yaml + sids.yaml from the config directory
-    and writes a unified canvod-settings.yaml. Legacy files are left in place
-    so you can review the result before removing them.
-
-    Parameters
-    ----------
-    config_dir : Path
-        Directory containing legacy config files.
-    dry_run : bool
-        Print the merged config to stdout without writing anything.
-    force : bool
-        Overwrite an existing canvod-settings.yaml.
-
-    Returns
-    -------
-    None
-    """
-    out_path = config_dir / "canvod-settings.yaml"
-
-    if out_path.exists() and not force and not dry_run:
-        console.print(
-            f"[yellow]⚠  {out_path} already exists. "
-            "Use --force to overwrite or --dry-run to preview.[/yellow]"
-        )
-        raise typer.Exit(1)
-
-    sections: dict = {}
-    found: list[Path] = []
-
-    def _read(fpath: Path) -> dict:
-        with open(fpath) as fh:
-            return yaml.safe_load(fh) or {}
-
-    # processing.yaml — top-level keys map directly to the 'processing:' section
-    proc_file = config_dir / "processing.yaml"
-    if proc_file.exists():
-        sections["processing"] = _read(proc_file)
-        found.append(proc_file)
-    else:
-        console.print(f"[yellow]⊘  {proc_file} not found — skipping.[/yellow]")
-
-    # sites.yaml — unwrap the top-level 'sites:' key so canvod-settings.yaml
-    # has site names directly under 'sites:' (one less level of nesting).
-    sites_file = config_dir / "sites.yaml"
-    if sites_file.exists():
-        raw = _read(sites_file)
-        sections["sites"] = raw.get("sites", raw)
-        found.append(sites_file)
-    else:
-        console.print(f"[yellow]⊘  {sites_file} not found — skipping.[/yellow]")
-
-    # sids.yaml — top-level keys map directly to the 'sids:' section
-    sids_file = config_dir / "sids.yaml"
-    if sids_file.exists():
-        sections["sids"] = _read(sids_file)
-        found.append(sids_file)
-    else:
-        console.print(f"[yellow]⊘  {sids_file} not found — skipping.[/yellow]")
-
-    if not sections:
-        console.print("[red]No legacy config files found. Nothing to migrate.[/red]")
-        raise typer.Exit(1)
-
-    header = (
-        "# canvodpy configuration — canvod-settings.yaml\n"
-        "# Migrated from legacy three-file layout (processing/sites/sids.yaml).\n"
-        "# Run: canvod config validate\n\n"
-    )
-    content = yaml.dump(
-        sections, default_flow_style=False, allow_unicode=True, sort_keys=False
-    )
-
-    if dry_run:
-        console.print(f"[bold]# Would write to {out_path}:[/bold]\n")
-        console.print(header + content)
-        return
-
-    with open(out_path, "w") as fh:
-        fh.write(header + content)
-
-    console.print(f"[green]✓ Written:[/green] {out_path}")
-    console.print("\n[dim]Sources merged:[/dim]")
-    for f in found:
-        console.print(f"  {f}")
-    console.print("\n[bold]Next steps:[/bold]")
-    console.print("  1. Review canvod-settings.yaml to confirm it looks correct")
-    console.print("  2. Run: canvod config validate")
-    console.print("  3. Once confirmed, remove the legacy files:")
-    names = "  ".join(f.name for f in found)
-    console.print(f"       {names}\n")
 
 
 @config_app.command()
@@ -455,18 +349,12 @@ def show(
 
 @config_app.command()
 def edit(
-    file: str = typer.Argument(
-        ...,
-        help="Config file to edit (processing, sites, sids)",
-    ),
     config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
 ) -> None:
-    """Open a configuration file in the editor.
+    """Open canvod-settings.yaml in $EDITOR.
 
     Parameters
     ----------
-    file : str
-        Config file to edit (processing, sites, sids).
     config_dir : Path
         Directory containing config files.
 
@@ -476,25 +364,13 @@ def edit(
     """
     import os
 
-    file_map = {
-        "processing": config_dir / "processing.yaml",
-        "sites": config_dir / "sites.yaml",
-        "sids": config_dir / "sids.yaml",
-    }
-
-    if file not in file_map:
-        console.print(f"[red]Unknown config file:[/red] {file}")
-        console.print(f"Choose from: {', '.join(file_map.keys())}")
-        raise typer.Exit(1)
-
-    file_path = file_map[file]
+    file_path = config_dir / "canvod-settings.yaml"
 
     if not file_path.exists():
         console.print(f"[red]File not found:[/red] {file_path}")
         console.print("\nRun: just config-init")
         raise typer.Exit(1)
 
-    # Open in editor
     editor = os.getenv("EDITOR", "nano")
     subprocess.run([editor, str(file_path)])
 
@@ -559,9 +435,7 @@ def _show_processing(config: ProcessingConfig) -> None:
     console.print(f"  VOD store name:    {st.vod_store_name}")
     aux_dir = str(st.aux_data_dir) if st.aux_data_dir else "[dim]system temp[/dim]"
     console.print(f"  Aux data dir:      {aux_dir}")
-    console.print(
-        f"  GNSS strategy:     {st.gnss_store_strategy} (expire: {st.gnss_store_expire_days}d)"
-    )
+    console.print(f"  GNSS strategy:     {st.gnss_store_strategy}")
     console.print(f"  VOD strategy:      {st.vod_store_strategy}")
     console.print()
 

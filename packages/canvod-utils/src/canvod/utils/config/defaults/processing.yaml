@@ -59,7 +59,6 @@ icechunk:
 storage:
   stores_root_dir: /path/to/stores  # MUST be set by user!
   gnss_store_strategy: skip
-  gnss_store_expire_days: 2
   vod_store_strategy: overwrite
 
 logging:

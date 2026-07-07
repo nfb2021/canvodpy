@@ -59,8 +59,8 @@ class MyIcechunkStore:
     ----------
     store_path : Path
         Path to the Icechunk store directory.
-    store_type : str, default "rinex_store"
-        Type of store ("rinex_store" or "vod_store").
+    store_type : str, default "gnss_store"
+        Type of store ("gnss_store" or "vod_store").
     compression_level : int | None, optional
         Override default compression level.
     compression_algorithm : str | None, optional
@@ -71,7 +71,7 @@ class MyIcechunkStore:
     store_path : Path
         Path to the Icechunk store directory.
     store_type : str
-        Type of store ("rinex_store" or "vod_store").
+        Type of store ("gnss_store" or "vod_store").
     compression_level : int
         Compression level (1-9).
     compression_algorithm : icechunk.CompressionAlgorithm
@@ -83,7 +83,7 @@ class MyIcechunkStore:
     def __init__(
         self,
         store_path: Path,
-        store_type: str = "rinex_store",
+        store_type: str = "gnss_store",
         compression_level: int | None = None,
         compression_algorithm: str | None = None,
     ) -> None:
@@ -108,7 +108,6 @@ class MyIcechunkStore:
             cfg = load_config()
             ic_cfg = cfg.processing.icechunk
             _rinex_store_strategy = cfg.processing.storage.gnss_store_strategy
-            _rinex_store_expire_days = cfg.processing.storage.gnss_store_expire_days
             _vod_store_strategy = cfg.processing.storage.vod_store_strategy
             _log_path_depth = cfg.processing.logging.log_path_depth
         except Exception:
@@ -116,7 +115,6 @@ class MyIcechunkStore:
 
             ic_cfg = IcechunkConfig()
             _rinex_store_strategy = "append"
-            _rinex_store_expire_days = 2
             _vod_store_strategy = "overwrite"
             _log_path_depth = 3
 
@@ -138,7 +136,6 @@ class MyIcechunkStore:
 
         # Storage config cached for metadata rows
         self._rinex_store_strategy = _rinex_store_strategy
-        self._rinex_store_expire_days = _rinex_store_expire_days
         self._vod_store_strategy = _vod_store_strategy
         self._log_path_depth = _log_path_depth
 
@@ -2083,7 +2080,7 @@ class MyIcechunkStore:
             Expired snapshot IDs.
         """
         if days is None:
-            days = self._rinex_store_expire_days
+            days = 30
         cutoff = datetime.now(UTC) - timedelta(days=days)
 
         # cutoff = datetime(2025, 10, 3, 16, 44, 1, tzinfo=timezone.utc)
@@ -2315,7 +2312,7 @@ class MyIcechunkStore:
 
         # Write rechunked data (overwrites only this group)
         with self.writable_session(temp_branch) as session:
-            to_icechunk(ds_rechunked, session, group=group_name, mode="w")
+            to_icechunk(ds_rechunked, session, group=group_name, mode="r+")
             snapshot_id = session.commit(f"Rechunked {group_name} with chunks={chunks}")
 
         self._logger.info(
@@ -2570,7 +2567,7 @@ def create_rinex_store(store_path: Path) -> MyIcechunkStore:
     MyIcechunkStore
         Configured store for RINEX data.
     """
-    return MyIcechunkStore(store_path=store_path, store_type="rinex_store")
+    return MyIcechunkStore(store_path=store_path, store_type="gnss_store")
 
 
 def create_vod_store(store_path: Path) -> MyIcechunkStore:

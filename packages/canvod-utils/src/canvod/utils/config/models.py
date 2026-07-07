@@ -477,7 +477,6 @@ class StorageConfig(_StrictModel):
         ),
     )
     gnss_store_strategy: Literal["skip", "overwrite", "append"] = "skip"
-    gnss_store_expire_days: int = Field(2, ge=1)
     vod_store_strategy: Literal["skip", "overwrite", "append"] = "overwrite"
 
     @field_validator("stores_root_dir", mode="before")

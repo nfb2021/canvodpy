@@ -2017,10 +2017,11 @@ class RinexDataProcessor:
                     snapshot_id[:8],
                 )
 
-                expired = self.site.rinex_store.expire_old_snapshots()
-
-                if expired:
-                    print(f"Expired {len(expired)} snapshots for cleanup.")
+                # GC is intentionally skipped here. Running garbage_collect() after
+                # every commit performs a full reachability scan over all snapshots,
+                # manifests, and chunk objects — cost grows O(n) per batch → O(n²)
+                # over a multi-year backfill. Call store.expire_old_snapshots() or
+                # store.maintenance() once after the pipeline completes instead.
 
                 # Timing summary
                 t_end = time.time()
