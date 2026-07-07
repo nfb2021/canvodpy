@@ -48,8 +48,20 @@ class MetadataConfig(_StrictModel):
     This is a Pydantic model for configuration validation.
     """
 
-    author: str = Field(..., description="Author name")
-    email: EmailStr = Field(..., description="Author email")
+    author: str = Field(
+        ...,
+        description=(
+            "Your full name — used in dataset metadata and FAIR attribution "
+            "(e.g. 'Jane Forester'). Wizard prompt: 'Who is running this pipeline?'"
+        ),
+    )
+    email: EmailStr = Field(
+        ...,
+        description=(
+            "Your contact email — included in DataCite and ACDD metadata records "
+            "(e.g. 'jane@boku.ac.at'). Wizard prompt: 'Contact email address?'"
+        ),
+    )
 
     @field_validator("author", mode="before")
     @classmethod
@@ -80,7 +92,14 @@ class MetadataConfig(_StrictModel):
         return v
 
     orcid: str | None = Field(None, description="ORCID identifier")
-    institution: str = Field(..., description="Institution name")
+    institution: str = Field(
+        ...,
+        description=(
+            "Your institution or organisation name "
+            "(e.g. 'University of Natural Resources and Life Sciences Vienna'). "
+            "Wizard prompt: 'Which institution do you belong to?'"
+        ),
+    )
     institution_ror: str | None = Field(None, description="ROR identifier")
     department: str | None = Field(None, description="Department name")
     research_group: str | None = Field(
@@ -483,7 +502,11 @@ class StorageConfig(_StrictModel):
 
     stores_root_dir: Path = Field(
         ...,
-        description="Root directory for all IceChunk stores",
+        description=(
+            "Directory where canvodpy writes all processed results "
+            "(Icechunk/Zarr stores). Must exist and be writable. "
+            "Wizard prompt: 'Where should processed results be stored?'"
+        ),
     )
     gnss_store_name: str = Field(
         "rinex",
@@ -804,7 +827,11 @@ class ReceiverConfig(_StrictModel):
 
     type: Literal["reference", "canopy"] = Field(
         ...,
-        description="Receiver type",
+        description=(
+            "Receiver role: 'canopy' = placed under the vegetation canopy; "
+            "'reference' = open-sky baseline above or outside the canopy. "
+            "Wizard prompt: 'Is this receiver under the canopy or in the open sky?'"
+        ),
     )
     directory: str = Field(..., description="Subdirectory for receiver data")
     paired_canopies: str | list[str] | None = Field(
