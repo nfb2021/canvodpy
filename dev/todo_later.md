@@ -404,7 +404,11 @@ Everything else is auto-detected (file naming, temporal extent, SID universe) or
 2. ~~Replace all `print()` warnings in `loader.py` with `logging.getLogger("canvod.config")`~~ **RESOLVED (c7bcad13)**
 3. ~~`@lru_cache(maxsize=4)` on `load_config` keyed on resolved `config_dir`.~~ **RESOLVED (e8275bc6):** `@functools.lru_cache(maxsize=8)`
 4. ~~`model_config = {"extra": "forbid"}` on **every** nested model~~ **RESOLVED (c7bcad13):** `_StrictModel` base class, all 24 config classes inherit it.
-5. Path-existence `@field_validator` on `stores_root_dir`, `gnss_site_data_root` — reject sentinel values (`/path/to/stores`, `Unknown`, `user@example.com`) at load time. ← **still open** (verified 2026-07-08: no such validator in models.py)
+5. ~~Path-existence `@field_validator` on `stores_root_dir`, `gnss_site_data_root` — reject sentinel values (`/path/to/stores`, `Unknown`, `user@example.com`) at load time.~~ **DONE (2026-07-08):**
+   - `MetadataConfig`: `_reject_sentinel_author` rejects `"Unknown"`, `"Your Name"`, `"Your Name Here"`
+   - `MetadataConfig`: `_reject_sentinel_email` rejects `"user@example.com"`, `"your@email.com"`, `"your.email@example.com"`
+   - `StorageConfig.validate_stores_dir`: extended to reject `"/path/to/stores"`, `"/path/to/your/stores"` before expanding `~`
+   - All raise `ValueError` with a plain-language message pointing to `canvod-settings.yaml`
 
 ### Phase 1 — Config simplification (~3 days)
 

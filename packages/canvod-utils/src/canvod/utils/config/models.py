@@ -50,6 +50,35 @@ class MetadataConfig(_StrictModel):
 
     author: str = Field(..., description="Author name")
     email: EmailStr = Field(..., description="Author email")
+
+    @field_validator("author", mode="before")
+    @classmethod
+    def _reject_sentinel_author(cls, v: object) -> object:
+        if isinstance(v, str) and v.strip() in {
+            "Unknown",
+            "Your Name",
+            "Your Name Here",
+        }:
+            raise ValueError(
+                f"author is set to placeholder {v!r} — "
+                "fill in your real name in canvod-settings.yaml"
+            )
+        return v
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _reject_sentinel_email(cls, v: object) -> object:
+        if isinstance(v, str) and v.strip() in {
+            "user@example.com",
+            "your@email.com",
+            "your.email@example.com",
+        }:
+            raise ValueError(
+                f"email is set to placeholder {v!r} — "
+                "fill in your real email in canvod-settings.yaml"
+            )
+        return v
+
     orcid: str | None = Field(None, description="ORCID identifier")
     institution: str = Field(..., description="Institution name")
     institution_ror: str | None = Field(None, description="ROR identifier")
@@ -482,8 +511,13 @@ class StorageConfig(_StrictModel):
     @field_validator("stores_root_dir", mode="before")
     @classmethod
     def validate_stores_dir(cls, v: object) -> object:
-        """Expand ~ in stores_root_dir at parse time."""
+        """Expand ~ and reject placeholder values in stores_root_dir."""
         if isinstance(v, str):
+            if v.strip() in {"/path/to/stores", "/path/to/your/stores"}:
+                raise ValueError(
+                    f"stores_root_dir is set to placeholder {v!r} — "
+                    "set a real directory path in canvod-settings.yaml"
+                )
             return Path(v).expanduser()
         return v
 
