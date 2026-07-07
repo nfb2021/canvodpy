@@ -984,6 +984,23 @@ class SiteConfig(_StrictModel):
         )
         return self.resolve_paired_canopies(receiver_name)
 
+    @model_validator(mode="after")
+    def _auto_derive_vod_analyses(self) -> SiteConfig:
+        """Fill vod_analyses from paired_canopies when not explicitly set."""
+        if self.vod_analyses is not None:
+            return self
+        pairs = self.get_reference_canopy_pairs()
+        if not pairs:
+            return self
+        self.vod_analyses = {
+            f"{canopy}_vs_{ref}": VodAnalysisConfig(
+                canopy_receiver=canopy,
+                reference_receiver=ref,
+            )
+            for ref, canopy in pairs
+        }
+        return self
+
     def get_reference_canopy_pairs(self) -> list[tuple[str, str]]:
         """Expand paired_canopies into (reference_name, canopy_name) pairs.
 

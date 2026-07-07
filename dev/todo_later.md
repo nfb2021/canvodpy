@@ -418,7 +418,8 @@ Files: `models.py`, `defaults/` templates, `canvod-utils/src/canvod/utils/config
 2. ~~Rename `ReceiverConfig.scs_from` (models.py:698) → `pairs_with_canopy`~~ **RESOLVED (4f855dde):** renamed to `paired_canopies` with deprecated `scs_from` alias; `resolve_scs_from → resolve_paired_canopies` kept as alias.
 3. ~~Implement `SidsConfig._get_preset_sids()` (models.py:967 TODO stub returning `[]`) from packaged `presets/` dir, or remove `preset` from the `Literal` entirely and fix `sids.yaml.example:31–36`.~~ **RESOLVED (ac5283e8):** implemented with bundled `presets/default.yaml`.
 4. Docstring the 5 non-discoverable facts on `SiteConfig` / `ReceiverConfig` / `MetadataConfig` — these become the wizard's question prompts verbatim.
-5. Fix documentation drift: `configuration.md:91` `base_dir` → `gnss_site_data_root`; `configuration.md:145` `custom:` → `custom_sids`; correct `scs_from` receiver example (L103–107).
+   **Auto-derive vod_analyses DONE (2026-07-08):** Added `_auto_derive_vod_analyses` `@model_validator(mode="after")` on `SiteConfig` — when `vod_analyses` is omitted, expands `paired_canopies` via `get_reference_canopy_pairs()` into `{canopy}_vs_{ref}: VodAnalysisConfig(...)` entries. Users no longer need to declare pairings twice. All 56 config-model tests pass.
+5. ~~Fix documentation drift: `configuration.md:91` `base_dir` → `gnss_site_data_root`; `configuration.md:145` `custom:` → `custom_sids`; correct `scs_from` receiver example (L103–107).~~ **ALREADY RESOLVED** (verified 2026-07-08: all three drifts absent from current file — `base_dir` gone from L91 area, L145 shows `paired_canopies: all`, L289 names field correctly with deprecated alias note).
 
 **Risk:** field rename ripples into `canvodpy/src/canvodpy/orchestrator/pipeline.py` and `workflows/tasks.py` — grep `scs_from` across the workspace before merging. Depends on Phase 0 item 4.
 
