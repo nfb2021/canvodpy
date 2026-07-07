@@ -935,8 +935,8 @@ class RinexDataProcessor:
     ) -> list[Path]:
         """Get sorted list of GNSS data files from directory.
 
-        Uses ``BUILTIN_PATTERNS`` from canvod-virtualiconvname as the
-        single source of truth for file discovery globs.
+        Uses ``BUILTIN_PATTERNS`` from canvod-filemap when installed.
+        Falls back to canonical canVOD globs (``*.rnx``, ``*.sbf``) otherwise.
 
         Parameters
         ----------
@@ -951,27 +951,42 @@ class RinexDataProcessor:
             self._logger.warning("Directory does not exist: %s", rinex_dir)
             return []
 
-        from canvod.virtualiconvname.patterns import BUILTIN_PATTERNS, auto_match_order
-
-        if reader_format == "sbf":
-            globs = set(BUILTIN_PATTERNS["septentrio_sbf"].file_globs)
-            # Also include canvod pattern which covers .sbf extension
-            globs.update(
-                g for g in BUILTIN_PATTERNS["canvod"].file_globs if ".sbf" in g
+        try:
+            from canvod.filemap.patterns import (
+                BUILTIN_PATTERNS,
+                auto_match_order,
             )
-        elif reader_format in ("rinex3", "rinex"):
-            # Only RINEX patterns — exclude SBF globs
-            rinex_pattern_names = [
-                n for n in auto_match_order() if n != "septentrio_sbf"
-            ]
-            globs: set[str] = set()
-            for name in rinex_pattern_names:
-                globs.update(BUILTIN_PATTERNS[name].file_globs)
+
+            _has_patterns = True
+        except ImportError:
+            _has_patterns = False
+
+        if _has_patterns:
+            if reader_format == "sbf":
+                globs = set(BUILTIN_PATTERNS["septentrio_sbf"].file_globs)
+                globs.update(
+                    g for g in BUILTIN_PATTERNS["canvod"].file_globs if ".sbf" in g
+                )
+            elif reader_format in ("rinex3", "rinex"):
+                rinex_pattern_names = [
+                    n for n in auto_match_order() if n != "septentrio_sbf"
+                ]
+                globs: set[str] = set()
+                for name in rinex_pattern_names:
+                    globs.update(BUILTIN_PATTERNS[name].file_globs)
+            else:
+                globs: set[str] = set()
+                for name in auto_match_order():
+                    globs.update(BUILTIN_PATTERNS[name].file_globs)
         else:
-            # "auto" or unknown — use all patterns
-            globs: set[str] = set()
-            for name in auto_match_order():
-                globs.update(BUILTIN_PATTERNS[name].file_globs)
+            # Fallback: canonical canVOD names only (*.rnx, *.sbf).
+            # Non-canonical filenames require canvod-filemap + a recipe.
+            if reader_format == "sbf":
+                globs = {"*.sbf", "*.SBF"}
+            elif reader_format in ("rinex3", "rinex"):
+                globs = {"*.rnx", "*.RNX"}
+            else:
+                globs = {"*.rnx", "*.RNX", "*.sbf", "*.SBF"}
 
         rinex_files: list[Path] = []
         seen: set[Path] = set()
@@ -1011,11 +1026,18 @@ class RinexDataProcessor:
         ValueError
             If validation fails (unmatched files or overlaps).
         """
-        from canvod.virtualiconvname import (
-            FilenameMapper,
-            ReceiverNamingConfig,
-            SiteNamingConfig,
-        )
+        try:
+            from canvod.filemap import (
+                FilenameMapper,
+                ReceiverNamingConfig,
+                SiteNamingConfig,
+            )
+        except ImportError as exc:
+            raise ImportError(
+                "canvod-filemap is required for recipe-based filename "
+                "mapping but is not installed. Install it separately or remove "
+                "the 'recipe:' field from your receiver config."
+            ) from exc
 
         # Resolve site and receiver naming config
         site_config = self._get_site_config()

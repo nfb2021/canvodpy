@@ -24,7 +24,7 @@ UREG: pint.UnitRegistry = pint.get_application_registry()
 if "dBHz" not in UREG:
     UREG.define("dBHz = 10 * log10(hertz)")
 
-# DEPRECATED: Use canvod.virtualiconvname.patterns.BUILTIN_PATTERNS instead.
+# DEPRECATED: Use canvod.filemap.patterns.BUILTIN_PATTERNS instead.
 # These are kept only for backward compatibility with DataDirMatcher.
 FORMAT_GLOB_PATTERNS: dict[str, tuple[str, ...]] = {
     "rinex3": ("*.[0-9][0-9]o", "*.O", "*.rnx"),

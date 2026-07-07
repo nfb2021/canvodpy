@@ -14,7 +14,7 @@ questions become unanswerable:
 - **Reproducibility** — which software version, config, and ephemeris source
   produced this store? The `ProcessingProvenance` and `ConfigSnapshot` sections
   capture the full environment (down to Python version, uv lockfile hash, and
-  Dask scheduler config) so any store can be reproduced from scratch.
+  worker configuration) so any store can be reproduced from scratch.
 - **DOI registration** — TU Wien Repositum and Zenodo require DataCite 4.5
   metadata (creator, title, identifier, rights). Rather than filling these
   manually at publication time, canvodpy collects them automatically during
@@ -71,7 +71,7 @@ Pydantic `BaseModel`:
 | 5. Spatial Extent & Site | `SpatialExtent` | site name/country, lat/lon/alt (WGS84), bounding box | Geographic coverage |
 | 6. Instruments | `Instruments` | platform, per-receiver: type, directory, format, epochs, SIDs | Hardware provenance |
 | 7. Software Provenance | `ProcessingProvenance` | software versions, Python, uv, processing level, lineage | Software environment |
-| 8. Environment | `Environment` | hostname, OS, arch, CPU count, memory, disk, Dask config | Compute environment |
+| 8. Environment | `Environment` | hostname, OS, arch, CPU count, memory, disk, worker config | Compute environment |
 | 9. Config Snapshot | `ConfigSnapshot` | processing params, preprocessing, compression, config hash | Reproducibility |
 | 10. References | `References` | repository, documentation, publications, funding | Related resources |
 | 11. Summaries | `Summaries` | total_epochs, total_sids, constellations, variables, history | Aggregate statistics |
@@ -211,7 +211,7 @@ No user action is required — metadata collection is a side effect of the stand
 
 Store metadata draws from two config sections:
 
-### `canvod.yaml` — Creator and publisher (`processing.metadata:`)
+### `canvod-settings.yaml` — Creator and publisher (`processing.metadata:`)
 
 ```yaml
 processing:
@@ -227,7 +227,7 @@ processing:
     naming_authority: "at.ac.tuwien.geo"
 ```
 
-### `canvod.yaml` — Spatial extent (`sites.<name>:`)
+### `canvod-settings.yaml` — Spatial extent (`sites.<name>:`)
 
 ```yaml
 sites:

@@ -19,7 +19,7 @@ signal-to-noise ratio observations.
 [![fair-software.eu](https://img.shields.io/badge/fair--software.eu-%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8F-green)](https://fair-software.eu)
 [![OpenSSF Best Practices](https://bestpractices.coreinfrastructure.org/projects/12329/badge)](https://bestpractices.coreinfrastructure.org/projects/12329)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nfb2021/canvodpy/badge)](https://securityscorecards.dev/viewer/?uri=github.com/nfb2021/canvodpy)
-[![VODnet](https://img.shields.io/badge/-VODnet-2d6a4f?labelColor=555555&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAAXNSR0IArs4c6QAAAHhlWElmTU0AKgAAAAgABAEaAAUAAAABAAAAPgEbAAUAAAABAAAARgEoAAMAAAABAAIAAIdpAAQAAAABAAAATgAAAAAAAABIAAAAAQAAAEgAAAABAAOgAQADAAAAAQABAACgAgAEAAAAAQAAAA6gAwAEAAAAAQAAAA4AAAAAjn8NzQAAAAlwSFlzAAALEwAACxMBAJqcGAAAAflJREFUKBWtUEtoE1EUPe+9SczHiam/aixtqi1E7aai4kK0CAVBDFZwrQs3xp2KIriYtiKuav3QRVxYKIjFVihWrCBIaaWioKidQBsxi3SwYmMmkxidYWaemYEEKUgRPHDhXu4575x3gf+NKfVD3UQ2u/Zv7wrLF8mPfV2ZH1ZCNIM7xUCAHHjyfN6wQ8mZo3vvE4Av57tzOjfd/WZpivfJSW5wkzvomnzFe2SFTyyU+iFJtCpk1eaRfOIw84TuRsN7kEkVMDzyEjPvUtga2YiDTRFM5+m+F8XYHMZuzDqaWlQf8yVMpmJ0/DUu9g6hVNQAy8au3W04NHAV85oFRulZS+LDkIjtWmcyHT6vQHYoXwrouTWKkv4LLOAHE4N4K6dxZ2AISl4DpawVDVrYcXSFZtTPGSV8IatjUVErJ+Cwbdstx3Vw8CG+pmQIHg+HUVlWo7aSp/qz9Kn3W5p5S/x4DJ8/lfGt4kAow7bmBpQ9fuQ3RUFtM4Uz61Qk/vijbpLbgtc61n05zjQ1hCvXHmB9fT3OnT8NOWfi+uxP0IJxE4S4jrXzxrffm1xlb75Aud/cEFmD9vYW6KaNUoUmCpS3BblUPNk45sR0UBM6Qzx2qd9LVnfqujGS+64puaX8olEuj4uMHHnc2dTrcFZGtCOMxv11KxP/kfEbTTzNcyb5ar0AAAAASUVORK5CYII=&logoColor=white)](https://vodnet.netlify.app)
+[![VODnet](https://img.shields.io/badge/-VODnet-2d6a4f?labelColor=555555&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAAXNSR0IArs4c6QAAAHhlWElmTU0AKgAAAAgABAEaAAUAAAABAAAAPgEbAAUAAAABAAAARgEoAAMAAAABAAIAAIdpAAQAAAABAAAATgAAAAAAAABIAAAAAQAAAEgAAAABAAOgAQADAAAAAQABAACgAgAEAAAAAQAAAA6gAwAEAAAAAQAAAA4AAAAAjn8NzQAAAAlwSFlzAAALEwAACxMBAJqcGAAAAflJREFUKBWtUEtoE1EUPe+9SczHiam/aixtqi1E7aai4kK0CAVBDFZwrQs3xp2KIriYtiKuav3QRVxYKIjFVihWrCBIaaWioKidQBsxi3SwYmMmkxidYWaemYEEKUgRPHDhXu4575x3gf+NKfVD3UQ2u/Zv7wrLF8mPfV2ZH1ZCNIM7xUCAHHjyfN6wQ8mZo3vvE4Av57tzOjfd/WZpivfJSW5wkzvomnzFe2SFTyyU+iFJtCpk1eaRfOIw84TuRsN7kEkVMDzyEjPvUtga2YiDTRFM5+m+F8XYHMZuzDqaWlQf8yVMpmJ0/DUu9g6hVNQAy8au3W04NHAV85oFRulZS+LDkIjtWmcyHT6vQHYoXwrouTWKkv4LLOAHE4N4K6dxZ2AISl4DpawVDVrYcXSFZtTPGSV8IatjUVErJ+Cwbdstx3Vw8CG+pmQIHg+HUVlWo7aSp/qz9Kn3W5p5S/x4DJ8/lfGt4kAow7bmBpQ9fuQ3RUFtM4Uz61Qk/vijbpLbgtc61n05zjQ1hCvXHmB9fT3OnT8NOWfi+uxP0IJxE4S4jrXzxrffm1xlb75Aud/cEFmD9vYW6KaNUoUmCpS3BblUPNk45sR0UBM6Qzx2qd9LVnfqujGS+64puaX8olEuj4uMHHnc2dTrcFZGtCOMxv11KxP/kfEbTTzNcyb5ar0AAAAASUVORK5CYII=&logoColor=white)](https://www.gfz.de/en/section/remote-sensing-and-geoinformatics/projects/vodnet)
 
 [Get started :fontawesome-solid-arrow-right:](guides/getting-started.md){ .md-button .md-button--primary }
 
@@ -31,50 +31,50 @@ signal-to-noise ratio observations.
 
 <div class="grid cards" markdown>
 
--   :fontawesome-solid-layer-group: &nbsp; **Single unified dataset format**
+
+-   :fontawesome-solid-stamp: &nbsp; **No more breaking code - multi-reader support and GNSS data validation**
 
     ---
 
-    Every reader produces an identical `(epoch × sid)` xarray Dataset
-    that passes structural validation. Downstream code is reader-agnostic.
+    Supports RINEX v2.11, RINEX v3.04, Stripped RINEX v3.05, NMEA v4 and Septentrio SBF. Every supported GNSS reader produces a strcuturally identical xarray Dataset
+    that passes structural and content validation at run-time. Downstream code is reader-agnostic.
 
     [:octicons-arrow-right-24: Reader Architecture](packages/readers/architecture.md)
 
--   :fontawesome-solid-database: &nbsp; **Versioned, cloud-native storage**
+
+-   :fontawesome-solid-layer-group: &nbsp; **Single unified & validated dataset format**
 
     ---
 
-    Icechunk gives every append a git-like commit snapshot.
-    Reproducible reads, safe parallel writes, S3-ready.
+    Every supported GNSS reader produces a strcuturally identical xarray Dataset
+    that passes structural and content validation at run-time. Downstream code is reader-agnostic.
 
-    [:octicons-arrow-right-24: canvod-store](packages/store/overview.md)
+    [:octicons-arrow-right-24: Reader Architecture](packages/readers/architecture.md)
+
+-   :fontawesome-solid-database: &nbsp; **Versioned, performant storage, ready for the cloud**
+
+    ---
+
+    Icechunk let's you manage xarray Datasets of your entire network like a database and gives every write a git-like commit snapshot. Scroll through your commit history, branch off into development branches and create immutable tags for releases. Local-storage first, but S3-ready with full write-concurrency when you are.
+
+    [:octicons-arrow-right-24: Storage Engine](packages/store/overview.md)
 
 -   :fontawesome-solid-globe: &nbsp; **Hemispheric grid system**
 
     ---
 
-    Equal-area, geodesic, HTM and four more grid types.
-    KDTree cell assignment in O(n log m).
+    Different hemispheric tessellations (equal-area, equal-angle, geodesic, ...) defined in 3D, enabling full spatial analyses. Supports  KDTree cell assignment and interactive data exploration.
 
     [:octicons-arrow-right-24: canvod-grids](packages/grids/overview.md)
 
--   :fontawesome-solid-code: &nbsp; **Four API levels**
+
+-   :fontawesome-solid-rotate: &nbsp; **Fully parallel processing**
 
     ---
 
-    One-liner convenience functions · Fluent workflow · `VODWorkflow` class ·
-    Fully stateless functional API for Airflow / Prefect.
+    Per default, all file reading and processign is natively parallelized. Sw
 
-    [:octicons-arrow-right-24: Quick Start](#quick-start)
-
--   :fontawesome-solid-rotate: &nbsp; **Parallel processing pipeline**
-
-    ---
-
-    Dask Distributed parallel pipeline with per-file commit,
-    hash deduplication, and cooperative distributed writing.
-
-    [:octicons-arrow-right-24: Architecture](architecture.md) · [Dask & Resources](guides/dask-resources.md)
+    [:octicons-arrow-right-24: Architecture](architecture.md)
 
 </div>
 
@@ -130,8 +130,8 @@ pip install canvodpy
     result = (
         canvodpy.workflow("Rosalia")
             .read("2025001")
-            .preprocess()
-            .grid("equal_area", angular_resolution=5.0)
+            .augment()
+            .grid()
             .vod("canopy_01", "reference_01")
             .result()
     )
@@ -217,12 +217,19 @@ flowchart TD
 
     Pydantic configuration, YYYYDOY date utilities, shared tooling.
 
--   :fontawesome-solid-tag: &nbsp; **canvod-virtualiconvname**
+-   :fontawesome-solid-circle-check: &nbsp; **canvod-preflight**
 
     ---
 
-    Maps arbitrary filenames to canonical canVOD names.
-    NamingRecipe system, pre-flight validation, DuckDB catalog.
+    Pre-flight validation of data directories against the canVOD
+    naming convention. Hard gate before ingestion.
+
+-   :fontawesome-solid-tag: &nbsp; **canvod-filemap** *(optional)*
+
+    ---
+
+    Virtual renaming engine for non-standard receiver filenames
+    (Septentrio SBF, RINEX v2 short names). Optional plug-in.
 
 -   :fontawesome-solid-wand-magic-sparkles: &nbsp; **canvod-ops**
 
@@ -237,6 +244,13 @@ flowchart TD
 
     Store-level provenance (DataCite, ACDD, STAC), compliance validation,
     inventory builder, STAC catalog export.
+
+-   :fontawesome-solid-flask: &nbsp; **canvod-audit**
+
+    ---
+
+    Three-tier verification suite: internal consistency, regression
+    snapshots, and comparison against reference implementations.
 
 -   :fontawesome-solid-circle-nodes: &nbsp; **canvodpy**
 

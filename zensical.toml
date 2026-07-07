@@ -85,7 +85,7 @@ nav = [
     { "canvod-ops" = [
       { "Overview" = "packages/ops/overview.md" },
     ]},
-    { "canvod-virtualiconvname" = [
+    { "canvod-filemap" = [
       { "Overview" = "packages/naming/overview.md" },
     ]},
     { "canvod-audit" = [
@@ -104,7 +104,7 @@ nav = [
     { "Build System" = "build-system.md" },
     { "Tooling" = "tooling.md" },
     { "Configuration Guide" = "guides/configuration.md" },
-    { "Dask & Resource Management" = "guides/dask-resources.md" },
+    { "Parallel Processing" = "guides/parallel-processing.md" },
     { "API Levels" = "guides/api-levels.md" },
     { "Airflow Integration" = "guides/airflow.md" },
     { "Diagnostics & Monitoring" = "guides/diagnostics.md" },
@@ -141,7 +141,7 @@ nav = [
     { "canvod.viz" = "api/canvod-viz.md" },
     { "canvod.utils" = "api/canvod-utils.md" },
     { "canvod.ops" = "api/canvod-ops.md" },
-    { "canvod.virtualiconvname" = "api/canvod-virtualiconvname.md" },
+    { "canvod.filemap" = "api/canvod-filemap.md" },
     { "canvod.audit" = "api/canvod-audit.md" },
   ]},
 ]

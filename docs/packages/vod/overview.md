@@ -87,7 +87,7 @@ The `canvod-vod` package implements vegetation optical depth (VOD) estimation fr
 
 ## Multi-Receiver SCS Expansion
 
-When a single reference receiver serves multiple canopy positions, satellite geometry must be recomputed relative to each canopy location. The `scs_from` field in `canvod.yaml` (`sites.<name>.receivers.<ref>.scs_from`) drives this expansion.
+When a single reference receiver serves multiple canopy positions, satellite geometry must be recomputed relative to each canopy location. The `scs_from` field in `canvod-settings.yaml` (`sites.<name>.receivers.<ref>.scs_from`) drives this expansion.
 
 ```mermaid
 flowchart TD
@@ -129,7 +129,7 @@ flowchart TD
 !!! note "Configuration"
 
     ```yaml
-    # config/canvod.yaml (sites.<name>.receivers)
+    # config/canvod-settings.yaml (sites.<name>.receivers)
     receivers:
       reference_01:
         type: reference

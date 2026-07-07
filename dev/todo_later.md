@@ -123,24 +123,17 @@ name. ~1,765 LOC, 9 test modules.
 - Two CLIs both named `canvodpy`: the installed `canvodpy` script is the config tool;
   the pipeline runner (`canvodpy/src/canvodpy/cli/run.py`) is not registered → `canvodpy --site X`
   fails for every new user. Confusing at first launch.
-- Override precedence is ad hoc: `--workers`/`--batch-hours` bypass the config model;
-  no general CLI > env > user-yaml > defaults story; no `--set key=value` passthrough
-  for other fields.
+- Override precedence is ad hoc: `--workers` ~~/ `--batch-hours`~~ bypass the config model ~~(`--batch-hours` removed, 96e58c73)~~; no general CLI > env > user-yaml > defaults story; no `--set key=value` passthrough for other fields.
 - Config errors from naming sections (C10) only surface at pipeline start — too late.
 
 **Directions:**
-- Make `canvod-*` packages usable without a config file. Pass settings as arguments;
-  use library defaults when not provided. `load_config()` is an orchestrator entrypoint,
-  not a library utility.
-- `sys.exit` → raise throughout `loader.py`.
-- Split `models.py` into focused files (`parallelism.py`, `sids.py`, `sites.py`, etc.).
-- Separate science config (portable, version-controlled) from machine config (local,
-  gitignored or env-overridden). Introduce `ParallelismConfig` as the single home for
-  all resource knobs; deprecate the four scattered `ProcessingParams` resource fields.
-- Merge the two CLIs: `canvodpy config validate`, `canvodpy run --site ...` under one
-  entry point.
-- Validate naming-section config at `SitesConfig` load time, not at first pipeline use.
-- Surface `CANVOD_CONFIG_DIR` in `--help` and all package READMEs.
+- ~~Make `canvod-*` packages usable without a config file.~~ **RESOLVED (c7bcad13):** `GnssResearchSite.calculate_vod()` accepts `processing_params=None`; `extra="forbid"` on all 24 models catches bad YAML at load time; `ConfigValidationError` replaces `sys.exit`.
+- ~~`sys.exit` → raise throughout `loader.py`.~~ **RESOLVED (c7bcad13)**
+- Split `models.py` into focused files — still open (deferred to §11 Phase 1).
+- ~~Separate science config from machine config / Introduce `ParallelismConfig`.~~ **RESOLVED differently (366c7eab + 4f855dde):** Dask gone, loky Wave A/B in place; credentials moved to `.env` (4f855dde); `days_per_batch` replaces `batch_hours`; `aggregate_glonass_fdma` dead wire removed; `scs_from → paired_canopies`; `ProcessingConfig.processing → .params`.
+- ~~Merge the two CLIs.~~ **RESOLVED (c7bcad13):** `find_monorepo_root()` deduplicated; CLI unified under one entry point.
+- Validate naming-section config at `SitesConfig` load time — still open (§12 preflight).
+- ~~Surface `CANVOD_CONFIG_DIR` in `--help` and all package READMEs.~~ **RESOLVED (96e58c73 + prior):** `CANVOD_CONFIG_FILE` + `CANVOD_CONFIG_DIR` both handled in `load_config()`; `@lru_cache(maxsize=8)`, `logger.warning()` (no print()), `ConfigValidationError` (no sys.exit) all in place. **Still open:** mention both env vars in each `canvod-*` package README.
 
 **Open questions:**
 - Primary operational interface: L3 `Site` API with `run.py` as sugar, or runner as
@@ -150,22 +143,9 @@ name. ~1,765 LOC, 9 test modules.
 
 ---
 
-## 5. Pipeline parallelism (Phase 2+, lower priority)
+## 5. ~~Pipeline parallelism (Phase 2+, lower priority)~~ — RESOLVED
 
-**What:** replace Dask LocalCluster as default with a long-lived `ProcessPoolExecutor`
-managed by `ParallelismConfig`. RINEX is CPU-bound (pure-Python string parsing), not
-I/O-bound — threads don't help. Both formats need ProcessPool.
-
-**Key design decisions documented in `perf_plan.md`:**
-- `ParallelismConfig` Pydantic model in `canvod-utils`: `mode: backlog|daily`,
-  `max_workers: int | "auto"`, `memory_fraction`, `gil_enabled()` static method.
-- Single long-lived pool per `PipelineOrchestrator`, reused across all days (eliminates
-  ~3s spawn per receiver-day).
-- Deprecate `ProcessingParams` resource fields with bridging warnings.
-- `ParallelismConfig` subsumes (not joins) existing fields: `resource_mode`,
-  `n_max_threads`, `threads_per_worker`, `parallelization_strategy`.
-
-**Deferred until §1 + §2 are merged** (SID padding is the bigger lever).
+**RESOLVED (366c7eab):** Dask removed. Wave A/B parallel receiver processing via `ThreadPoolExecutor × ProcessPoolExecutor` (loky backend). 1.7× speedup confirmed (847s → 501s, 28 days). `_process_sub_day_batches` deleted (4f855dde). `batch_hours` → `days_per_batch` (4f855dde). `resource_mode` / `n_max_threads` / `auto_uncapped` / `nice` remain as the resource knobs (simpler than a full `ParallelismConfig` model — no need to introduce one).
 
 ---
 
@@ -297,13 +277,13 @@ class RollupConfig(BaseModel):
 
 ---
 
-## 9. Production pipeline config — revisit before next run
+## 9. ~~Production pipeline config — revisit before next run~~ — PARTIALLY RESOLVED
 
 **Context (2026-07-04):** First production config written for rosalia/January 2025 RINEX run. Two fields added that need review:
 
-- **`batch_hours: 24`** — matches the 24h daily file structure (one `_01D_` file per day per receiver). Probably correct, but confirm whether the pipeline uses this to split sub-day batches or to group multi-day batches. If the pipeline already handles 24h files as atomic units, this field may be redundant or set wrong.
-- **`resource_mode: auto`** — Dask auto-detects workers and memory. On an M-series Mac this is fine for a single overnight run, but on a shared server this could claim all cores. Before running on a server, switch to `resource_mode: manual` and set explicit `n_max_threads`.
-- **`preprocessing.grid_assignment`** — 2° equal-area grid assignment is currently baked into preprocessing. Confirm this is the intended behavior (vs. doing grid assignment only at VOD time) and that it doesn't conflict with the rollup-native store's own `cell_id` assignment.
+- ~~**`batch_hours: 24`**~~ — **RESOLVED (96e58c73):** `batch_hours` removed entirely from `ProcessingParams`; pipeline handles file granularity via `FilenameMapper`, not a time-based batch window.
+- ~~**`resource_mode: auto`**~~ — **RESOLVED (96e58c73):** `auto` now caps at `cpu_count − 2` workers and applies `nice=3`. Add `auto_uncapped: true` only on a dedicated machine. Shared server no longer needs manual intervention by default.
+- **`preprocessing.grid_assignment`** — still open: 2° equal-area grid assignment is currently baked into preprocessing. Confirm this is the intended behavior (vs. doing grid assignment only at VOD time) and that it doesn't conflict with the rollup-native store's own `cell_id` assignment.
 
 ---
 
@@ -322,7 +302,7 @@ Quick wins  — ride alongside any of the above
 
 ---
 
-## 10. Standalone sub-package install — config warnings leak (Fable review, 2026-07-05)
+## 10. Standalone sub-package install — config warnings leak (Fable review, 2026-07-05) — TIER 1 RESOLVED
 
 **Problem:** Installing only `canvod-readers` or `canvod-grids` (without the full canvodpy pipeline) produces 4–6 lines of `⚠️ Warning` noise on stdout per `.to_ds()` call, each telling the user to run `just config-init` — a command that doesn't exist in their environment.
 
@@ -355,12 +335,12 @@ Good pattern already in-tree to copy: `canvod-store/store.py:139–149` and `can
 
 ### Fix strategy (~55–70 lines, 5–6 files)
 
-**Tier 1 — fix the loader (canvod-utils, eliminates 90% of noise):**
-1. Replace the four `print()` lines (loader.py:133–134, 146–147) with `logging.getLogger("canvod.utils.config").info(...)` — silent by default for library users, visible to orchestrator/CLI. ~8 lines.
-2. Add `strict` semantics: `load_config(config_dir=None, *, strict=False)`. `strict=True` (used by canvodpy CLI entry points) raises `ConfigFilesMissingError` with the `just config-init` hint. Default `strict=False` returns defaults silently. ~15 lines in loader.py + ~6 call-site updates in `canvodpy/src/canvodpy/` (orchestrator, workflows/tasks.py, cli.py).
-3. Add `@lru_cache` wrapper keyed on resolved `config_dir`. ~10 lines.
-4. Replace `sys.exit(1)` at loader.py:118 with `raise ConfigValidationError`; catch-and-exit moves to `cli.py`. ~10 lines.
-5. Either use `defaults/sites.yaml` in `_load_sites()` or delete it. ~3 lines.
+**~~Tier 1 — fix the loader (canvod-utils, eliminates 90% of noise):~~ DONE**
+1. ~~Replace the four `print()` lines~~ — **DONE:** `logger.warning()` throughout.
+2. ~~Add `strict` semantics~~ — **DONE:** defaults silently when config absent; `ConfigValidationError` raised on bad YAML.
+3. ~~Add `@lru_cache`~~ — **DONE:** `@functools.lru_cache(maxsize=8)` on `load_config()`.
+4. ~~Replace `sys.exit(1)` with `raise ConfigValidationError`~~ — **DONE.**
+5. Either use `defaults/sites.yaml` in `_load_sites()` or delete it. ~3 lines. ← still open
 
 **Tier 2 — decouple readers from config (canvod-readers):**
 6. `metadata.py:254`: wrap in `try/except Exception: meta = MetadataConfig()`. ~6 lines.
@@ -398,23 +378,21 @@ Everything else is auto-detected (file naming, temporal extent, SID universe) or
 
 ### Phase 0 — Silent trap fixes (~1 day) — PREREQUISITE
 
-Files: `packages/canvod-utils/src/canvod/utils/config/loader.py`, `models.py`.
+~~Files: `packages/canvod-utils/src/canvod/utils/config/loader.py`, `models.py`.~~
 
-1. `loader.py:118` — replace `sys.exit(1)` with `raise ConfigValidationError`; add `strict: bool = True` param to `load_config()` (L233). Lenient mode (strict=False) returns defaults silently — used by library internals. Strict mode used by CLI entry points.
-2. Replace all `print()` warnings in `loader.py` with `logging.getLogger("canvod.config")` — silent by default for library users.
-3. `@lru_cache(maxsize=4)` on `load_config` keyed on resolved `config_dir`.
-4. `model_config = {"extra": "forbid"}` on **every** nested model in `models.py` — today only root `CanvodConfig` (L990) has it; `bach_hours: 6` in nested sections passes silently. Ship a `canvod-config validate` migration hint listing rejected keys.
-5. Path-existence `@field_validator` on `stores_root_dir`, `gnss_site_data_root` — reject sentinel values (`/path/to/stores`, `Unknown`, `user@example.com`) at load time.
-
-**Risk:** item 4 will break existing user YAMLs with stale keys on upgrade — migration hint is mandatory.
+1. ~~`loader.py:118` — replace `sys.exit(1)` with `raise ConfigValidationError`~~ **RESOLVED (c7bcad13)**
+2. ~~Replace all `print()` warnings in `loader.py` with `logging.getLogger("canvod.config")`~~ **RESOLVED (c7bcad13)**
+3. ~~`@lru_cache(maxsize=4)` on `load_config` keyed on resolved `config_dir`.~~ **RESOLVED (e8275bc6):** `@functools.lru_cache(maxsize=8)`
+4. ~~`model_config = {"extra": "forbid"}` on **every** nested model~~ **RESOLVED (c7bcad13):** `_StrictModel` base class, all 24 config classes inherit it.
+5. Path-existence `@field_validator` on `stores_root_dir`, `gnss_site_data_root` — reject sentinel values (`/path/to/stores`, `Unknown`, `user@example.com`) at load time. ← **still open**
 
 ### Phase 1 — Config simplification (~3 days)
 
 Files: `models.py`, `defaults/` templates, `canvod-utils/src/canvod/utils/config/cli.py`, `docs/guides/configuration.md`.
 
-1. Collapse `processing.yaml` + `sids.yaml` into `sites.yaml` optional sections. Infrastructure fields (Icechunk `inline_threshold`, Dask scheduler address, chunk strategies) move to `defaults/advanced.yaml` — never shown to scientists. Template shrinks from 217 lines to ~40.
-2. Rename `ReceiverConfig.scs_from` (models.py:698) → `pairs_with_canopy`; keep `scs_from` as deprecated `AliasChoices` alias for one release. Update `validate_scs_from` (L738), `resolve_scs_from` (L818), and `cli.py:569–575` display.
-3. Implement `SidsConfig._get_preset_sids()` (models.py:967 TODO stub returning `[]`) from packaged `presets/` dir, or remove `preset` from the `Literal` entirely and fix `sids.yaml.example:31–36`.
+1. ~~Collapse `processing.yaml` + `sids.yaml` into `sites.yaml` optional sections.~~ **RESOLVED (c7bcad13 + 4f855dde):** unified `canvod-settings.yaml` loader implemented; legacy 3-file path kept with `DeprecationWarning`. Dask scheduler addr removed. Template still needs trimming (infrastructure fields not yet moved to `defaults/advanced.yaml`).
+2. ~~Rename `ReceiverConfig.scs_from` (models.py:698) → `pairs_with_canopy`~~ **RESOLVED (4f855dde):** renamed to `paired_canopies` with deprecated `scs_from` alias; `resolve_scs_from → resolve_paired_canopies` kept as alias.
+3. ~~Implement `SidsConfig._get_preset_sids()` (models.py:967 TODO stub returning `[]`) from packaged `presets/` dir, or remove `preset` from the `Literal` entirely and fix `sids.yaml.example:31–36`.~~ **RESOLVED (ac5283e8):** implemented with bundled `presets/default.yaml`.
 4. Docstring the 5 non-discoverable facts on `SiteConfig` / `ReceiverConfig` / `MetadataConfig` — these become the wizard's question prompts verbatim.
 5. Fix documentation drift: `configuration.md:91` `base_dir` → `gnss_site_data_root`; `configuration.md:145` `custom:` → `custom_sids`; correct `scs_from` receiver example (L103–107).
 
@@ -465,7 +443,7 @@ Files: new `canvodpy/src/canvodpy/cli/dashboard.py` (Textual app), `cli/run.py`,
 4. **`scs_from` is cryptic and asymmetric.** Required for reference receivers, forbidden for canopy (models.py:737–746). No scientist knows what "SCS" means. The docs (`docs/guides/configuration.md:103–107`) show `scs_from` on canopy receivers — copying that fails validation with a confusing error.
 5. **Documentation drift → guaranteed first-run failures.** `configuration.md:91` uses `base_dir`; model requires `gnss_site_data_root` (models.py:760). `configuration.md:145` uses `custom:`; model field is `custom_sids` (models.py:912). Two validation errors on first try following the official guide.
 6. **Redundant declaration.** `vod_analyses` (models.py:769) restates the pairing already encoded in `scs_from`. Users say "canopy_01 pairs with reference_01" twice, in two syntaxes.
-7. **`sids: mode: preset` documented but not implemented.** `SidsConfig._get_preset_sids()` is a TODO returning `[]` (models.py:959–969); `config/sids.yaml.example:31–36` advertises three presets. User selecting `preset: gps_galileo` silently filters to nothing.
+7. ~~**`sids: mode: preset` documented but not implemented.** `SidsConfig._get_preset_sids()` is a TODO returning `[]` (models.py:959–969); `config/sids.yaml.example:31–36` advertises three presets. User selecting `preset: gps_galileo` silently filters to nothing.~~ **RESOLVED (ac5283e8)**
 8. **Overwhelming template.** `config/processing.yaml.example` is 217 lines exposing Icechunk `inline_threshold`, chunk strategies, Dask scheduler addresses — pure infrastructure jargon for an ecologist whose only real decisions are "where is my data, where do results go."
 9. **`sys.exit(1)` in a library.** `loader.py:118` kills a Jupyter/marimo kernel session on validation error instead of raising.
 10. **Git-checkout coupling.** `find_monorepo_root()` requires a `.git` directory (loader.py:20–55); a scientist who `pip install`s canvodpy without cloning lands in a poorly documented `cwd/config` fallback.
@@ -511,7 +489,7 @@ Replace template copy with typer/rich Q&A: site name → data root → scan subd
 - Cons: helps only at first run; recipe inference is genuinely hard; wizard needs maintenance alongside models
 - Effort: 3–4 days wizard, +3–4 days recipe inference. Fit for scientists: excellent day one, neutral afterwards.
 
-**Option B — single consolidated `canvod.yaml`, site-centric** (recommended structural fix):
+**Option B — single consolidated `canvod-settings.yaml`, site-centric** (recommended structural fix):
 One file; site is the top-level concept; `processing`/`sids`/`storage` become optional override sections. Loader already deep-merges (loader.py:181–211) — mostly re-plumb `_load_*` to read one file, keep 3-file path as deprecated fallback. Pair with convention-over-configuration: derive `vod_analyses` from `scs_from`; rename `scs_from` to something human; default `directory` to receiver name.
 - Pros: one file = one mental model; minimal config shrinks to ~10 lines; matches Snakemake/nf-core convention scientists already know; fixes the "which file does this go in?" question permanently
 - Cons: migration shim needed; doesn't fix recipes by itself; docs rewrite
@@ -534,17 +512,17 @@ Do C first (fixes silent traps that would poison any new UX), then B (structural
 **Phase 1 — hardening (1–1.5 days):**
 - `models.py`: add `model_config = ConfigDict(extra="forbid")` to all nested models (shared base class); add `@model_validator` on `StorageConfig`/`MetadataConfig` rejecting sentinel values (`/path/to/stores`, `Unknown`, `user@example.com`) with plain-language messages; auto-derive `vod_analyses` in `SiteConfig` when omitted (from `get_reference_canopy_pairs()`, models.py:845).
 - `loader.py:110–119`: raise `ConfigError` instead of `sys.exit(1)`; keep pretty-printing in CLI layer only.
-- `models.py:959–969`: implement `_get_preset_sids()` from packaged `presets/` dir (port `canvodpy-perf/.../presets/default.yaml`), or delete preset mode from `sids.yaml.example:29–36`.
+- ~~`models.py:959–969`: implement `_get_preset_sids()` from packaged `presets/` dir~~ **RESOLVED (ac5283e8)**
 - `docs/guides/configuration.md`: fix `base_dir`→`gnss_site_data_root` (L91), `custom`→`custom_sids` (L145), correct `scs_from` semantics (L103–120).
 
-**Phase 2 — single `canvod.yaml` (3–4 days):**
-- `loader.py`: new resolution order — `$CANVOD_CONFIG` → `./canvod.yaml` → `config/canvod.yaml` → legacy 3-file mode (deprecation notice). Sections: `site:`/`sites:`, optional `processing:`, `storage:`, `sids:`, `metadata:`. **Mechanism: use `pydantic-settings` `BaseSettings` to implement env-var override layer — see §16 for details.**
+**Phase 2 — single `canvod-settings.yaml` (3–4 days):**
+- `loader.py`: new resolution order — `$CANVOD_CONFIG` → `./canvod-settings.yaml` → `config/canvod-settings.yaml` → legacy 3-file mode (deprecation notice). Sections: `site:`/`sites:`, optional `processing:`, `storage:`, `sids:`, `metadata:`. **Mechanism: use `pydantic-settings` `BaseSettings` to implement env-var override layer — see §16 for details.**
 - `models.py`: rename `scs_from` with Pydantic `AliasChoices` so old files keep working.
-- New `config/canvod.yaml.example` (~25 lines); demote 217-line `processing.yaml.example` to `docs/reference/config-full.md`.
+- New `config/canvod-settings.yaml.example` (~25 lines); demote 217-line `processing.yaml.example` to `docs/reference/config-full.md`.
 - Update `justfile` targets `config-validate`/`config-init` (justfile:104–116).
 
 **Phase 3 — wizard (3–4 days; +3–4 later for recipe inference):**
-- `cli.py`: `canvod config init --interactive` (make it default; `--templates` keeps old behaviour). Reuse directory/format detection from `validate` (cli.py:246–309). Writes minimal `canvod.yaml`, runs validation immediately.
+- `cli.py`: `canvod config init --interactive` (make it default; `--templates` keeps old behaviour). Reuse directory/format detection from `validate` (cli.py:246–309). Writes minimal `canvod-settings.yaml`, runs validation immediately.
 - Follow-up: recipe inference — user pastes one filename, wizard aligns it against `CanVODFilename` fields and emits `config/recipes/<name>.yaml`.
 
 **Tests/docs (1–2 days):** extend `packages/canvod-utils/tests/test_config_models.py`; rewrite `docs/guides/configuration.md` around the single file; add "5-minute setup" to `docs/guides/getting-started.md`.
@@ -553,7 +531,7 @@ Do C first (fixes silent traps that would poison any new UX), then B (structural
 
 ---
 
-## 12. canvod-virtualiconvname split → `canvod-preflight` + optional virtual renaming
+## 12. ~~canvod-virtualiconvname split → `canvod-preflight` + optional virtual renaming~~ RESOLVED 2026-07-06
 
 **Architecture decision (2026-07-05):** the package is split into two. The virtual renaming engine stays in `canvod-virtualiconvname` as an optional standalone package — not auto-used by the pipeline, manually slotted in by users who need it (e.g. Septentrio SBF / RINEX v2 with non-standard names). The validation and convention logic moves to a new mandatory package: **`canvod-preflight`**.
 
@@ -854,7 +832,7 @@ that holds up at both widths. Then commit as a constant in a new
 ## 16. pydantic-settings: 12-factor config resolution (mechanism for §11 Option B)
 
 **Context:** §11 identifies "no general CLI > env > user-yaml > defaults story"
-as a pain point and proposes Option B (single `canvod.yaml`). `pydantic-settings`
+as a pain point and proposes Option B (single `canvod-settings.yaml`). `pydantic-settings`
 is the concrete mechanism that implements Option B's resolution order with
 minimal code.
 
@@ -862,11 +840,11 @@ minimal code.
 - `ProcessingConfig(BaseSettings)` instead of `BaseModel` — env vars override
   YAML automatically with zero custom parsing.
 - Resolution order (standard 12-factor):
-  `env vars → .env file → canvod.yaml → defaults/canvod.yaml`
+  `env vars → .env file → canvod-settings.yaml → defaults/canvod-settings.yaml`
 - Nested override via double-underscore separator:
   `CANVOD__STORAGE__STORES_ROOT_DIR=/nfs/stores canvodpy run --site rosalia`
 - `.env` file support: scientists keep a per-machine `.env` (gitignored) for
-  paths and credentials; the committed `canvod.yaml` stays portable.
+  paths and credentials; the committed `canvod-settings.yaml` stays portable.
 - HPC/cloud/n8n deployment: pipeline step sets env vars, no config file needed
   on the compute node — directly enables the n8n/Airflow integration track (§4).
 
@@ -876,7 +854,7 @@ sources (defaults then user file) below env vars. `pydantic-settings` ships
 with pydantic v2 — no new dependency in practice.
 
 **Effort:** ~1 day (base class swap + source registration + env var tests).
-Sequence after §11 Phase 2 (single `canvod.yaml` must exist before env var
+Sequence after §11 Phase 2 (single `canvod-settings.yaml` must exist before env var
 overrides of it make sense).
 
 **Files:** `packages/canvod-utils/src/canvod/utils/config/models.py` (base

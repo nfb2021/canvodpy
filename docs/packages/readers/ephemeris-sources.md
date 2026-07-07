@@ -87,7 +87,7 @@ The production path used by the orchestrator (Levels 1 and 3).
 ### Configuration
 
 ```yaml
-# canvod.yaml
+# canvod-settings.yaml
 processing:
   params:
     ephemeris_source: "final"

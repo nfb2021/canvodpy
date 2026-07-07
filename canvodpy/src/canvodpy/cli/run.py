@@ -87,7 +87,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--config",
         default=None,
         metavar="FILE",
-        help="Overlay config YAML applied on top of the main canvod.yaml",
+        help="Overlay config YAML applied on top of the main canvod-settings.yaml",
     )
     return p
 

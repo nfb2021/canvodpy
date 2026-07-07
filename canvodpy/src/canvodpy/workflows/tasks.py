@@ -60,9 +60,9 @@ def _cap_blas_threads(n: int = 1) -> None:
             os.environ[var] = s
 
 
-# GNSS file glob patterns — sourced from canvod-virtualiconvname BUILTIN_PATTERNS
+# GNSS file glob patterns — sourced from canvod-filemap BUILTIN_PATTERNS
 def _get_gnss_globs() -> list[str]:
-    from canvod.virtualiconvname.patterns import BUILTIN_PATTERNS, auto_match_order
+    from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
 
     globs: set[str] = set()
     for name in auto_match_order():
@@ -153,7 +153,7 @@ def _discover_files_for_date(
     # Prefer FilenameMapper when naming config is available
     if site_cfg.naming and rcfg.naming:
         try:
-            from canvod.virtualiconvname import (
+            from canvod.filemap import (
                 FilenameMapper,
                 ReceiverNamingConfig,
                 SiteNamingConfig,
@@ -359,7 +359,7 @@ def _validate_receiver_with_recipe(
     """
     from natsort import natsorted
 
-    from canvod.virtualiconvname.recipe import NamingRecipe
+    from canvod.filemap.recipe import NamingRecipe
 
     recipe_path = _resolve_recipe(recipe_name)
     recipe = NamingRecipe.load(recipe_path)
@@ -505,7 +505,7 @@ def validate_data_dirs(site: str) -> dict:
 
         # Legacy naming-dict validation
         if rcfg.naming:
-            from canvod.virtualiconvname import (
+            from canvod.filemap import (
                 DataDirectoryValidator,
                 ReceiverNamingConfig,
                 SiteNamingConfig,

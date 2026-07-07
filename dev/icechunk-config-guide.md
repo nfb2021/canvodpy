@@ -1,6 +1,6 @@
 # Icechunk Configuration Guide
 
-Config lives in `canvod.yaml` under `processing.icechunk:`, backed by
+Config lives in `canvod-settings.yaml` under `processing.icechunk:`, backed by
 `IcechunkConfig` in `packages/canvod-utils/src/canvod/utils/config/models.py`.
 Wired into `MyIcechunkStore.__init__` in `packages/canvod-store/src/canvod/store/store.py`.
 

@@ -47,7 +47,7 @@ canVODpy applies the engineering concept of *Sollbruchstellen* (predetermined br
 ```
 Foundation (0 inter-package dependencies):
   canvod-readers, canvod-grids, canvod-vod, canvod-utils,
-  canvod-virtualiconvname
+  canvod-filemap
 
 Consumer (1–2 dependencies each):
   canvod-auxiliary      → canvod-readers
@@ -200,7 +200,7 @@ canvodpy exposes four API levels — all backed by the same packages:
 ```mermaid
 flowchart TD
     subgraph FILES["Config Sources"]
-        YAML["canvod.yaml"]
+        YAML["canvod-settings.yaml"]
         ENV[".env / env vars"]
         DEF["Package defaults"]
     end
@@ -230,7 +230,7 @@ cfg.processing.storage.stores_root_dir
 ```
 
 ```bash
-canvod config init      # Scaffold canvod.yaml from template
+canvod config init      # Scaffold canvod-settings.yaml from template
 canvod config validate  # Validate current config
 canvod config show      # Print resolved config
 ```

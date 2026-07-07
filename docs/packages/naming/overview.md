@@ -1,8 +1,8 @@
-# canvod-virtualiconvname
+# canvod-filemap
 
 ## Purpose
 
-The `canvod-virtualiconvname` package maps arbitrary GNSS observation filenames
+The `canvod-filemap` package maps arbitrary GNSS observation filenames
 to a canonical naming convention. Physical files on disk keep their original names
 -- the package creates a **virtual** mapping layer that gives every file a unique,
 self-describing canonical name.
@@ -73,7 +73,7 @@ ROSR01TUW_R_20250010000_01D_05S_AA.rnx
 A **VirtualFile** pairs a physical file path with its canonical name:
 
 ```python
-from canvod.virtualiconvname import VirtualFile
+from canvod.filemap import VirtualFile
 
 vf.physical_path    # Path("/data/rref001a00.25_")
 vf.canonical_str    # "ROSR01TUW_R_20250010000_15M_05S_AA.sbf"
@@ -88,7 +88,7 @@ name for metadata, deduplication, and storage keys.
 ## NamingRecipe
 
 A **NamingRecipe** tells the system how to parse an arbitrary physical filename
-into a canonical name. Recipes are defined in YAML and referenced from `canvod.yaml` under `sites:`.
+into a canonical name. Recipes are defined in YAML and referenced from `canvod-settings.yaml` under `sites:`.
 
 ### How it works
 
@@ -150,7 +150,7 @@ fields:
 
 ### Using recipes
 
-Reference a recipe file from `canvod.yaml` (`sites.<name>.receivers.<receiver>.recipe`):
+Reference a recipe file from `canvod-settings.yaml` (`sites.<name>.receivers.<receiver>.recipe`):
 
 ```yaml
 sites:
@@ -235,7 +235,7 @@ filenames are parsed (that is determined by the source pattern or recipe).
 
 #### Configuration
 
-In `canvod.yaml` under `sites.<name>.receivers`:
+In `canvod-settings.yaml` under `sites.<name>.receivers`:
 
 ```yaml
 receivers:
@@ -254,7 +254,7 @@ layout: yyddd_subdirs   # default if omitted
 ### Usage
 
 ```python
-from canvod.virtualiconvname import FilenameMapper
+from canvod.filemap import FilenameMapper
 
 mapper = FilenameMapper(
     site_naming=site_config,
@@ -300,7 +300,7 @@ If validation fails, the pipeline is blocked with a diagnostic message listing
 the unmatched files and/or overlapping pairs.
 
 ```python
-from canvod.virtualiconvname import DataDirectoryValidator
+from canvod.filemap import DataDirectoryValidator
 
 report = DataDirectoryValidator.validate_receiver(
     site_naming=site_config,
@@ -324,7 +324,7 @@ The `FilenameCatalog` persists file mappings in a local DuckDB database, enablin
 fast lookups without re-scanning directories.
 
 ```python
-from canvod.virtualiconvname import FilenameCatalog
+from canvod.filemap import FilenameCatalog
 
 with FilenameCatalog(db_path) as catalog:
     catalog.record_batch(virtual_files)

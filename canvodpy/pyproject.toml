@@ -28,7 +28,6 @@ dependencies = [
     "canvod-viz",
     "canvod-vod",
     "canvod-ops",
-    "canvod-virtualiconvname",
     "matplotlib>=3.8.0",
     "pint>=0.20",
     "structlog>=23.0",
@@ -77,7 +76,6 @@ canvod-utils = { workspace = true }
 canvod-viz = { workspace = true }
 canvod-vod = { workspace = true }
 canvod-ops = { workspace = true }
-canvod-virtualiconvname = { workspace = true }
 
 [tool.ty]
 extend-exclude = [

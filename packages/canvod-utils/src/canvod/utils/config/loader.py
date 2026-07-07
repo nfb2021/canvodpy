@@ -125,9 +125,7 @@ class ConfigLoader:
         """
         Load complete configuration.
 
-        Checks for ``canvod.yaml`` first (new unified format); falls back to
-        the legacy trio (``processing.yaml`` / ``sites.yaml`` / ``sids.yaml``)
-        with a ``DeprecationWarning``.
+        Loads ``canvod-settings.yaml`` from the config directory.
 
         Returns
         -------
@@ -138,25 +136,16 @@ class ConfigLoader:
         ------
         ConfigValidationError
             If configuration is invalid (wraps Pydantic ValidationError).
+        FileNotFoundError
+            If ``canvod-settings.yaml`` does not exist in the config directory.
         """
-        canvod_yaml = self.config_dir / "canvod.yaml"
-        if canvod_yaml.exists():
-            return self._load_single_file(canvod_yaml)
-
-        if any(
-            (self.config_dir / f).exists()
-            for f in ("processing.yaml", "sites.yaml", "sids.yaml")
-        ):
-            import warnings
-
-            warnings.warn(
-                "Separate config files (processing.yaml / sites.yaml / sids.yaml) "
-                "are deprecated. Run 'canvod config migrate' to consolidate into "
-                "a single canvod.yaml.",
-                DeprecationWarning,
-                stacklevel=2,
+        settings_yaml = self.config_dir / "canvod-settings.yaml"
+        if not settings_yaml.exists():
+            raise FileNotFoundError(
+                f"Settings file not found: {settings_yaml}\n"
+                "Run 'canvod config init' to create it from the template."
             )
-        return self._load_legacy()
+        return self._load_single_file(settings_yaml)
 
     def _load_legacy(self) -> CanvodConfig:
         """Load from the three-file legacy layout."""
@@ -170,7 +159,7 @@ class ConfigLoader:
             raise ConfigValidationError(e, self.config_dir) from e
 
     def _load_single_file(self, path: Path) -> CanvodConfig:
-        """Load from a unified canvod.yaml.
+        """Load from a unified settings file (canvod-settings.yaml).
 
         Expected top-level keys: ``processing:``, ``sites:``, ``sids:``.
         ``sites:`` values are site names directly (no nested ``sites:`` wrapper).

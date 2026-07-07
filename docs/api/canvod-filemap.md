@@ -1,10 +1,10 @@
-# canvod.virtualiconvname API Reference
+# canvod.filemap API Reference
 
 Filename convention, mapping, validation, and cataloging.
 
 ## Convention
 
-::: canvod.virtualiconvname.convention
+::: canvod.filemap.convention
     options:
       members:
         - CanVODFilename
@@ -13,7 +13,7 @@ Filename convention, mapping, validation, and cataloging.
 
 ## Mapping
 
-::: canvod.virtualiconvname.mapping
+::: canvod.filemap.mapping
     options:
       members:
         - VirtualFile
@@ -21,14 +21,14 @@ Filename convention, mapping, validation, and cataloging.
 
 ## Recipe
 
-::: canvod.virtualiconvname.recipe
+::: canvod.filemap.recipe
     options:
       members:
         - NamingRecipe
 
 ## Patterns
 
-::: canvod.virtualiconvname.patterns
+::: canvod.filemap.patterns
     options:
       members:
         - SourcePattern
@@ -36,7 +36,7 @@ Filename convention, mapping, validation, and cataloging.
 
 ## Validation
 
-::: canvod.virtualiconvname.validator
+::: canvod.filemap.validator
     options:
       members:
         - DataDirectoryValidator
@@ -44,14 +44,14 @@ Filename convention, mapping, validation, and cataloging.
 
 ## Catalog
 
-::: canvod.virtualiconvname.catalog
+::: canvod.filemap.catalog
     options:
       members:
         - FilenameCatalog
 
 ## Configuration
 
-::: canvod.virtualiconvname.config_models
+::: canvod.filemap.config_models
     options:
       members:
         - SiteNamingConfig

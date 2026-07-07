@@ -82,9 +82,9 @@ loading that pydantic-settings already does correctly. Not simpler after ~3 fiel
 
 ---
 
-## 3. Single file vs three files → CONSOLIDATE to `canvod.yaml`
+## 3. Single file vs three files → CONSOLIDATE to `canvod-settings.yaml`
 
-Recommendation: **one `config/canvod.yaml`** with top-level keys `processing:`, `sites:`,
+Recommendation: **one `config/canvod-settings.yaml`** with top-level keys `processing:`, `sites:`,
 `sids:` — an exact mirror of `CanvodConfig`, so `yaml.safe_load(file)` feeds the model
 with no remapping.
 
@@ -92,17 +92,17 @@ Why:
 - First-time scientist experience: one file to open, one file `canvod config init`
   scaffolds, one file to attach to a bug report. Three files force the user to learn the
   loader's merge rules before their first run.
-- Every field has a Pydantic default, so a minimal `canvod.yaml` is ~15 lines (site name,
+- Every field has a Pydantic default, so a minimal `canvod-settings.yaml` is ~15 lines (site name,
   receivers, author email). "Partial override" was the argument for three files; defaults
   in the models already provide that.
 - Env-var layer (§2) now covers deployment-specific overrides (HPC/Airflow/n8n), which
   was the other justification for file splitting.
 
-Back-compat: `ConfigLoader` checks for `canvod.yaml` first; if absent, falls back to the
+Back-compat: `ConfigLoader` checks for `canvod-settings.yaml` first; if absent, falls back to the
 legacy trio (`processing.yaml`, `sites.yaml`, `sids.yaml`) with a one-line
 `DeprecationWarning` (via `warnings`, not print). Add `canvod config migrate` command to
-cli.py that merges the trio and writes `canvod.yaml`. Keep fallback for one minor
-release. Update `*.example` files: ship a single `canvod.yaml.example`.
+cli.py that merges the trio and writes `canvod-settings.yaml`. Keep fallback for one minor
+release. Update `*.example` files: ship a single `canvod-settings.yaml.example`.
 
 ---
 
@@ -121,7 +121,7 @@ Decision: **env var via the §2 layer, with `.env` file as the scientist-friendl
   (models.py:978) keeps working — only the *source* changes.
 - If the key is found in YAML: load it but emit `DeprecationWarning`
   ("move nasa_earthdata_acc_mail to .env"). Detect in `ConfigLoader._load_processing`.
-- Remove the field from `canvod.yaml.example`; document the `.env` line instead.
+- Remove the field from `canvod-settings.yaml.example`; document the `.env` line instead.
 - Update the four hardcoded error-message strings that say "set nasa_earthdata_acc_mail
   in config/processing.yaml": `core/downloader.py:100,196,272`, `core/base.py:33,235,279`,
   `cli.py:192`.
@@ -248,8 +248,8 @@ Each step is independently commitable; run
 
 ### Tier C — nice-to-have
 
-12. **Consolidate to single `canvod.yaml`** — §3: loader fallback chain, `canvod config
-    migrate` command in cli.py, single `canvod.yaml.example`, docs update. Why: biggest
+12. **Consolidate to single `canvod-settings.yaml`** — §3: loader fallback chain, `canvod config
+    migrate` command in cli.py, single `canvod-settings.yaml.example`, docs update. Why: biggest
     onboarding win, but touches docs/CLI/justfile (`just config-init`,
     `config-validate`) broadly — do it last, on top of the stabilized model layer.
 

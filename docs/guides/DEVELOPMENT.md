@@ -52,13 +52,13 @@ canVODpy uses three YAML files in `config/`:
 | `sites:` | Research sites, receiver definitions, data root paths, VOD analysis pairs |
 | `sids:` | Signal ID filtering — `all`, a named `preset`, or `custom` list |
 
-All three sections live in a single `config/canvod.yaml`. Template: `config/canvod.yaml.example`.
+All three sections live in a single `config/canvod-settings.yaml`. Template: `config/canvod-settings.yaml.example`.
 
 === "First-time setup"
 
     ```bash
-    canvod config init      # scaffold canvod.yaml from template
-    # edit config/canvod.yaml
+    canvod config init      # scaffold canvod-settings.yaml from template
+    # edit config/canvod-settings.yaml
     canvod config validate  # check for errors
     canvod config show      # print resolved config
     ```
@@ -278,7 +278,7 @@ just test                # run all tests
 just sync                # install/update dependencies
 just clean               # remove build artifacts
 just hooks               # install pre-commit hooks
-canvod config init       # scaffold canvod.yaml from template
+canvod config init       # scaffold canvod-settings.yaml from template
 just config-validate     # validate configuration
 just config-show         # view resolved configuration
 just docs                # preview documentation (localhost:3000)

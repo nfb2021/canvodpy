@@ -1,17 +1,35 @@
 # Configuration Guide
 
-canVODpy is configured through a single `config/canvod.yaml` file.
+canVODpy is configured through a single `config/canvod-settings.yaml` file.
+
+Under the hood, configuration is handled by
+[pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) —
+a Python library that automatically reads configuration from YAML files **and**
+environment variables using the same validated model, so you never have to parse
+config files manually. Every field is type-checked when loaded: a typo in a field
+name or a string where a number belongs is reported immediately, with the exact
+location, instead of failing halfway through a processing run.
+
+!!! tip "Why one file?"
+    Everything lives in one `canvod-settings.yaml`: one place to look, one file to
+    version-control, and edits that belong together (a new site plus its
+    receivers) happen in a single atomic change. Earlier versions used three
+    separate files — see [Legacy three-file layout](#legacy-three-file-layout)
+    if you are migrating.
 
 ```bash
-canvod config init    # scaffold canvod.yaml from template (includes recipe files)
-canvod config validate
+uv run canvodpy config init      # scaffold canvod-settings.yaml from template (includes recipe files)
+uv run canvodpy config validate  # check the config against the Pydantic models
+uv run canvodpy config show      # print the fully resolved configuration
 ```
+
+Shortcuts: `just config-init`, `just config-validate`, `just config-show`.
 
 If you have an existing three-file setup (`processing.yaml` / `sites.yaml` / `sids.yaml`),
 migrate it with:
 
 ```bash
-canvod config migrate   # merges the trio → canvod.yaml, then review & remove old files
+uv run canvodpy config migrate   # merges the trio → canvod-settings.yaml, then review & remove old files
 ```
 
 ---
@@ -20,26 +38,84 @@ canvod config migrate   # merges the trio → canvod.yaml, then review & remove 
 
 ```
 config/
-├── canvod.yaml          # unified configuration (processing, sites, sids)
-├── .env                 # secrets — gitignored, loaded automatically
-└── recipes/
-    ├── rosalia_reference.yaml
-    └── rosalia_canopy.yaml
+├── canvod-settings.yaml          # unified configuration (processing, sites, sids)
+└── recipes/                      # optional — only needed with canvod-filemap
+    ├── my_site_reference.yaml
+    └── my_site_canopy.yaml
 ```
+
+**Precedence:** environment variable > `canvod-settings.yaml` > package defaults.
+
+You only need to write the fields you want to change — anything you omit falls
+back to the package defaults. Unknown field names are rejected
+(`extra="forbid"`), so typos are caught at load time instead of being silently
+ignored.
+
+Two loader-level environment variables control *where* configuration is read from:
+
+| Variable | Effect |
+|---|---|
+| `CANVOD_CONFIG_DIR` | Use a different config directory (default: `{repo_root}/config`) |
+| `CANVOD_CONFIG_FILE` | Apply an overlay YAML on top of the main config (also available as `--config` on the CLI) |
 
 ---
 
 ## Environment variable overrides
 
-Any field can be overridden at runtime via environment variables or a `config/.env`
-file (automatically loaded, gitignored).  Prefix `CANVOD__`, use `__` for nesting:
+To override any config value **without editing the file**, set an environment
+variable with the `CANVOD__` prefix, using double underscores (`__`) to separate
+nesting levels. This is especially useful on HPC clusters or shared servers,
+where you want to change resource limits per job without touching a
+version-controlled file:
+
+```bash
+CANVOD__PROCESSING__PARAMS__N_MAX_THREADS=4 uv run canvodpy run ...
+CANVOD__PROCESSING__PARAMS__DAYS_PER_BATCH=7 uv run canvodpy run ...
+```
 
 | Variable | Overrides |
 |---|---|
 | `CANVOD__PROCESSING__STORAGE__STORES_ROOT_DIR` | `processing.storage.stores_root_dir` |
 | `CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL` | `processing.credentials.nasa_earthdata_acc_mail` |
+| `CANVOD__PROCESSING__PARAMS__N_MAX_THREADS` | `processing.params.n_max_threads` |
 
-**Precedence:** env var > `.env` file > `canvod.yaml` > package defaults
+Environment variables always take priority over values in `canvod-settings.yaml`.
+
+---
+
+## Minimal working example
+
+A complete, valid `canvod-settings.yaml` needs only the required fields — everything
+else uses package defaults:
+
+```yaml
+processing:
+  metadata:
+    author: Jane Scientist
+    email: jane.scientist@example.edu
+    institution: Example University
+
+  storage:
+    stores_root_dir: /data/stores
+
+sites:
+  mysite:
+    gnss_site_data_root: /data/mysite
+
+    receivers:
+      reference_01:
+        type: reference
+        directory: 01_reference
+        paired_canopies: all
+      canopy_01:
+        type: canopy
+        directory: 02_canopy
+
+    vod_analyses:
+      canopy_01_vs_reference_01:
+        canopy_receiver: canopy_01
+        reference_receiver: reference_01
+```
 
 ---
 
@@ -53,21 +129,23 @@ processing:
     author: Your Name
     email: your.email@example.com
     institution: Your Institution
+    # optional: orcid, institution_ror, department, research_group,
+    # website, license, publisher, publisher_url, naming_authority
 
   credentials:
-    nasa_earthdata_acc_mail: null  # prefer .env instead — see env-var table above
+    nasa_earthdata_acc_mail: null  # prefer the env var — see table above
 
   aux_data:
-    agency: COD          # SP3/CLK product source
-    product_type: final
+    agency: COD          # SP3/CLK analysis center code
+    product_type: final  # final, rapid, or ultra-rapid
 
   params:
-    keep_rnx_vars: [SNR]           # RINEX variables to retain
+    keep_gnss_observables: [SNR]   # observables to keep (SNR, Pseudorange, Phase, Doppler)
     store_radial_distance: false   # store satellite distance (r)
     receiver_position_mode: shared # or per_receiver
     file_pairing: complete         # or paired
     ephemeris_source: final        # or broadcast (SBF only)
-    days_per_batch: 1              # calendar days per loky wave (1–30)
+    days_per_batch: 1              # calendar days per processing wave (1–30)
 
     # --- Resource management ---
     resource_mode: auto            # auto or manual
@@ -86,16 +164,16 @@ processing:
       grid_type: equal_area
       angular_resolution: 2.0     # degrees
 
-  compression:
+  netcdf_compression:              # NetCDF output from RINEX readers
     zlib: true
     complevel: 5
 
   icechunk:
-    compression_level: 5
+    compression_level: 3
     compression_algorithm: zstd
-    inline_threshold: 512
+    inline_chunk_threshold_bytes: 512
     chunk_strategies:
-      rinex_store:
+      gnss_store:
         epoch: 34560
         sid: -1
       vod_store:
@@ -104,7 +182,7 @@ processing:
 
   storage:
     stores_root_dir: /path/to/stores  # prefer CANVOD__PROCESSING__STORAGE__STORES_ROOT_DIR
-    rinex_store_strategy: skip        # skip, overwrite, or append
+    gnss_store_strategy: skip         # skip, overwrite, or append
     vod_store_strategy: overwrite
 ```
 
@@ -112,12 +190,20 @@ processing:
 
 | Field | Values | Description |
 |-------|--------|-------------|
+| `params.keep_gnss_observables` | list | GNSS observables to retain (default `[SNR]`). |
 | `params.receiver_position_mode` | `shared`, `per_receiver` | `shared` uses canopy receiver position for all receivers (enables 1:1 SNR comparison). `per_receiver` uses each receiver's own position. |
 | `params.file_pairing` | `complete`, `paired` | `complete` ingests all files per receiver independently. `paired` only processes dates where both receivers have data. |
-| `params.ephemeris_source` | `final`, `broadcast` | `final` uses SP3/CLK agency products (~3 cm, 12-18 day latency). `broadcast` uses SBF SatVisibility (SBF only, faster but ~1-2 m). |
-| `params.days_per_batch` | 1–30 | Calendar days pooled per loky processing wave. |
-| `params.resource_mode` | `auto`, `manual` | `auto` lets Dask detect available resources. `manual` uses explicit limits. See [Dask & Resource Management](dask-resources.md). |
+| `params.ephemeris_source` | `final`, `broadcast` | `final` computes satellite positions from agency SP3/CLK products. `broadcast` uses ephemerides from SBF SatVisibility blocks (SBF only, no SP3/CLK download, faster but less accurate). |
+| `params.days_per_batch` | 1–30 | Calendar days pooled per parallel processing wave. |
+| `params.resource_mode` | `auto`, `manual` | `auto` detects available CPU cores and leaves two free for the operating system. `manual` enforces explicit limits (`n_max_threads` is then required) — use this on shared servers. |
 | `params.store_radial_distance` | `true`, `false` | Whether to store satellite radial distance in the output. |
+
+### Ephemeris data sources
+
+Agency SP3/CLK products are downloaded from **ESA GSSC** by default — no
+account or credentials required. If you set
+`credentials.nasa_earthdata_acc_mail` (a registered NASA Earthdata email),
+**NASA CDDIS** is tried first, with ESA GSSC as fallback.
 
 ---
 
@@ -128,26 +214,26 @@ Top-level keys under `sites:` are site names (no nested `sites:` wrapper).
 
 ```yaml
 sites:
-  rosalia:
-    gnss_site_data_root: /data/rosalia
-    description: Mixed forest GNSS-T research site
-    country: AT
-    latitude: 47.7
-    longitude: 16.3
-    altitude_m: 680.0
+  my_site:
+    gnss_site_data_root: /data/my_site
+    description: null        # optional free-text description
+    country: null            # ISO 3166-1 alpha-2, e.g. AT
+    latitude: null           # WGS84 decimal degrees
+    longitude: null
+    altitude_m: null         # metres above WGS84 ellipsoid
 
     receivers:
       reference_01:
         type: reference
         directory: 01_reference
-        recipe: rosalia_reference     # → config/recipes/rosalia_reference.yaml
         reader_format: auto           # rinex3, sbf, or auto
-        scs_from: all                 # 'all' or list of canopy receiver names
+        paired_canopies: all          # 'all' or list of canopy receiver names
+        # recipe: my_site_reference   # optional — requires canvod-filemap
       canopy_01:
         type: canopy
         directory: 02_canopy
-        recipe: rosalia_canopy
         reader_format: auto
+        # recipe: my_site_canopy
 
     vod_analyses:
       canopy_01_vs_reference_01:
@@ -159,9 +245,11 @@ sites:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `recipe` | -- | Name of a NamingRecipe file in `config/recipes/`. See [canvod-virtualiconvname](../packages/naming/overview.md). |
+| `type` | -- | `reference` or `canopy`. |
+| `directory` | -- | Subdirectory under `gnss_site_data_root` holding this receiver's files. |
+| `recipe` | -- | Name of a NamingRecipe file in `config/recipes/`. Maps non-canonical physical filenames to canVOD canonical names. Requires [`canvod-filemap`](https://github.com/nfb2021/canvodpy-extensions) (optional external package). Omit if your files already follow the canVOD naming convention. |
 | `reader_format` | `auto` | Force a specific reader: `rinex3`, `sbf`, or `auto` (detect from file). |
-| `scs_from` | `all` | Which canopy receivers this reference is paired with. `all` pairs with every canopy receiver. |
+| `paired_canopies` | -- | Which canopy receivers this reference is paired with: `all` or a list of canopy receiver names. Required for reference receivers, must not be set for canopy receivers. (The old name `scs_from` is deprecated and still accepted with a warning.) |
 
 ---
 
@@ -232,24 +320,52 @@ IGSO, no augmentation, no GPS L2W) when adding new entries.
 
 ## Recipe files
 
+!!! note "Optional — requires `canvod-filemap`"
+    Recipe files are only needed if your GNSS data files use non-canonical
+    filenames (e.g. RINEX v2 short names, custom directory layouts).
+    If your files already follow the canVOD naming convention, skip this section.
+    Install from [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions).
+
 NamingRecipe files define how to parse physical filenames into canonical names.
 They live in `config/recipes/` and are referenced from `sites:` receivers via
-the `recipe` field.
+the `recipe` field. When `canvod-filemap` is installed, the pipeline
+picks up the recipe at runtime — no other code change needed.
 
-See [NamingRecipe](../packages/naming/overview.md#namingrecipe) for the full YAML
-format and field reference.
+---
 
-`canvod config init` copies recipe templates to `config/recipes/` alongside `canvod.yaml`.
+## Validating configuration and data
+
+Two separate validation steps exist — one for the config file, one for the
+data directories it points to:
+
+**Config validation** runs your `canvod-settings.yaml` through the Pydantic models and
+reports any field errors (wrong types, missing required fields, unknown keys),
+then checks that each receiver directory exists and contains data files:
+
+```bash
+just config-validate           # = uv run canvodpy config validate
+```
+
+**Data directory validation** checks the *file names* inside a receiver
+directory against the canVOD naming convention — before any processing starts:
+
+```bash
+canvod-preflight validate /data/rosalia/02_canopy \
+    --site ROS --agency TUW --receiver 1 --role canopy
+```
+
+Shortcut for a configured site: `just config-check-data <site>`.
 
 ---
 
 ## Legacy three-file layout
 
 If your project still uses `processing.yaml` / `sites.yaml` / `sids.yaml`, the
-loader accepts them with a `DeprecationWarning`.  Migrate with:
+loader **no longer accepts them** — it requires `canvod-settings.yaml` and will
+raise an error if that file is absent. Use the migrate command to consolidate:
 
 ```bash
-canvod config migrate   # reads legacy trio, writes canvod.yaml
-canvod config validate  # confirm it loaded correctly
+uv run canvodpy config migrate   # reads legacy trio, writes canvod-settings.yaml
+uv run canvodpy config validate  # confirm it loaded correctly
 rm config/processing.yaml config/sites.yaml config/sids.yaml
 ```

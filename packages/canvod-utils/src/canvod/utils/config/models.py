@@ -788,7 +788,7 @@ class ReceiverConfig(_StrictModel):
     )
     naming: dict | None = Field(
         None,
-        description="Naming configuration (validated by canvod-virtualiconvname package)",
+        description="Naming configuration (validated by canvod-filemap package)",
     )
     metadata: dict[str, str | int | float | bool] | None = Field(
         None,
@@ -866,7 +866,7 @@ class SiteConfig(_StrictModel):
     )
     naming: dict | None = Field(
         None,
-        description="Naming configuration (validated by canvod-virtualiconvname package)",
+        description="Naming configuration (validated by canvod-filemap package)",
     )
 
     @model_validator(mode="after")

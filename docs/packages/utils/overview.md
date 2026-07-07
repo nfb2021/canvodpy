@@ -8,7 +8,7 @@ The `canvod-utils` package provides configuration management and command-line to
 
 ## Configuration System
 
-A single `config/canvod.yaml` controls all aspects of a canVODpy deployment:
+A single `config/canvod-settings.yaml` controls all aspects of a canVODpy deployment:
 
 <div class="grid cards" markdown>
 
@@ -151,11 +151,11 @@ n_cores = config.processing.params.n_max_threads
 === "Setup"
 
     ```bash
-    canvod config init      # Scaffold canvod.yaml + recipe templates
-    canvod config migrate   # Convert legacy three-file layout → canvod.yaml
+    canvod config init      # Scaffold canvod-settings.yaml + recipe templates
+    canvod config migrate   # Convert legacy three-file layout → canvod-settings.yaml
     canvod config validate  # Validate configuration
     canvod config show      # Display resolved configuration
-    canvod config edit      # Open canvod.yaml in $EDITOR
+    canvod config edit      # Open canvod-settings.yaml in $EDITOR
     ```
 
 === "Development"

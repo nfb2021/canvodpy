@@ -140,7 +140,7 @@ Icechunk is a cloud-native transactional storage format for multidimensional arr
 ## Configuration
 
 ```yaml
-# config/canvod.yaml
+# config/canvod-settings.yaml
 processing:
   icechunk:
   compression_algorithm: zstd

@@ -88,7 +88,7 @@ Installing `canvodpy` provides access to all 11 sub-packages:
 | `canvod-viz` | `canvod.viz` | 2D polar and 3D interactive visualization |
 | `canvod-utils` | `canvod.utils` | Pydantic configuration models, shared utilities |
 | `canvod-ops` | `canvod.ops` | Composable preprocessing operations pipeline |
-| `canvod-virtualiconvname` | `canvod.virtualiconvname` | Canonical GNSS-T filename parser and validator |
+| `canvod-filemap` | `canvod.filemap` | Canonical GNSS-T filename parser and validator |
 | `canvod-audit` | `canvod.audit` | Three-tier verification and regression suite |
 
 ## Platform Support

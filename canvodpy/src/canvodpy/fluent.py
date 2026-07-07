@@ -178,7 +178,7 @@ class FluentWorkflow:
     def read(self, date: str, receivers: list[str] | None = None) -> FluentWorkflow:
         """Load RINEX observations for *date*.
 
-        Uses :class:`~canvod.virtualiconvname.FilenameMapper` for file
+        Uses :class:`~canvod.filemap.FilenameMapper` for file
         discovery when naming config is available, preventing duplicate
         files (e.g. daily + sub-daily) from being concatenated.  Falls
         back to naive glob when naming config is missing.
@@ -256,7 +256,7 @@ class FluentWorkflow:
         # Try FilenameMapper when naming config is available
         if site_cfg.naming and recv_cfg.naming:
             try:
-                from canvod.virtualiconvname import (
+                from canvod.filemap import (
                     FilenameMapper,
                     ReceiverNamingConfig,
                     SiteNamingConfig,

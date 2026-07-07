@@ -14,12 +14,12 @@ import pint
 import xarray as xr
 from rich.progress import TaskID
 
+from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
 from canvod.readers import MatchedDirs, PairDataDirMatcher
 from canvod.readers.gnss_specs.constants import UREG
 from canvod.store import GnssResearchSite
 from canvod.utils.config import load_config
 from canvod.utils.tools import YYYYDOY, _worker_init
-from canvod.virtualiconvname.patterns import BUILTIN_PATTERNS, auto_match_order
 
 try:
     from loky import get_reusable_executor as _loky_reusable

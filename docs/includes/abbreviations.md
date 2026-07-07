@@ -48,9 +48,10 @@
 <!-- Infrastructure -->
 *[Icechunk]: Version-controlled cloud-native tensor storage engine — git-like snapshots over Zarr v3 chunks
 *[Zarr]: Chunked, compressed N-dimensional array storage format — cloud-native alternative to HDF5/NetCDF
-*[Dask]: Parallel computing library for Python — scales NumPy/pandas/xarray to multi-core and distributed clusters
 *[xarray]: Labelled multi-dimensional arrays for Python — extends NumPy with named dims, coords, and attrs
 *[Polars]: Fast DataFrame library written in Rust — used for metadata catalogs and inventory
+*[loky]: Reusable Process Pool Executor - based on Python's native concurrent.futures
+*[pydantic]: The fastest and most widely used data validation library for Python - written in Rust
 *[DAG]: Directed Acyclic Graph — task dependency structure used by workflow schedulers (Airflow, Prefect)
 *[CI]: Continuous Integration — automated build and test on every commit
 *[CDDIS]: Crustal Dynamics Data Information System — NASA archive for GNSS orbits, clocks, and observation data

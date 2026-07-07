@@ -63,7 +63,7 @@ A namespace package is created by **omitting `__init__.py`** from the shared par
         viz/              ← from canvod-viz
         utils/            ← from canvod-utils
         ops/              ← from canvod-ops
-        virtualiconvname/ ← from canvod-virtualiconvname
+        filemap/ ← from canvod-filemap
     ```
 
 ---

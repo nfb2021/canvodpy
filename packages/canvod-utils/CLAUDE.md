@@ -14,9 +14,9 @@ Configuration, date parsing, diagnostics, and shared utilities.
 ## Config hierarchy
 
 User config file (NEVER committed):
-- `config/canvod.yaml` — unified config: processing, sites, sids
+- `config/canvod-settings.yaml` — unified config: processing, sites, sids
 
-Templates (committed): `config/canvod.yaml.example`
+Templates (committed): `config/canvod-settings.yaml.example`
 
 Legacy trio (`processing.yaml` / `sites.yaml` / `sids.yaml`) still loads with a
 `DeprecationWarning`. Migrate with `canvod config migrate`.

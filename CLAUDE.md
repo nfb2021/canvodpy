@@ -101,7 +101,7 @@ RINEX/SBF files → Reader → xarray.Dataset(epoch, sid)
 | `canvod-utils` | `canvod.utils` | Config models (Pydantic), shared utilities |
 | `canvod-viz` | `canvod.viz` | Visualization and store viewer |
 | `canvod-ops` | `canvod.ops` | Operational pipeline (streaming, monitoring) |
-| `canvod-virtualiconvname` | `canvod.virtualiconvname` | GNSS filename convention parsing and validation |
+| `canvod-filemap` | `canvod.filemap` | GNSS filename convention parsing and validation |
 | `canvod-audit` | `canvod.audit` | Three-tier verification suite (internal consistency, regression, vs gnssvod) |
 | `canvodpy` | `canvodpy` | Orchestrator, API levels (L1-L4), VodComputer |
 
@@ -208,7 +208,7 @@ to test edge cases (see `pyproject.toml:90` for ruff exemptions).
 - **VOD formula** (`canvod-vod`) — Tau-Omega radiative transfer model
 - **Coordinate transforms** (`canvod-auxiliary`) — ECEF ↔ spherical, deg/rad conversions
 - **Store dedup logic** (`canvod-store`) — hash + temporal overlap + intra-batch guards
-- **Naming convention parser** (`canvod-virtualiconvname`) — IGS/RINEX standard
+- **Naming convention parser** (`canvod-filemap`) — IGS/RINEX standard
 - **Ephemeris interpolation** (`canvod-auxiliary`) — Hermite spline on SP3 data
 - **SID construction** (`canvod-readers`) — must match across readers and store
 

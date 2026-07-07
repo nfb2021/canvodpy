@@ -31,7 +31,6 @@ dependencies = [
     "sbf-parser>=1.0.3",
     "structlog>=24.1.0",
     "canvod-utils>=0.1.0",
-    "canvod-virtualiconvname>=0.1.0",
 ]
 
 [dependency-groups]
@@ -61,7 +60,6 @@ extend-exclude = [
 
 [tool.uv.sources]
 canvod-utils = { workspace = true }
-canvod-virtualiconvname = { workspace = true }
 
 [tool.uv.build-backend]
 module-name = "canvod.readers"

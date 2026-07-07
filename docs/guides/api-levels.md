@@ -9,18 +9,25 @@ canvodpy exposes four API levels, each targeting a different use case. All level
 produce the same `(epoch, sid)` xarray Dataset format; they differ in how much
 infrastructure they manage for you.
 
+**Why four levels?** Scientists come to this package with very different needs.
+Some want a single function call that turns a folder of RINEX files into VOD.
+Others need to slot individual processing steps into their own pipeline and
+inspect intermediate results along the way. Each level trades convenience for
+control: Level 1 does everything automatically, Level 4 does nothing you did
+not explicitly ask for. Start at Level 1 and move down only when you need to.
+
 ---
 
 ## Quick Comparison
 
-| | L1: Convenience | L2: Fluent | L3: Site + Pipeline | L4: Functional |
+| | L1: Convenience | L2: Fluent | L3: Objects | L4: Functional |
 |---|---|---|---|---|
 | **Pattern** | `process_date(...)` | `.read().augment().result()` | `site.pipeline().process_date(...)` | `read_rinex(path)` |
-| **Ephemeris** | Automatic (SP3/CLK) | `.augment(source=...)` | Automatic (SP3/CLK) | `augment_with_ephemeris(ds)` |
-| **Store writes** | Automatic (Icechunk) | Optional `.to_store()` | Automatic (Icechunk) | None (NetCDF) |
-| **File discovery** | FilenameMapper | FilenameMapper | FilenameMapper | Caller provides paths |
-| **Dask parallelism** | Yes | No | Yes | No |
-| **Deduplication** | 3-layer | None | 3-layer | None |
+| **Ephemeris** | Automatic (from config) | `.augment(source=...)` | Automatic (from config) | `augment_with_ephemeris(ds, pos, ...)` |
+| **Store writes** | Automatic (Icechunk) | Optional `.to_store()` | Automatic (Icechunk) | None (NetCDF / pickle files) |
+| **File discovery** | FilenameMapper | FilenameMapper (glob fallback) | FilenameMapper | Caller provides paths |
+| **Parallel workers** | Yes | No | Yes | No |
+| **Deduplication** | 3-layer | Store guardrails on `.to_store()` | 3-layer | None |
 | **Best for** | Daily cron jobs | Interactive exploration | Multi-day batch runs | Airflow / custom pipelines |
 
 ---
@@ -33,45 +40,46 @@ One-liner entry points that handle everything internally.
 from canvodpy import process_date, calculate_vod
 
 # Process one day: read → augment → write to store
-process_date("Rosalia", "2025001")
+# Returns dict[str, xr.Dataset], one entry per receiver
+datasets = process_date("Rosalia", "2025001")
 
-# Compute VOD from stored data
-calculate_vod("Rosalia", "canopy_01", "reference_01", "2025001")
+# Compute VOD for a configured receiver pair and write it to the VOD store
+vod = calculate_vod("Rosalia", "canopy_01", "reference_01", "2025001")
 ```
 
-Internally, `process_date()` creates a `Pipeline`, spawns Dask workers,
-discovers files via `FilenameMapper`, downloads SP3/CLK ephemerides, runs
-Hermite interpolation, computes theta/phi, writes to Icechunk with 3-layer
-deduplication, and shuts down.
+Both functions accept optional keyword arguments that override the values in
+`config/processing.yaml` — for example
+`process_date("Rosalia", "2025001", aux_agency="ESA", n_workers=4)`.
+
+Internally, `process_date()` creates a `Pipeline`, discovers files via
+`FilenameMapper`, reads them in parallel worker processes, downloads SP3/CLK
+ephemerides, runs Hermite interpolation to obtain satellite positions,
+computes theta/phi, and writes to Icechunk with 3-layer deduplication
+(file hash, temporal overlap, intra-batch overlap).
+
+There is also `preview_processing("Rosalia")`, which returns the processing
+plan (dates, receivers, file counts) without executing anything.
 
 ---
 
 ## Level 2: Fluent Workflow
 
-Chainable deferred API for interactive use. Steps are recorded and executed
-on a terminal call (`.result()`, `.to_store()`).
+A *fluent* API is one where each method returns the workflow object itself,
+so calls chain together like clauses in a sentence: read the data, *then*
+augment it, *then* grid it, *then* compute VOD. Steps are recorded but not
+executed until a terminal call (`.result()`, `.to_store()`, `.plot()`)
+triggers the whole chain.
 
 ```python
 import canvodpy
 
-ds = (
+datasets = (
     canvodpy.workflow("Rosalia")
     .read("2025001")
-    .augment(source="final")     # SP3/CLK ephemeris
-    .result()
+    .augment(source="final")     # SP3/CLK agency ephemeris
+    .result()                    # dict of per-receiver Datasets
 )
 ```
-
-=== "With broadcast ephemeris"
-
-    ```python
-    ds = (
-        canvodpy.workflow("Rosalia")
-        .read("2025001")
-        .augment(source="broadcast")   # SBF SatVisibility or RINEX NAV
-        .result()
-    )
-    ```
 
 === "With VOD"
 
@@ -80,8 +88,9 @@ ds = (
         canvodpy.workflow("Rosalia")
         .read("2025001")
         .augment(source="final")
+        .grid()                          # assign hemisphere grid cells
         .vod("canopy_01", "reference_01")
-        .result()
+        .result()                        # returns the VOD Dataset
     )
     ```
 
@@ -96,16 +105,43 @@ ds = (
     )
     ```
 
+=== "Inspect the plan"
+
+    ```python
+    wf = (
+        canvodpy.workflow("Rosalia")
+        .read("2025001")
+        .augment()
+    )
+    wf.explain()   # describes the recorded steps without executing them
+    ```
+
 !!! info "Deferred execution"
 
-    `.read()`, `.augment()`, `.vod()` do **not** execute immediately.
-    They append to an internal plan. Execution happens on `.result()` or `.to_store()`.
+    `.read()`, `.augment()`, `.grid()`, `.vod()` do **not** execute
+    immediately. They append to an internal plan. Execution happens on
+    `.result()`, `.to_store()`, or `.plot()`. Use `.explain()` to inspect
+    the plan without running it.
+
+!!! warning "Ephemeris sources at Level 2"
+
+    `.augment()` supports `source="final"` (default) and `source="rapid"`,
+    both served by SP3/CLK agency products. Broadcast ephemeris is currently
+    only available at Level 4 via `augment_with_ephemeris(..., source="broadcast")`
+    or at Levels 1/3 via the `ephemeris_source` config option.
+
+The workflow constructor also accepts component overrides:
+`canvodpy.workflow("Rosalia", reader="rinex3", grid_type="equal_area",
+vod_calculator="tau_omega")` — any name registered with the corresponding
+factory works, which is how community extensions plug in.
 
 ---
 
-## Level 3: Site + Pipeline
+## Level 3: Site and Pipeline Objects
 
-Object-oriented API for batch processing. Holds a Dask cluster across calls.
+Object-oriented API for batch processing. A `Pipeline` keeps its pool of
+parallel worker processes alive across calls, so processing many days in one
+run avoids repeated setup and teardown.
 
 ```python
 from canvodpy import Site
@@ -116,124 +152,185 @@ with site.pipeline(n_workers=8) as pipeline:
     for date_key, datasets in pipeline.process_range("2025001", "2025007"):
         print(f"{date_key}: {sum(ds.sizes['epoch'] for ds in datasets.values())} epochs")
 
-        # Optional: compute VOD inline
+        # Optional: compute VOD inline for a configured analysis pair
         site.vod.compute_day(datasets, "canopy_01_vs_reference_01")
 ```
 
 Level 3 is functionally identical to Level 1 — the orchestrator runs the same
-code path. The difference is ergonomic: Level 3 reuses the Dask cluster across
-multiple `process_date()` calls, avoiding repeated cluster setup/teardown.
+code path. The difference is ergonomic: you keep the `Site` and `Pipeline`
+objects around, reuse the worker pool, and get direct access to the stores.
+
+`Site` exposes:
+
+| Attribute / method | What it gives you |
+|---|---|
+| `site.receivers` / `site.active_receivers` | Configured receivers |
+| `site.vod_analyses` | Configured VOD analysis pairs |
+| `site.rinex_store` / `site.vod_store` | The Icechunk stores |
+| `site.vod` | `VodComputer` helper (see [VOD Computation](#vod-computation)) |
+| `site.pipeline(...)` | Create a `Pipeline` |
+
+`Pipeline` exposes `process_date(date)`, `process_range(start, end)` (a
+generator yielding `(date_key, datasets)`), `calculate_vod(canopy, reference,
+date)`, `preview()`, and `close()`; it is also a context manager, as shown
+above.
+
+### VODWorkflow
+
+`VODWorkflow` is a factory-based alternative to `Site` + `Pipeline` that lets
+you swap individual components (reader, grid, VOD calculator) by registered
+name:
+
+```python
+from canvodpy import VODWorkflow
+
+workflow = VODWorkflow(
+    site="Rosalia",
+    grid="equal_area",
+    grid_params={"angular_resolution": 5.0},
+)
+datasets = workflow.process_date("2025001")               # load → augment → grid
+vod = workflow.calculate_vod("canopy_01", "reference_01", "2025001")
+```
 
 ---
 
 ## Level 4: Functional API
 
-Pure stateless functions for Airflow or custom pipelines. The caller provides
-file paths and manages all orchestration.
+*Functional* here means stateless: each function takes explicit inputs and
+returns explicit outputs, with no hidden objects holding state between calls.
+That makes the functions easy to test, easy to reason about, and safe to
+compose into your own pipeline (or an Airflow DAG). The caller provides file
+paths and manages all orchestration.
 
 ```python
 from canvodpy.functional import read_rinex, augment_with_ephemeris, calculate_vod
+from canvod.auxiliary.position.position import ECEFPosition
+from canvod.utils.config import load_config
 
 # Read a single file
-ds = read_rinex("station.25o")
+ds = read_rinex("ROSA01TUW_R_20250010000_15M_05S_AA.rnx")
 
-# Add satellite geometry (downloads SP3/CLK if needed)
-ds = augment_with_ephemeris(ds, site_name="Rosalia", source="final")
+# Receiver position comes from the RINEX header, not from config
+rx_pos = ECEFPosition.from_ds_metadata(ds)
 
-# Compute VOD
+# Add satellite geometry (downloads and caches SP3/CLK for that day)
+site_cfg = load_config().sites.sites["Rosalia"]
+ds = augment_with_ephemeris(
+    ds,
+    rx_pos,
+    source="final",       # or "rapid"; "broadcast" for SBF-derived geometry
+    agency="COD",
+    date="2025001",
+    site_config=site_cfg,
+)
+
+# Compute VOD from two augmented datasets
 vod_ds = calculate_vod(canopy_ds, reference_ds)
 ```
 
+!!! warning "Two functions named `calculate_vod`"
+
+    `from canvodpy import calculate_vod` gives you the **Level 1** function
+    (`site, canopy, reference, date` — reads from the store, writes to the
+    store). `from canvodpy.functional import calculate_vod` gives you the
+    **Level 4** function (`canopy_ds, sky_ds` — pure, in-memory). Import
+    from the module that matches your intent.
+
+=== "Grid assignment"
+
+    ```python
+    from canvodpy.functional import create_grid, assign_grid_cells
+
+    grid = create_grid("equal_area", angular_resolution=5.0)
+    ds_with_cells = assign_grid_cells(ds, grid)
+    ```
+
 === "Airflow-ready variants"
 
-    ```python
-    from canvodpy.functional import read_rinex_to_file, calculate_vod_to_file
-
-    # Returns path string (XCom-serializable)
-    obs_path = read_rinex_to_file("station.25o", output="obs.nc")
-    vod_path = calculate_vod_to_file(canopy_path, ref_path, output="vod.nc")
-    ```
-
-=== "File discovery with FilenameMapper"
+    Every function has a `*_to_file` twin that reads/writes files and returns
+    a path string, which Airflow can serialize in XCom:
 
     ```python
-    from canvod.virtualiconvname import FilenameMapper
+    from canvodpy.functional import (
+        read_rinex_to_file,
+        create_grid_to_file,
+        assign_grid_cells_to_file,
+        calculate_vod_to_file,
+    )
 
-    mapper = FilenameMapper(site="Rosalia", receiver="canopy_01")
-    files = mapper.discover("2025001")
-
-    datasets = [read_rinex(f) for f in files]
+    canopy = read_rinex_to_file("canopy.rnx", "/tmp/canopy.nc")
+    sky = read_rinex_to_file("sky.rnx", "/tmp/sky.nc")
+    vod_path = calculate_vod_to_file(canopy, sky, "/tmp/vod.nc")
     ```
+
+    Datasets are stored as NetCDF; grids are stored as pickle
+    (`create_grid_to_file` / `assign_grid_cells_to_file`).
+
+At Level 4 file discovery is the caller's job — pass explicit paths (e.g.
+from your own `Path.glob`, a workflow scheduler, or the
+`canvod.filemap.FilenameMapper` if your site uses the naming
+convention).
 
 ---
 
 ## Ephemeris Sources
 
-All levels support three ephemeris sources for computing satellite geometry
-(theta, phi). The source determines accuracy, latency, and internet requirements.
+Computing the satellite angles theta and phi requires satellite positions,
+which come from an ephemeris source.
 
 ### Source comparison
 
-| Source | Accuracy | Latency | Internet | Input files |
-|--------|----------|---------|----------|-------------|
-| **Agency final** (SP3/CLK) | ~2-3 cm orbit | 12-18 days | Required | SP3 + CLK from COD/ESA/IGS |
-| **SBF broadcast** | ~1-2 m orbit | Immediate | None | SBF binary (SatVisibility block) |
-| **RINEX NAV broadcast** | ~1-2 m orbit | Immediate | None | `.YYp` / `.YYn` nav files |
+| Source | What it is | Internet | Provider class |
+|--------|------------|----------|----------------|
+| **Agency products** (`"final"`, `"rapid"`) | Post-processed SP3 orbit + CLK clock files from an analysis centre (COD, ESA, ...), downloaded and Hermite-interpolated | Required (results cached locally) | `AgencyEphemerisProvider` |
+| **SBF broadcast** (`"broadcast"`) | Satellite geometry the receiver itself recorded (SBF `SatVisibility` block) | None — embedded in the SBF file | `SbfBroadcastProvider` |
 
-!!! tip "Accuracy perspective"
-
-    A 2 m orbit error at 20,200 km altitude produces <0.00001 deg angular error
-    in theta/phi — six orders of magnitude below GNSS measurement noise.
-    For VOD applications, broadcast ephemerides are more than sufficient.
+A provider for RINEX navigation files (`RinexNavProvider`) is planned but not
+yet implemented.
 
 ### How each source works
 
 ```mermaid
 flowchart LR
-    subgraph Agency["Agency Final (SP3/CLK)"]
+    subgraph Agency["Agency products (SP3/CLK)"]
         A1[Download SP3+CLK] --> A2[Hermite interpolation]
         A2 --> A3["ECEF → θ, φ, r"]
     end
 
     subgraph SBF["SBF Broadcast"]
         B1["SBF file scan"] --> B2["SatVisibility block"]
-        B2 --> B3["θ, φ directly from receiver"]
-    end
-
-    subgraph NAV["RINEX NAV Broadcast"]
-        C1["Parse .YYp nav file"] --> C2["Keplerian propagation"]
-        C2 --> C3["ECEF → θ, φ, r"]
+        B2 --> B3["θ, φ from receiver-recorded geometry"]
     end
 
     Agency --> DS["ds with theta, phi"]
     SBF --> DS
-    NAV --> DS
 ```
 
 ### Usage across levels
 
 ```python
-# Level 1/3: config-driven (canvod.yaml → processing.params.ephemeris_source)
-# ephemeris_source: "final" | "broadcast" | "auto"
+# Levels 1/3: config-driven (config/processing.yaml)
+# processing.params.ephemeris_source: "final" | "broadcast"
 
-# Level 2: explicit step
-.augment(source="final")      # SP3/CLK
-.augment(source="broadcast")  # SBF SatVisibility or RINEX NAV
+# Level 2: explicit step (agency products only)
+.augment(source="final")      # SP3/CLK, default
+.augment(source="rapid")      # rapid SP3/CLK products
 
-# Level 4: explicit function
-augment_with_ephemeris(ds, site_name="Rosalia", source="final")
-augment_with_ephemeris(ds, site_name="Rosalia", source="broadcast")
+# Level 4: explicit function (all sources)
+augment_with_ephemeris(ds, rx_pos, source="final", date="2025001", site_config=cfg)
+augment_with_ephemeris(ds, rx_pos, source="broadcast")   # SBF only
 ```
 
 ### EphemerisProvider architecture
 
-All three sources implement the same abstract interface:
+All sources implement the same abstract interface:
 
 ```python
 class EphemerisProvider(ABC):
     @abstractmethod
     def augment_dataset(self, ds, receiver_position) -> xr.Dataset:
-        """Add theta, phi (and optionally r) to the observation dataset."""
+        """Add theta and phi (and optionally r) to the observation dataset."""
 
     @abstractmethod
     def preprocess_day(self, date, site_config) -> Path | None:
@@ -242,9 +339,8 @@ class EphemerisProvider(ABC):
 
 | Provider | `preprocess_day()` | `augment_dataset()` |
 |----------|-------------------|---------------------|
-| `AgencyEphemerisProvider` | Downloads SP3/CLK, Hermite interpolation → Zarr cache | Opens Zarr, selects epochs, `compute_spherical_coordinates()` |
-| `SbfBroadcastProvider` | No-op (geometry embedded in file) | Extracts theta/phi from `sbf_obs` auxiliary dataset |
-| `RinexNavProvider` | Parses NAV file, Keplerian propagation → Zarr cache | Opens Zarr, selects epochs, `compute_spherical_coordinates()` |
+| `AgencyEphemerisProvider` | Downloads SP3/CLK, Hermite interpolation → Zarr cache | Opens cache, selects epochs, computes spherical coordinates |
+| `SbfBroadcastProvider` | No-op (geometry embedded in file) | Extracts theta/phi from the SBF `sbf_obs` auxiliary dataset |
 
 ---
 
@@ -254,11 +350,11 @@ class EphemerisProvider(ABC):
 flowchart TD
     subgraph Input["Data Ingestion"]
         FILES["GNSS Files<br/>(RINEX / SBF)"]
-        EPHEM["Ephemeris Source<br/>(SP3 / SBF / NAV)"]
+        EPHEM["Ephemeris Source<br/>(SP3/CLK / SBF)"]
     end
 
     subgraph Discovery["File Discovery"]
-        FM["FilenameMapper<br/>canvod-virtualiconvname"]
+        FM["FilenameMapper<br/>canvod-filemap"]
     end
 
     subgraph Reading["Parsing"]
@@ -266,7 +362,7 @@ flowchart TD
     end
 
     subgraph Augmentation["Geometry Augmentation"]
-        EP["EphemerisProvider<br/>Agency / SBF / NAV"]
+        EP["EphemerisProvider<br/>Agency / SBF"]
         SCS["θ, φ, r coordinates"]
     end
 
@@ -277,7 +373,7 @@ flowchart TD
 
     subgraph Analysis["VOD Analysis"]
         VOD["VodComputer<br/>tau-omega model"]
-        GRID["Grid Assignment<br/>equal-area / geodesic"]
+        GRID["Grid Assignment<br/>equal-area hemigrid"]
     end
 
     FILES --> FM --> READER
@@ -301,21 +397,22 @@ flowchart TD
 | File discovery | :fontawesome-solid-check: | :fontawesome-solid-check: | :fontawesome-solid-check: | caller |
 | Reading | :fontawesome-solid-check: | :fontawesome-solid-check: | :fontawesome-solid-check: | :fontawesome-solid-check: |
 | Ephemeris augmentation | auto | `.augment()` | auto | `augment_with_ephemeris()` |
-| Deduplication | :fontawesome-solid-check: | — | :fontawesome-solid-check: | — |
+| Deduplication | :fontawesome-solid-check: | store guardrails | :fontawesome-solid-check: | — |
 | Store write | auto | `.to_store()` | auto | — |
-| VOD computation | `calculate_vod()` | `.vod()` | `site.vod.compute_day()` | `calculate_vod()` |
-| Dask parallelism | :fontawesome-solid-check: | — | :fontawesome-solid-check: | — |
+| VOD computation | `calculate_vod()` | `.vod()` | `pipeline.calculate_vod()` / `site.vod` | `functional.calculate_vod()` |
+| Parallel workers | :fontawesome-solid-check: | — | :fontawesome-solid-check: | — |
 
 ---
 
 ## VOD Computation
 
-VOD is computed via `VodComputer`, which offers two strategies:
+At Level 3, VOD is computed via `VodComputer` (available as `site.vod`),
+which offers two strategies:
 
 === "Daily (inline)"
 
     ```python
-    # Compute VOD immediately after processing
+    # Compute VOD immediately after processing, from the in-memory datasets
     with site.pipeline() as pipeline:
         for date_key, datasets in pipeline.process_range("2025001", "2025007"):
             site.vod.compute_day(datasets, "canopy_01_vs_reference_01")
@@ -324,16 +421,20 @@ VOD is computed via `VodComputer`, which offers two strategies:
 === "Bulk (from store)"
 
     ```python
+    from datetime import datetime
+
     # Recompute VOD for an entire time range from the RINEX store
     site.vod.compute_bulk(
         "canopy_01_vs_reference_01",
-        start="2025001",
-        end="2025031",
+        start=datetime(2025, 1, 1),
+        end=datetime(2025, 1, 31),
     )
     ```
 
-Both strategies use the same core: rechunk → clear encodings → `VODFactory.create()` →
-`calculator.calculate_vod()` → write to VOD store.
+Both strategies share the same core: the canopy/reference pair is passed to
+`VODFactory.create()`, the calculator's `calculate_vod()` runs the tau-omega
+retrieval, and the result is written to the site's VOD store (pass
+`write=False` to skip the store write).
 
 ---
 
@@ -343,17 +444,19 @@ Both strategies use the same core: rechunk → clear encodings → `VODFactory.c
 
     **Level 1** (`process_date`) or **Level 3** (`site.pipeline()`).
     Both handle everything: file discovery, ephemeris, store writes, dedup.
-    Level 3 is better if you process multiple days in one run (reuses Dask cluster).
+    Level 3 is better if you process multiple days in one run (reuses the
+    worker pool).
 
 ??? question "I want to explore data interactively in a notebook"
 
     **Level 2** (fluent workflow). Chain `.read().augment().result()` to get
-    an in-memory Dataset without side effects. Add `.vod()` to compute VOD inline.
+    in-memory Datasets without side effects. Add `.grid()` and `.vod()` to
+    compute VOD inline.
 
 ??? question "I want to integrate with Airflow"
 
     **Level 4** (functional). Use `*_to_file` variants that return path strings
-    for XCom serialization. Each function is stateless and pure.
+    for XCom serialization. Each function is stateless.
 
 ??? question "I want to read a single file quickly"
 

@@ -4,7 +4,7 @@
 
 [tool.uv.workspace]
 members = ["packages/*", "canvodpy"]
-exclude = ["packages/canvod-streamstats"]
+exclude = ["packages/canvod-streamstats", "packages/canvod-filemap"]
 
 # ============================================================================
 # Development Dependencies (Workspace-wide)
@@ -138,7 +138,6 @@ testpaths = [
     "packages/canvod-readers/tests",
     "packages/canvod-store/tests",
     "packages/canvod-store-metadata/tests",
-    "packages/canvod-virtualiconvname/tests",
     "packages/canvod-utils/tests",
     "packages/canvod-viz/tests",
     "packages/canvod-vod/tests",
@@ -159,7 +158,6 @@ source = [
     "packages/canvod-readers/src",
     "packages/canvod-store/src",
     "packages/canvod-store-metadata/src",
-    "packages/canvod-virtualiconvname/src",
     "packages/canvod-utils/src",
     "packages/canvod-viz/src",
     "packages/canvod-vod/src",
@@ -184,7 +182,6 @@ version_files = [
     "packages/canvod-store-metadata/pyproject.toml:version",
     "packages/canvod-viz/pyproject.toml:version",
     "packages/canvod-utils/pyproject.toml:version",
-    "packages/canvod-virtualiconvname/pyproject.toml:version",
     "packages/canvod-ops/pyproject.toml:version",
     "packages/canvod-audit/pyproject.toml:version",
 ]

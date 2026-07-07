@@ -1,8 +1,8 @@
 # =============================================================================
-# canVODpy Configuration — single unified file
+# canVODpy Settings — single unified file
 # =============================================================================
-# Copy this file to config/canvod.yaml and customize for your setup.
-# Run: canvod config init   (scaffolds canvod.yaml from this template)
+# Copy this file to config/canvod-settings.yaml and customize for your setup.
+# Run: canvod config init   (scaffolds canvod-settings.yaml from this template)
 #      canvod config migrate (converts legacy processing/sites/sids.yaml)
 #
 # Top-level sections:
@@ -23,7 +23,7 @@
 processing:
 
   # ---------------------------------------------------------------------------
-  # Metadata  (written to processed files / store attributes)
+  # Metadata  (written as Zarr root attrs on the GNSS store via canvod-store-metadata)
   # ---------------------------------------------------------------------------
   metadata:
     author: Your Name
@@ -31,11 +31,11 @@ processing:
     orcid: null                          # e.g. "0000-0001-2345-6789"
     institution: Your Institution
     institution_ror: null                # e.g. "https://ror.org/04d836q62"
-    department: Your Department          # Optional
-    research_group: Your Research Group  # Optional
-    website: https://your-institution.edu  # Optional
+    department: null                     # Optional
+    research_group: null                 # Optional
+    website: null                        # Optional
     license: CC-BY-4.0                   # SPDX identifier
-    publisher: Your Institution          # Optional
+    publisher: null                      # Optional
     publisher_url: null                  # Optional
     naming_authority: null               # e.g. "at.ac.tuwien"
 
@@ -201,60 +201,54 @@ processing:
 # =============================================================================
 # Each top-level key is a site name.  Receivers go under each site.
 # Recipe files live in config/recipes/{recipe_name}.yaml.
+# If canvod-virtualiconvname is installed, recipe files map physical filenames
+# to the canVOD naming convention. Without it, files must already conform.
 
 sites:
-  rosalia:
-    gnss_site_data_root: /path/to/your/gnss/data/01_Rosalia
+  my_site:
+    gnss_site_data_root: /path/to/your/gnss/data/my_site
 
-    # Site geospatial metadata (used by canvod-store-metadata)
-    description: Mixed forest GNSS-T research site
-    country: AT                # ISO 3166-1 alpha-2 country code
-    latitude: 47.7             # WGS84 latitude (decimal degrees)
-    longitude: 16.3            # WGS84 longitude (decimal degrees)
-    altitude_m: 680.0          # Altitude above WGS84 ellipsoid (metres)
+    # Site geospatial metadata (used by canvod-store-metadata, all optional)
+    description: null
+    country: null           # ISO 3166-1 alpha-2 country code, e.g. AT
+    latitude: null          # WGS84 latitude (decimal degrees)
+    longitude: null         # WGS84 longitude (decimal degrees)
+    altitude_m: null        # Altitude above WGS84 ellipsoid (metres)
 
     receivers:
       reference_01:
         type: reference
         directory: 01_reference
-        reader_format: auto                 # 'auto', 'rinex3', or 'sbf'
-        scs_from: all                       # 'all' or list of canopy receiver names
-        description: First reference receiver (open sky)
-        recipe: rosalia_reference           # → config/recipes/rosalia_reference.yaml
-        metadata:
-          site_url: https://forschung.boku.ac.at/rosalia
-          antenna_height: 2.0
+        reader_format: auto          # 'auto', 'rinex3', or 'sbf'
+        paired_canopies: all         # 'all' or list of canopy receiver names
+        description: null
+        # recipe: my_site_reference  # → config/recipes/my_site_reference.yaml
+        #                            #   (requires canvod-virtualiconvname)
 
       canopy_01:
         type: canopy
         directory: 02_canopy
         reader_format: auto
-        description: First canopy receiver (under vegetation)
-        recipe: rosalia_canopy              # → config/recipes/rosalia_canopy.yaml
-        metadata:
-          site_url: https://forschung.boku.ac.at/rosalia
-          antenna_height: 1.5
-          species: Fagus sylvatica
+        description: null
+        # recipe: my_site_canopy     # → config/recipes/my_site_canopy.yaml
 
     vod_analyses:
       canopy_01_vs_reference_01:
         canopy_receiver: canopy_01
         reference_receiver: reference_01
-        description: VOD analysis canopy_01 vs reference_01
+        description: null
 
   # Add more sites as needed:
-  # tuw:
-  #   gnss_site_data_root: /path/to/your/gnss/data/02_TUW
+  # my_second_site:
+  #   gnss_site_data_root: /path/to/your/gnss/data/my_second_site
   #   receivers:
   #     reference_01:
   #       type: reference
   #       directory: 01_reference
-  #       scs_from: all
-  #       recipe: tuw_reference
+  #       paired_canopies: all
   #     canopy_01:
   #       type: canopy
   #       directory: 02_canopy
-  #       recipe: tuw_canopy
   #   vod_analyses:
   #     canopy_01_vs_reference_01:
   #       canopy_receiver: canopy_01

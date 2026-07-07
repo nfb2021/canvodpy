@@ -21,7 +21,7 @@ graph TD
         GRIDS["canvod-grids"]
         VOD["canvod-vod"]
         UTILS["canvod-utils"]
-        NAMING["canvod-virtualiconvname"]
+        NAMING["canvod-filemap"]
     end
 
     AUX   --> READERS
@@ -42,7 +42,7 @@ graph TD
 | canvod-grids | 0 | 3 | 0.00 | 1.00 |
 | canvod-vod | 0 | 0 | 0.00 | 1.00 |
 | canvod-utils | 0 | 2 | 0.00 | 1.00 |
-| canvod-virtualiconvname | 0 | 0 | 0.00 | 1.00 |
+| canvod-filemap | 0 | 0 | 0.00 | 1.00 |
 | canvod-auxiliary | 1 | 0 | 1.00 | 0.90 |
 | canvod-viz | 1 | 0 | 1.00 | 0.90 |
 | canvod-store | 1 | 0 | 1.00 | 0.90 |
@@ -81,7 +81,7 @@ All packages can be extracted to independent repositories with zero or minimal c
     packages/canvod-grids/            → independent repo
     packages/canvod-vod/              → independent repo
     packages/canvod-utils/            → independent repo
-    packages/canvod-virtualiconvname/ → independent repo
+    packages/canvod-filemap/ → independent repo
     ```
 
 === "Consumer packages"

@@ -59,7 +59,7 @@ def config_callback(
         Path | None,
         typer.Option(
             "--config",
-            help="Overlay config file applied on top of the main canvod.yaml",
+            help="Overlay config file applied on top of the main canvod-settings.yaml",
             show_default=False,
         ),
     ] = None,
@@ -81,10 +81,10 @@ def init(
         help="Overwrite existing files",
     ),
 ) -> None:
-    """Initialize configuration from the canvod.yaml template.
+    """Initialize configuration from the canvod-settings.yaml template.
 
     Creates:
-      - config/canvod.yaml
+      - config/canvod-settings.yaml
       - config/recipes/*.yaml (example naming recipes)
 
     Parameters
@@ -123,9 +123,9 @@ def init(
     files_created = []
     files_skipped = []
 
-    # Copy unified template (canvod.yaml.example → canvod.yaml)
-    canvod_example = template_dir / "canvod.yaml.example"
-    canvod_dest = config_dir / "canvod.yaml"
+    # Copy unified template (canvod-settings.yaml.example → canvod-settings.yaml)
+    canvod_example = template_dir / "canvod-settings.yaml.example"
+    canvod_dest = config_dir / "canvod-settings.yaml"
     if canvod_example.exists():
         if canvod_dest.exists() and not force:
             files_skipped.append(canvod_dest)
@@ -162,7 +162,7 @@ def init(
 
     # Next steps
     console.print("\n[bold]Next steps:[/bold]")
-    console.print("  1. Edit config/canvod.yaml:")
+    console.print("  1. Edit config/canvod-settings.yaml:")
     console.print("     - processing.metadata: fill in author, email, institution")
     console.print("     - processing.storage.stores_root_dir: set your store path")
     console.print("     - sites: replace the example site with your own")
@@ -181,14 +181,15 @@ def migrate(
         bool, typer.Option("--dry-run", help="Print merged config without writing")
     ] = False,
     force: Annotated[
-        bool, typer.Option("--force", "-f", help="Overwrite existing canvod.yaml")
+        bool,
+        typer.Option("--force", "-f", help="Overwrite existing canvod-settings.yaml"),
     ] = False,
 ) -> None:
-    """Merge legacy config files into a single canvod.yaml.
+    """Merge legacy config files into a single canvod-settings.yaml.
 
     Reads processing.yaml + sites.yaml + sids.yaml from the config directory
-    and writes a unified canvod.yaml. Legacy files are left in place so you
-    can review the result before removing them.
+    and writes a unified canvod-settings.yaml. Legacy files are left in place
+    so you can review the result before removing them.
 
     Parameters
     ----------
@@ -197,13 +198,13 @@ def migrate(
     dry_run : bool
         Print the merged config to stdout without writing anything.
     force : bool
-        Overwrite an existing canvod.yaml.
+        Overwrite an existing canvod-settings.yaml.
 
     Returns
     -------
     None
     """
-    out_path = config_dir / "canvod.yaml"
+    out_path = config_dir / "canvod-settings.yaml"
 
     if out_path.exists() and not force and not dry_run:
         console.print(
@@ -227,8 +228,8 @@ def migrate(
     else:
         console.print(f"[yellow]⊘  {proc_file} not found — skipping.[/yellow]")
 
-    # sites.yaml — unwrap the top-level 'sites:' key so canvod.yaml has site
-    # names directly under 'sites:' (one less level of nesting).
+    # sites.yaml — unwrap the top-level 'sites:' key so canvod-settings.yaml
+    # has site names directly under 'sites:' (one less level of nesting).
     sites_file = config_dir / "sites.yaml"
     if sites_file.exists():
         raw = _read(sites_file)
@@ -250,7 +251,8 @@ def migrate(
         raise typer.Exit(1)
 
     header = (
-        "# canvodpy configuration (migrated from legacy three-file layout)\n"
+        "# canvodpy configuration — canvod-settings.yaml\n"
+        "# Migrated from legacy three-file layout (processing/sites/sids.yaml).\n"
         "# Run: canvod config validate\n\n"
     )
     content = yaml.dump(
@@ -270,7 +272,7 @@ def migrate(
     for f in found:
         console.print(f"  {f}")
     console.print("\n[bold]Next steps:[/bold]")
-    console.print("  1. Review canvod.yaml to confirm it looks correct")
+    console.print("  1. Review canvod-settings.yaml to confirm it looks correct")
     console.print("  2. Run: canvod config validate")
     console.print("  3. Once confirmed, remove the legacy files:")
     names = "  ".join(f.name for f in found)
@@ -392,7 +394,7 @@ def validate(
                 f"\n[red]❌ {len(dir_errors)} receiver director(y/ies) not found.[/red]"
             )
             console.print(
-                "  Check gnss_site_data_root and receiver directory settings in sites.yaml"
+                "  Check gnss_site_data_root and receiver directory settings in canvod-settings.yaml"
             )
             console.print()
             raise typer.Exit(1)
