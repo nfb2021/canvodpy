@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -53,24 +54,15 @@ _EXT_TO_FILETYPE: dict[str, FileType] = {
     ".sbf": FileType.SBF,
     ".ubx": FileType.UBX,
     ".nmea": FileType.NMEA,
-    # RINEX v2 observation types
     ".obs": FileType.RNX,
 }
 
-# RINEX v2 type characters that indicate observation files
 _RNX2_OBS_CHARS = set("oOdD")
-
 _COMPRESSION_EXTS = {".zip", ".gz", ".bz2", ".zst", ".Z"}
 
 
 def _detect_file_type(path: Path) -> tuple[FileType, str | None]:
-    """Detect FileType and compression from a file path.
-
-    Returns
-    -------
-    tuple[FileType, str | None]
-        (file_type, compression_ext_without_dot_or_None)
-    """
+    """Detect FileType and compression from a file path."""
     suffixes = path.suffixes
     compression = None
 
@@ -79,7 +71,6 @@ def _detect_file_type(path: Path) -> tuple[FileType, str | None]:
         suffixes = suffixes[:-1]
 
     if not suffixes:
-        # Septentrio SBF: file ends with .YY_ (e.g. .25_)
         stem = path.stem if compression else path.name
         if stem.endswith("_"):
             return FileType.SBF, compression
@@ -87,17 +78,14 @@ def _detect_file_type(path: Path) -> tuple[FileType, str | None]:
 
     ext = suffixes[-1].lower()
 
-    # Direct extension match
     if ext in _EXT_TO_FILETYPE:
         return _EXT_TO_FILETYPE[ext], compression
 
-    # RINEX v2: .YYo, .YYd, etc. — last char indicates type
     if len(ext) == 4 and ext[1:3].isdigit():
         type_char = ext[3]
         if type_char in _RNX2_OBS_CHARS:
             return FileType.RNX, compression
 
-    # Septentrio SBF: .YY_
     if ext.endswith("_") and len(ext) == 4 and ext[1:3].isdigit():
         return FileType.SBF, compression
 
@@ -162,7 +150,6 @@ class FilenameMapper:
             dir_name = f"{year:04d}{doy:03d}"
             search_dir = self.receiver_base_dir / dir_name
         else:
-            # FLAT: discover all and filter
             all_files = self.discover_all()
             return [
                 vf
@@ -189,13 +176,6 @@ class FilenameMapper:
     ) -> VirtualFile:
         """Map a single physical file to its canVOD conventional name.
 
-        Parameters
-        ----------
-        file_path
-            Path to the physical file.
-        year, doy
-            Optional date override (e.g. from directory name).
-
         Raises
         ------
         ValueError
@@ -211,7 +191,6 @@ class FilenameMapper:
         pat, m = result
         groups = m.groupdict()
 
-        # Validate station code if configured
         expected_station = self.receiver_naming.source_station
         if expected_station and "station" in groups:
             actual_station = groups["station"]
@@ -221,7 +200,6 @@ class FilenameMapper:
                     f"expected {expected_station!r}, got {actual_station!r}"
                 )
 
-        # Extract year
         if year is None:
             if "year" in groups and groups["year"] is not None:
                 year = int(groups["year"])
@@ -230,14 +208,12 @@ class FilenameMapper:
             else:
                 raise ValueError(f"Cannot determine year from {filename!r}")
 
-        # Extract DOY
         if doy is None:
             if "doy" in groups and groups["doy"] is not None:
                 doy = int(groups["doy"])
             else:
                 raise ValueError(f"Cannot determine DOY from {filename!r}")
 
-        # Extract hour
         if "hour" in groups and groups["hour"] is not None:
             hour = int(groups["hour"])
         elif "hour_letter" in groups and groups["hour_letter"] is not None:
@@ -245,13 +221,11 @@ class FilenameMapper:
         else:
             hour = 0
 
-        # Extract minute
         if "minute" in groups and groups["minute"] is not None:
             minute = int(groups["minute"])
         else:
             minute = 0
 
-        # Sampling and period from regex or config defaults
         sampling = (
             groups.get("sampling")
             or self.receiver_naming.sampling
@@ -259,20 +233,14 @@ class FilenameMapper:
         )
         period = groups.get("period")
         if not period:
-            # For RINEX v2 / SBF: hour_letter='0' means daily file
             hour_letter = groups.get("hour_letter")
             if hour_letter == "0" and hour == 0 and minute == 0:
                 period = "01D"
             else:
                 period = self.receiver_naming.period or self.site_naming.default_period
 
-        # Content from config
         content = self.receiver_naming.content or self.site_naming.default_content
-
-        # Agency from config
         agency = self.receiver_naming.agency or self.site_naming.agency
-
-        # File type and compression from extension
         file_type, compression = _detect_file_type(file_path)
 
         conventional = CanVODFilename(
@@ -297,19 +265,7 @@ class FilenameMapper:
     def detect_overlaps(
         vfs: list[VirtualFile],
     ) -> list[tuple[VirtualFile, VirtualFile]]:
-        """Detect temporal overlaps among virtual files.
-
-        Groups files by ``(year, doy)`` and checks whether any file's time
-        range contains or overlaps another's.  A ``01D`` file alongside
-        ``15M`` files for the same day is the canonical overlap case.
-
-        Returns
-        -------
-        list[tuple[VirtualFile, VirtualFile]]
-            Pairs of overlapping files.
-        """
-        from collections import defaultdict
-
+        """Detect temporal overlaps among virtual files."""
         by_date: dict[tuple[int, int], list[VirtualFile]] = defaultdict(list)
         for vf in vfs:
             cn = vf.conventional_name
@@ -319,7 +275,6 @@ class FilenameMapper:
         for group in by_date.values():
             if len(group) < 2:
                 continue
-            # Compute (start_minutes, end_minutes) for each file
             ranges: list[tuple[int, int, VirtualFile]] = []
             for vf in group:
                 cn = vf.conventional_name
@@ -328,12 +283,10 @@ class FilenameMapper:
                 end_min = start_min + duration_sec // 60
                 ranges.append((start_min, end_min, vf))
 
-            # O(n^2) pairwise check — fine for <100 files per day
             for i in range(len(ranges)):
                 for j in range(i + 1, len(ranges)):
                     s_i, e_i, vf_i = ranges[i]
                     s_j, e_j, vf_j = ranges[j]
-                    # Overlap if intervals intersect
                     if s_i < e_j and s_j < e_i:
                         overlaps.append((vf_i, vf_j))
         return overlaps
@@ -347,7 +300,6 @@ class FilenameMapper:
         if layout == DirectoryLayout.FLAT:
             return self._glob_in_dir(self.receiver_base_dir)
 
-        # Subdirectory layouts
         if not self.receiver_base_dir.is_dir():
             return []
 
