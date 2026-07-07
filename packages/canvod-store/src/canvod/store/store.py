@@ -2306,9 +2306,11 @@ class MyIcechunkStore:
         ds_rechunked = ds_original.chunk(chunks)
         self._logger.info(f"New chunks: {ds_rechunked.chunks}")
 
-        # Clear encoding to avoid conflicts
-        for var in ds_rechunked.data_vars:
-            ds_rechunked[var].encoding = {}
+        # Clear encoding in-place on all variables and coords.
+        # Assignment (= {}) creates a new dict on the returned copy and is a no-op;
+        # .clear() mutates the shared dict that the Dataset holds.
+        for key in list(ds_rechunked.data_vars) + list(ds_rechunked.coords):
+            ds_rechunked[key].encoding.clear()
 
         # Write rechunked data (overwrites only this group)
         with self.writable_session(temp_branch) as session:
