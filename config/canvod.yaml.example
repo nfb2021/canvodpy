@@ -10,7 +10,7 @@
 #   sites:       Research sites and receivers
 #   sids:        Signal-ID filtering
 #
-# Environment variable overrides (via .env or shell):
+# Environment variable overrides (export in your shell or HPC job script):
 #   CANVOD__PROCESSING__STORAGE__STORES_ROOT_DIR=/nfs/stores
 #   CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com
 # =============================================================================
@@ -44,8 +44,8 @@ processing:
   # ---------------------------------------------------------------------------
   credentials:
     # NASA Earthdata email for CDDIS FTP authentication (optional)
-    # Preferred: set via CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL
-    #            in config/.env (gitignored) rather than here.
+    # Preferred: set via environment variable rather than storing here:
+    #   export CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com
     # Register at: https://urs.earthdata.nasa.gov/users/new
     # If set: NASA CDDIS primary, ESA fallback
     # If not set: ESA only (no auth required)
@@ -93,14 +93,14 @@ processing:
     # 'paired'   — only process dates where both receivers have data
     file_pairing: complete
 
-    # 'final'     — satellite coords from SP3/CLK agency products (~3 cm, 12-18 day latency)
-    # 'broadcast' — broadcast ephemerides from SBF SatVisibility (SBF only, faster but ~1-2 m)
+    # 'final'     — satellite coords from SP3/CLK agency products (delayed, high accuracy)
+    # 'broadcast' — broadcast ephemerides from SBF SatVisibility (SBF only, same-day)
     ephemeris_source: final
 
     # How many calendar days to pool per loky wave (ge=1, le=30)
     days_per_batch: 1
 
-    # 'auto'   — Dask/OS auto-detects workers and memory (personal machines)
+    # 'auto'   — auto-detects available cores and memory (personal machines)
     # 'manual' — hard caps below are enforced (shared servers)
     resource_mode: auto
 
@@ -130,9 +130,9 @@ processing:
       angular_resolution: 2.0  # degrees (0 < value ≤ 90)
 
   # ---------------------------------------------------------------------------
-  # Compression
+  # NetCDF Compression (used when writing intermediate .nc files)
   # ---------------------------------------------------------------------------
-  compression:
+  netcdf_compression:
     zlib: true
     complevel: 5
 
@@ -141,9 +141,9 @@ processing:
   # ---------------------------------------------------------------------------
   icechunk:
     compression_level: 5
-    compression_algorithm: zstd  # zstd, lz4, gzip
-    inline_threshold: 512        # Bytes; chunks ≤ this are inlined into the manifest
-    get_concurrency: 1           # Concurrent partial-value reads (increase for S3/GCS)
+    compression_algorithm: zstd  # currently only zstd is supported
+    inline_chunk_threshold_bytes: 512   # Bytes; chunks ≤ this are inlined into the manifest
+    get_partial_values_concurrency: 1   # Concurrent partial-value reads (increase for S3/GCS)
 
     chunk_strategies:
       gnss_store:
@@ -158,7 +158,8 @@ processing:
   # ---------------------------------------------------------------------------
   storage:
     # Root directory for all Icechunk stores.
-    # Preferred: set via CANVOD__PROCESSING__STORAGE__STORES_ROOT_DIR in .env
+    # Preferred: set via environment variable:
+    #   export CANVOD__PROCESSING__STORAGE__STORES_ROOT_DIR=/path/to/stores
     stores_root_dir: /path/to/your/gnss/stores
 
     # Custom store directory names (defaults: "rinex" and "vod")

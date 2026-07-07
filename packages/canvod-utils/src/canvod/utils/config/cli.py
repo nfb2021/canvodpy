@@ -166,9 +166,9 @@ def init(
     console.print("     - processing.metadata: fill in author, email, institution")
     console.print("     - processing.storage.stores_root_dir: set your store path")
     console.print("     - sites: replace the example site with your own")
-    console.print("  2. For NASA CDDIS access, add to config/.env (gitignored):")
+    console.print("  2. For NASA CDDIS access, set this environment variable:")
     console.print(
-        "       CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com"
+        "       export CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com"
     )
     console.print("  3. Edit config/recipes/*.yaml to match your filename format")
     console.print("  4. Run: canvod config validate\n")
