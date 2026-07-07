@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import xarray as xr
+    from rich.live import Live
+    from rich.progress import TaskID
 
 
 # ---------------------------------------------------------------------------
@@ -127,8 +129,8 @@ class RichReporter:
         self._total = _day_count(start, end)
         self._day_n = 0
         self._current_day = ""
-        self._task_id = None
-        self._live = None
+        self._task_id: TaskID | None = None
+        self._live: Live | None = None
 
         from rich.console import Console
         from rich.progress import (
@@ -172,6 +174,16 @@ class RichReporter:
             self._progress,
         )
 
+    @property
+    def _live_obj(self) -> Live:
+        assert self._live is not None, "must be used as a context manager"
+        return self._live
+
+    @property
+    def _task(self) -> TaskID:
+        assert self._task_id is not None, "must be used as a context manager"
+        return self._task_id
+
     def __enter__(self) -> RichReporter:
         from rich.live import Live
 
@@ -185,15 +197,15 @@ class RichReporter:
         return self
 
     def __exit__(self, *_) -> None:
-        if self._live:
+        if self._live is not None:
             self._live.stop()
 
     def log(self, msg: str) -> None:
-        self._live.console.print(msg)
+        self._live_obj.console.print(msg)
 
     def print_header(self, site: str, start: str, end: str, config, args=None) -> None:
         proc = config.processing.params
-        self._live.console.print(
+        self._live_obj.console.print(
             f"[dim]  ephemeris={proc.ephemeris_source}"
             f"  resource_mode={proc.resource_mode}"
             f"  strategy={config.processing.storage.gnss_store_strategy}[/dim]"
@@ -202,38 +214,40 @@ class RichReporter:
     def on_day_start(self, date_key: str, day_n: int, total: int) -> None:
         self._day_n = day_n
         self._current_day = date_key
-        self._live.update(self._render())
-        self._live.console.print(f"\n[bold]─── {date_key}[/bold]")
+        self._live_obj.update(self._render())
+        self._live_obj.console.print(f"\n[bold]─── {date_key}[/bold]")
 
     def on_datasets(self, datasets: dict[str, xr.Dataset]) -> None:
         for group, ds in datasets.items():
             e = ds.sizes.get("epoch", 0)
             s = ds.sizes.get("sid", 0)
-            self._live.console.print(f"  [dim]{group}: {e}×{s}[/dim]")
+            self._live_obj.console.print(f"  [dim]{group}: {e}×{s}[/dim]")
 
     def on_vod_result(
         self, analysis: str, n_valid: int, n_total: int, dt: float
     ) -> None:
         pct = 100 * n_valid / n_total if n_total else 0
-        self._live.console.print(
+        self._live_obj.console.print(
             f"  [dim]VOD {analysis}: {n_valid}/{n_total} valid ({pct:.0f}%)  {dt:.1f}s[/dim]"
         )
 
     def on_vod_failed(self, analysis: str, error: str) -> None:
-        self._live.console.print(f"[yellow]  VOD {analysis}: FAILED — {error}[/yellow]")
+        self._live_obj.console.print(
+            f"[yellow]  VOD {analysis}: FAILED — {error}[/yellow]"
+        )
 
     def on_timing(self, dt_pipeline: float, dt_vod: float, dt_vod_store: float) -> None:
-        self._live.console.print(
+        self._live_obj.console.print(
             f"  [dim]pipeline={dt_pipeline:.1f}s"
             f"  vod={dt_vod:.1f}s"
             f"  vod_store={dt_vod_store:.1f}s[/dim]"
         )
-        self._progress.advance(self._task_id)
-        self._live.update(self._render())
+        self._progress.advance(self._task)
+        self._live_obj.update(self._render())
 
     def on_done(self, total_days: int, total_vod: int, dt_total: float) -> None:
-        self._live.console.print()
-        self._live.console.print(
+        self._live_obj.console.print()
+        self._live_obj.console.print(
             f"[bold green]Done  {total_days} days  "
             f"{total_vod} VOD analyses  {dt_total:.0f}s total[/bold green]"
         )

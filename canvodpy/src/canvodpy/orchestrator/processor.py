@@ -2020,10 +2020,12 @@ class RinexDataProcessor:
                     )
                     _commit_meta["end"] = str(max(r["end"] for r in metadata_records))
                     _commit_meta["rinex_hashes"] = ",".join(
-                        r["rinex_hash"] for r in metadata_records if r.get("rinex_hash")
+                        str(r["rinex_hash"])
+                        for r in metadata_records
+                        if r.get("rinex_hash")
                     )
                     _commit_meta["canonical_names"] = ",".join(
-                        r["canonical_name"]
+                        str(r["canonical_name"])
                         for r in metadata_records
                         if r.get("canonical_name")
                     )
