@@ -356,7 +356,11 @@ Good pattern already in-tree to copy: `canvod-store/store.py:139–149` and `can
 5. ~~Either use `defaults/sites.yaml` in `_load_sites()` or delete it.~~ **RESOLVED (moot):** unified config makes this irrelevant — see §4.
 
 **Tier 2 — decouple readers from config (canvod-readers):**
-6. `metadata.py:254`: wrap in `try/except Exception: meta = MetadataConfig()`. ~6 lines.
+6. ~~`metadata.py:254`: wrap in `try/except Exception: meta = MetadataConfig()`. ~6 lines.~~
+   **DONE (2026-07-08):** `get_global_attrs()` now wraps `load_config()` in `try/except
+   Exception` and returns `{"Software": "canVODpy"}` on failure. Note: `MetadataConfig()`
+   cannot be instantiated without required fields (`author`, `email`, `institution` use
+   `Field(...)`), so the fallback is a minimal attrs dict rather than a default model.
 
 **Tier 3 — fix cryptic crashes (canvod-store):**
 7. `reader.py:161` and `manager.py:884`: replace bare `next(iter(...))` with a clear `ValueError("No sites configured. Create config/sites.yaml or pass site_name explicitly.")`. ~8 lines.

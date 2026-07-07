@@ -250,11 +250,18 @@ def get_global_attrs() -> dict[str, str]:
     -------
     dict[str, str]
         Global attributes dict suitable for xarray Dataset attrs.
+        Falls back to ``{"Software": "canVODpy"}`` when no config is
+        available (e.g. standalone ``canvod-readers`` install without a
+        ``canvod-settings.yaml``).
     """
     from canvod.utils.config import load_config
 
-    cfg = load_config()
-    meta = cfg.processing.metadata
+    try:
+        cfg = load_config()
+        meta = cfg.processing.metadata
+    except Exception:
+        return {"Software": "canVODpy"}
+
     attrs: dict[str, str] = {
         "Author": meta.author,
         "Email": meta.email,
