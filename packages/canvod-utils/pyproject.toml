@@ -13,15 +13,10 @@ dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "pyyaml>=6.0",
-    "typer>=0.9",
-    "rich>=13.0",
     "email-validator>=2.0",
     "tenacity>=8.2.0",
     "structlog>=24.1.0",
 ]
-
-[project.scripts]
-canvodpy = "canvod.utils.config.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/nfb2021/canvodpy"

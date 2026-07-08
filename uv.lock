@@ -566,10 +566,8 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyyaml" },
-    { name = "rich" },
     { name = "structlog" },
     { name = "tenacity" },
-    { name = "typer" },
 ]
 
 [package.metadata]
@@ -578,10 +576,8 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "rich", specifier = ">=13.0" },
     { name = "structlog", specifier = ">=24.1.0" },
     { name = "tenacity", specifier = ">=8.2.0" },
-    { name = "typer", specifier = ">=0.9" },
 ]
 
 [[package]]
@@ -681,10 +677,12 @@ dependencies = [
     { name = "pint" },
     { name = "pyarrow" },
     { name = "pydantic" },
+    { name = "rich" },
     { name = "sqlglot" },
     { name = "structlog" },
     { name = "tabulate" },
     { name = "tqdm" },
+    { name = "typer" },
 ]
 
 [package.optional-dependencies]
@@ -724,10 +722,12 @@ requires-dist = [
     { name = "pint", specifier = ">=0.20" },
     { name = "pyarrow", specifier = ">=23.0.1" },
     { name = "pydantic", specifier = ">=2.0" },
+    { name = "rich", specifier = ">=13.0" },
     { name = "sqlglot", specifier = ">=29.0.1" },
     { name = "structlog", specifier = ">=23.0" },
     { name = "tabulate", specifier = ">=0.10.0" },
     { name = "tqdm", specifier = ">=4.65" },
+    { name = "typer", specifier = ">=0.9" },
 ]
 provides-extras = ["filemap"]
 

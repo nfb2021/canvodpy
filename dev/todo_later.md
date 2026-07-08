@@ -151,16 +151,18 @@ name. ~1,765 LOC, 9 test modules.
 - ~~`sys.exit` → raise throughout `loader.py`.~~ **RESOLVED (c7bcad13)**
 - Split `models.py` into focused files — still open (deferred to §11 Phase 1).
 - ~~Separate science config from machine config / Introduce `ParallelismConfig`.~~ **RESOLVED differently (366c7eab + 4f855dde):** Dask gone, loky Wave A/B in place; credentials moved to `.env` (4f855dde); `days_per_batch` replaces `batch_hours`; `aggregate_glonass_fdma` dead wire removed; `scs_from → paired_canopies`; `ProcessingConfig.processing → .params`.
-- **Merge the two CLIs — claim corrected (2026-07-08), NOT actually resolved:**
-  `find_monorepo_root()` was deduplicated in c7bcad13, but the user-facing entry
-  point was never unified. The installed `canvodpy` console script
-  (`packages/canvod-utils/pyproject.toml` → `canvod.utils.config.cli:main`) is the
-  config tool only, with no subparsers. The pipeline runner (`canvodpy/cli/run.py`)
-  has **no registered entry point at all** — only invocable as
-  `uv run python -m canvodpy.cli.run --site ... --start ... --end ...`. Now that the
-  CLI is the recommended way to run the pipeline (§4 open-question resolution
-  above), this matters more: register `run.py`'s `main()` as a `canvodpy run`
-  subcommand alongside the existing config subcommands. **Still open.**
+- ~~**Merge the two CLIs**~~ **RESOLVED (2026-07-08).** `find_monorepo_root()` was
+  deduplicated in c7bcad13, but the user-facing entry point wasn't unified until
+  now. Two steps: first registered `run.py`'s `main()` as a `canvodpy run`
+  subcommand via a lazy import in `canvod-utils`' `cli.py` (avoided a circular
+  dependency, since `canvodpy` depends on `canvod-utils`, not the reverse); then,
+  on review, moved the *entire* CLI — `config`, `stats`, `run` — into
+  `canvodpy/src/canvodpy/cli/` (`config.py`, `stats.py`, `app.py`), since
+  `canvodpy` is already the one package that hosts every other user-facing
+  surface (`Site`, `Pipeline`, functional API). `canvod-utils` is a pure config/
+  utility library again — no CLI code, no `typer`/`rich` deps. Installed console
+  script: `canvodpy/pyproject.toml` → `canvodpy.cli.app:main`. Full rationale in
+  `dev/cli_home_and_flags_plan.md`.
 - Validate naming-section config at `SitesConfig` load time — still open (§12 preflight).
 - ~~Surface `CANVOD_CONFIG_DIR` in `--help` and all package READMEs.~~ **RESOLVED (96e58c73 + prior):** `CANVOD_CONFIG_FILE` + `CANVOD_CONFIG_DIR` both handled in `load_config()`; `@lru_cache(maxsize=8)`, `logger.warning()` (no print()), `ConfigValidationError` (no sys.exit) all in place. **Still open:** mention both env vars in each `canvod-*` package README.
 - ~~`defaults/sites.yaml` never read by `_load_sites()`.~~ **RESOLVED (moot):** With the unified `canvod-settings.yaml`, sites are always user-defined — `defaults/sites.yaml` contains `sites: {}` and there is nothing to merge. Dead file; delete or leave as a stub.
@@ -259,7 +261,7 @@ No implementation needed until object storage is a confirmed target.
   `canvod.filemap` importable). **Needed:** a clear, fail-fast, actionable error
   instead of a silent degrade whenever a receiver has `recipe:` configured but
   `canvod-filemap` isn't importable — e.g. in `canvodpy config validate`
-  (`packages/canvod-utils/src/canvod/utils/config/cli.py`) and/or at
+  (`canvodpy/src/canvodpy/cli/config.py`) and/or at
   `PipelineOrchestrator`/`RinexDataProcessor` startup, something like:
   `"Receiver {name} configures recipe '{recipe}' but canvod-filemap is not
   installed. Install with: uv sync --extra filemap"`. Should fail before any
@@ -549,7 +551,7 @@ Everything else is auto-detected (file naming, temporal extent, SID universe) or
 
 ### Phase 1 — Config simplification (~3 days)
 
-Files: `models.py`, `defaults/` templates, `canvod-utils/src/canvod/utils/config/cli.py`, `docs/guides/configuration.md`.
+Files: `models.py`, `defaults/` templates, `canvodpy/src/canvodpy/cli/config.py`, `docs/guides/configuration.md`.
 
 1. ~~Collapse `processing.yaml` + `sids.yaml` into `sites.yaml` optional sections.~~ **RESOLVED (c7bcad13 + 4f855dde):** unified `canvod-settings.yaml` loader implemented; legacy 3-file path kept with `DeprecationWarning`. Dask scheduler addr removed. Template still needs trimming (infrastructure fields not yet moved to `defaults/advanced.yaml`).
 2. ~~Rename `ReceiverConfig.scs_from` (models.py:698) → `pairs_with_canopy`~~ **RESOLVED (4f855dde):** renamed to `paired_canopies` with deprecated `scs_from` alias; `resolve_scs_from → resolve_paired_canopies` kept as alias.
@@ -565,7 +567,7 @@ Files: `models.py`, `defaults/` templates, `canvod-utils/src/canvod/utils/config
 
 ### Phase 2 — Discovery wizard: `canvodpy init` (~3–4 days)
 
-Files: `packages/canvod-utils/src/canvod/utils/config/cli.py` (upgrade `init` command), new `wizard.py` alongside it. New dep: `questionary` (MIT, actively maintained, prompt_toolkit 3.x).
+Files: `canvodpy/src/canvodpy/cli/config.py` (upgrade `init` command), new `wizard.py` alongside it. New dep: `questionary` (MIT, actively maintained, prompt_toolkit 3.x).
 
 1. `canvodpy init` flow:
    - `questionary.path` → data directory

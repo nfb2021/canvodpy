@@ -1173,10 +1173,19 @@ class CanvodConfig(BaseSettings):
 
     Examples
     --------
-    Override a single nested field without touching the YAML::
+    Override a single nested field without touching the YAML. ``VAR=value``
+    must appear on the *same command line* as ``canvodpy`` — it only sets a
+    variable for the current shell otherwise, and canvodpy (a separate
+    process) never sees it::
 
         CANVOD__PROCESSING__PARAMS__DAYS_PER_BATCH=7 canvodpy run ...
         CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=me@x.com canvodpy run ...
+
+    To reuse an override across several commands, ``export`` it once instead::
+
+        export CANVOD__PROCESSING__PARAMS__DAYS_PER_BATCH=7
+        canvodpy config show   # confirms the override took effect
+        canvodpy run ...
     """
 
     model_config = SettingsConfigDict(

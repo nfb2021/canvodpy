@@ -53,7 +53,7 @@ canvodpy config --config cluster-overlay.yaml validate
 canvodpy config --config cluster-overlay.yaml show
 
 # Run the pipeline with an overlay
-uv run python -m canvodpy.cli.run --site mysite --start 2025001 --end 2025028 \
+uv run canvodpy run --site mysite --start 2025001 --end 2025028 \
     --config cluster-overlay.yaml
 ```
 
@@ -92,17 +92,38 @@ vary per job but the configuration file is version-controlled:
 
 ```bash
 CANVOD__PROCESSING__PARAMS__N_MAX_THREADS=4 \
-    uv run python -m canvodpy.cli.run --site mysite
+    uv run canvodpy run --site mysite
 CANVOD__PROCESSING__PARAMS__DAYS_PER_BATCH=7 \
-    uv run python -m canvodpy.cli.run --site mysite
+    uv run canvodpy run --site mysite
 ```
+
+!!! warning "This must stay one shell command"
+
+    `VAR=value` set on its own line (without `export`) only exists in your *current*
+    shell — it is never passed down to `canvodpy`, a separate process. The `\` above
+    is a line continuation: it keeps `VAR=value` and the command that follows as a
+    single shell statement. Do not press Enter after the `VAR=value` line and then
+    run the command separately — that sets a local variable and silently does
+    nothing.
+
+    Two ways to avoid the trap:
+
+    ```bash
+    # inline, one line, no backslash needed:
+    CANVOD__PROCESSING__PARAMS__DAYS_PER_BATCH=7 uv run canvodpy run --site mysite
+
+    # or export it once, then reuse it across multiple commands:
+    export CANVOD__PROCESSING__PARAMS__DAYS_PER_BATCH=7
+    just config-show   # confirms the override took effect
+    uv run canvodpy run --site mysite
+    ```
 
 Scalar values (strings, integers, booleans) are passed as-is. List values require JSON
 encoding:
 
 ```bash
 CANVOD__PROCESSING__PARAMS__KEEP_GNSS_OBSERVABLES='["SNR","Pseudorange"]' \
-    uv run python -m canvodpy.cli.run --site mysite
+    uv run canvodpy run --site mysite
 ```
 
 Some examples, but really all configuration fields can be overwritten:

@@ -18,15 +18,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from .loader import find_monorepo_root
-from .models import ProcessingConfig, SidsConfig, SitesConfig
-
-# Main app
-main_app = typer.Typer(
-    name="canvodpy",
-    help="canvodpy CLI tools",
-    no_args_is_help=True,
-)
+from canvod.utils.config.loader import find_monorepo_root
+from canvod.utils.config.models import ProcessingConfig, SidsConfig, SitesConfig
 
 # Config subcommand
 config_app = typer.Typer(
@@ -188,7 +181,11 @@ def validate(
     -------
     None
     """
-    from .loader import load_config
+    from canvod.readers.gnss_specs.constants import (
+        FORMAT_GLOB_PATTERNS,
+        RINEX_OBS_GLOB_PATTERNS,
+    )
+    from canvod.utils.config.loader import load_config
 
     console.print("\n[bold]Validating configuration...[/bold]\n")
 
@@ -221,15 +218,6 @@ def validate(
         # Check receiver directories exist and contain data
         console.print("[bold]Checking receiver directories...[/bold]")
         dir_errors: list[str] = []
-
-        try:
-            from canvod.readers.gnss_specs.constants import (
-                FORMAT_GLOB_PATTERNS,
-                RINEX_OBS_GLOB_PATTERNS,
-            )
-        except ImportError:
-            FORMAT_GLOB_PATTERNS = {}
-            RINEX_OBS_GLOB_PATTERNS = ()
 
         for site_name, site in config.sites.sites.items():
             base_path = site.get_base_path()
@@ -269,13 +257,13 @@ def validate(
                                 break
                     configured_fmt = recv.reader_format
                     if configured_fmt == "auto" and detected_fmt:
-                        fmt_info = f"format: auto \u2192 {detected_fmt}"
+                        fmt_info = f"format: auto → {detected_fmt}"
                     elif configured_fmt == "auto":
                         fmt_info = "format: auto"
                     else:
                         fmt_info = f"format: {configured_fmt}"
                     console.print(
-                        f"  [green]\u2713 {site_name}/{recv_name}: {recv_dir} ({fmt_info})[/green]"
+                        f"  [green]✓ {site_name}/{recv_name}: {recv_dir} ({fmt_info})[/green]"
                     )
                 else:
                     console.print(
@@ -325,7 +313,7 @@ def show(
     -------
     None
     """
-    from .loader import load_config
+    from canvod.utils.config.loader import load_config
 
     try:
         config = load_config(config_dir)
@@ -475,7 +463,7 @@ def _show_sites(config: SitesConfig) -> None:
     -------
     None
     """
-    from .loader import load_config as _load_config
+    from canvod.utils.config.loader import load_config as _load_config
 
     try:
         full_config = _load_config()
@@ -583,232 +571,3 @@ def _show_sids(config: SidsConfig) -> None:
         table.add_row("Custom SIDs", f"{len(config.custom_sids)} defined")
     console.print(table)
     console.print()
-
-
-# Register config subcommand
-main_app.add_typer(config_app, name="config")
-
-# ============================================================================
-# Stats subcommand
-# ============================================================================
-
-stats_app = typer.Typer(
-    name="stats",
-    help="Streaming statistics management",
-    no_args_is_help=True,
-)
-
-
-@stats_app.command("compute")
-def stats_compute(
-    site: str = typer.Argument(..., help="Site name"),
-    receiver: str = typer.Argument(..., help="Receiver name"),
-    from_date: str | None = typer.Option(
-        None, "--from", help="Start date (YYYY-MM-DD)"
-    ),
-    to_date: str | None = typer.Option(None, "--to", help="End date (YYYY-MM-DD)"),
-    config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
-) -> None:
-    """Compute streaming statistics for a site/receiver.
-
-    Loads data, runs the UpdateStatistics pipeline, and saves results
-    to the statistics Zarr store.
-    """
-    from .loader import load_config
-
-    try:
-        config = load_config(config_dir)
-    except Exception as e:
-        console.print(f"[red]Error loading config:[/red] {e}")
-        raise typer.Exit(1) from e
-
-    site_config = config.sites.sites.get(site)
-    if site_config is None:
-        console.print(f"[red]Unknown site:[/red] {site}")
-        console.print(f"Available: {list(config.sites.sites.keys())}")
-        raise typer.Exit(1)
-
-    if receiver not in site_config.receivers:
-        console.print(f"[red]Unknown receiver:[/red] {receiver}")
-        console.print(f"Available: {list(site_config.receivers.keys())}")
-        raise typer.Exit(1)
-
-    recv_config = site_config.receivers[receiver]
-    store_path = config.processing.storage.get_statistics_store_path(site)
-
-    console.print(f"\n[bold]Computing statistics for {site}/{receiver}[/bold]")
-    console.print(f"  Store path: {store_path}")
-    console.print(f"  Receiver type: {recv_config.type}")
-    if from_date:
-        console.print(f"  From: {from_date}")
-    if to_date:
-        console.print(f"  To: {to_date}")
-
-    console.print(
-        "\n[yellow]Not yet implemented — pipeline integration pending.[/yellow]"
-    )
-    console.print("Use the Python API directly:")
-    console.print("  from canvod.ops import build_statistics_pipeline, ProfileRegistry")
-    console.print()
-
-
-@stats_app.command("show")
-def stats_show(
-    site: str = typer.Argument(..., help="Site name"),
-    receiver_type: str | None = typer.Option(
-        None, "--receiver", "-r", help="Receiver type filter"
-    ),
-    variable: str | None = typer.Option(
-        None, "--variable", "-v", help="Variable filter"
-    ),
-    cell: int | None = typer.Option(None, "--cell", "-c", help="Cell ID filter"),
-    config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
-) -> None:
-    """Display stored statistics for a site."""
-    from .loader import load_config
-
-    try:
-        config = load_config(config_dir)
-    except Exception as e:
-        console.print(f"[red]Error loading config:[/red] {e}")
-        raise typer.Exit(1) from e
-
-    store_path = config.processing.storage.get_statistics_store_path(site)
-
-    if not store_path.exists():
-        console.print(f"[yellow]No statistics store found at {store_path}[/yellow]")
-        raise typer.Exit(0)
-
-    try:
-        import zarr
-
-        from canvod.ops.statistics.store import (
-            StatisticsStore,  # type: ignore[unresolved-import]
-        )
-
-        root = zarr.open_group(str(store_path), mode="r")
-        store = StatisticsStore(root)
-        rx_types = store.list_receiver_types()
-
-        if not rx_types:
-            console.print("[yellow]No statistics data found.[/yellow]")
-            raise typer.Exit(0)
-
-        console.print(f"\n[bold]Statistics for site: {site}[/bold]")
-        console.print(f"  Store: {store_path}")
-        console.print(f"  Receiver types: {rx_types}\n")
-
-        for rx in rx_types:
-            if receiver_type and rx != receiver_type:
-                continue
-
-            registry = store.load(rx)
-            summary = registry.summary()
-
-            console.print(f"  [bold cyan]{rx}[/bold cyan]")
-
-            table = Table(show_header=True, padding=(0, 1))
-            table.add_column("Metric", style="bold")
-            table.add_column("Value")
-            table.add_row("Keys", str(summary["n_keys"]))
-            table.add_row(
-                "Total observations", str(summary.get("total_observations", 0))
-            )
-            table.add_row("Variables", ", ".join(summary.get("variables", [])))
-            table.add_row("Cells", str(summary.get("n_cells", 0)))
-            table.add_row("GK epsilon", str(summary.get("gk_epsilon", "N/A")))
-            console.print(table)
-            console.print()
-
-    except ImportError as e:
-        console.print(f"[red]Missing dependency:[/red] {e}")
-        console.print("Install canvod-ops: uv pip install canvod-ops")
-        raise typer.Exit(1) from e
-
-
-@stats_app.command("reset")
-def stats_reset(
-    site: str = typer.Argument(..., help="Site name"),
-    receiver_type: str | None = typer.Option(
-        None, "--receiver", "-r", help="Reset specific receiver type only"
-    ),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
-    config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
-) -> None:
-    """Delete the statistics store for a site."""
-    from .loader import load_config
-
-    try:
-        config = load_config(config_dir)
-    except Exception as e:
-        console.print(f"[red]Error loading config:[/red] {e}")
-        raise typer.Exit(1) from e
-
-    store_path = config.processing.storage.get_statistics_store_path(site)
-
-    if not store_path.exists():
-        console.print(f"[yellow]No statistics store at {store_path}[/yellow]")
-        raise typer.Exit(0)
-
-    target = f"{store_path}/{receiver_type}" if receiver_type else str(store_path)
-
-    if not yes:
-        confirm = typer.confirm(f"Delete statistics at {target}?")
-        if not confirm:
-            console.print("Aborted.")
-            raise typer.Exit(0)
-
-    import shutil as _shutil
-
-    if receiver_type:
-        rx_path = store_path / receiver_type
-        if rx_path.exists():
-            _shutil.rmtree(rx_path)
-            console.print(f"[green]Deleted {rx_path}[/green]")
-        else:
-            console.print(f"[yellow]No data for receiver type {receiver_type}[/yellow]")
-    else:
-        _shutil.rmtree(store_path)
-        console.print(f"[green]Deleted {store_path}[/green]")
-
-
-main_app.add_typer(stats_app, name="stats")
-
-
-# ============================================================================
-# Run subcommand — lazy/optional: canvod-utils cannot depend on canvodpy
-# (the orchestrator depends on canvod-utils, not the reverse), so this only
-# appears when canvodpy happens to be installed alongside it. Mirrors the
-# canvod-filemap optional-import pattern used elsewhere in the pipeline.
-# ============================================================================
-
-try:
-    from canvodpy.cli.run import main as _run_main
-
-    _HAS_CANVODPY = True
-except ImportError:
-    _HAS_CANVODPY = False
-
-if _HAS_CANVODPY:
-
-    @main_app.command(
-        "run",
-        help="Process GNSS observations into Icechunk stores and compute VOD.",
-        context_settings={
-            "allow_extra_args": True,
-            "ignore_unknown_options": True,
-            "help_option_names": [],
-        },
-        add_help_option=False,
-    )
-    def run_cmd(ctx: typer.Context) -> None:
-        raise typer.Exit(code=_run_main(ctx.args))
-
-
-def main() -> None:
-    """Run the CLI entry point."""
-    main_app()
-
-
-if __name__ == "__main__":
-    main()

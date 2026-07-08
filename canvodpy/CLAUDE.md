@@ -24,7 +24,7 @@ deprecated (`DeprecationWarning` on use) — kept working, no longer taught.
 
 | Level | Style | Entry point | Use case | Status |
 |---|---|---|---|---|
-| CLI | Command-line | `uv run python -m canvodpy.cli.run --site ... --start ... --end ...` | Running the pipeline — recommended | Active |
+| CLI | Command-line | `uv run canvodpy run --site ... --start ... --end ...` | Running the pipeline — recommended | Active |
 | L3 | Site pipeline (OOP) | `Site(site).pipeline()` (`api.py`) | Python-native configured pipeline runs — what the CLI wraps; internally builds `PipelineOrchestrator`/`RinexDataProcessor` | Active |
 | L4 | Functional | `read_rinex()`, `augment_with_ephemeris()`, etc. (`functional.py`) | Component-level scripting/analysis; also used by Airflow (stateless) | Active |
 | L1 | Convenience | `process_date()`, `calculate_vod()`, `preview_processing()` (`api.py`) | Superseded by `Site(site).pipeline()` | Deprecated |
@@ -42,13 +42,14 @@ Files → DataDirectoryValidator → GNSSDataReader → AuxDataAugmenter → Gri
 
 ## Important patterns
 
-- **The two CLIs are not actually merged** despite the todo tracker claiming this
-  resolved: the installed `canvodpy` console script (`project.scripts` in
-  `packages/canvod-utils/pyproject.toml`) is the **config tool only**
-  (`canvod.utils.config.cli:main`, no subparsers). The pipeline runner
-  (`cli/run.py`) has no registered entry point — invoke it as
-  `uv run python -m canvodpy.cli.run --site ... --start ... --end ...`. Registering
-  it as a `canvodpy run` subcommand is open follow-up work.
+- **The whole CLI lives here**, not in `canvod-utils`. `cli/app.py` is the
+  installed `canvodpy` console script (`project.scripts` in `canvodpy/pyproject.toml`
+  → `canvodpy.cli.app:main`); it composes `cli/config.py` (`config` subcommands),
+  `cli/stats.py` (`stats` subcommands), and `cli/run.py` (`run`, the pipeline
+  runner) into one Typer app. `canvod-utils` went back to being a pure config/
+  utility library — no CLI code, no `typer`/`rich` deps — consistent with what
+  its own `CLAUDE.md` always described it as. See `dev/cli_home_and_flags_plan.md`
+  for the full rationale.
 - `PipelineOrchestrator`/`RinexDataProcessor` (the CLI/`Site.pipeline()` path) discover
   files via `canvod-filemap`'s `BUILTIN_PATTERNS` when installed, falling back to
   canonical canVOD-only globs (`*.rnx`/`*.sbf`) otherwise — see §12 in `dev/todo_later.md`
