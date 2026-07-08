@@ -1087,7 +1087,7 @@ class swap); `packages/canvod-utils/src/canvod/utils/config/loader.py`
 
 ---
 
-## 17. `canvodpy-demo` submodule — update for API-level deprecation + CLI-first
+## 17. `canvodpy-demo` submodule — update for API-level deprecation + CLI-first — DONE (2026-07-08)
 
 **Context (2026-07-08):** follows this session's API-level cleanup (§4 open
 questions). `FluentWorkflow`, the flat `process_date()`/`calculate_vod()`/
@@ -1133,6 +1133,34 @@ renumbering, since the underlying files still exist under their current names.
 **Depends on:** finishing the docs/CLAUDE.md API-levels table updates and the CLI
 ephemeris/calculator flag work (§4 follow-ups) first, so the demo doesn't document
 a CLI surface that's still mid-change.
+
+**Resolution (2026-07-08):** all four tasks done in the local `canvodpy-demo`
+checkout, commit `6f5ba32` on `main` — **not yet pushed to `origin/main`**
+(explicit user decision, pending thumbnail regeneration).
+1. Removed `13_api_level1_convenience.py`, `14_api_level2_fluent.py` (pure
+   documentation notebooks, no live code — confirmed no `VODWorkflow` demo
+   existed anywhere either).
+2. Renumbered: `15_api_level3_site_pipeline.py` → `14_site_pipeline.py` (content
+   reframed to lead with `Site.pipeline().process_range()`, not just
+   `VodComputer`), `16_api_level4_functional.py` → `15_functional_api.py`,
+   `17`–`20` (workflow/grid) shift down to `16`–`19`. `12_api_overview.py`
+   rewritten for the 3-surface model (CLI, `Site.pipeline()`, functional).
+   All footer/cross-reference links fixed repo-wide (verified via grep, zero
+   dangling references).
+3. All touched notebooks verified via `ast.parse` (syntax) and `uv run
+   <file>.py` (each notebook's own PEP 723 header pins deps — all exited 0,
+   no exceptions).
+4. New `13_cli_pipeline.py`: basic usage, auto-resume, multi-site, the
+   `--ephemeris-source`/`--vod-calculator` flags, resource flags, config
+   overlay.
+
+`README.md`/`PUBLISHING.md` notebook tables updated in the demo repo;
+`docs/notebooks/index.md` in this repo updated to match (zensical build
+clean). **Two follow-ups before/at push time:** (a) push `6f5ba32` to
+`origin/main`, (b) regenerate molab thumbnails for the renamed/new notebooks
+per `PUBLISHING.md` Step 4 (`uv run marimo export thumbnail ./`) — old
+thumbnails are keyed by the old filename stems and won't exist for
+`13_cli_pipeline.py` or match the renamed files.
 
 ---
 

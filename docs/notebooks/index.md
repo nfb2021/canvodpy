@@ -34,30 +34,29 @@ Each notebook can be previewed read-only in [molab](https://molab.marimo.io/gith
 
 ### API notebooks
 
-!!! warning "Notebooks 13 and 14 cover deprecated surfaces"
+!!! note "Demo repo update pending push"
 
-    `process_date()`/`calculate_vod()`/`preview_processing()` (L1) and
-    `FluentWorkflow` (L2) are deprecated (`DeprecationWarning` on use) — see
-    [API Levels](../guides/api-levels.md). These notebooks are pending
-    removal/renumbering in the demo repo (`dev/todo_later.md` §17); the table
-    below still reflects the current repo state.
+    The deprecated L1/L2 notebooks have been removed and the remaining
+    notebooks renumbered in the local `canvodpy-demo` checkout, but that
+    commit hasn't been pushed to `origin/main` yet — the molab preview
+    links below will 404 until it is. The table already reflects the
+    post-reorg state.
 
 | # | Notebook | Topic | Preview |
 |---|---|---|---|
 | 12 | API Overview | CLI, `Site.pipeline()`, and the functional API side by side | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/12_api_overview.py) |
-| 13 | *(deprecated)* L1 — Convenience API | One-liner `process_date()` — superseded by `Site.pipeline()` | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/13_api_level1_convenience.py) |
-| 14 | *(deprecated)* L2 — Fluent Workflow | `FluentWorkflow().read().augment().grid().vod()` — superseded by `Site.pipeline()` / functional API | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/14_api_level2_fluent.py) |
-| 15 | `Site.pipeline()` | `Site().pipeline().process_range()` | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/15_api_level3_site_pipeline.py) |
-| 16 | Functional API | Pure functions for custom pipelines and analysis | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/16_api_level4_functional.py) |
+| 13 | Running the Pipeline (CLI) | `canvodpy run` — flags, auto-resume, multi-site | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/13_cli_pipeline.py) |
+| 14 | Site Pipeline | `Site().pipeline().process_range()` — same path the CLI wraps | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/14_site_pipeline.py) |
+| 15 | Functional API | Pure functions for custom pipelines and analysis | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/15_functional_api.py) |
 
 ### Workflow notebooks
 
 | # | Notebook | Topic | Preview |
 |---|---|---|---|
-| 17 | Single-Day Workflow | End-to-end single-day processing | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/17_workflow_single_day.py) |
-| 18 | Batch Processing | Multi-day processing with Dask | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/18_workflow_batch_processing.py) |
-| 19 | Store Operations | Store read/write/branch operations | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/19_workflow_store_operations.py) |
-| 20 | Grid Exploration | Interactive hemispheric grid explorer | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/20_grid_exploration.py) |
+| 16 | Single-Day Workflow | End-to-end single-day processing | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/16_workflow_single_day.py) |
+| 17 | Batch Processing | Multi-day processing with Dask | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/17_workflow_batch_processing.py) |
+| 18 | Store Operations | Store read/write/branch operations | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/18_workflow_store_operations.py) |
+| 19 | Grid Exploration | Interactive hemispheric grid explorer | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/19_grid_exploration.py) |
 
 ---
 
