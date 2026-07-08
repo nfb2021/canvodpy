@@ -265,28 +265,27 @@ No implementation needed until object storage is a confirmed target.
   installed. Install with: uv sync --extra filemap"`. Should fail before any
   processing starts, not surface as a per-day discovery warning deep in a run.
 
-- **Dueling Rich `Live` displays cause flashing/reprinting progress bars (found
-  2026-07-08, live production run on the remote processing machine).** Two
-  separate `Live` regions are active at once during a real pipeline run:
+- ~~**Dueling Rich `Live` displays cause flashing/reprinting progress bars** (found
+  2026-07-08, live production run on the remote processing machine). Two
+  separate `Live` regions were active at once during a real pipeline run:
   `RichReporter.__enter__` (`canvodpy/src/canvodpy/cli/dashboard.py:190-199`)
   creates its own `Live` for the "Overall" bar + header panel; independently,
-  `_processing_progress()` (`canvodpy/src/canvodpy/orchestrator/pipeline.py:619-624,
-  986`) creates a separate `Progress` for the per-receiver bars
-  (`canopy_01`/`reference_01_canopy_01`/etc.) and calls `.start()`/`.stop()`
-  directly, which spins up its own independent internal `Live`. Rich only
-  supports one active `Live` per terminal — two concurrent instances fight over
-  cursor control, producing exactly the observed symptom: the header panel and
-  progress bars reprinting as fresh frames instead of updating in place
-  ("flashing", duplicate boxes in the log). **Fix:** compose both progress
-  displays into a single shared `Live`/`Group` — either have `_processing_progress()`
-  accept an externally-owned `Console`/`Live` (or return a `Progress` object that
-  `RichReporter` folds into its own `Group()` alongside the Overall bar, never
-  calling `.start()`/`.stop()` on it directly), so there is exactly one `Live`
-  context for the whole run. Not yet investigated: whether `show_progress=False`
-  (already used elsewhere per `_build_compute_waves` to avoid
-  `rich.errors.LiveError` when `len(wave_a) > 1`) is a viable stopgap here too, or
-  whether the real fix requires restructuring `RichReporter` to own both progress
-  groups.
+  `_processing_progress()` (`canvodpy/src/canvodpy/orchestrator/pipeline.py:626`)
+  created a separate `Progress` for the per-receiver bars
+  (`canopy_01`/`reference_01_canopy_01`/etc.), which spins up its own
+  independent internal `Live`. Two concurrent `Live` instances fight over
+  cursor control on the same terminal, producing exactly the observed symptom.~~
+  **DONE (2026-07-08):** rather than merging the two displays into one shared
+  `Live`/`Group` (bigger refactor), threaded a `show_progress: bool = True` flag
+  through `Site.pipeline()` → `Pipeline.__init__` → `PipelineOrchestrator.__init__`
+  (`api.py`, `orchestrator/pipeline.py`), used at the `_processing_progress()`
+  call site as `disable=not self._show_progress`. `cli/run.py`'s real-run
+  `site.pipeline(...)` call now passes `show_progress=False`, since
+  `RichReporter` already owns the one `Live` that should exist and already
+  reports per-day/per-dataset progress via its own callbacks
+  (`on_day_start`/`on_datasets`/`on_timing`) — the per-receiver bars were
+  redundant with that, not additive. Default stays `True` for programmatic/
+  notebook use of `Site(...).pipeline()` without a competing `Live`.
 
 - ~~**Commit metadata annotation**: add `rinex_hash`, `canonical_name`, `start`, `end` to
   `session.commit(metadata={...})` — self-describing Icechunk history, zero logic change.~~

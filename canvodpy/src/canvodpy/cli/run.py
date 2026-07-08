@@ -329,6 +329,7 @@ def main(argv: list[str] | None = None) -> int:
             n_workers=args.workers,
             days_per_batch=args.days_per_batch,
             dry_run=False,
+            show_progress=False,
         ) as pipeline:
             gen = pipeline.process_range(start=start, end=end)
             while True:

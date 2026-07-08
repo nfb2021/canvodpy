@@ -138,6 +138,7 @@ class Site:
         cpu_affinity: list[int] | None = None,
         nice_priority: int | None = None,
         threads_per_worker: int | None = None,
+        show_progress: bool = True,
     ) -> Pipeline:
         """Create a processing pipeline for this site.
 
@@ -169,6 +170,11 @@ class Site:
             Process nice value (0=normal, 19=lowest). Default: from config.
         threads_per_worker : int, optional
             Threads per worker process. Default: from config.
+        show_progress : bool, default True
+            Render the per-receiver Rich progress bars. Set False when the
+            caller already owns a Rich ``Live`` display (e.g. the CLI) —
+            two concurrent ``Live`` instances on one terminal corrupt each
+            other's output.
 
         Returns
         -------
@@ -193,6 +199,7 @@ class Site:
             cpu_affinity=cpu_affinity,
             nice_priority=nice_priority,
             threads_per_worker=threads_per_worker,
+            show_progress=show_progress,
         )
 
     def __repr__(self) -> str:
@@ -239,6 +246,9 @@ class Pipeline:
         Process nice value (0=normal, 19=lowest). Default: from config.
     threads_per_worker : int, optional
         Threads per Dask worker process. Default: from config.
+    show_progress : bool, default True
+        Render the per-receiver Rich progress bars. Set False when the
+        caller already owns a Rich ``Live`` display (e.g. the CLI).
 
     Examples
     --------
@@ -270,6 +280,7 @@ class Pipeline:
         cpu_affinity: list[int] | None = None,
         nice_priority: int | None = None,
         threads_per_worker: int | None = None,
+        show_progress: bool = True,
     ) -> None:
         # Handle both Site object and string
         if isinstance(site, str):
@@ -342,6 +353,7 @@ class Pipeline:
             cpu_affinity=cpu_affinity,
             nice_priority=nice_priority,
             threads_per_worker=threads_per_worker,
+            show_progress=show_progress,
         )
 
         self.log.info(

@@ -63,6 +63,11 @@ class PipelineOrchestrator:
     threads_per_worker : int | None
         Threads per worker process (used to cap BLAS thread env vars).
         None defaults to 1.
+    show_progress : bool
+        Render the per-receiver Rich progress bars. Disable when the caller
+        already owns a Rich ``Live`` display (e.g. the CLI's ``RichReporter``)
+        — two concurrent ``Live`` instances on the same terminal corrupt each
+        other's output. Default True for standalone/programmatic use.
 
     """
 
@@ -76,11 +81,13 @@ class PipelineOrchestrator:
         cpu_affinity: list[int] | None = None,
         nice_priority: int = 0,
         threads_per_worker: int | None = None,
+        show_progress: bool = True,
     ) -> None:
         self.site = site
         self.n_max_workers = n_max_workers
         self.dry_run = dry_run
         self.days_per_batch = days_per_batch
+        self._show_progress = show_progress
         self._batch_duration: pint.Quantity = days_per_batch * 24 * UREG.hour
         self._max_memory_gb = max_memory_gb
         self._cpu_affinity = cpu_affinity
@@ -616,7 +623,7 @@ class PipelineOrchestrator:
                 if _rn not in _seen_rn:
                     _receiver_names_ordered.append(_rn)
                     _seen_rn.add(_rn)
-        progress = _processing_progress()
+        progress = _processing_progress(disable=not self._show_progress)
         receiver_tasks: dict[str, TaskID] = {
             _rn: progress.add_task(f"  {_rn}", total=len(filtered_dates))
             for _rn in _receiver_names_ordered
