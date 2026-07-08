@@ -217,6 +217,7 @@ class RichReporter:
     def on_day_start(self, date_key: str, day_n: int, total: int) -> None:
         self._day_n = day_n
         self._current_day = date_key
+        self._progress.update(self._task, completed=day_n)
         self._live_obj.update(self._render())
         self._live_obj.console.print(f"\n[bold]─── {date_key}[/bold]")
 
