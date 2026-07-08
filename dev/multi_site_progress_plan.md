@@ -1,5 +1,21 @@
 # Multi-Site CLI + Per-Site/Receiver Progress — Plan
 
+**Status: implemented (2026-07-08).** `--site` accepts multiple values
+(`nargs="+"`), processed sequentially. `on_group_written` callback threaded
+through `PipelineOrchestrator`/`Pipeline`/`Site.pipeline()`, replacing the
+`show_progress` bool from the earlier dueling-`Live` fix. `RichReporter`/
+`PlainReporter` rewritten: no more aggregate "Overall" bar, one row per
+`(site, group)` known upfront via `_site_groups()` in `cli/run.py`. Verified:
+`uv run ty check` clean on all touched files, `uv run pytest -m "not
+integration" -q --no-cov` matches baseline (18 failed / 1388 passed / 257
+skipped / 7 deselected), `canvodpy run --help` shows `--site SITE [SITE ...]`,
+both single- and multi-site `--dry-run` invocations parse and reach the same
+downstream (pre-existing, unrelated) config-placeholder error. Files touched:
+`canvodpy/src/canvodpy/cli/dashboard.py` (full rewrite), `cli/run.py`
+(multi-site loop + `_site_groups()` helper), `api.py` (`Pipeline.__init__`/
+`Site.pipeline()`), `orchestrator/pipeline.py` (`PipelineOrchestrator.__init__`
++ `_process_multi_day_batches`).
+
 Written 2026-07-08, following the tmux/batching investigation on the remote
 processing machine. Confirmed there: the "Overall" days-processed bar was
 architecturally correct but blind to per-receiver detail, and the old

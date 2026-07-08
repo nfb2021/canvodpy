@@ -288,6 +288,15 @@ No implementation needed until object storage is a confirmed target.
   (`on_day_start`/`on_datasets`/`on_timing`) — the per-receiver bars were
   redundant with that, not additive. Default stays `True` for programmatic/
   notebook use of `Site(...).pipeline()` without a competing `Live`.
+  **Superseded (2026-07-08):** the `show_progress: bool` flag from this fix was
+  itself replaced by an `on_group_written: Callable[[str], None] | None`
+  callback as part of the multi-site + per-(site,receiver) progress redesign —
+  see `dev/multi_site_progress_plan.md`. The per-receiver bars weren't
+  actually redundant after all: they were the only mechanism giving real-time
+  feedback *during* a `days_per_batch`-sized batch (the aggregate bar can only
+  advance once a whole batch yields). Disabling them traded that away; the
+  redesign restores it properly instead of re-enabling the old dueling-`Live`
+  version.
 
 - ~~**Commit metadata annotation**: add `rinex_hash`, `canonical_name`, `start`, `end` to
   `session.commit(metadata={...})` — self-describing Icechunk history, zero logic change.~~

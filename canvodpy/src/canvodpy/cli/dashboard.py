@@ -2,19 +2,23 @@
 
 Usage
 -----
-    with make_reporter(site, start, end) as r:
-        r.on_day_start(date_key, day_n, total_estimate)
+    rows = [(site_name, group_name, total_days), ...]  # known upfront
+    with make_reporter(rows) as r:
+        r.set_current_site(site_name, start, end)
+        r.print_header(site_name, start, end, config, args)
+        r.on_day_start(date_key)
         r.on_datasets(datasets)
         r.on_vod_result(analysis, n_valid, n_total, dt)
         r.on_timing(dt_pipeline, dt_vod, dt_vod_store)
+        r.advance(site_name, group_name)  # called from an on_group_written callback
         r.on_done(total_days, total_vod, dt_total)
 
 Non-TTY (cron, CI, pipes): plain print() — identical to pre-dashboard output.
-TTY: Rich Live display — header panel + overall progress bar at the bottom of
-the terminal; per-day detail scrolls above via live.console.print().
-
-Per-receiver progress bars (the ◉/◎ step labels from §14) are Phase 2 and
-require orchestrator event hooks that are not yet wired.
+TTY: Rich Live display — one progress row per (site, receiver-group), known
+upfront so a multi-site run shows every row from the start; per-day detail
+scrolls above via live.console.print(). There is no aggregate "Overall" bar —
+sites are processed sequentially, so the header panel's "current site" text
+plus the per-row bars are the whole picture.
 """
 
 from __future__ import annotations
@@ -34,7 +38,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def _day_count(start: str, end: str) -> int:
+def day_count(start: str, end: str) -> int:
     """Estimate calendar days between two YYYYDOY strings (inclusive)."""
     parse = lambda s: datetime.strptime(s, "%Y%j")  # noqa: E731
     return max(1, (parse(end) - parse(start)).days + 1)
@@ -46,17 +50,24 @@ def _day_count(start: str, end: str) -> int:
 
 
 class PlainReporter:
-    """Writes to stdout via print(). Behaviour identical to pre-dashboard."""
+    """Writes to stdout via print(). Behaviour identical to pre-dashboard output."""
+
+    def __init__(self, rows: list[tuple[str, str, int]]) -> None:
+        self._rows = rows
+        self._current_site = ""
 
     def log(self, msg: str) -> None:
         print(msg)
 
-    def print_header(self, site: str, start: str, end: str, config, args=None) -> None:
-        proc = config.processing.params
-        storage = config.processing.storage
+    def set_current_site(self, site: str, start: str, end: str) -> None:
+        self._current_site = site
         print("=" * 72)
         print(f"canvodpy  site={site}  {start} .. {end}")
         print("=" * 72)
+
+    def print_header(self, site: str, start: str, end: str, config, args=None) -> None:
+        proc = config.processing.params
+        storage = config.processing.storage
         print(f"  started        {datetime.now():%Y-%m-%d %H:%M:%S}")
         print(f"  ephemeris      {proc.ephemeris_source}")
         print(f"  keep_vars      {proc.keep_gnss_observables}")
@@ -70,8 +81,11 @@ class PlainReporter:
             print(f"  vod            {'skip' if args.no_vod else 'enabled'}")
         print()
 
-    def on_day_start(self, date_key: str, day_n: int, total: int) -> None:
-        print(f"\n--- {date_key} ---")
+    def advance(self, site: str, group: str) -> None:
+        pass  # no bar to advance in plain mode
+
+    def on_day_start(self, date_key: str) -> None:
+        print(f"\n--- {self._current_site}/{date_key} ---")
 
     def on_datasets(self, datasets: dict[str, xr.Dataset]) -> None:
         for group, ds in datasets.items():
@@ -116,20 +130,16 @@ class PlainReporter:
 
 
 class RichReporter:
-    """Rich Live display: header panel + overall progress at the bottom.
+    """Rich Live display: header panel + one progress row per (site, group).
 
     Per-day detail lines are printed above the live region via
     live.console.print(), which Rich handles without flicker.
     """
 
-    def __init__(self, site: str, start: str, end: str) -> None:
-        self._site = site
-        self._start = start
-        self._end = end
-        self._total = _day_count(start, end)
-        self._day_n = 0
-        self._current_day = ""
-        self._task_id: TaskID | None = None
+    def __init__(self, rows: list[tuple[str, str, int]]) -> None:
+        self._current_site = ""
+        self._current_start = ""
+        self._current_end = ""
         self._live: Live | None = None
 
         from rich.console import Console
@@ -137,6 +147,8 @@ class RichReporter:
             BarColumn,
             MofNCompleteColumn,
             Progress,
+            SpinnerColumn,
+            TaskID,  # noqa: F401
             TextColumn,
             TimeElapsedColumn,
             TimeRemainingColumn,
@@ -144,11 +156,10 @@ class RichReporter:
 
         self._console = Console()
         self._progress = Progress(
-            TextColumn("  [bold]Overall[/bold]"),
+            SpinnerColumn(),
+            TextColumn("  [bold]{task.description}[/bold]"),
             BarColumn(
-                bar_width=None,
-                complete_style="green3",
-                finished_style="dim green",
+                bar_width=None, complete_style="green3", finished_style="dim green"
             ),
             MofNCompleteColumn(),
             TextColumn("[dim]days[/dim]"),
@@ -157,6 +168,10 @@ class RichReporter:
             TimeRemainingColumn(),
             console=self._console,
         )
+        self._task_ids: dict[tuple[str, str], TaskID] = {
+            (site, group): self._progress.add_task(f"{site}/{group}", total=total)
+            for site, group, total in rows
+        }
 
     def _render(self):
         try:
@@ -165,13 +180,8 @@ class RichReporter:
             from rich.console import Group  # rich < 12.0
         from rich.panel import Panel
 
-        site4 = self._site[:4].upper()
-        day_part = (
-            f" · day {self._day_n} of {self._total}  {self._current_day}"
-            if self._day_n
-            else ""
-        )
-        content = f"─[◉]─  canvod · {site4} · {self._start}–{self._end}{day_part}"
+        site4 = self._current_site[:4].upper() if self._current_site else "----"
+        content = f"─[◉]─  canvod · {site4} · {self._current_start}–{self._current_end}"
         return Group(
             Panel(content, border_style="dim green", padding=(0, 1)),
             self._progress,
@@ -182,15 +192,9 @@ class RichReporter:
         assert self._live is not None, "must be used as a context manager"
         return self._live
 
-    @property
-    def _task(self) -> TaskID:
-        assert self._task_id is not None, "must be used as a context manager"
-        return self._task_id
-
     def __enter__(self) -> RichReporter:
         from rich.live import Live
 
-        self._task_id = self._progress.add_task("", total=self._total)
         self._live = Live(
             self._render(),
             console=self._console,
@@ -206,6 +210,13 @@ class RichReporter:
     def log(self, msg: str) -> None:
         self._live_obj.console.print(msg)
 
+    def set_current_site(self, site: str, start: str, end: str) -> None:
+        self._current_site = site
+        self._current_start = start
+        self._current_end = end
+        self._live_obj.update(self._render())
+        self._live_obj.console.print(f"\n[bold green]═══ {site} ═══[/bold green]")
+
     def print_header(self, site: str, start: str, end: str, config, args=None) -> None:
         proc = config.processing.params
         self._live_obj.console.print(
@@ -214,12 +225,16 @@ class RichReporter:
             f"  strategy={config.processing.storage.gnss_store_strategy}[/dim]"
         )
 
-    def on_day_start(self, date_key: str, day_n: int, total: int) -> None:
-        self._day_n = day_n
-        self._current_day = date_key
-        self._progress.update(self._task, completed=day_n)
-        self._live_obj.update(self._render())
-        self._live_obj.console.print(f"\n[bold]─── {date_key}[/bold]")
+    def advance(self, site: str, group: str) -> None:
+        task_id = self._task_ids.get((site, group))
+        if task_id is not None:
+            self._progress.advance(task_id)
+            self._live_obj.update(self._render())
+
+    def on_day_start(self, date_key: str) -> None:
+        self._live_obj.console.print(
+            f"\n[bold]─── {self._current_site}/{date_key}[/bold]"
+        )
 
     def on_datasets(self, datasets: dict[str, xr.Dataset]) -> None:
         for group, ds in datasets.items():
@@ -246,8 +261,6 @@ class RichReporter:
             f"  vod={dt_vod:.1f}s"
             f"  vod_store={dt_vod_store:.1f}s[/dim]"
         )
-        self._progress.advance(self._task)
-        self._live_obj.update(self._render())
 
     def on_done(self, total_days: int, total_vod: int, dt_total: float) -> None:
         self._live_obj.console.print()
@@ -263,15 +276,21 @@ class RichReporter:
 
 
 def make_reporter(
-    site: str,
-    start: str,
-    end: str,
+    rows: list[tuple[str, str, int]],
     *,
     tty: bool | None = None,
 ) -> PlainReporter | RichReporter:
-    """Return a RichReporter when running in a TTY, PlainReporter otherwise."""
+    """Return a RichReporter when running in a TTY, PlainReporter otherwise.
+
+    Parameters
+    ----------
+    rows : list[tuple[str, str, int]]
+        One entry per (site_name, receiver_group, total_days) — every row
+        known upfront so a multi-site run shows the full picture from the
+        start.
+    """
     if tty is None:
         tty = sys.stdout.isatty()
     if tty:
-        return RichReporter(site, start, end)
-    return PlainReporter()
+        return RichReporter(rows)
+    return PlainReporter(rows)

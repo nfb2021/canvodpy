@@ -37,7 +37,7 @@ from canvodpy._deprecation import deprecated
 # Lazy imports to avoid circular dependencies
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
 
     import xarray as xr
 
@@ -138,7 +138,7 @@ class Site:
         cpu_affinity: list[int] | None = None,
         nice_priority: int | None = None,
         threads_per_worker: int | None = None,
-        show_progress: bool = True,
+        on_group_written: Callable[[str], None] | None = None,
     ) -> Pipeline:
         """Create a processing pipeline for this site.
 
@@ -170,11 +170,11 @@ class Site:
             Process nice value (0=normal, 19=lowest). Default: from config.
         threads_per_worker : int, optional
             Threads per worker process. Default: from config.
-        show_progress : bool, default True
-            Render the per-receiver Rich progress bars. Set False when the
-            caller already owns a Rich ``Live`` display (e.g. the CLI) —
-            two concurrent ``Live`` instances on one terminal corrupt each
-            other's output.
+        on_group_written : Callable[[str], None], optional
+            Called with the receiver-group name each time a group's data for
+            one day finishes writing to Icechunk. Lets a caller drive its own
+            progress display (e.g. the CLI's per-site/receiver rows) without
+            this class owning any display itself.
 
         Returns
         -------
@@ -199,7 +199,7 @@ class Site:
             cpu_affinity=cpu_affinity,
             nice_priority=nice_priority,
             threads_per_worker=threads_per_worker,
-            show_progress=show_progress,
+            on_group_written=on_group_written,
         )
 
     def __repr__(self) -> str:
@@ -246,9 +246,10 @@ class Pipeline:
         Process nice value (0=normal, 19=lowest). Default: from config.
     threads_per_worker : int, optional
         Threads per Dask worker process. Default: from config.
-    show_progress : bool, default True
-        Render the per-receiver Rich progress bars. Set False when the
-        caller already owns a Rich ``Live`` display (e.g. the CLI).
+    on_group_written : Callable[[str], None], optional
+        Called with the receiver-group name each time a group's data for one
+        day finishes writing to Icechunk. Lets a caller drive its own
+        progress display without this class owning any display itself.
 
     Examples
     --------
@@ -280,7 +281,7 @@ class Pipeline:
         cpu_affinity: list[int] | None = None,
         nice_priority: int | None = None,
         threads_per_worker: int | None = None,
-        show_progress: bool = True,
+        on_group_written: Callable[[str], None] | None = None,
     ) -> None:
         # Handle both Site object and string
         if isinstance(site, str):
@@ -353,7 +354,7 @@ class Pipeline:
             cpu_affinity=cpu_affinity,
             nice_priority=nice_priority,
             threads_per_worker=threads_per_worker,
-            show_progress=show_progress,
+            on_group_written=on_group_written,
         )
 
         self.log.info(

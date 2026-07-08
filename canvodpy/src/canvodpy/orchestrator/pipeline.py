@@ -5,14 +5,13 @@ from __future__ import annotations
 import os
 import time as _time
 from collections import defaultdict
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
 import pint
 import xarray as xr
-from rich.progress import TaskID
 
 from canvod.readers import MatchedDirs, PairDataDirMatcher
 from canvod.readers.gnss_specs.constants import UREG
@@ -63,11 +62,15 @@ class PipelineOrchestrator:
     threads_per_worker : int | None
         Threads per worker process (used to cap BLAS thread env vars).
         None defaults to 1.
-    show_progress : bool
-        Render the per-receiver Rich progress bars. Disable when the caller
-        already owns a Rich ``Live`` display (e.g. the CLI's ``RichReporter``)
-        — two concurrent ``Live`` instances on the same terminal corrupt each
-        other's output. Default True for standalone/programmatic use.
+    on_group_written : Callable[[str], None] | None
+        Called with the receiver-group name (e.g. ``"canopy_01"``,
+        ``"reference_01_canopy_02"``) each time a group's data for one day
+        finishes writing to Icechunk. Lets a caller drive its own progress
+        display (e.g. the CLI's per-site/receiver rows) without this class
+        owning any display itself — two independently-created Rich ``Live``
+        instances on the same terminal corrupt each other's output, so
+        display ownership belongs entirely to the caller. Default None
+        (no-op) for standalone/programmatic use.
 
     """
 
@@ -81,13 +84,13 @@ class PipelineOrchestrator:
         cpu_affinity: list[int] | None = None,
         nice_priority: int = 0,
         threads_per_worker: int | None = None,
-        show_progress: bool = True,
+        on_group_written: Callable[[str], None] | None = None,
     ) -> None:
         self.site = site
         self.n_max_workers = n_max_workers
         self.dry_run = dry_run
         self.days_per_batch = days_per_batch
-        self._show_progress = show_progress
+        self._on_group_written = on_group_written
         self._batch_duration: pint.Quantity = days_per_batch * 24 * UREG.hour
         self._max_memory_gb = max_memory_gb
         self._cpu_affinity = cpu_affinity
@@ -615,21 +618,6 @@ class PipelineOrchestrator:
             flat_loky=use_flat_loky,
         )
 
-        # One persistent bar per receiver spanning ALL dates — updates in place
-        _receiver_names_ordered: list[str] = []
-        _seen_rn: set[str] = set()
-        for _, _recvs in filtered_dates:
-            for _rn in _recvs:
-                if _rn not in _seen_rn:
-                    _receiver_names_ordered.append(_rn)
-                    _seen_rn.add(_rn)
-        progress = _processing_progress(disable=not self._show_progress)
-        receiver_tasks: dict[str, TaskID] = {
-            _rn: progress.add_task(f"  {_rn}", total=len(filtered_dates))
-            for _rn in _receiver_names_ordered
-        }
-        progress.start()
-
         # Partition dates into batches
         for batch_idx, batch_start in enumerate(
             range(0, len(filtered_dates), days_per_batch)
@@ -930,9 +918,8 @@ class PipelineOrchestrator:
                         total_seconds=round(t_read_end - t_write_start, 2),
                     )
 
-                    # Advance the persistent per-receiver bar (one tick per date)
-                    if receiver_name in receiver_tasks:
-                        progress.advance(receiver_tasks[receiver_name])
+                    if self._on_group_written is not None:
+                        self._on_group_written(receiver_name)
                     date_datasets[date_key][receiver_name] = daily_ds
                     date_timings[date_key][receiver_name] = t_read_end - t_write_start
                     groups_written.add(group_key)
@@ -989,8 +976,6 @@ class PipelineOrchestrator:
                 doys_failed=doys_failed,
                 batch_seconds=round(batch_elapsed, 2),
             )
-
-        progress.stop()
 
     def process_by_date(
         self,

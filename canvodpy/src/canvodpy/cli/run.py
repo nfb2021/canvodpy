@@ -3,19 +3,22 @@
 Usage
 -----
     # Process a specific range
-    uv run python -m canvodpy.cli.run --site Rosalia --start 2025001 --end 2025007
+    uv run canvodpy run --site Rosalia --start 2025001 --end 2025007
 
     # Process new data only (auto-detect start from store, end = today)
-    uv run python -m canvodpy.cli.run --site Rosalia
+    uv run canvodpy run --site Rosalia
+
+    # Multiple sites in one invocation (processed sequentially)
+    uv run canvodpy run --site Rosalia OtherSite
 
     # Cron: run daily, picks up new data automatically
-    # 0 3 * * * cd /path/to/canvodpy && uv run python -m canvodpy.cli.run --site Rosalia
+    # 0 3 * * * cd /path/to/canvodpy && uv run canvodpy run --site Rosalia
 
     # Observation ingestion only, no VOD
-    uv run python -m canvodpy.cli.run --site Rosalia --no-vod
+    uv run canvodpy run --site Rosalia --no-vod
 
     # Preview what would be processed
-    uv run python -m canvodpy.cli.run --site Rosalia --dry-run
+    uv run canvodpy run --site Rosalia --dry-run
 """
 
 from __future__ import annotations
@@ -41,7 +44,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--site",
         required=True,
-        help="Site name as defined in sites.yaml (e.g. Rosalia)",
+        nargs="+",
+        metavar="SITE",
+        help=(
+            "One or more site names as defined in sites.yaml (e.g. Rosalia). "
+            "Multiple sites are processed sequentially."
+        ),
     )
     p.add_argument(
         "--start",
@@ -146,6 +154,23 @@ def _last_processed_date(store) -> str | None:
 def _today_yyyydoy() -> str:
     now = datetime.now()
     return f"{now.year}{now.timetuple().tm_yday:03d}"
+
+
+def _site_groups(site) -> list[str]:
+    """List receiver-group names as used in the Icechunk store.
+
+    Canopy receivers write under their own name (``canopy_01``); each
+    reference/canopy pair writes under ``{reference}_{canopy}``.
+    """
+    canopy_names = [
+        name
+        for name, cfg in site.active_receivers.items()
+        if cfg.get("type") == "canopy"
+    ]
+    pair_names = [
+        f"{ref}_{canopy}" for ref, canopy in site._site.get_reference_canopy_pairs()
+    ]
+    return canopy_names + pair_names
 
 
 def _resolve_date_range(args, site) -> tuple[str, str]:
@@ -290,80 +315,96 @@ def main(argv: list[str] | None = None) -> int:
 
     from canvodpy.api import Site
 
-    site = Site(args.site)
-
-    # Resolve date range (auto-detect from store if not specified)
-    start, end = _resolve_date_range(args, site)
-
-    from canvodpy.cli.dashboard import make_reporter
+    site_names: list[str] = args.site
 
     if args.dry_run:
-        with site.pipeline(
-            n_workers=args.workers,
-            days_per_batch=args.days_per_batch,
-            dry_run=True,
-        ) as pipeline:
-            plan = pipeline.preview()
-            print("Dry-run plan:")
-            for k, v in plan.items():
-                print(f"  {k}: {v}")
+        for site_name in site_names:
+            site = Site(site_name)
+            with site.pipeline(
+                n_workers=args.workers,
+                days_per_batch=args.days_per_batch,
+                dry_run=True,
+            ) as pipeline:
+                plan = pipeline.preview()
+                print(f"Dry-run plan for {site_name}:")
+                for k, v in plan.items():
+                    print(f"  {k}: {v}")
         return 0
 
-    # Resolve VOD analysis pairs
-    vod_analyses = site.vod_analyses if not args.no_vod else {}
+    from canvodpy.cli.dashboard import day_count, make_reporter
 
-    # Access the underlying GnssResearchSite for VOD store writes
-    research_site = site._site
+    # Resolve every site upfront: date range + receiver-group rows, so a
+    # multi-site run shows the full picture from the start.
+    site_infos: list[tuple[str, Site, str, str]] = []
+    rows: list[tuple[str, str, int]] = []
+    for site_name in site_names:
+        site = Site(site_name)
+        start, end = _resolve_date_range(args, site)
+        total = day_count(start, end)
+        for group in _site_groups(site):
+            rows.append((site_name, group, total))
+        site_infos.append((site_name, site, start, end))
 
     total_days = 0
     total_vod = 0
     t_total = time.perf_counter()
 
-    with make_reporter(args.site, start, end) as reporter:
-        reporter.print_header(args.site, start, end, config, args)
+    with make_reporter(rows) as reporter:
+        for site_name, site, start, end in site_infos:
+            reporter.set_current_site(site_name, start, end)
+            reporter.print_header(site_name, start, end, config, args)
 
-        if vod_analyses:
-            reporter.log(f"  VOD analyses: {list(vod_analyses.keys())}")
+            # Resolve VOD analysis pairs for this site
+            vod_analyses = site.vod_analyses if not args.no_vod else {}
 
-        with site.pipeline(
-            n_workers=args.workers,
-            days_per_batch=args.days_per_batch,
-            dry_run=False,
-            show_progress=False,
-        ) as pipeline:
-            gen = pipeline.process_range(start=start, end=end)
-            while True:
-                t_pipeline = time.perf_counter()
-                try:
-                    date_key, datasets = next(gen)
-                except StopIteration:
-                    break
-                dt_pipeline = time.perf_counter() - t_pipeline
+            if vod_analyses:
+                reporter.log(f"  VOD analyses: {list(vod_analyses.keys())}")
 
-                total_days += 1
-                reporter.on_day_start(date_key, total_days, total_days)
-                reporter.on_datasets(datasets)
+            # Access the underlying GnssResearchSite for VOD store writes
+            research_site = site._site
 
-                dt_vod = 0.0
-                dt_vod_store = 0.0
-                if vod_analyses:
-                    t_vod = time.perf_counter()
-                    vod_results = _compute_vod_for_day(
-                        datasets, vod_analyses, date_key, reporter
-                    )
-                    dt_vod = time.perf_counter() - t_vod
+            def _on_group_written(group_name: str, _site_name: str = site_name) -> None:
+                reporter.advance(_site_name, group_name)
 
-                    t_vod_store = time.perf_counter()
-                    for analysis_name, vod_ds in vod_results.items():
-                        research_site.store_vod_analysis(
-                            vod_dataset=vod_ds,
-                            analysis_name=analysis_name,
-                            commit_message=f"VOD {analysis_name} {date_key}",
+            with site.pipeline(
+                n_workers=args.workers,
+                days_per_batch=args.days_per_batch,
+                dry_run=False,
+                on_group_written=_on_group_written,
+            ) as pipeline:
+                gen = pipeline.process_range(start=start, end=end)
+                while True:
+                    t_pipeline = time.perf_counter()
+                    try:
+                        date_key, datasets = next(gen)
+                    except StopIteration:
+                        break
+                    dt_pipeline = time.perf_counter() - t_pipeline
+
+                    total_days += 1
+                    reporter.on_day_start(date_key)
+                    reporter.on_datasets(datasets)
+
+                    dt_vod = 0.0
+                    dt_vod_store = 0.0
+                    if vod_analyses:
+                        t_vod = time.perf_counter()
+                        vod_results = _compute_vod_for_day(
+                            datasets, vod_analyses, date_key, reporter
                         )
-                    dt_vod_store = time.perf_counter() - t_vod_store
-                    total_vod += len(vod_results)
+                        dt_vod = time.perf_counter() - t_vod
 
-                reporter.on_timing(dt_pipeline, dt_vod, dt_vod_store)
+                        t_vod_store = time.perf_counter()
+                        for analysis_name, vod_ds in vod_results.items():
+                            research_site.store_vod_analysis(
+                                vod_dataset=vod_ds,
+                                analysis_name=analysis_name,
+                                commit_message=f"VOD {analysis_name} {date_key}",
+                            )
+                        dt_vod_store = time.perf_counter() - t_vod_store
+                        total_vod += len(vod_results)
+
+                    reporter.on_timing(dt_pipeline, dt_vod, dt_vod_store)
 
         dt_total = time.perf_counter() - t_total
         reporter.on_done(total_days, total_vod, dt_total)
