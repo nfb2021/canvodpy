@@ -301,20 +301,12 @@ dev = [
 [[package]]
 name = "canvod-filemap"
 version = "0.3.0"
-source = { directory = "../canvodpy-extensions/packages/canvod-filemap" }
+source = { git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap#c70aeae9f137cb4d54d8ca597e6678dfb673fef6" }
 dependencies = [
     { name = "duckdb" },
     { name = "natsort" },
     { name = "pydantic" },
     { name = "pyyaml" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "duckdb", specifier = ">=1.0" },
-    { name = "natsort", specifier = ">=8.4.0" },
-    { name = "pydantic", specifier = ">=2.5.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [[package]]
@@ -712,7 +704,7 @@ dev = [
 requires-dist = [
     { name = "altair", specifier = ">=6.0.0" },
     { name = "canvod-auxiliary", editable = "packages/canvod-auxiliary" },
-    { name = "canvod-filemap", marker = "extra == 'filemap'", directory = "../canvodpy-extensions/packages/canvod-filemap" },
+    { name = "canvod-filemap", marker = "extra == 'filemap'", git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap" },
     { name = "canvod-grids", editable = "packages/canvod-grids" },
     { name = "canvod-ops", editable = "packages/canvod-ops" },
     { name = "canvod-readers", editable = "packages/canvod-readers" },

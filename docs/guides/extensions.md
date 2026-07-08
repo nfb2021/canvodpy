@@ -20,26 +20,33 @@ no config beyond what the package itself asks for.
 
 ## Installing an extension
 
-Extensions are not published to PyPI. Install directly from the repository
-with `uv`:
-
-```bash
-uv add "canvod-filemap @ git+https://github.com/nfb2021/canvodpy-extensions.git#subdirectory=packages/canvod-filemap"
-```
-
-If you have both repositories cloned as sibling directories (common for
-contributors working across the ecosystem), point `uv` at the local path
-instead so changes in one are picked up without reinstalling:
-
-```toml
-# pyproject.toml
-[tool.uv.sources]
-canvod-filemap = { path = "../canvodpy-extensions/packages/canvod-filemap" }
-```
+Extensions are not published to PyPI. The monorepo's root `pyproject.toml`
+already points `canvod-filemap` at the public repo over git, so a plain
 
 ```bash
 uv sync --extra filemap
 ```
+
+resolves and installs it on any machine — no sibling checkout required.
+
+If you have both repositories cloned as sibling directories locally (common
+for contributors iterating on `canvod-filemap` itself), you can override the
+source in your own uncommitted local checkout to pick up changes without
+reinstalling:
+
+```toml
+# pyproject.toml (local override — do not commit)
+[tool.uv.sources]
+canvod-filemap = { path = "../canvodpy-extensions/packages/canvod-filemap" }
+```
+
+!!! warning "Don't commit a local path source"
+
+    A path-based source only works on machines that happen to have
+    `canvodpy-extensions` cloned as a sibling directory. `uv` resolves
+    optional-dependency-group sources even when the extra isn't requested,
+    so committing a local path breaks `uv run`/`uv sync` for everyone else.
+    Keep the git source in version control; only override it locally.
 
 ## What happens if an extension isn't installed
 

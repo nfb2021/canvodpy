@@ -228,10 +228,19 @@ No implementation needed until object storage is a confirmed target.
   while installing it for testing, then reverted per user direction — it must stay
   optional so regular installs have zero footprint.~~ **DONE (2026-07-08):**
   `canvod-filemap` is now `[project.optional-dependencies] filemap = [...]` in
-  `canvodpy/pyproject.toml`, resolved via `[tool.uv.sources]` path to the sibling
-  `canvodpy-extensions` checkout. Fixed two hard top-level/unguarded imports that
+  `canvodpy/pyproject.toml`. Fixed two hard top-level/unguarded imports that
   would crash a regular install without the extension: `orchestrator/pipeline.py`
   (`_detect_reader_format`, `_get_rinex_files`) and `workflows/tasks.py`
+  (`_get_gnss_globs`) — both now fall back to canonical `*.rnx`/`*.sbf` globs on
+  `ImportError`. **Follow-up bug caught 2026-07-08 on the remote processing
+  machine:** `[tool.uv.sources]` initially pointed `canvod-filemap` at a local
+  sibling path (`../canvodpy-extensions/...`), which broke `uv run` entirely on
+  any machine without that sibling repo cloned — `uv` resolves optional-group
+  sources even when the extra isn't requested. Fixed by switching the source to
+  `{ git = "https://github.com/nfb2021/canvodpy-extensions.git", subdirectory =
+  "packages/canvod-filemap" }` in the root `pyproject.toml`; the local-path form
+  is now documented in `docs/guides/extensions.md` as an uncommitted local
+  override only, for contributors iterating on both repos side by side.
   (`_get_gnss_globs`, used by the Airflow `check_rinex`/`check_sbf` tasks) — both now
   lazily import with a canonical-name fallback (`*.rnx`/`*.sbf`), matching the
   pattern already used in `orchestrator/processor.py`. New docs page
