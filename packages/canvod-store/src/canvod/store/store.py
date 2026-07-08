@@ -2245,6 +2245,56 @@ class MyIcechunkStore:
             f"{tree_output}"
         )
 
+    @staticmethod
+    def _copy_zarr_subtree(source_group: Any, target_group: Any) -> int:
+        """Recursively copy all arrays, subgroups, and attrs (byte-for-byte).
+
+        Used to restore ``group_name``'s nested ``metadata/`` subtree after
+        a destructive ``mode="w"`` rewrite of the group's data arrays wipes
+        it. Copies raw Zarr arrays directly (no xarray/Polars round-trip),
+        so there is no dtype/schema-reconstruction risk — the arrays here
+        (file registry rows, SBF metadata, etc.) end up byte-identical to
+        the source. Handles arbitrary nesting depth (e.g. ``metadata/table``
+        and ``metadata/sbf_obs`` are both subgroups of ``metadata``, not
+        direct arrays of it).
+
+        Parameters
+        ----------
+        source_group : zarr.Group
+            Group to copy from (e.g. the original ``group_name`` node).
+        target_group : zarr.Group
+            Group to copy into (must already exist).
+
+        Returns
+        -------
+        int
+            Total number of subgroups copied (recursively).
+        """
+        target_group.attrs.update(source_group.attrs)
+
+        count = 0
+        for array_name in source_group.array_keys():
+            source_array = source_group[array_name]
+            target_array = target_group.create_array(
+                array_name,
+                shape=source_array.shape,
+                dtype=source_array.dtype,
+                chunks=source_array.chunks,
+                overwrite=True,
+            )
+            target_array[:] = source_array[:]
+            target_array.attrs.update(source_array.attrs)
+
+        for subgroup_name in source_group.group_keys():
+            source_subgroup = source_group[subgroup_name]
+            target_subgroup = target_group.create_group(subgroup_name, overwrite=True)
+            count += 1
+            count += MyIcechunkStore._copy_zarr_subtree(
+                source_subgroup, target_subgroup
+            )
+
+        return count
+
     def rechunk_group(
         self,
         group_name: str,
@@ -2257,12 +2307,35 @@ class MyIcechunkStore:
         """
         Rechunk a group with optimal chunk sizes.
 
+        Zarr arrays have a fixed chunk shape once created — writing with
+        ``mode="r+"`` onto an existing array cannot change chunk boundaries,
+        it can only update values within the existing grid (verified
+        2026-07-08: a previous version of this method used ``mode="r+"``,
+        which silently failed to change on-disk chunking whenever the
+        request didn't align with the current chunks). Actually changing
+        chunk size requires a destructive ``mode="w"`` rewrite of the
+        group, which also wipes the group's nested subgroups (``metadata/
+        table``, ``metadata/sbf_obs``) — so this method copies that
+        subtree back afterward via a raw recursive Zarr copy (see
+        ``_copy_zarr_subtree``), all on a temporary branch, before ``main``
+        is ever touched. This mirrors a fix already applied once before in
+        gnssvodpy (``rechunk_group_verbose``), generalized here to handle
+        canvod-store's two-level-deep ``metadata/{table,sbf_obs}`` nesting
+        rather than gnssvodpy's one-level copy.
+
+        Both the data read and the subtree copy are pinned to the exact
+        snapshot captured at the start of this call (not just "whatever
+        ``source_branch`` currently points to"), so this is safe to run
+        even if ``source_branch`` keeps advancing concurrently — anything
+        committed after this call started is simply not part of the
+        rechunk and stays untouched on ``source_branch``.
+
         Parameters
         ----------
         group_name : str
             Name of the group to rechunk
         chunks : dict[str, int]
-            Chunking specification, e.g. {'epoch': 34560, 'sid': -1}
+            Chunking specification, e.g. {'epoch': 17280, 'sid': -1}
         source_branch : str
             Branch to read original data from (default: "main")
         temp_branch : str | None
@@ -2286,10 +2359,11 @@ class MyIcechunkStore:
             f"Starting rechunk of group '{group_name}' with chunks={chunks}"
         )
 
-        # Get CURRENT snapshot from source branch to preserve all other groups
+        # Snapshot everything up front so the whole operation is pinned to
+        # one consistent point in time, regardless of concurrent writers.
         current_snapshot = self.repo.lookup_branch(source_branch)
 
-        # Create temp branch from current snapshot (preserves all existing groups)
+        # Create temp branch from that snapshot (preserves all existing groups)
         try:
             self.repo.create_branch(temp_branch, current_snapshot)
             self._logger.info(
@@ -2298,8 +2372,9 @@ class MyIcechunkStore:
         except Exception as e:
             self._logger.warning(f"Branch '{temp_branch}' may already exist: {e}")
 
-        # Read original data
-        ds_original = self.read_group(group_name, branch=source_branch)
+        # Read original data, pinned to current_snapshot
+        session = self.repo.readonly_session(snapshot_id=current_snapshot)
+        ds_original = xr.open_zarr(session.store, group=group_name, consolidated=False)
         self._logger.info(f"Original chunks: {ds_original.chunks}")
 
         # Rechunk
@@ -2307,15 +2382,46 @@ class MyIcechunkStore:
         self._logger.info(f"New chunks: {ds_rechunked.chunks}")
 
         # Clear encoding in-place on all variables and coords.
-        # Assignment (= {}) creates a new dict on the returned copy and is a no-op;
-        # .clear() mutates the shared dict that the Dataset holds.
+        # Assignment (= {}) creates a new dict on the returned copy and
+        # is a no-op; .clear() mutates the shared dict the Dataset holds.
         for key in list(ds_rechunked.data_vars) + list(ds_rechunked.coords):
             ds_rechunked[key].encoding.clear()
 
-        # Write rechunked data (overwrites only this group)
+        source_zroot = zarr.open_group(session.store, mode="r")
+        source_group = source_zroot[group_name]
+        subgroup_names = list(source_group.group_keys())
+
+        # Force-write with mode="w": the only way to actually change chunk
+        # boundaries on an existing array. This wipes group_name's entire
+        # subtree, including all subgroups -- restored below, same
+        # session, same commit, so the temp branch never has a subgroup-less
+        # state that could be read by anything else.
         with self.writable_session(temp_branch) as session:
-            to_icechunk(ds_rechunked, session, group=group_name, mode="r+")
-            snapshot_id = session.commit(f"Rechunked {group_name} with chunks={chunks}")
+            to_icechunk(ds_rechunked, session, group=group_name, mode="w")
+
+            subgroup_count = 0
+            if subgroup_names:
+                ro_session = self.repo.readonly_session(snapshot_id=current_snapshot)
+                ro_zroot = zarr.open_group(ro_session.store, mode="r")
+                source_group = ro_zroot[group_name]
+
+                target_zroot = zarr.open_group(session.store, mode="a")
+                target_group = target_zroot[group_name]
+
+                for subgroup_name in subgroup_names:
+                    source_subgroup = source_group[subgroup_name]
+                    target_subgroup = target_group.create_group(
+                        subgroup_name, overwrite=True
+                    )
+                    subgroup_count += 1
+                    subgroup_count += self._copy_zarr_subtree(
+                        source_subgroup, target_subgroup
+                    )
+
+            snapshot_id = session.commit(
+                f"Rechunked {group_name} with chunks={chunks} "
+                f"({subgroup_count} subgroups restored)"
+            )
 
         self._logger.info(
             f"Rechunked data written to branch '{temp_branch}', snapshot={snapshot_id}"

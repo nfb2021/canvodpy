@@ -1224,3 +1224,99 @@ not a unilateral pick):**
 **Needed:** a decision on which fix (or combination) to pursue before implementing —
 flagging here rather than picking one, since #1 and #2 have real cost (dependency or
 plumbing) and #3/#4 are partial mitigations, not fixes.
+
+---
+
+## 19. Chunk-size misalignment on the Rosalia store — root cause found, `rechunk_group()` fixed, migration still pending
+
+**Found 2026-07-08**, analyzing performance logs from the remote processing
+machine's live backfill run (`dev/*.md` log analysis, not a code investigation).
+The Icechunk write step (`_append_to_icechunk` → `session.commit()`) was taking
+17-19s per receiver-group-day — by far the dominant cost in the run (~63% of
+total wall-clock across the sampled batches).
+
+**Root cause:** `epoch` chunk size defaults to `34560`
+(`packages/canvod-utils/src/canvod/utils/config/models.py:419,459-460,486,490`;
+`packages/canvod-store/src/canvod/store/store.py:626,1237`), which the
+docstring explicitly says is tuned for **2.5s sampling** (86400s/day ÷ 2.5s =
+34560). Rosalia samples at **5s**, so one real day = 17280 epochs — exactly
+half the configured chunk size. Every daily write lands mid-chunk, forcing a
+read-modify-write of the whole 2-day chunk instead of a clean append — this
+matches icechunk's own documented "chunk-unaligned writes" limitation
+(confirmed via web search against icechunk's FAQ). General principle: chunk
+size (append dim) should equal the write granularity — for this pipeline,
+that's always one calendar day, since `append_to_group()` commits once per
+receiver-group per day regardless of `days_per_batch`. Formula:
+`epoch_chunk_size = 86400 / site_sampling_interval_seconds`. Not a universal
+constant — every site should be set to match its own sampling rate.
+
+**Config-only fix does NOT work retroactively.** Confirmed by reading
+`write_initial_group()`/`append_to_group()`: chunk shape is set once, at a
+group's first-ever write (`write_initial_group`, `to_icechunk(..., mode="w")`,
+no explicit `chunks=` — inherited from whatever the incoming dataset was
+already rechunked to via `self.chunk_strategy` at store-construction time).
+Every subsequent `append_to_group()` call passes no `chunks=` at all — it just
+extends the array using whatever grid was established on the first write.
+Changing the config and restarting the pipeline has **zero effect** on
+already-existing groups; it only applies to brand-new groups/stores. The
+existing 4 Rosalia groups (`canopy_01`, `canopy_02`, `reference_01_canopy_01`,
+`reference_01_canopy_02`) need an actual migration.
+
+**`rechunk_group()` (`packages/canvod-store/src/canvod/store/store.py`) was
+broken for its stated purpose** — found via new test coverage
+(`packages/canvod-store/tests/test_rechunk.py`, zero prior tests existed).
+Original implementation used `mode="r+"` to preserve the group's nested
+`metadata/` subtree (file registry table, `sbf_obs`), but `mode="r+"` writes
+into the array's *existing* chunk grid — verified empirically that it cannot
+actually change chunk boundaries (Zarr arrays have immutable chunk shape once
+created). The previous author's exact tradeoff (`r+` to avoid losing
+metadata) is confirmed real: `mode="w"` does wipe the nested `metadata/`
+subtree, reproduced directly in a debug script.
+
+**Fixed** by combining the destructive-but-correct path (`mode="w"`, which
+actually changes chunk shape) with a recursive raw-Zarr copy of the wiped
+subtree, restored on the same temp branch before promotion — generalizing a
+fix already applied once before in `gnssvodpy`
+(`gnssvodpy/src/gnssvodpy/icechunk_manager/store.py:1457`,
+`rechunk_group_verbose`, found via `/Users/work/rechunk.py`), which only
+copied one level of subgroup depth; canvod-store's layout nests
+`metadata/{table,sbf_obs}` two levels deep, so the fix here
+(`_copy_zarr_subtree`) is properly recursive. Also pins the whole operation to
+the exact snapshot captured at the start (`repo.readonly_session(snapshot_id=
+current_snapshot)`, not `branch=source_branch`), so it stays safe even if
+`source_branch` advances concurrently — anything committed after the rechunk
+started is simply not part of the migration, not silently discarded. Verified
+by `packages/canvod-store/tests/test_rechunk.py` (6 tests: metadata table
+survives, root attrs survive, data values byte-identical, chunk size actually
+changes, sibling groups untouched, `promote_to_main=False` correctly leaves
+`main` alone) — all passing, including against a real column-order/flaky
+false-failure in the metadata comparison that got caught and fixed along the
+way (sort by unique `rinex_hash` key, not all columns).
+
+**Decision (2026-07-08): no periodic rechunking.** Considered "day-aligned
+during ingestion, periodically consolidate to something bigger for reads"
+(mirrors gnssvodpy's `rechunk.py`, which ran rechunks periodically) — rejected
+because the actual read pattern here is single-day/single-week windows, which
+day-aligned chunks already serve well; consolidating to bigger chunks would
+only help genuine bulk/seasonal reads (not the case here) while reintroducing
+the exact write-side merge cost being fixed, since write granularity stays
+per-day regardless of chunk size chosen. Fix the chunk size once, correctly;
+`rechunk_group()` is a one-time migration tool, not a recurring maintenance
+job. Also worth remembering if this ever changes: `rechunk_group()` isn't
+currently safe to run concurrently with active ingestion into the same group
+(pinned-snapshot + branch-reset would silently discard anything committed
+during the rechunk window) — fine for a one-time migration with the pipeline
+stopped first, but would need a "detect branch moved, abort" guard before ever
+becoming a recurring/automated job.
+
+**Still pending:**
+1. Stop the remote pipeline.
+2. Set `epoch=17280` for Rosalia in `canvod-settings.yaml`'s
+   `icechunk.chunk_strategies` (both `gnss_store` and `vod_store` if VOD
+   analyses are also affected — not yet checked whether VOD store has the same
+   sampling-rate assumption).
+3. Run `store.rechunk_group(group_name, chunks={"epoch": 17280, "sid": -1})`
+   for each of the 4 groups.
+4. Verify (chunk size, metadata row counts, root attrs, spot-check data
+   values) before resuming the pipeline.
+5. Resume ingestion — new writes should now be clean appends.
