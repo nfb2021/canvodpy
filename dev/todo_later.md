@@ -1120,3 +1120,66 @@ renumbering, since the underlying files still exist under their current names.
 **Depends on:** finishing the docs/CLAUDE.md API-levels table updates and the CLI
 ephemeris/calculator flag work (§4 follow-ups) first, so the demo doesn't document
 a CLI surface that's still mid-change.
+
+---
+
+## 18. Multi-process logging race — `RotatingFileHandler` shared across loky workers
+
+**Found 2026-07-08**, live production run on the remote processing machine, under
+`days_per_batch=14`. Non-fatal (Python's `logging` module catches handler `emit()`
+failures and prints `--- Logging error ---` rather than propagating — confirmed the
+pipeline kept running, "Overall" bar continued advancing), but noisy and a latent
+data-integrity risk.
+
+**Symptom:**
+```
+FileNotFoundError: [Errno 2] No such file or directory:
+  '.../.logs/machine/full.json' -> '.../.logs/machine/full.json.1'
+```
+raised from `logging/handlers.py:doRollover() -> rotate() -> os.rename()`, inside a
+loky worker process (call stack: `loky/process_executor.py:_process_worker` →
+`processor.py:290 log.debug("computing_spherical_coordinates")` → structlog →
+stdlib logging → `RotatingFileHandler.emit()`).
+
+**Root cause:** `canvodpy/src/canvodpy/logging/logging_config.py:420` —
+`LOGGER = configure_logging()` runs at **module import time**, at global scope.
+Every loky worker process re-imports this module when it spawns and independently
+re-runs `configure_logging()`, which creates 9 file handlers
+(`RotatingFileHandler`/`TimedRotatingFileHandler`) all pointing at the *same*
+physical paths under `.logs/` (`machine/full.json`, `human/main.log`,
+`human/errors.log`, `machine/performance.json`, 3× `component/*.log`, legacy
+`canvodpy.log`). `RotatingFileHandler` is only safe within a single process (its
+lock is a `threading.RLock`, not cross-process) — when the shared file crosses its
+size threshold, multiple worker processes can decide to rotate simultaneously and
+race on `os.rename()`. Whichever loses finds the source already renamed away by the
+winner. This isn't limited to the one handler that happened to fire in the observed
+traceback — all 9 registered handlers share the same exposure whenever multiple
+processes are alive and the threshold is crossed mid-run.
+
+**Candidate fixes (tradeoffs, no single obviously-right answer — needs a decision,
+not a unilateral pick):**
+1. **Skip file-handler setup in worker processes.** Guard `configure_logging()`
+   (or its call site) to detect a non-main process (e.g.
+   `multiprocessing.current_process().name != "MainProcess"`, or check for the
+   loky/ProcessPoolExecutor worker context) and have workers log to stderr/null
+   only, or forward records to the main process via `logging.handlers.QueueHandler`
+   + `QueueListener` (stdlib, no new dependency, but requires plumbing a
+   multiprocessing-safe queue through to every worker).
+2. **Process-safe rotating handler.** Swap `RotatingFileHandler`/
+   `TimedRotatingFileHandler` for a library that uses file locking across processes
+   (e.g. `concurrent-log-handler`'s `ConcurrentRotatingFileHandler`) — new
+   dependency, but a drop-in replacement with minimal code change.
+3. **Per-process log files.** Include PID (or loky worker ID) in each handler's
+   filename, eliminating the shared-path race entirely — but fragments
+   `machine/full.json` (meant to be "complete JSON logs for analysis" in one place)
+   across many files, needing a separate aggregation/merge step to read "the full
+   log" as originally intended.
+4. **Reduce worker-process verbosity.** Cheap mitigation, not a real fix: workers
+   currently log at DEBUG (`log.debug("computing_spherical_coordinates")` etc.) —
+   dropping worker-process handlers to WARNING would reduce volume and therefore
+   how often the 100MB threshold gets crossed mid-run, lowering race likelihood
+   without eliminating the underlying multi-process-unsafe pattern.
+
+**Needed:** a decision on which fix (or combination) to pursue before implementing —
+flagging here rather than picking one, since #1 and #2 have real cost (dependency or
+plumbing) and #3/#4 are partial mitigations, not fixes.
