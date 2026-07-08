@@ -97,6 +97,24 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help="Overlay config YAML applied on top of the main canvod-settings.yaml",
     )
+    p.add_argument(
+        "--ephemeris-source",
+        choices=["final", "broadcast"],
+        default=None,
+        help=(
+            "Override the configured ephemeris source ('final' = agency "
+            "SP3/CLK, 'broadcast' = SBF SatVisibility). "
+            "Default: from canvod-settings.yaml."
+        ),
+    )
+    from canvodpy.factories import VODFactory
+
+    p.add_argument(
+        "--vod-calculator",
+        choices=VODFactory.list_available(),
+        default="tau_omega",
+        help="VOD calculator to use.",
+    )
     return p
 
 
@@ -202,6 +220,7 @@ def _compute_vod_for_day(
     vod_analyses: dict,
     date_key: str,
     reporter=None,
+    calculator_name: str = "tau_omega",
 ) -> dict[str, xr.Dataset]:
     """Compute VOD for all configured analysis pairs.
 
@@ -216,12 +235,14 @@ def _compute_vod_for_day(
         ``GnssResearchSite`` instance (owns the VOD store).
     date_key
         YYYYDOY string for logging.
+    calculator_name
+        Name registered in ``VODFactory`` (e.g. ``"tau_omega"``).
 
     Returns
     -------
     dict mapping analysis name to VOD dataset.
     """
-    from canvod.vod.calculator import TauOmegaZerothOrder
+    from canvodpy.factories import VODFactory
 
     results: dict[str, xr.Dataset] = {}
 
@@ -254,11 +275,11 @@ def _compute_vod_for_day(
 
         t0 = time.perf_counter()
         try:
-            vod_ds = TauOmegaZerothOrder.from_datasets(
-                canopy_ds=canopy_ds,
-                sky_ds=ref_ds,
-                align=True,
+            canopy_ds, ref_ds = xr.align(canopy_ds, ref_ds, join="inner")
+            calculator = VODFactory.create(
+                calculator_name, canopy_ds=canopy_ds, sky_ds=ref_ds
             )
+            vod_ds = calculator.calculate_vod()
 
             # Rechunk + clear encoding for clean Icechunk writes
             vod_ds = vod_ds.chunk({"epoch": 34560, "sid": -1})
@@ -312,6 +333,9 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["CANVOD_CONFIG_FILE"] = str(config_file.expanduser().resolve())
 
     config = load_config(config_file=config_file)
+
+    if args.ephemeris_source is not None:
+        config.processing.params.ephemeris_source = args.ephemeris_source
 
     from canvodpy.api import Site
 
@@ -390,7 +414,11 @@ def main(argv: list[str] | None = None) -> int:
                     if vod_analyses:
                         t_vod = time.perf_counter()
                         vod_results = _compute_vod_for_day(
-                            datasets, vod_analyses, date_key, reporter
+                            datasets,
+                            vod_analyses,
+                            date_key,
+                            reporter,
+                            calculator_name=args.vod_calculator,
                         )
                         dt_vod = time.perf_counter() - t_vod
 

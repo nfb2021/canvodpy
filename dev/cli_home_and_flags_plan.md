@@ -113,7 +113,18 @@ Net effect: **all** CLI code — entry point, `config`, `stats`, `run`, and futu
 subcommands — lives under `canvodpy/src/canvodpy/cli/`. `canvod-utils` is a pure
 library again, consistent with its own docs.
 
-## Part B — `--ephemeris-source {final,broadcast}` flag
+## Part B — `--ephemeris-source {final,broadcast}` flag — DONE (2026-07-08)
+
+Implemented as planned: flag added, config mutated after `load_config()`.
+Bonus: the deprecated `.processing.processing.` alias access (not just the
+one at `processor.py:607` scoped by this plan) turned out to appear at 11
+more call sites in the same file — all fixed in one mechanical pass
+(`.processing.processing.` → `.processing.params.`), removing the
+`DeprecationWarning` spam entirely rather than leaving 10 of 12 dangling.
+Verified: `uv run ty check`/`ruff check` clean, `uv run pytest -m "not
+integration"` matches baseline, `canvodpy run --help` shows the flag,
+`--ephemeris-source bogus` correctly rejected by argparse `choices=`.
+
 
 **Already config-driven, not hardcoded.** `ProcessingParams.ephemeris_source:
 Literal["final", "broadcast"]` already exists
@@ -168,7 +179,19 @@ is a **deprecated property alias** for `.params`
    `config.processing.params.ephemeris_source = args.ephemeris_source`.
 3. `processor.py:607`: fix `.processing.processing.` → `.processing.params.`.
 
-## Part C — `--vod-calculator` flag
+## Part C — `--vod-calculator` flag — DONE (2026-07-08)
+
+Implemented as planned: `_compute_vod_for_day` now takes `calculator_name`,
+manually re-adds the `xr.align(canopy_ds, ref_ds, join="inner")` step
+`VODFactory.create()` doesn't do (unlike `TauOmegaZerothOrder.from_datasets()`,
+which did it internally), then `VODFactory.create(name, canopy_ds=...,
+sky_ds=...).calculate_vod()`. `--vod-calculator` choices are populated
+dynamically from `VODFactory.list_available()` at parser-build time — just
+`tau_omega` today, extends automatically if a second calculator is ever
+registered. Verified: `uv run ty check`/`ruff check` clean, `uv run pytest`
+matches baseline, `canvodpy run --help` shows `{tau_omega}` as the only
+choice.
+
 
 **Only one concrete calculator exists today**: `TauOmegaZerothOrder`
 (`packages/canvod-vod/src/canvod/vod/calculator.py:148`), registered as `"tau_omega"`

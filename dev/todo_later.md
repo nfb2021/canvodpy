@@ -180,11 +180,15 @@ name. ~1,765 LOC, 9 test modules.
   functions, and `VODWorkflow` — the latter found to have a **broken augmentation
   step** (`workflow.py::_augment_data` is a no-op TODO stub; VOD computed through it
   never gets ephemeris-augmented angles). None of these are removed, just no longer
-  taught. **Still open:** update `CLAUDE.md`/docs API-levels tables, scrub demos,
+  taught. ~~**Still open:** update `CLAUDE.md`/docs API-levels tables, scrub demos,
   strengthen the breadcrumb trail/skill toward CLI-first guidance, and add CLI flags
   for ephemeris-source/VOD-calculator choice (currently `Pipeline` hardcodes
   `TauOmegaZerothOrder` and only reads ephemeris source from YAML, not as a
-  parameter — the CLI inherits this limit since it calls `Site.pipeline()`).
+  parameter — the CLI inherits this limit since it calls `Site.pipeline()`).~~
+  **Ephemeris/VOD-calculator flags DONE (2026-07-08)** — `canvodpy run
+  --ephemeris-source {final,broadcast}` and `--vod-calculator` added; see
+  `dev/cli_home_and_flags_plan.md` Parts B/C. Docs/demo scrubbing still open
+  (tracked separately in §17, the `canvodpy-demo` submodule work).
 - Should `CanvodConfig` snapshots be persisted into store metadata per run (the
   store-metadata package already has a `config` section) for drift auditability?
   — still open, unanswered.

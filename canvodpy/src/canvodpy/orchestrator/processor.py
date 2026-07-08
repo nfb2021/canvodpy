@@ -604,7 +604,7 @@ class RinexDataProcessor:
             self.use_sbf_geometry = True
         else:
             self.use_sbf_geometry = (
-                config.processing.processing.ephemeris_source == "broadcast"
+                config.processing.params.ephemeris_source == "broadcast"
             )
 
         # Cache config values formerly in globals
@@ -1158,7 +1158,7 @@ class RinexDataProcessor:
         Returns dict keyed by receiver_name (store group name).
         Positions are computed once per unique source directory and shared.
         """
-        position_mode = self._config.processing.processing.receiver_position_mode
+        position_mode = self._config.processing.params.receiver_position_mode
         pos_by_source: dict = {}  # (source_dir, fmt) -> ECEFPosition | None
         result: dict = {}
 
@@ -1379,8 +1379,8 @@ class RinexDataProcessor:
 
         """
         effective_reader = reader_format or self._reader_name
-        store_r = self._config.processing.processing.store_radial_distance
-        store_raw = self._config.processing.processing.store_sbf_raw_observables
+        store_r = self._config.processing.params.store_radial_distance
+        store_raw = self._config.processing.params.store_sbf_raw_observables
         return self._parallel_process_rinex_pool(
             rinex_files,
             keep_vars,
@@ -2116,7 +2116,7 @@ class RinexDataProcessor:
             if site_cfg is not None:
                 reader_fmt = reader_format or self._reader_name
                 if not metadata_exists(store_path, branch=branch):
-                    resources = self._config.processing.processing.resolve_resources()
+                    resources = self._config.processing.params.resolve_resources()
                     meta = collect_metadata(
                         config=self._config,
                         site_name=site_name,
@@ -2297,7 +2297,7 @@ class RinexDataProcessor:
         # ====================================================================
         # STEP 2: Compute receiver position
         # ====================================================================
-        position_mode = self._config.processing.processing.receiver_position_mode
+        position_mode = self._config.processing.params.receiver_position_mode
         first_rnx = self._make_reader(canopy_files[0])
         first_ds = first_rnx.to_ds(keep_data_vars=[], write_global_attrs=True)
         shared_position = ECEFPosition.from_ds_metadata(first_ds)
@@ -2469,7 +2469,7 @@ class RinexDataProcessor:
         # read the matching canopy file's sbf_obs on the fly
         canopy_file_by_timestamp: dict[str, Path] | None = None
         canopy_reader_fmt: str | None = None
-        position_mode = self._config.processing.processing.receiver_position_mode
+        position_mode = self._config.processing.params.receiver_position_mode
         if self.use_sbf_geometry and position_mode == "shared":
             for rc_name, rc_type, rc_dir, _, rc_fmt in receiver_configs:
                 if rc_type == "canopy":
@@ -3139,7 +3139,7 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
         # Collect all epochs from all files (or create empty structure)
         # Option A: Process all files first to get full time range
         all_epochs = []
-        store_raw = self._config.processing.processing.store_sbf_raw_observables
+        store_raw = self._config.processing.params.store_sbf_raw_observables
         for rinex_file in rinex_files_sorted:
             _fname, ds, _aux, _sids = preprocess_with_hermite_aux(
                 rinex_file,
@@ -3293,7 +3293,7 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
         # ====================================================================
         # STEP 2: Compute receiver position
         # ====================================================================
-        position_mode = self._config.processing.processing.receiver_position_mode
+        position_mode = self._config.processing.params.receiver_position_mode
         first_rnx = self._make_reader(canopy_files[0])
         first_ds = first_rnx.to_ds(keep_data_vars=[], write_global_attrs=True)
         shared_position = ECEFPosition.from_ds_metadata(first_ds)
