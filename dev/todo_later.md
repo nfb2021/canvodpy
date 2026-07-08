@@ -231,22 +231,62 @@ No implementation needed until object storage is a confirmed target.
   `canvodpy/pyproject.toml`. Fixed two hard top-level/unguarded imports that
   would crash a regular install without the extension: `orchestrator/pipeline.py`
   (`_detect_reader_format`, `_get_rinex_files`) and `workflows/tasks.py`
-  (`_get_gnss_globs`) — both now fall back to canonical `*.rnx`/`*.sbf` globs on
-  `ImportError`. **Follow-up bug caught 2026-07-08 on the remote processing
-  machine:** `[tool.uv.sources]` initially pointed `canvod-filemap` at a local
-  sibling path (`../canvodpy-extensions/...`), which broke `uv run` entirely on
-  any machine without that sibling repo cloned — `uv` resolves optional-group
-  sources even when the extra isn't requested. Fixed by switching the source to
-  `{ git = "https://github.com/nfb2021/canvodpy-extensions.git", subdirectory =
+  (`_get_gnss_globs`, used by the Airflow `check_rinex`/`check_sbf` tasks) — both
+  now lazily import with a canonical-name fallback (`*.rnx`/`*.sbf`), matching the
+  pattern already used in `orchestrator/processor.py`. **Follow-up bug caught
+  2026-07-08 on the remote processing machine:** `[tool.uv.sources]` initially
+  pointed `canvod-filemap` at a local sibling path (`../canvodpy-extensions/...`),
+  which broke `uv run` entirely on any machine without that sibling repo cloned —
+  `uv` resolves optional-group sources even when the extra isn't requested. Fixed
+  by switching the source to `{ git =
+  "https://github.com/nfb2021/canvodpy-extensions.git", subdirectory =
   "packages/canvod-filemap" }` in the root `pyproject.toml`; the local-path form
   is now documented in `docs/guides/extensions.md` as an uncommitted local
-  override only, for contributors iterating on both repos side by side.
-  (`_get_gnss_globs`, used by the Airflow `check_rinex`/`check_sbf` tasks) — both now
-  lazily import with a canonical-name fallback (`*.rnx`/`*.sbf`), matching the
-  pattern already used in `orchestrator/processor.py`. New docs page
-  `docs/guides/extensions.md` covers install (`uv add "canvod-filemap @
+  override only, for contributors iterating on both repos side by side. New docs
+  page `docs/guides/extensions.md` covers install (`uv add "canvod-filemap @
   git+...#subdirectory=..."` or the sibling-path form) and is linked from
   `docs/index.md` and `docs/guides/configuration.md`.
+- **Silent recipe-without-filemap failure (found 2026-07-08, real production run
+  on the remote processing machine).** A site's receivers were configured with
+  `recipe: rosalia_canopy` / `recipe: rosalia_reference` in `canvod-settings.yaml`
+  — i.e. non-canonical filenames requiring `canvod-filemap` to match them — but
+  `canvod-filemap` wasn't installed (plain `uv sync`, no `--extra filemap`). The
+  ImportError fallback in `pipeline.py`/`tasks.py` (see bullet above) silently
+  degraded to canonical-only globs (`*.rnx`/`*.RNX`), which don't match this
+  site's real files. Symptom was a confusing `no_rinex_files_found` warning per
+  receiver-day with no indication of the actual cause, discovered only through
+  manual diagnosis (checking `config.sites.*.receivers.*.recipe` against whether
+  `canvod.filemap` importable). **Needed:** a clear, fail-fast, actionable error
+  instead of a silent degrade whenever a receiver has `recipe:` configured but
+  `canvod-filemap` isn't importable — e.g. in `canvodpy config validate`
+  (`packages/canvod-utils/src/canvod/utils/config/cli.py`) and/or at
+  `PipelineOrchestrator`/`RinexDataProcessor` startup, something like:
+  `"Receiver {name} configures recipe '{recipe}' but canvod-filemap is not
+  installed. Install with: uv sync --extra filemap"`. Should fail before any
+  processing starts, not surface as a per-day discovery warning deep in a run.
+
+- **Dueling Rich `Live` displays cause flashing/reprinting progress bars (found
+  2026-07-08, live production run on the remote processing machine).** Two
+  separate `Live` regions are active at once during a real pipeline run:
+  `RichReporter.__enter__` (`canvodpy/src/canvodpy/cli/dashboard.py:190-199`)
+  creates its own `Live` for the "Overall" bar + header panel; independently,
+  `_processing_progress()` (`canvodpy/src/canvodpy/orchestrator/pipeline.py:619-624,
+  986`) creates a separate `Progress` for the per-receiver bars
+  (`canopy_01`/`reference_01_canopy_01`/etc.) and calls `.start()`/`.stop()`
+  directly, which spins up its own independent internal `Live`. Rich only
+  supports one active `Live` per terminal — two concurrent instances fight over
+  cursor control, producing exactly the observed symptom: the header panel and
+  progress bars reprinting as fresh frames instead of updating in place
+  ("flashing", duplicate boxes in the log). **Fix:** compose both progress
+  displays into a single shared `Live`/`Group` — either have `_processing_progress()`
+  accept an externally-owned `Console`/`Live` (or return a `Progress` object that
+  `RichReporter` folds into its own `Group()` alongside the Overall bar, never
+  calling `.start()`/`.stop()` on it directly), so there is exactly one `Live`
+  context for the whole run. Not yet investigated: whether `show_progress=False`
+  (already used elsewhere per `_build_compute_waves` to avoid
+  `rich.errors.LiveError` when `len(wave_a) > 1`) is a viable stopgap here too, or
+  whether the real fix requires restructuring `RichReporter` to own both progress
+  groups.
 
 - ~~**Commit metadata annotation**: add `rinex_hash`, `canonical_name`, `start`, `end` to
   `session.commit(metadata={...})` — self-describing Icechunk history, zero logic change.~~

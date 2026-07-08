@@ -2011,7 +2011,7 @@ class RinexDataProcessor:
                 t7 = time.time()
                 _commit_meta: dict = {
                     "receiver": receiver_name,
-                    "date": self.matched_data_dirs.yyyydoy,
+                    "date": str(self.matched_data_dirs.yyyydoy),
                     "files": str(len(metadata_records)),
                 }
                 if metadata_records:
