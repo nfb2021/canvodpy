@@ -61,13 +61,18 @@ def _cap_blas_threads(n: int = 1) -> None:
 
 
 # GNSS file glob patterns — sourced from canvod-filemap BUILTIN_PATTERNS
+# when that optional package is installed. Falls back to canonical
+# canVOD-only names (*.rnx, *.sbf) otherwise.
 def _get_gnss_globs() -> list[str]:
-    from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
+    try:
+        from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
 
-    globs: set[str] = set()
-    for name in auto_match_order():
-        globs.update(BUILTIN_PATTERNS[name].file_globs)
-    return sorted(globs)
+        globs: set[str] = set()
+        for name in auto_match_order():
+            globs.update(BUILTIN_PATTERNS[name].file_globs)
+        return sorted(globs)
+    except ImportError:
+        return sorted({"*.rnx", "*.RNX", "*.sbf", "*.SBF"})
 
 
 # ---------------------------------------------------------------------------

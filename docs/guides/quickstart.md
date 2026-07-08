@@ -81,15 +81,17 @@ date convention in GNSS data products.
 
 ### Run it
 
-The simplest entry point (API level L1):
+Recommended: run it via the CLI —
 
-```python
-from canvodpy import process_date
-
-data = process_date("Rosalia", "2025001")   # site name from canvod-settings.yaml, 1 Jan 2025
+```bash
+uv run python -m canvodpy.cli.run --site Rosalia --start 2025001 --end 2025001
 ```
 
-For more control, create a `Site` and configure the pipeline explicitly:
+This reads the raw files, augments them with satellite positions (ephemeris),
+and writes the results to the site's Icechunk store. Omit `--start` on later
+runs and it resumes automatically from the last processed date.
+
+From Python, the same thing via `Site.pipeline()`:
 
 ```python
 from canvodpy import Site
@@ -99,21 +101,14 @@ pipeline = site.pipeline()          # options like n_workers default to config v
 data = pipeline.process_date("2025001")
 ```
 
-This reads the raw files, augments them with satellite positions (ephemeris),
-and writes the results to the site's Icechunk store. If you prefer a
-step-by-step chain (API level L2):
+For component-level scripting or analysis in a notebook, use the functional API:
 
 ```python
-import canvodpy
+from canvodpy.functional import read_rinex, augment_with_ephemeris, calculate_vod
 
-result = (
-    canvodpy.workflow("Rosalia")
-    .read("2025001")
-    .augment()
-    .grid()
-    .vod("canopy_01", "reference_01")
-    .result()
-)
+ds = read_rinex("ROSA01TUW_R_20250010000_15M_05S_AA.rnx")
+ds = augment_with_ephemeris(ds, rx_pos, source="final", date="2025001", site_config=cfg)
+vod = calculate_vod(canopy_ds, reference_ds)
 ```
 
 !!! info "Ephemeris downloads"

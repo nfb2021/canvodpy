@@ -1,143 +1,104 @@
 ---
 title: API Levels
-description: Four ways to use canvodpy — from one-liners to Airflow-ready functions
+description: Running the pipeline via CLI or Site.pipeline(), and scripting/analysis via the functional API
 ---
 
 # API Levels
 
-canvodpy exposes four API levels, each targeting a different use case. All levels
-produce the same `(epoch, sid)` xarray Dataset format; they differ in how much
-infrastructure they manage for you.
+**Two supported surfaces, plus the CLI on top of one of them.**
 
-**Why four levels?** Scientists come to this package with very different needs.
-Some want a single function call that turns a folder of RINEX files into VOD.
-Others need to slot individual processing steps into their own pipeline and
-inspect intermediate results along the way. Each level trades convenience for
-control: Level 1 does everything automatically, Level 4 does nothing you did
-not explicitly ask for. Start at Level 1 and move down only when you need to.
+- **CLI** (`uv run python -m canvodpy.cli.run ...`) — recommended way to run the pipeline. Wraps `Site.pipeline()`.
+- **`Site.pipeline()`** (L3) — the same thing from Python, when you need to script a
+  run rather than shell out (e.g. looping over sites, embedding in a notebook).
+- **`canvodpy.functional`** (L4) — stateless, component-level functions for
+  custom pipelines, testing, and analysis. Also what Airflow calls directly.
+
+All three produce the same `(epoch, sid)` xarray Dataset format.
+
+!!! warning "Deprecated surfaces"
+
+    `FluentWorkflow` (L2), the flat convenience functions `process_date()` /
+    `calculate_vod()` / `preview_processing()` (L1), and `VODWorkflow` are all
+    deprecated (`DeprecationWarning` on use) — kept working, no longer taught.
+    `VODWorkflow` in particular has a broken augmentation step (`_augment_data`
+    is a no-op stub) and should not be used regardless. See the sections at the
+    bottom of this page if you're migrating code that still uses them.
 
 ---
 
 ## Quick Comparison
 
-| | L1: Convenience | L2: Fluent | L3: Objects | L4: Functional |
-|---|---|---|---|---|
-| **Pattern** | `process_date(...)` | `.read().augment().result()` | `site.pipeline().process_date(...)` | `read_rinex(path)` |
-| **Ephemeris** | Automatic (from config) | `.augment(source=...)` | Automatic (from config) | `augment_with_ephemeris(ds, pos, ...)` |
-| **Store writes** | Automatic (Icechunk) | Optional `.to_store()` | Automatic (Icechunk) | None (NetCDF / pickle files) |
-| **File discovery** | FilenameMapper | FilenameMapper (glob fallback) | FilenameMapper | Caller provides paths |
-| **Parallel workers** | Yes | No | Yes | No |
-| **Deduplication** | 3-layer | Store guardrails on `.to_store()` | 3-layer | None |
-| **Best for** | Daily cron jobs | Interactive exploration | Multi-day batch runs | Airflow / custom pipelines |
+| | CLI | L3: `Site.pipeline()` | L4: Functional |
+|---|---|---|---|
+| **Pattern** | `python -m canvodpy.cli.run --site ... --start ... --end ...` | `site.pipeline().process_date(...)` | `read_rinex(path)` |
+| **Ephemeris** | Automatic (from config) | Automatic (from config) | `augment_with_ephemeris(ds, pos, ...)` |
+| **Store writes** | Automatic (Icechunk) | Automatic (Icechunk) | None (NetCDF / pickle files) |
+| **File discovery** | `canvod-filemap` `BUILTIN_PATTERNS` if installed, else canonical globs (`*.rnx`/`*.sbf`) | Same as CLI | Caller provides paths |
+| **Parallel workers** | Yes | Yes | No |
+| **Deduplication** | 3-layer | 3-layer | None |
+| **Best for** | Daily cron jobs, production runs | Multi-day batch runs from Python | Airflow / custom pipelines / analysis |
 
 ---
 
-## Level 1: Convenience Functions
+## CLI: Running the Pipeline
 
-One-liner entry points that handle everything internally.
+The recommended way to run the pipeline — production runs, cron jobs, resumable.
+There is no registered `canvodpy run` subcommand yet (the installed `canvodpy`
+console script is currently the config tool only — see
+[Configuration](configuration.md)), so invoke it as a module for now:
 
-```python
-from canvodpy import process_date, calculate_vod
+```bash
+# Process a specific range
+uv run python -m canvodpy.cli.run --site Rosalia --start 2025001 --end 2025007
 
-# Process one day: read → augment → write to store
-# Returns dict[str, xr.Dataset], one entry per receiver
-datasets = process_date("Rosalia", "2025001")
+# Process new data only — start omitted means "resume from the last
+# processed date in the store", end omitted means "today"
+uv run python -m canvodpy.cli.run --site Rosalia
 
-# Compute VOD for a configured receiver pair and write it to the VOD store
-vod = calculate_vod("Rosalia", "canopy_01", "reference_01", "2025001")
+# Cron: run daily, picks up new data automatically
+# 0 3 * * * cd /path/to/canvodpy && uv run python -m canvodpy.cli.run --site Rosalia
+
+# Observation ingestion only, no VOD
+uv run python -m canvodpy.cli.run --site Rosalia --no-vod
+
+# Preview what would be processed, without executing
+uv run python -m canvodpy.cli.run --site Rosalia --dry-run
 ```
 
-Both functions accept optional keyword arguments that override the values in
-`config/processing.yaml` — for example
-`process_date("Rosalia", "2025001", aux_agency="ESA", n_workers=4)`.
+| Flag | Meaning |
+|---|---|
+| `--site` | Site name from `canvod-settings.yaml` (required) |
+| `--start` / `--end` | `YYYYDOY`. Omit `--start` to resume from the store; omit `--end` for "up to today" |
+| `--no-vod` | Ingest observations only, skip VOD |
+| `--dry-run` | Preview the processing plan without executing |
+| `--workers` | Override worker count (default: from config) |
+| `--days-per-batch` | Override batch size (default: from config) |
+| `--config` | Overlay YAML applied on top of `canvod-settings.yaml` |
 
-Internally, `process_date()` creates a `Pipeline`, discovers files via
-`FilenameMapper`, reads them in parallel worker processes, downloads SP3/CLK
-ephemerides, runs Hermite interpolation to obtain satellite positions,
-computes theta/phi, and writes to Icechunk with 3-layer deduplication
-(file hash, temporal overlap, intra-batch overlap).
+Internally the CLI builds a `Site` and calls `.pipeline(...)` — see the next
+section for the exact same thing from Python.
 
-There is also `preview_processing("Rosalia")`, which returns the processing
-plan (dates, receivers, file counts) without executing anything.
+!!! note "Ephemeris source and VOD calculator are not yet CLI flags"
 
----
-
-## Level 2: Fluent Workflow
-
-A *fluent* API is one where each method returns the workflow object itself,
-so calls chain together like clauses in a sentence: read the data, *then*
-augment it, *then* grid it, *then* compute VOD. Steps are recorded but not
-executed until a terminal call (`.result()`, `.to_store()`, `.plot()`)
-triggers the whole chain.
-
-```python
-import canvodpy
-
-datasets = (
-    canvodpy.workflow("Rosalia")
-    .read("2025001")
-    .augment(source="final")     # SP3/CLK agency ephemeris
-    .result()                    # dict of per-receiver Datasets
-)
-```
-
-=== "With VOD"
-
-    ```python
-    vod_ds = (
-        canvodpy.workflow("Rosalia")
-        .read("2025001")
-        .augment(source="final")
-        .grid()                          # assign hemisphere grid cells
-        .vod("canopy_01", "reference_01")
-        .result()                        # returns the VOD Dataset
-    )
-    ```
-
-=== "Write to store"
-
-    ```python
-    (
-        canvodpy.workflow("Rosalia")
-        .read("2025001")
-        .augment(source="final")
-        .to_store()    # terminal: writes to Icechunk
-    )
-    ```
-
-=== "Inspect the plan"
-
-    ```python
-    wf = (
-        canvodpy.workflow("Rosalia")
-        .read("2025001")
-        .augment()
-    )
-    wf.explain()   # describes the recorded steps without executing them
-    ```
-
-!!! info "Deferred execution"
-
-    `.read()`, `.augment()`, `.grid()`, `.vod()` do **not** execute
-    immediately. They append to an internal plan. Execution happens on
-    `.result()`, `.to_store()`, or `.plot()`. Use `.explain()` to inspect
-    the plan without running it.
-
-!!! warning "Ephemeris sources at Level 2"
-
-    `.augment()` supports `source="final"` (default) and `source="rapid"`,
-    both served by SP3/CLK agency products. Broadcast ephemeris is currently
-    only available at Level 4 via `augment_with_ephemeris(..., source="broadcast")`
-    or at Levels 1/3 via the `ephemeris_source` config option.
-
-The workflow constructor also accepts component overrides:
-`canvodpy.workflow("Rosalia", reader="rinex3", grid_type="equal_area",
-vod_calculator="tau_omega")` — any name registered with the corresponding
-factory works, which is how community extensions plug in.
+    `Pipeline` currently hardcodes the VOD calculator (`TauOmegaZerothOrder`) and
+    only reads the ephemeris source (agency vs. broadcast) from
+    `canvod-settings.yaml`, not as a CLI parameter. This is open follow-up work —
+    see `dev/todo_later.md` §4.
 
 ---
 
-## Level 3: Site and Pipeline Objects
+## Deprecated: `FluentWorkflow` and flat convenience functions
+
+`FluentWorkflow` (`canvodpy.workflow("Rosalia").read(...).augment(...)...`) and
+the flat `process_date()` / `calculate_vod()` / `preview_processing()` functions
+are deprecated (`DeprecationWarning` on use). Both are thin wrappers around the
+same `Pipeline` class the CLI and `Site.pipeline()` use — they added a second and
+third syntax for identical capability without adding flexibility, so they're no
+longer taught. Use the CLI or `Site.pipeline()` (next section) instead.
+
+---
+
+## Site and Pipeline Objects
 
 Object-oriented API for batch processing. A `Pipeline` keeps its pool of
 parallel worker processes alive across calls, so processing many days in one
@@ -156,9 +117,10 @@ with site.pipeline(n_workers=8) as pipeline:
         site.vod.compute_day(datasets, "canopy_01_vs_reference_01")
 ```
 
-Level 3 is functionally identical to Level 1 — the orchestrator runs the same
-code path. The difference is ergonomic: you keep the `Site` and `Pipeline`
-objects around, reuse the worker pool, and get direct access to the stores.
+This is the same code path the CLI runs — `Site.pipeline()` is what
+`canvodpy.cli.run` builds internally. Use this form when you need Python-native
+control: looping over sites in a script, embedding a run in a notebook, or
+anything the CLI's flags don't expose yet.
 
 `Site` exposes:
 
@@ -175,27 +137,18 @@ generator yielding `(date_key, datasets)`), `calculate_vod(canopy, reference,
 date)`, `preview()`, and `close()`; it is also a context manager, as shown
 above.
 
-### VODWorkflow
+!!! warning "Deprecated: `VODWorkflow`"
 
-`VODWorkflow` is a factory-based alternative to `Site` + `Pipeline` that lets
-you swap individual components (reader, grid, VOD calculator) by registered
-name:
-
-```python
-from canvodpy import VODWorkflow
-
-workflow = VODWorkflow(
-    site="Rosalia",
-    grid="equal_area",
-    grid_params={"angular_resolution": 5.0},
-)
-datasets = workflow.process_date("2025001")               # load → augment → grid
-vod = workflow.calculate_vod("canopy_01", "reference_01", "2025001")
-```
+    `VODWorkflow` was a factory-based alternative to `Site` + `Pipeline`. It is
+    deprecated — its augmentation step (`_augment_data`) is a no-op stub that
+    never applies ephemeris augmentation, so VOD computed through it uses
+    un-augmented angles. Use `Site.pipeline()` above, or `canvodpy.functional`
+    below for component-level control (reader, grid, VOD calculator all as
+    direct keyword arguments).
 
 ---
 
-## Level 4: Functional API
+## Functional API
 
 *Functional* here means stateless: each function takes explicit inputs and
 returns explicit outputs, with no hidden objects holding state between calls.
@@ -231,10 +184,11 @@ vod_ds = calculate_vod(canopy_ds, reference_ds)
 
 !!! warning "Two functions named `calculate_vod`"
 
-    `from canvodpy import calculate_vod` gives you the **Level 1** function
-    (`site, canopy, reference, date` — reads from the store, writes to the
-    store). `from canvodpy.functional import calculate_vod` gives you the
-    **Level 4** function (`canopy_ds, sky_ds` — pure, in-memory). Import
+    `from canvodpy import calculate_vod` gives you the **deprecated** flat
+    function (`site, canopy, reference, date` — reads from the store, writes
+    to the store; use `Site(site).pipeline().calculate_vod(...)` instead).
+    `from canvodpy.functional import calculate_vod` gives you the
+    **functional API** version (`canopy_ds, sky_ds` — pure, in-memory). Import
     from the module that matches your intent.
 
 === "Grid assignment"
@@ -267,10 +221,10 @@ vod_ds = calculate_vod(canopy_ds, reference_ds)
     Datasets are stored as NetCDF; grids are stored as pickle
     (`create_grid_to_file` / `assign_grid_cells_to_file`).
 
-At Level 4 file discovery is the caller's job — pass explicit paths (e.g.
-from your own `Path.glob`, a workflow scheduler, or the
-`canvod.filemap.FilenameMapper` if your site uses the naming
-convention).
+With the functional API, file discovery is the caller's job — pass explicit
+paths (e.g. from your own `Path.glob`, a workflow scheduler, or the optional
+`canvod.filemap.FilenameMapper` if your site uses non-canonical filenames —
+see [Optional Extensions](extensions.md)).
 
 ---
 
@@ -310,14 +264,11 @@ flowchart LR
 ### Usage across levels
 
 ```python
-# Levels 1/3: config-driven (config/processing.yaml)
+# CLI / Site.pipeline(): config-driven (canvod-settings.yaml)
 # processing.params.ephemeris_source: "final" | "broadcast"
+# Not yet a CLI flag — see the note in the CLI section above.
 
-# Level 2: explicit step (agency products only)
-.augment(source="final")      # SP3/CLK, default
-.augment(source="rapid")      # rapid SP3/CLK products
-
-# Level 4: explicit function (all sources)
+# canvodpy.functional: explicit function (all sources)
 augment_with_ephemeris(ds, rx_pos, source="final", date="2025001", site_config=cfg)
 augment_with_ephemeris(ds, rx_pos, source="broadcast")   # SBF only
 ```
@@ -354,7 +305,7 @@ flowchart TD
     end
 
     subgraph Discovery["File Discovery"]
-        FM["FilenameMapper<br/>canvod-filemap"]
+        FM["BUILTIN_PATTERNS globs<br/>canvod-filemap if installed, else canonical fallback"]
     end
 
     subgraph Reading["Parsing"]
@@ -390,24 +341,24 @@ flowchart TD
     style Analysis fill:#e8f5e9,stroke:#2e7d32
 ```
 
-### What each level handles
+### What each surface handles
 
-| Step | L1 | L2 | L3 | L4 |
-|------|:--:|:--:|:--:|:--:|
-| File discovery | :fontawesome-solid-check: | :fontawesome-solid-check: | :fontawesome-solid-check: | caller |
-| Reading | :fontawesome-solid-check: | :fontawesome-solid-check: | :fontawesome-solid-check: | :fontawesome-solid-check: |
-| Ephemeris augmentation | auto | `.augment()` | auto | `augment_with_ephemeris()` |
-| Deduplication | :fontawesome-solid-check: | store guardrails | :fontawesome-solid-check: | — |
-| Store write | auto | `.to_store()` | auto | — |
-| VOD computation | `calculate_vod()` | `.vod()` | `pipeline.calculate_vod()` / `site.vod` | `functional.calculate_vod()` |
-| Parallel workers | :fontawesome-solid-check: | — | :fontawesome-solid-check: | — |
+| Step | CLI | `Site.pipeline()` | Functional |
+|------|:--:|:--:|:--:|
+| File discovery | :fontawesome-solid-check: | :fontawesome-solid-check: | caller |
+| Reading | :fontawesome-solid-check: | :fontawesome-solid-check: | :fontawesome-solid-check: |
+| Ephemeris augmentation | auto | auto | `augment_with_ephemeris()` |
+| Deduplication | :fontawesome-solid-check: | :fontawesome-solid-check: | — |
+| Store write | auto | auto | — |
+| VOD computation | `pipeline.calculate_vod()` | `pipeline.calculate_vod()` / `site.vod` | `functional.calculate_vod()` |
+| Parallel workers | :fontawesome-solid-check: | :fontawesome-solid-check: | — |
 
 ---
 
 ## VOD Computation
 
-At Level 3, VOD is computed via `VodComputer` (available as `site.vod`),
-which offers two strategies:
+VOD is computed via `VodComputer` (available as `site.vod`), which offers two
+strategies:
 
 === "Daily (inline)"
 
@@ -438,29 +389,32 @@ retrieval, and the result is written to the site's VOD store (pass
 
 ---
 
-## Choosing the Right Level
+## Choosing the Right Surface
 
 ??? question "I want to process data daily as a cron job"
 
-    **Level 1** (`process_date`) or **Level 3** (`site.pipeline()`).
-    Both handle everything: file discovery, ephemeris, store writes, dedup.
-    Level 3 is better if you process multiple days in one run (reuses the
-    worker pool).
+    **CLI**: `uv run python -m canvodpy.cli.run --site Rosalia`. Omit `--start`
+    and it resumes from the last processed date in the store automatically.
 
-??? question "I want to explore data interactively in a notebook"
+??? question "I want to script a multi-day batch run from Python"
 
-    **Level 2** (fluent workflow). Chain `.read().augment().result()` to get
-    in-memory Datasets without side effects. Add `.grid()` and `.vod()` to
-    compute VOD inline.
+    **`Site.pipeline()`**: `site.pipeline(n_workers=8)`, then
+    `pipeline.process_range(start, end)`. Reuses the worker pool across days,
+    gives direct access to the stores.
+
+??? question "I want to explore data or do custom analysis in a notebook"
+
+    **Functional API**: `read_rinex()`, `augment_with_ephemeris()`,
+    `create_grid()`, `calculate_vod()` — stateless, in-memory, no side effects.
 
 ??? question "I want to integrate with Airflow"
 
-    **Level 4** (functional). Use `*_to_file` variants that return path strings
+    **Functional API**. Use `*_to_file` variants that return path strings
     for XCom serialization. Each function is stateless.
 
 ??? question "I want to read a single file quickly"
 
-    **Level 4**: `read_rinex("file.rnx")` or use the reader directly:
+    **Functional API**: `read_rinex("file.rnx")` or use the reader directly:
     `SbfReader(fpath="file.sbf").to_ds()`.
 
 ---

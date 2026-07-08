@@ -1,25 +1,27 @@
 """High-level public API for canvodpy.
 
 This module provides the user-friendly API that wraps proven gnssvodpy logic.
-Three levels of API:
-1. Convenience functions - process_date(), calculate_vod()
-2. Object-oriented - Site, Pipeline classes
-3. Low-level - Direct access to canvod.* subpackages
+
+Recommended surfaces:
+- Run the pipeline via the ``canvodpy`` CLI (production runs, resumable).
+- Script a configured pipeline run in Python via ``Site.pipeline()``
+  (``Pipeline`` class) — this is what the CLI wraps internally.
+- Component-level scripting/analysis (custom readers, ephemeris source,
+  grid, VOD calculator) via ``canvodpy.functional``.
+
+``process_date()``, ``calculate_vod()``, and ``preview_processing()`` below
+are deprecated convenience wrappers around ``Pipeline`` — use
+``Site.pipeline()`` directly instead.
 
 Examples
 --------
-Level 1 - Simple (one-liners):
-    >>> from canvodpy import process_date, calculate_vod
-    >>> data = process_date("Rosalia", "2025001")
-    >>> vod = calculate_vod("Rosalia", "canopy_01", "reference_01", "2025001")
-
-Level 2 - Object-oriented (more control):
+Object-oriented (recommended for Python-native pipeline runs):
     >>> from canvodpy import Site, Pipeline
     >>> site = Site("Rosalia")
     >>> pipeline = site.pipeline()
     >>> data = pipeline.process_date("2025001")
 
-Level 3 - Low-level (full control):
+Low-level (full control):
     >>> from canvod.store import GnssResearchSite
     >>> from canvodpy.processor.pipeline_orchestrator import PipelineOrchestrator
     >>> # Direct access to internals
@@ -29,6 +31,8 @@ Level 3 - Low-level (full control):
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+
+from canvodpy._deprecation import deprecated
 
 # Lazy imports to avoid circular dependencies
 
@@ -560,10 +564,14 @@ class Pipeline:
 
 
 # ============================================================================
-# Level 1 API: Convenience Functions
+# Deprecated convenience functions — use Site.pipeline() instead
 # ============================================================================
 
 
+@deprecated(
+    "process_date() is deprecated. Use Site(site).pipeline().process_date(date) "
+    "instead, or run the pipeline via the `canvodpy` CLI."
+)
 def process_date(
     site: str,
     date: str,
@@ -620,6 +628,11 @@ def process_date(
         return pipeline.process_date(date)
 
 
+@deprecated(
+    "calculate_vod() is deprecated. Use "
+    "Site(site).pipeline().calculate_vod(canopy, reference, date) instead, "
+    "or run the pipeline via the `canvodpy` CLI."
+)
 def calculate_vod(
     site: str,
     canopy: str,
@@ -678,6 +691,10 @@ def calculate_vod(
         )
 
 
+@deprecated(
+    "preview_processing() is deprecated. Use "
+    "Site(site).pipeline(dry_run=True).preview() instead."
+)
 def preview_processing(site: str) -> dict:
     """Preview processing plan for a site (convenience function).
 

@@ -40,7 +40,7 @@ When Claude Code starts, it follows this chain to build understanding:
 ```
 CLAUDE.md (auto-loaded)
 ├── Scientific context (GNSS-T, VOD, key domain concepts)
-├── Architecture (12 packages, 4 API levels, data contracts)
+├── Architecture (12 packages, CLI + Site.pipeline() + functional API, data contracts)
 ├── Conventions (uv, ruff, ty, pytest, commitizen)
 ├── Skills table (15+ domain skills, auto-applied)
 ├── Guardrails (what NOT to change without running audits)
@@ -48,7 +48,7 @@ CLAUDE.md (auto-loaded)
     ├── docs/guides/ai-development.md  ← you are here
     ├── docs/architecture.md           ← system design & data flow
     ├── docs/principles.md             ← design philosophy
-    ├── docs/guides/api-levels.md      ← L1-L4 API explanation
+    ├── docs/guides/api-levels.md      ← CLI, Site.pipeline(), functional API
     ├── docs/guides/contributor-setup.md ← contributor setup & first run
     ├── docs/findings/                 ← scientific comparison results
     └── docs/packages/*/overview.md    ← per-package deep dives
@@ -149,6 +149,20 @@ Claude will:
 5. Register in the factory
 ```
 
+### Running the pipeline
+
+```
+> Process the last week of data for site Rosalia
+
+Claude will:
+1. Recommend the CLI: uv run python -m canvodpy.cli.run --site Rosalia --start ... --end ...
+2. Suggest omitting --start on subsequent runs (auto-resumes from the store)
+3. Only drop to Site(site).pipeline() in Python if the user needs scripted,
+   multi-site, or notebook-embedded control
+4. Not suggest FluentWorkflow, the flat process_date()/calculate_vod()
+   functions, or VODWorkflow — all deprecated, see docs/guides/api-levels.md
+```
+
 ### Running the audit suite
 
 ```
@@ -205,5 +219,5 @@ It uses real GNSS test data from a git submodule.
 
 - [Architecture](../architecture.md) — system design and data flow
 - [Contributor Setup](contributor-setup.md) — contributor setup and first run
-- [API Levels](api-levels.md) — the four API levels explained
+- [API Levels](api-levels.md) — CLI, `Site.pipeline()`, and the functional API explained
 - [Audit Overview](../packages/audit/overview.md) — three-tier verification suite

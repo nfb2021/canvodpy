@@ -1,0 +1,39 @@
+strategy,t_s,event,detail
+S2 loky/flat,0.0,spawn_start,
+S2 loky/flat,0.147,spawn_done,overhead=0.15s
+S2 loky/flat,29.42,task_done,reference/25001/ROSR01TUW_R_20250010000_01D_05S_AA.rnx cpu=26.83s
+S2 loky/flat,29.42,write_start,reference/25001
+S2 loky/flat,30.137,write_done,reference/25001 dur=0.68s
+S2 loky/flat,30.137,task_done,reference/25004/ROSR01TUW_R_20250040000_01D_05S_AA.rnx cpu=27.05s
+S2 loky/flat,30.137,write_start,reference/25004
+S2 loky/flat,30.64,write_done,reference/25004 dur=0.48s
+S2 loky/flat,30.66,task_done,reference/25005/ROSR01TUW_R_20250050000_01D_05S_AA.rnx cpu=27.21s
+S2 loky/flat,30.66,write_start,reference/25005
+S2 loky/flat,31.054,write_done,reference/25005 dur=0.36s
+S2 loky/flat,31.054,task_done,reference/25002/ROSR01TUW_R_20250020000_01D_05S_AA.rnx cpu=27.68s
+S2 loky/flat,31.054,write_start,reference/25002
+S2 loky/flat,31.48,write_done,reference/25002 dur=0.41s
+S2 loky/flat,31.481,task_done,reference/25006/ROSR01TUW_R_20250060000_01D_05S_AA.rnx cpu=27.07s
+S2 loky/flat,31.481,write_start,reference/25006
+S2 loky/flat,31.74,write_done,reference/25006 dur=0.24s
+S2 loky/flat,50.554,task_done,canopy/25005/ROSA01TUW_R_20250050000_01D_05S_AA.rnx cpu=19.79s
+S2 loky/flat,50.554,write_start,canopy/25005
+S2 loky/flat,50.749,write_done,canopy/25005 dur=0.18s
+S2 loky/flat,52.676,task_done,canopy/25002/ROSA01TUW_R_20250020000_01D_05S_AA.rnx cpu=20.90s
+S2 loky/flat,52.677,write_start,canopy/25002
+S2 loky/flat,53.125,write_done,canopy/25002 dur=0.42s
+S2 loky/flat,53.126,task_done,canopy/25001/ROSA01TUW_R_20250010000_01D_05S_AA.rnx cpu=20.50s
+S2 loky/flat,53.126,write_start,canopy/25001
+S2 loky/flat,53.375,write_done,canopy/25001 dur=0.23s
+S2 loky/flat,54.922,task_done,canopy/25006/ROSA01TUW_R_20250060000_01D_05S_AA.rnx cpu=20.99s
+S2 loky/flat,54.922,write_start,canopy/25006
+S2 loky/flat,55.233,write_done,canopy/25006 dur=0.28s
+S2 loky/flat,55.233,task_done,reference/25003/ROSR01TUW_R_20250030000_01D_05S_AA.rnx cpu=25.31s
+S2 loky/flat,55.233,write_start,reference/25003
+S2 loky/flat,55.415,write_done,reference/25003 dur=0.17s
+S2 loky/flat,61.121,task_done,canopy/25004/ROSA01TUW_R_20250040000_01D_05S_AA.rnx cpu=8.56s
+S2 loky/flat,61.121,write_start,canopy/25004
+S2 loky/flat,61.264,write_done,canopy/25004 dur=0.13s
+S2 loky/flat,63.972,task_done,canopy/25003/ROSA01TUW_R_20250030000_01D_05S_AA.rnx cpu=7.92s
+S2 loky/flat,63.972,write_start,canopy/25003
+S2 loky/flat,64.087,write_done,canopy/25003 dur=0.11s

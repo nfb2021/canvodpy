@@ -36,7 +36,27 @@ complexity without a measured Linux benefit.
 
 ## 3. `canvod-virtualiconvname` — needs drastic redesign (Task C)
 
-**User note:** The current mapping is way too complicated and not intuitive for humans. This needs to change drastically.
+**Status (2026-07-08) — scope changed, not just superseded:** the decision was not
+to redesign the mapping mechanism, but to **not need one** for the default path.
+canvodpy now prescribes a single canonical filename convention and `canvod-preflight`
+enforces it as a hard, mandatory gate before ingestion; users with non-conforming
+receiver output rename files on disk (`gfzrnx`, one-time per site). The **only**
+remaining escape hatch for people who can't or won't rename is the optional
+`canvod-filemap` package — deliberately kept as an admitted hack, not a polished
+feature. Consequence: this section's original redesign goals ("one mechanism, not
+three", wizard-in-10-minutes) are **descoped for `canvod-filemap`** — it doesn't need
+to be intuitive, that's the whole reason it's optional and quarantined outside the
+main monorepo. They still matter for the *canonical-name path*, but that path is
+already simple (prescribe + enforce), so there's little left to redesign there either.
+
+**What's still legitimately open** is `canvod-preflight` polish (the mandatory path,
+where quality does matter): §12 Phase 1 item 4 (plain-language
+`_format_validation_error()`) and Phase 3 items 11-13 (RINEX header peek, gap
+detection, full CLI report). §12 Phase 2 (hardening `canvod-filemap` itself: items
+6, 8, 9, 10) is now **de-prioritized** per this scope decision, not forgotten — it's
+acceptable for the optional hack to stay rough.
+
+**User note (original, 2026-07-02):** The current mapping is way too complicated and not intuitive for humans. This needs to change drastically.
 
 **What it is:** filename-convention layer that maps arbitrary receiver filenames to the
 canonical `{SIT}{T}{NN}{AGC}_R_{YYYY}{DOY}{HHMM}_{PERIOD}_{SAMPLING}_{CONTENT}.{TYPE}`
@@ -131,16 +151,41 @@ name. ~1,765 LOC, 9 test modules.
 - ~~`sys.exit` → raise throughout `loader.py`.~~ **RESOLVED (c7bcad13)**
 - Split `models.py` into focused files — still open (deferred to §11 Phase 1).
 - ~~Separate science config from machine config / Introduce `ParallelismConfig`.~~ **RESOLVED differently (366c7eab + 4f855dde):** Dask gone, loky Wave A/B in place; credentials moved to `.env` (4f855dde); `days_per_batch` replaces `batch_hours`; `aggregate_glonass_fdma` dead wire removed; `scs_from → paired_canopies`; `ProcessingConfig.processing → .params`.
-- ~~Merge the two CLIs.~~ **RESOLVED (c7bcad13):** `find_monorepo_root()` deduplicated; CLI unified under one entry point.
+- **Merge the two CLIs — claim corrected (2026-07-08), NOT actually resolved:**
+  `find_monorepo_root()` was deduplicated in c7bcad13, but the user-facing entry
+  point was never unified. The installed `canvodpy` console script
+  (`packages/canvod-utils/pyproject.toml` → `canvod.utils.config.cli:main`) is the
+  config tool only, with no subparsers. The pipeline runner (`canvodpy/cli/run.py`)
+  has **no registered entry point at all** — only invocable as
+  `uv run python -m canvodpy.cli.run --site ... --start ... --end ...`. Now that the
+  CLI is the recommended way to run the pipeline (§4 open-question resolution
+  above), this matters more: register `run.py`'s `main()` as a `canvodpy run`
+  subcommand alongside the existing config subcommands. **Still open.**
 - Validate naming-section config at `SitesConfig` load time — still open (§12 preflight).
 - ~~Surface `CANVOD_CONFIG_DIR` in `--help` and all package READMEs.~~ **RESOLVED (96e58c73 + prior):** `CANVOD_CONFIG_FILE` + `CANVOD_CONFIG_DIR` both handled in `load_config()`; `@lru_cache(maxsize=8)`, `logger.warning()` (no print()), `ConfigValidationError` (no sys.exit) all in place. **Still open:** mention both env vars in each `canvod-*` package README.
 - ~~`defaults/sites.yaml` never read by `_load_sites()`.~~ **RESOLVED (moot):** With the unified `canvod-settings.yaml`, sites are always user-defined — `defaults/sites.yaml` contains `sites: {}` and there is nothing to merge. Dead file; delete or leave as a stub.
 
 **Open questions:**
-- Primary operational interface: L3 `Site` API with `run.py` as sugar, or runner as
-  first-class interface for n8n/Airflow?
+- ~~Primary operational interface: L3 `Site` API with `run.py` as sugar, or runner as
+  first-class interface for n8n/Airflow?~~ **RESOLVED (2026-07-08):** CLI (wrapping
+  `Site.pipeline()`) is the primary interface for running the pipeline. Airflow/n8n
+  keep calling `canvodpy.functional` (stateless) directly — unchanged. Going forward
+  there are two supported Python surfaces: `Site.pipeline()` (configured pipeline
+  runs — what the CLI wraps) and `canvodpy.functional` (component-level
+  scripting/analysis). Deprecated with `DeprecationWarning` (via a shared
+  `canvodpy._deprecation.deprecated` decorator): `FluentWorkflow`, the flat
+  `process_date()` / `calculate_vod()` / `preview_processing()` convenience
+  functions, and `VODWorkflow` — the latter found to have a **broken augmentation
+  step** (`workflow.py::_augment_data` is a no-op TODO stub; VOD computed through it
+  never gets ephemeris-augmented angles). None of these are removed, just no longer
+  taught. **Still open:** update `CLAUDE.md`/docs API-levels tables, scrub demos,
+  strengthen the breadcrumb trail/skill toward CLI-first guidance, and add CLI flags
+  for ephemeris-source/VOD-calculator choice (currently `Pipeline` hardcodes
+  `TauOmegaZerothOrder` and only reads ephemeris source from YAML, not as a
+  parameter — the CLI inherits this limit since it calls `Site.pipeline()`).
 - Should `CanvodConfig` snapshots be persisted into store metadata per run (the
   store-metadata package already has a `config` section) for drift auditability?
+  — still open, unanswered.
 
 ---
 
@@ -173,9 +218,26 @@ No implementation needed until object storage is a confirmed target.
 - ~~**Silent discovery skips** (`mapping.py:145, 178`)~~ **DONE:** `logger.warning("Could not map %s — skipping", path.name)` at lines 149 and 183.
 - ~~**`sys.exit` in `loader.py:116-118`**~~ **DONE (c7bcad13):** raises `ConfigValidationError`.
 - ~~**`FilenameCatalog`** (`catalog.py:79-301`): delete. Zero consumers, pulls in `duckdb`.~~
-  **DONE (2026-07-08):** Deleted `catalog.py` and `tests/test_catalog.py`. Removed
-  `from .catalog import FilenameCatalog` and `"FilenameCatalog"` from `__init__.py`.
-  Dropped `duckdb>=1.0` from `canvod-virtualiconvname/pyproject.toml`. ruff clean.
+  **DONE (2026-07-08)** in the in-monorepo package, **but regressed**: when the
+  package moved to the separate `canvodpy-extensions` repo (§12), the deletion did
+  not carry over — `catalog.py`, `tests/test_catalog.py`, and the `duckdb>=1.0`
+  dependency are all still present in
+  `canvodpy-extensions/packages/canvod-filemap` (verified 2026-07-08). **Still open:**
+  re-apply the deletion in the extensions repo.
+- ~~**`canvod-filemap` hard dependency**: made it a required `canvodpy` dependency
+  while installing it for testing, then reverted per user direction — it must stay
+  optional so regular installs have zero footprint.~~ **DONE (2026-07-08):**
+  `canvod-filemap` is now `[project.optional-dependencies] filemap = [...]` in
+  `canvodpy/pyproject.toml`, resolved via `[tool.uv.sources]` path to the sibling
+  `canvodpy-extensions` checkout. Fixed two hard top-level/unguarded imports that
+  would crash a regular install without the extension: `orchestrator/pipeline.py`
+  (`_detect_reader_format`, `_get_rinex_files`) and `workflows/tasks.py`
+  (`_get_gnss_globs`, used by the Airflow `check_rinex`/`check_sbf` tasks) — both now
+  lazily import with a canonical-name fallback (`*.rnx`/`*.sbf`), matching the
+  pattern already used in `orchestrator/processor.py`. New docs page
+  `docs/guides/extensions.md` covers install (`uv add "canvod-filemap @
+  git+...#subdirectory=..."` or the sibling-path form) and is linked from
+  `docs/index.md` and `docs/guides/configuration.md`.
 
 - ~~**Commit metadata annotation**: add `rinex_hash`, `canonical_name`, `start`, `end` to
   `session.commit(metadata={...})` — self-describing Icechunk history, zero logic change.~~
@@ -735,7 +797,10 @@ rosalia / canopy_01 (/data/gnss/rosalia/02_canopy)
 4. Rewrite `_format_validation_error()` using plain-language templates. ← **still open**
 5. ~~Standalone CLI entry point.~~ **DONE** — `canvod-preflight validate` via typer in `cli.py`.
 
-**Phase 2 — harden remaining `canvod-virtualiconvname` (~1 day):**
+**Phase 2 — harden remaining `canvod-virtualiconvname`/`canvod-filemap` (~1 day)
+— DE-PRIORITIZED (2026-07-08):** scope decision in §3 — `canvod-filemap` is an
+admitted escape hatch for non-conforming filenames, not a feature to polish. Items
+below stay open but are no longer worth pulling forward; fine to leave rough.
 6. Remove the moved files from virtualiconvname; add `canvod-preflight` as an explicit dependency. ← **still open** (convention.py/validator.py still duplicated in both packages)
 7. ~~Log every file skipped by `discover_all/discover_for_date` (mapping.py:145–146, 178–179).~~ **DONE** — `logger.warning()` at lines 149 and 183.
 8. Port `detect_overlaps()` into recipe validation path (tasks.py:402–407) — equal guardrails on both paths. ← **still open**
@@ -929,3 +994,52 @@ overrides of it make sense).
 class swap); `packages/canvod-utils/src/canvod/utils/config/loader.py`
 (source registration); `packages/canvod-utils/pyproject.toml` (add
 `pydantic-settings` dep if not already pulled in by pydantic v2 extras).
+
+---
+
+## 17. `canvodpy-demo` submodule — update for API-level deprecation + CLI-first
+
+**Context (2026-07-08):** follows this session's API-level cleanup (§4 open
+questions). `FluentWorkflow`, the flat `process_date()`/`calculate_vod()`/
+`preview_processing()` convenience functions, and `VODWorkflow` are now deprecated
+with `DeprecationWarning`. CLI (wrapping `Site.pipeline()`) is the recommended way
+to run the pipeline; `canvodpy.functional` is the recommended Python surface for
+component-level scripting/analysis. The demo submodule (`demo/` in this repo,
+`github.com/nfb2021/canvodpy-demo`, checked out locally at
+`/Users/work/Developer/GNSS/canvodpy-demo`) predates this decision and needs to
+catch up.
+
+**Current demo files (marimo notebooks, numbered):**
+`01_naming_convention.py` … `11_configuration.py`, `12_api_overview.py`,
+`13_api_level1_convenience.py`, `14_api_level2_fluent.py`,
+`15_api_level3_site_pipeline.py`, `16_api_level4_functional.py`,
+`17_workflow_single_day.py` … `20_grid_exploration.py`.
+
+**Also found (2026-07-08):** `docs/notebooks/index.md` references a
+`00_convenience_speedrun.py` notebook that does **not exist** in the current
+`canvodpy-demo` checkout (`/Users/work/Developer/GNSS/canvodpy-demo`, `main`
+branch) — a pre-existing docs/repo drift, unrelated to this session's changes.
+Resolve during this task: either the notebook was deleted and the docs table
+needs to drop the row, or it needs to be recreated. `docs/notebooks/index.md`
+has been updated in the meantime to mark rows 13/14 as deprecated without
+renumbering, since the underlying files still exist under their current names.
+
+**Tasks:**
+1. **Remove** demos for deprecated surfaces: `13_api_level1_convenience.py`,
+   `14_api_level2_fluent.py`. Check whether `VODWorkflow` is demonstrated inside
+   `12_api_overview.py` or elsewhere (no dedicated numbered file found) and remove
+   that too.
+2. **Rename/renumber** remaining demos to close the gap left by the removals, and
+   update `12_api_overview.py` to describe only the two supported surfaces (CLI +
+   `Site.pipeline()` for running, `canvodpy.functional` for scripting/analysis) —
+   don't just delete two files and leave a numbering hole.
+3. **Verify all demos still run** end-to-end (marimo notebooks) — some may already
+   be stale; this is also an opportunity to catch drift before adding new content.
+4. **Add a new CLI demo** — there is currently no demo showcasing `canvodpy run`
+   (or whatever the CLI entry point resolves to) from the shell. Should cover a
+   basic run and, once available, the resume-from-interruption behavior (see
+   §4's CLI flag/ephemeris-choice follow-up work, still in progress).
+
+**Depends on:** finishing the docs/CLAUDE.md API-levels table updates and the CLI
+ephemeris/calculator flag work (§4 follow-ups) first, so the demo doesn't document
+a CLI surface that's still mid-change.

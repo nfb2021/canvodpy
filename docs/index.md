@@ -110,43 +110,37 @@ signal-to-noise ratio observations.
 pip install canvodpy
 ```
 
-=== "Level 1 — Convenience"
+=== "CLI — running the pipeline"
 
-    Two lines, everything automatic:
+    Recommended for production runs; resumes automatically:
 
-    ```python
-    from canvodpy import process_date, calculate_vod
-
-    data = process_date("Rosalia", "2025001")
-    vod  = calculate_vod("Rosalia", "canopy_01", "reference_01", "2025001")
+    ```bash
+    uv run python -m canvodpy.cli.run --site Rosalia --start 2025001 --end 2025007
     ```
 
-=== "Level 2 — Fluent workflow"
+=== "Site.pipeline() — Python-native"
 
-    Deferred execution, chainable steps:
+    Same thing, scripted from Python:
 
     ```python
-    import canvodpy
+    from canvodpy import Site
 
-    result = (
-        canvodpy.workflow("Rosalia")
-            .read("2025001")
-            .augment()
-            .grid()
-            .vod("canopy_01", "reference_01")
-            .result()
-    )
+    site = Site("Rosalia")
+    with site.pipeline() as pipeline:
+        data = pipeline.process_date("2025001")
+        vod = pipeline.calculate_vod("canopy_01", "reference_01", "2025001")
     ```
 
-=== "Level 3 — VODWorkflow"
+=== "Functional — component-level"
 
-    Eager execution with structured logging:
+    Stateless functions for custom pipelines, Airflow, and analysis:
 
     ```python
-    from canvodpy import VODWorkflow
+    from canvodpy.functional import read_rinex, augment_with_ephemeris, calculate_vod
 
-    wf  = VODWorkflow(site="Rosalia", grid="equal_area")
-    vod = wf.calculate_vod("canopy_01", "reference_01", "2025001")
+    ds = read_rinex("ROSA01TUW_R_20250010000_15M_05S_AA.rnx")
+    ds = augment_with_ephemeris(ds, rx_pos, source="final", date="2025001", site_config=cfg)
+    vod = calculate_vod(canopy_ds, reference_ds)
     ```
 
 ---
@@ -230,7 +224,9 @@ flowchart TD
     ---
 
     Virtual renaming engine for non-standard receiver filenames
-    (Septentrio SBF, RINEX v2 short names). Optional plug-in.
+    (Septentrio SBF, RINEX v2 short names). Lives in the separate
+    [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions)
+    repo — see [Optional Extensions](guides/extensions.md).
 
 -   :fontawesome-solid-wand-magic-sparkles: &nbsp; **canvod-ops**
 
@@ -257,7 +253,7 @@ flowchart TD
 
     ---
 
-    Umbrella package — four API levels, factory system, unified entry point.
+    Umbrella package — CLI, `Site.pipeline()`, functional API, factory system.
 
 </div>
 

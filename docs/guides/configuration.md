@@ -382,10 +382,11 @@ For a site already defined in `canvod-settings.yaml`: `just config-check-data <s
     Where possible, rename files to the canonical convention using `gfzrnx` as a
     one-time per-site step.
 
-Install separately from the extensions repository:
+Install separately from the [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions)
+repository (see [Optional Extensions](extensions.md) for details and alternatives):
 
 ```bash
-uv add canvod-filemap
+uv add "canvod-filemap @ git+https://github.com/nfb2021/canvodpy-extensions.git#subdirectory=packages/canvod-filemap"
 ```
 
 Reference a recipe from `canvod-settings.yaml` on the receiver whose files use non-canonical names:

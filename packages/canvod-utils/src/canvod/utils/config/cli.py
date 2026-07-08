@@ -775,6 +775,36 @@ def stats_reset(
 main_app.add_typer(stats_app, name="stats")
 
 
+# ============================================================================
+# Run subcommand — lazy/optional: canvod-utils cannot depend on canvodpy
+# (the orchestrator depends on canvod-utils, not the reverse), so this only
+# appears when canvodpy happens to be installed alongside it. Mirrors the
+# canvod-filemap optional-import pattern used elsewhere in the pipeline.
+# ============================================================================
+
+try:
+    from canvodpy.cli.run import main as _run_main
+
+    _HAS_CANVODPY = True
+except ImportError:
+    _HAS_CANVODPY = False
+
+if _HAS_CANVODPY:
+
+    @main_app.command(
+        "run",
+        help="Process GNSS observations into Icechunk stores and compute VOD.",
+        context_settings={
+            "allow_extra_args": True,
+            "ignore_unknown_options": True,
+            "help_option_names": [],
+        },
+        add_help_option=False,
+    )
+    def run_cmd(ctx: typer.Context) -> None:
+        raise typer.Exit(code=_run_main(ctx.args))
+
+
 def main() -> None:
     """Run the CLI entry point."""
     main_app()

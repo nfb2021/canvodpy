@@ -40,6 +40,7 @@ nav = [
   { "Usage" = [
     { "Quickstart — Retrieve VOD" = "guides/quickstart.md" },
     { "Configuration" = "guides/configuration.md" },
+    { "Optional Extensions" = "guides/extensions.md" },
     { "API Levels" = "guides/api-levels.md" },
     { "Parallel Processing" = "guides/parallel-processing.md" },
     { "Airflow Integration" = "guides/airflow.md" },

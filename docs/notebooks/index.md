@@ -34,13 +34,21 @@ Each notebook can be previewed read-only in [molab](https://molab.marimo.io/gith
 
 ### API notebooks
 
+!!! warning "Notebooks 13 and 14 cover deprecated surfaces"
+
+    `process_date()`/`calculate_vod()`/`preview_processing()` (L1) and
+    `FluentWorkflow` (L2) are deprecated (`DeprecationWarning` on use) — see
+    [API Levels](../guides/api-levels.md). These notebooks are pending
+    removal/renumbering in the demo repo (`dev/todo_later.md` §17); the table
+    below still reflects the current repo state.
+
 | # | Notebook | Topic | Preview |
 |---|---|---|---|
-| 12 | API Levels Overview | Four API levels side by side | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/12_api_overview.py) |
-| 13 | L1 — Convenience API | One-liner `process_date()` | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/13_api_level1_convenience.py) |
-| 14 | L2 — Fluent Workflow | `FluentWorkflow().read().augment().grid().vod()` | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/14_api_level2_fluent.py) |
-| 15 | L3 — Site Pipeline | `Site().pipeline().process_range()` | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/15_api_level3_site_pipeline.py) |
-| 16 | L4 — Functional API | Pure functions for custom pipelines | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/16_api_level4_functional.py) |
+| 12 | API Overview | CLI, `Site.pipeline()`, and the functional API side by side | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/12_api_overview.py) |
+| 13 | *(deprecated)* L1 — Convenience API | One-liner `process_date()` — superseded by `Site.pipeline()` | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/13_api_level1_convenience.py) |
+| 14 | *(deprecated)* L2 — Fluent Workflow | `FluentWorkflow().read().augment().grid().vod()` — superseded by `Site.pipeline()` / functional API | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/14_api_level2_fluent.py) |
+| 15 | `Site.pipeline()` | `Site().pipeline().process_range()` | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/15_api_level3_site_pipeline.py) |
+| 16 | Functional API | Pure functions for custom pipelines and analysis | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/16_api_level4_functional.py) |
 
 ### Workflow notebooks
 

@@ -1,5 +1,10 @@
 """Fluent workflow API with deferred execution.
 
+.. deprecated::
+    Use ``Site(site).pipeline()`` for configured pipeline runs, or
+    ``canvodpy.functional`` for component-level scripting/analysis.
+    ``FluentWorkflow`` emits a ``DeprecationWarning`` on instantiation.
+
 Provides a chainable, lazy pipeline where steps are recorded and
 executed only when a terminal method is called.
 
@@ -31,6 +36,7 @@ from __future__ import annotations
 from functools import wraps
 from typing import TYPE_CHECKING, Any
 
+from canvodpy._deprecation import deprecated
 from canvodpy.api import Site
 from canvodpy.factories import GridFactory, ReaderFactory, VODFactory
 from canvodpy.logging import get_logger
@@ -124,6 +130,11 @@ def terminal(method):
 # ---------------------------------------------------------------------------
 
 
+@deprecated(
+    "FluentWorkflow is deprecated. Use Site(site).pipeline() for "
+    "configured pipeline runs, or canvodpy.functional for "
+    "component-level scripting."
+)
 class FluentWorkflow:
     """Chainable, deferred-execution workflow for VOD analysis.
 

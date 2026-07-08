@@ -96,10 +96,11 @@ short names, Septentrio binary, etc.), the optional
 a **recipe-based mapping layer** that virtualises physical filenames to canonical names
 without renaming anything on disk.
 
-Install it separately from the extensions repo:
+Install it separately from the [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions)
+repo (see [Optional Extensions](../../guides/extensions.md) for details and alternatives):
 
 ```bash
-uv add canvod-filemap
+uv add "canvod-filemap @ git+https://github.com/nfb2021/canvodpy-extensions.git#subdirectory=packages/canvod-filemap"
 ```
 
 Then reference a recipe from `canvod-settings.yaml`:

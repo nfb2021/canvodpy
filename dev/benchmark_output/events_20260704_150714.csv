@@ -1,0 +1,19 @@
+strategy,t_s,event,detail
+S0 current,0.0,spawn_start,reference/25001
+S0 current,0.036,tasks_submitted,reference/25001 n=1
+S0 current,10.691,spawn_done,overhead=10.66s
+S0 current,10.691,task_done,reference/25001/ROSR01TUW_R_20250010000_01D_05S_AA.rnx cpu=8.96s
+S0 current,11.127,spawn_start,canopy/25001
+S0 current,11.13,tasks_submitted,canopy/25001 n=1
+S0 current,19.802,spawn_done,overhead=8.67s
+S0 current,19.802,task_done,canopy/25001/ROSA01TUW_R_20250010000_01D_05S_AA.rnx cpu=6.78s
+S1 loky/day,0.0,spawn_start,
+S1 loky/day,0.112,spawn_done,overhead=0.11s
+S1 loky/day,0.112,tasks_submitted,reference/25001 n=1
+S1 loky/day,11.158,task_done,reference/25001/ROSR01TUW_R_20250010000_01D_05S_AA.rnx cpu=9.27s
+S1 loky/day,11.158,tasks_submitted,canopy/25001 n=1
+S1 loky/day,19.972,task_done,canopy/25001/ROSA01TUW_R_20250010000_01D_05S_AA.rnx cpu=6.94s
+S2 loky/flat,0.0,spawn_start,
+S2 loky/flat,0.248,spawn_done,overhead=0.25s
+S2 loky/flat,10.831,task_done,canopy/25001/ROSA01TUW_R_20250010000_01D_05S_AA.rnx cpu=8.43s
+S2 loky/flat,14.338,task_done,reference/25001/ROSR01TUW_R_20250010000_01D_05S_AA.rnx cpu=12.20s

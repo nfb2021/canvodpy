@@ -342,16 +342,17 @@ density, avoiding polar oversampling artifacts in VOD maps.
 
 ### API levels
 
-The same pipeline is exposed at four levels of abstraction:
+Two supported surfaces, plus the CLI on top of one of them:
 
-| Level | Entry point | Use case |
+| Surface | Entry point | Use case |
 |-------|-------------|----------|
-| L1 | `Site(name)`, `site.process_date()` | Full site processing driven by `canvod-settings.yaml` |
-| L2 | `FluentWorkflow().read()...` | Chained, scripted workflows |
-| L3 | `VODWorkflow`, direct subpackage classes | Fine-grained control over each stage |
-| L4 | `canvodpy.functional.*` | Pure functions for custom pipelines and testing |
+| CLI | `uv run python -m canvodpy.cli.run --site ...` | Running the pipeline — recommended |
+| `Site.pipeline()` (L3) | `Site(name).pipeline()` | Python-native configured pipeline runs — what the CLI wraps |
+| Functional (L4) | `canvodpy.functional.*` | Pure functions for custom pipelines, testing, and analysis |
 
-See [API Levels](guides/api-levels.md) for details.
+`FluentWorkflow` (L2), the flat `process_date()`/`calculate_vod()`/`preview_processing()`
+functions (L1), and `VODWorkflow` are deprecated — see [API Levels](guides/api-levels.md)
+for details and migration notes.
 
 ---
 

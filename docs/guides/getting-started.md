@@ -418,15 +418,17 @@ date convention in GNSS data products.
 
 ### Run it
 
-The simplest entry point (API level L1):
+Recommended: run it via the CLI —
 
-```python
-from canvodpy import process_date
-
-data = process_date("Rosalia", "2025001")   # site name from canvod-settings.yaml, 1 Jan 2025
+```bash
+uv run python -m canvodpy.cli.run --site Rosalia --start 2025001 --end 2025001
 ```
 
-For more control, create a `Site` and configure the pipeline explicitly:
+This reads the raw files, augments them with satellite positions (ephemeris),
+and writes the results to the site's Icechunk store. Omit `--start` on later
+runs and it resumes automatically from the last processed date.
+
+From Python, the same thing via `Site.pipeline()`:
 
 ```python
 from canvodpy import Site
@@ -436,32 +438,16 @@ pipeline = site.pipeline()          # options like n_workers default to config v
 data = pipeline.process_date("2025001")
 ```
 
-This reads the raw files, augments them with satellite positions (ephemeris),
-and writes the results to the site's Icechunk store. If you prefer a
-step-by-step chain (API level L2):
-
-```python
-import canvodpy
-
-result = (
-    canvodpy.workflow("Rosalia")
-    .read("2025001")
-    .augment()
-    .grid()
-    .vod("canopy_01", "reference_01")
-    .result()
-)
-```
-
 !!! info "Ephemeris downloads"
 
     Satellite orbit products (SP3/CLK) are downloaded automatically from
     **ESA GSSC** (no account needed). If you configure NASA Earthdata (CDDIS)
     credentials in `canvod-settings.yaml`, NASA is tried first with ESA as fallback.
 
-See the [API Levels guide](api-levels.md) for all four API levels (L1–L4),
-including the functional building blocks
-(`read_rinex`, `augment_with_ephemeris`, `assign_grid_cells`).
+See the [API Levels guide](api-levels.md) for the full picture — CLI,
+`Site.pipeline()`, and the functional building blocks (`read_rinex`,
+`augment_with_ephemeris`, `assign_grid_cells`) for component-level scripting
+and analysis.
 
 ---
 

@@ -107,12 +107,17 @@ RINEX/SBF files → Reader → xarray.Dataset(epoch, sid)
 
 ### API levels
 
-| Level | Style | Entry point | Use case |
-|---|---|---|---|
-| L1 | Convenience | `canvodpy.read()`, `canvodpy.vod()` | Quick exploration, notebooks |
-| L2 | Fluent | `FluentWorkflow().read().augment().grid().vod()` | Scripted workflows |
-| L3 | Site pipeline | `site.process()`, `site.vod` | Full site processing with config |
-| L4 | Functional | `canvodpy.functional.*` | Custom pipelines, testing |
+Two supported surfaces, plus the CLI on top of one of them. The rest are
+deprecated (`DeprecationWarning` on use) — kept working, no longer taught.
+
+| Level | Style | Entry point | Use case | Status |
+|---|---|---|---|---|
+| CLI | Command-line | `uv run python -m canvodpy.cli.run --site ... --start ... --end ...` | Running the pipeline — recommended | Active |
+| L3 | Site pipeline (OOP) | `Site(site).pipeline()` | Python-native configured pipeline runs — what the CLI wraps | Active |
+| L4 | Functional | `canvodpy.functional.*` | Component-level scripting/analysis; also used by Airflow (stateless) | Active |
+| L1 | Convenience | `process_date()`, `calculate_vod()`, `preview_processing()` | Superseded by `Site(site).pipeline()` | Deprecated |
+| L2 | Fluent | `FluentWorkflow().read().augment().grid().vod()` | Superseded by `Site.pipeline()` / functional | Deprecated |
+| — | `VODWorkflow` | `VODWorkflow(site=...)` | Broken augmentation step (no-op) — do not use | Deprecated |
 
 ### Data contracts
 
@@ -234,7 +239,7 @@ to package-specific details.
 1. `docs/guides/ai-development.md` — **start here**: Claude Code setup, skills, audit suite, workflows
 2. `docs/architecture.md` — system architecture and data flow
 3. `docs/principles.md` — design principles and philosophy
-4. `docs/guides/api-levels.md` — the four API levels explained
+4. `docs/guides/api-levels.md` — CLI, `Site.pipeline()`, and the functional API explained
 5. `docs/guides/getting-started.md` — setup and first run
 6. `docs/packages/audit/overview.md` — three-tier verification suite
 7. `docs/findings/` — scientific comparison results and findings
@@ -243,6 +248,17 @@ to package-specific details.
 **Onboarding rule:** If a user asks you to explain the project, walk them through
 this trail. If you encounter an unfamiliar package or concept, follow the trail
 to the relevant `overview.md` before answering.
+
+**Running-the-pipeline rule:** If a user asks to run, process, or ingest data
+(not analyze/visualize existing results), recommend the CLI
+(`uv run python -m canvodpy.cli.run --site ... --start ... --end ...`) first —
+it resumes automatically from the last processed date when `--start` is
+omitted. Use `Site(site).pipeline()` only when the user needs Python-native
+scripting (looping over sites, embedding in a notebook). Do not suggest
+`FluentWorkflow`, the flat `process_date()`/`calculate_vod()` functions, or
+`VODWorkflow` — all three are deprecated (see `docs/guides/api-levels.md`).
+For analysis/visualization of already-ingested data, `canvodpy.functional` and
+the viz/analysis packages remain the recommended Python surface.
 
 ## AI-assisted development
 

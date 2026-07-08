@@ -46,6 +46,12 @@ dependencies = [
     "icechunk>=2.0.1",
 ]
 
+# Optional slot-in extensions (github.com/nfb2021/canvodpy-extensions).
+# canvodpy works without these — file discovery falls back to canonical
+# canVOD-only glob patterns (*.rnx, *.sbf) when absent.
+[project.optional-dependencies]
+filemap = ["canvod-filemap"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",

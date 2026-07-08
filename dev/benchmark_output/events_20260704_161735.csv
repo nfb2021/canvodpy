@@ -1,0 +1,369 @@
+strategy,t_s,event,detail
+S0 current,0.0,spawn_start,reference/25001
+S0 current,0.058,tasks_submitted,reference/25001 n=1
+S0 current,17.079,spawn_done,overhead=17.04s
+S0 current,17.079,task_done,reference/25001/ROSR01TUW_R_20250010000_01D_05S_AA.rnx cpu=14.27s
+S0 current,17.756,write_start,reference/25001
+S0 current,18.025,write_done,reference/25001 dur=0.25s
+S0 current,18.025,spawn_start,canopy/25001
+S0 current,18.034,tasks_submitted,canopy/25001 n=1
+S0 current,38.666,spawn_done,overhead=20.64s
+S0 current,38.667,task_done,canopy/25001/ROSA01TUW_R_20250010000_01D_05S_AA.rnx cpu=15.87s
+S0 current,39.47,write_start,canopy/25001
+S0 current,39.776,write_done,canopy/25001 dur=0.28s
+S0 current,39.776,spawn_start,reference/25002
+S0 current,39.787,tasks_submitted,reference/25002 n=1
+S0 current,57.82,spawn_done,overhead=18.04s
+S0 current,57.82,task_done,reference/25002/ROSR01TUW_R_20250020000_01D_05S_AA.rnx cpu=14.46s
+S0 current,58.504,write_start,reference/25002
+S0 current,58.723,write_done,reference/25002 dur=0.20s
+S0 current,58.723,spawn_start,canopy/25002
+S0 current,58.732,tasks_submitted,canopy/25002 n=1
+S0 current,74.21,spawn_done,overhead=15.49s
+S0 current,74.211,task_done,canopy/25002/ROSA01TUW_R_20250020000_01D_05S_AA.rnx cpu=12.59s
+S0 current,74.832,write_start,canopy/25002
+S0 current,75.032,write_done,canopy/25002 dur=0.19s
+S0 current,75.032,spawn_start,reference/25003
+S0 current,75.041,tasks_submitted,reference/25003 n=1
+S0 current,93.39,spawn_done,overhead=18.36s
+S0 current,93.39,task_done,reference/25003/ROSR01TUW_R_20250030000_01D_05S_AA.rnx cpu=15.35s
+S0 current,94.019,write_start,reference/25003
+S0 current,94.211,write_done,reference/25003 dur=0.18s
+S0 current,94.211,spawn_start,canopy/25003
+S0 current,94.219,tasks_submitted,canopy/25003 n=1
+S0 current,109.563,spawn_done,overhead=15.35s
+S0 current,109.563,task_done,canopy/25003/ROSA01TUW_R_20250030000_01D_05S_AA.rnx cpu=12.25s
+S0 current,110.229,write_start,canopy/25003
+S0 current,110.423,write_done,canopy/25003 dur=0.18s
+S0 current,110.423,spawn_start,reference/25004
+S0 current,110.432,tasks_submitted,reference/25004 n=1
+S0 current,127.505,spawn_done,overhead=17.08s
+S0 current,127.506,task_done,reference/25004/ROSR01TUW_R_20250040000_01D_05S_AA.rnx cpu=14.12s
+S0 current,128.118,write_start,reference/25004
+S0 current,128.286,write_done,reference/25004 dur=0.15s
+S0 current,128.286,spawn_start,canopy/25004
+S0 current,128.294,tasks_submitted,canopy/25004 n=1
+S0 current,141.542,spawn_done,overhead=13.26s
+S0 current,141.542,task_done,canopy/25004/ROSA01TUW_R_20250040000_01D_05S_AA.rnx cpu=10.47s
+S0 current,142.263,write_start,canopy/25004
+S0 current,142.483,write_done,canopy/25004 dur=0.21s
+S0 current,142.483,spawn_start,reference/25005
+S0 current,142.493,tasks_submitted,reference/25005 n=1
+S0 current,163.777,spawn_done,overhead=21.29s
+S0 current,163.777,task_done,reference/25005/ROSR01TUW_R_20250050000_01D_05S_AA.rnx cpu=17.86s
+S0 current,164.608,write_start,reference/25005
+S0 current,164.837,write_done,reference/25005 dur=0.21s
+S0 current,164.837,spawn_start,canopy/25005
+S0 current,164.848,tasks_submitted,canopy/25005 n=1
+S0 current,180.733,spawn_done,overhead=15.90s
+S0 current,180.733,task_done,canopy/25005/ROSA01TUW_R_20250050000_01D_05S_AA.rnx cpu=12.56s
+S0 current,181.304,write_start,canopy/25005
+S0 current,181.481,write_done,canopy/25005 dur=0.17s
+S0 current,181.481,spawn_start,reference/25006
+S0 current,181.488,tasks_submitted,reference/25006 n=1
+S0 current,199.48,spawn_done,overhead=18.00s
+S0 current,199.48,task_done,reference/25006/ROSR01TUW_R_20250060000_01D_05S_AA.rnx cpu=15.30s
+S0 current,200.241,write_start,reference/25006
+S0 current,200.442,write_done,reference/25006 dur=0.19s
+S0 current,200.442,spawn_start,canopy/25006
+S0 current,200.452,tasks_submitted,canopy/25006 n=1
+S0 current,215.7,spawn_done,overhead=15.26s
+S0 current,215.7,task_done,canopy/25006/ROSA01TUW_R_20250060000_01D_05S_AA.rnx cpu=12.19s
+S0 current,216.313,write_start,canopy/25006
+S0 current,216.515,write_done,canopy/25006 dur=0.19s
+S0 current,216.515,spawn_start,reference/25007
+S0 current,216.526,tasks_submitted,reference/25007 n=1
+S0 current,235.3,spawn_done,overhead=18.78s
+S0 current,235.3,task_done,reference/25007/ROSR01TUW_R_20250070000_01D_05S_AA.rnx cpu=15.78s
+S0 current,235.981,write_start,reference/25007
+S0 current,236.18,write_done,reference/25007 dur=0.18s
+S0 current,236.18,spawn_start,canopy/25007
+S0 current,236.188,tasks_submitted,canopy/25007 n=1
+S0 current,251.632,spawn_done,overhead=15.45s
+S0 current,251.632,task_done,canopy/25007/ROSA01TUW_R_20250070000_01D_05S_AA.rnx cpu=12.28s
+S0 current,252.272,write_start,canopy/25007
+S0 current,252.459,write_done,canopy/25007 dur=0.17s
+S0 current,252.459,spawn_start,reference/25008
+S0 current,252.468,tasks_submitted,reference/25008 n=1
+S0 current,271.351,spawn_done,overhead=18.89s
+S0 current,271.351,task_done,reference/25008/ROSR01TUW_R_20250080000_01D_05S_AA.rnx cpu=15.80s
+S0 current,272.024,write_start,reference/25008
+S0 current,272.23,write_done,reference/25008 dur=0.19s
+S0 current,272.23,spawn_start,canopy/25008
+S0 current,272.24,tasks_submitted,canopy/25008 n=1
+S0 current,288.685,spawn_done,overhead=16.45s
+S0 current,288.685,task_done,canopy/25008/ROSA01TUW_R_20250080000_01D_05S_AA.rnx cpu=13.14s
+S0 current,289.322,write_start,canopy/25008
+S0 current,289.518,write_done,canopy/25008 dur=0.18s
+S0 current,289.518,spawn_start,reference/25009
+S0 current,289.527,tasks_submitted,reference/25009 n=1
+S0 current,307.642,spawn_done,overhead=18.12s
+S0 current,307.642,task_done,reference/25009/ROSR01TUW_R_20250090000_01D_05S_AA.rnx cpu=15.17s
+S0 current,308.316,write_start,reference/25009
+S0 current,308.515,write_done,reference/25009 dur=0.18s
+S0 current,308.515,spawn_start,canopy/25009
+S0 current,308.524,tasks_submitted,canopy/25009 n=1
+S0 current,323.747,spawn_done,overhead=15.23s
+S0 current,323.747,task_done,canopy/25009/ROSA01TUW_R_20250090000_01D_05S_AA.rnx cpu=12.15s
+S0 current,324.373,write_start,canopy/25009
+S0 current,324.557,write_done,canopy/25009 dur=0.17s
+S0 current,324.557,spawn_start,reference/25010
+S0 current,324.566,tasks_submitted,reference/25010 n=1
+S0 current,343.116,spawn_done,overhead=18.56s
+S0 current,343.116,task_done,reference/25010/ROSR01TUW_R_20250100000_01D_05S_AA.rnx cpu=15.57s
+S0 current,343.706,write_start,reference/25010
+S0 current,343.872,write_done,reference/25010 dur=0.15s
+S0 current,343.872,spawn_start,canopy/25010
+S0 current,343.88,tasks_submitted,canopy/25010 n=1
+S0 current,360.967,spawn_done,overhead=17.10s
+S0 current,360.967,task_done,canopy/25010/ROSA01TUW_R_20250100000_01D_05S_AA.rnx cpu=14.39s
+S0 current,361.715,write_start,canopy/25010
+S0 current,361.978,write_done,canopy/25010 dur=0.25s
+S0 current,361.978,spawn_start,reference/25011
+S0 current,361.988,tasks_submitted,reference/25011 n=1
+S0 current,380.916,spawn_done,overhead=18.94s
+S0 current,380.916,task_done,reference/25011/ROSR01TUW_R_20250110000_01D_05S_AA.rnx cpu=15.24s
+S0 current,381.528,write_start,reference/25011
+S0 current,381.721,write_done,reference/25011 dur=0.18s
+S0 current,381.721,spawn_start,canopy/25011
+S0 current,381.73,tasks_submitted,canopy/25011 n=1
+S0 current,396.074,spawn_done,overhead=14.35s
+S0 current,396.074,task_done,canopy/25011/ROSA01TUW_R_20250110000_01D_05S_AA.rnx cpu=11.53s
+S0 current,396.67,write_start,canopy/25011
+S0 current,396.844,write_done,canopy/25011 dur=0.16s
+S0 current,396.844,spawn_start,reference/25012
+S0 current,396.853,tasks_submitted,reference/25012 n=1
+S0 current,415.655,spawn_done,overhead=18.81s
+S0 current,415.655,task_done,reference/25012/ROSR01TUW_R_20250120000_01D_05S_AA.rnx cpu=15.86s
+S0 current,416.747,write_start,reference/25012
+S0 current,417.055,write_done,reference/25012 dur=0.29s
+S0 current,417.055,spawn_start,canopy/25012
+S0 current,417.069,tasks_submitted,canopy/25012 n=1
+S0 current,431.346,spawn_done,overhead=14.29s
+S0 current,431.346,task_done,canopy/25012/ROSA01TUW_R_20250120000_01D_05S_AA.rnx cpu=11.35s
+S0 current,431.969,write_start,canopy/25012
+S0 current,432.16,write_done,canopy/25012 dur=0.18s
+S0 current,432.16,spawn_start,reference/25013
+S0 current,432.168,tasks_submitted,reference/25013 n=1
+S0 current,449.144,spawn_done,overhead=16.98s
+S0 current,449.144,task_done,reference/25013/ROSR01TUW_R_20250130000_01D_05S_AA.rnx cpu=14.22s
+S0 current,449.723,write_start,reference/25013
+S0 current,449.9,write_done,reference/25013 dur=0.16s
+S0 current,449.9,spawn_start,canopy/25013
+S0 current,449.91,tasks_submitted,canopy/25013 n=1
+S0 current,464.247,spawn_done,overhead=14.35s
+S0 current,464.247,task_done,canopy/25013/ROSA01TUW_R_20250130000_01D_05S_AA.rnx cpu=11.61s
+S0 current,464.894,write_start,canopy/25013
+S0 current,465.14,write_done,canopy/25013 dur=0.23s
+S0 current,465.14,spawn_start,reference/25014
+S0 current,465.149,tasks_submitted,reference/25014 n=1
+S0 current,482.779,spawn_done,overhead=17.64s
+S0 current,482.779,task_done,reference/25014/ROSR01TUW_R_20250140000_01D_05S_AA.rnx cpu=14.72s
+S0 current,483.347,write_start,reference/25014
+S0 current,483.54,write_done,reference/25014 dur=0.18s
+S0 current,483.54,spawn_start,canopy/25014
+S0 current,483.548,tasks_submitted,canopy/25014 n=1
+S0 current,503.187,spawn_done,overhead=19.65s
+S0 current,503.187,task_done,canopy/25014/ROSA01TUW_R_20250140000_01D_05S_AA.rnx cpu=15.24s
+S0 current,503.988,write_start,canopy/25014
+S0 current,504.289,write_done,canopy/25014 dur=0.26s
+S1 loky/day,0.0,spawn_start,
+S1 loky/day,0.246,spawn_done,overhead=0.25s
+S1 loky/day,0.246,tasks_submitted,reference/25001 n=1
+S1 loky/day,17.227,task_done,reference/25001/ROSR01TUW_R_20250010000_01D_05S_AA.rnx cpu=14.47s
+S1 loky/day,17.227,write_start,reference/25001
+S1 loky/day,17.44,write_done,reference/25001 dur=0.19s
+S1 loky/day,17.44,tasks_submitted,canopy/25001 n=1
+S1 loky/day,35.426,task_done,canopy/25001/ROSA01TUW_R_20250010000_01D_05S_AA.rnx cpu=14.46s
+S1 loky/day,35.426,write_start,canopy/25001
+S1 loky/day,35.633,write_done,canopy/25001 dur=0.19s
+S1 loky/day,35.633,tasks_submitted,reference/25002 n=1
+S1 loky/day,51.995,task_done,reference/25002/ROSR01TUW_R_20250020000_01D_05S_AA.rnx cpu=13.42s
+S1 loky/day,51.995,write_start,reference/25002
+S1 loky/day,52.181,write_done,reference/25002 dur=0.17s
+S1 loky/day,52.181,tasks_submitted,canopy/25002 n=1
+S1 loky/day,67.619,task_done,canopy/25002/ROSA01TUW_R_20250020000_01D_05S_AA.rnx cpu=12.04s
+S1 loky/day,67.619,write_start,canopy/25002
+S1 loky/day,67.861,write_done,canopy/25002 dur=0.22s
+S1 loky/day,67.861,tasks_submitted,reference/25003 n=1
+S1 loky/day,86.959,task_done,reference/25003/ROSR01TUW_R_20250030000_01D_05S_AA.rnx cpu=16.36s
+S1 loky/day,86.959,write_start,reference/25003
+S1 loky/day,87.162,write_done,reference/25003 dur=0.18s
+S1 loky/day,87.162,tasks_submitted,canopy/25003 n=1
+S1 loky/day,99.454,task_done,canopy/25003/ROSA01TUW_R_20250030000_01D_05S_AA.rnx cpu=12.02s
+S1 loky/day,99.454,write_start,canopy/25003
+S1 loky/day,99.671,write_done,canopy/25003 dur=0.19s
+S1 loky/day,99.671,tasks_submitted,reference/25004 n=1
+S1 loky/day,116.766,task_done,reference/25004/ROSR01TUW_R_20250040000_01D_05S_AA.rnx cpu=14.33s
+S1 loky/day,116.766,write_start,reference/25004
+S1 loky/day,117.01,write_done,reference/25004 dur=0.22s
+S1 loky/day,117.01,tasks_submitted,canopy/25004 n=1
+S1 loky/day,129.992,task_done,canopy/25004/ROSA01TUW_R_20250040000_01D_05S_AA.rnx cpu=12.66s
+S1 loky/day,129.992,write_start,canopy/25004
+S1 loky/day,130.225,write_done,canopy/25004 dur=0.21s
+S1 loky/day,130.225,tasks_submitted,reference/25005 n=1
+S1 loky/day,145.192,task_done,reference/25005/ROSR01TUW_R_20250050000_01D_05S_AA.rnx cpu=14.22s
+S1 loky/day,145.192,write_start,reference/25005
+S1 loky/day,145.425,write_done,reference/25005 dur=0.21s
+S1 loky/day,145.425,tasks_submitted,canopy/25005 n=1
+S1 loky/day,162.174,task_done,canopy/25005/ROSA01TUW_R_20250050000_01D_05S_AA.rnx cpu=13.40s
+S1 loky/day,162.174,write_start,canopy/25005
+S1 loky/day,162.437,write_done,canopy/25005 dur=0.24s
+S1 loky/day,162.437,tasks_submitted,reference/25006 n=1
+S1 loky/day,181.744,task_done,reference/25006/ROSR01TUW_R_20250060000_01D_05S_AA.rnx cpu=16.09s
+S1 loky/day,181.744,write_start,reference/25006
+S1 loky/day,182.041,write_done,reference/25006 dur=0.26s
+S1 loky/day,182.041,tasks_submitted,canopy/25006 n=1
+S1 loky/day,195.152,task_done,canopy/25006/ROSA01TUW_R_20250060000_01D_05S_AA.rnx cpu=12.73s
+S1 loky/day,195.152,write_start,canopy/25006
+S1 loky/day,195.394,write_done,canopy/25006 dur=0.22s
+S1 loky/day,195.394,tasks_submitted,reference/25007 n=1
+S1 loky/day,213.563,task_done,reference/25007/ROSR01TUW_R_20250070000_01D_05S_AA.rnx cpu=17.67s
+S1 loky/day,213.563,write_start,reference/25007
+S1 loky/day,213.928,write_done,reference/25007 dur=0.33s
+S1 loky/day,213.928,tasks_submitted,canopy/25007 n=1
+S1 loky/day,232.971,task_done,canopy/25007/ROSA01TUW_R_20250070000_01D_05S_AA.rnx cpu=18.46s
+S1 loky/day,232.971,write_start,canopy/25007
+S1 loky/day,233.298,write_done,canopy/25007 dur=0.30s
+S1 loky/day,233.298,tasks_submitted,reference/25008 n=1
+S1 loky/day,258.563,task_done,reference/25008/ROSR01TUW_R_20250080000_01D_05S_AA.rnx cpu=21.71s
+S1 loky/day,258.563,write_start,reference/25008
+S1 loky/day,258.926,write_done,reference/25008 dur=0.32s
+S1 loky/day,258.926,tasks_submitted,canopy/25008 n=1
+S1 loky/day,274.993,task_done,canopy/25008/ROSA01TUW_R_20250080000_01D_05S_AA.rnx cpu=15.68s
+S1 loky/day,274.993,write_start,canopy/25008
+S1 loky/day,275.253,write_done,canopy/25008 dur=0.24s
+S1 loky/day,275.253,tasks_submitted,reference/25009 n=1
+S1 loky/day,296.902,task_done,reference/25009/ROSR01TUW_R_20250090000_01D_05S_AA.rnx cpu=18.08s
+S1 loky/day,296.903,write_start,reference/25009
+S1 loky/day,297.191,write_done,reference/25009 dur=0.26s
+S1 loky/day,297.191,tasks_submitted,canopy/25009 n=1
+S1 loky/day,312.483,task_done,canopy/25009/ROSA01TUW_R_20250090000_01D_05S_AA.rnx cpu=14.59s
+S1 loky/day,312.483,write_start,canopy/25009
+S1 loky/day,312.789,write_done,canopy/25009 dur=0.28s
+S1 loky/day,312.789,tasks_submitted,reference/25010 n=1
+S1 loky/day,336.643,task_done,reference/25010/ROSR01TUW_R_20250100000_01D_05S_AA.rnx cpu=23.29s
+S1 loky/day,336.643,write_start,reference/25010
+S1 loky/day,337.045,write_done,reference/25010 dur=0.37s
+S1 loky/day,337.045,tasks_submitted,canopy/25010 n=1
+S1 loky/day,353.436,task_done,canopy/25010/ROSA01TUW_R_20250100000_01D_05S_AA.rnx cpu=15.92s
+S1 loky/day,353.436,write_start,canopy/25010
+S1 loky/day,353.854,write_done,canopy/25010 dur=0.38s
+S1 loky/day,353.854,tasks_submitted,reference/25011 n=1
+S1 loky/day,373.387,task_done,reference/25011/ROSR01TUW_R_20250110000_01D_05S_AA.rnx cpu=19.15s
+S1 loky/day,373.387,write_start,reference/25011
+S1 loky/day,373.966,write_done,reference/25011 dur=0.54s
+S1 loky/day,373.966,tasks_submitted,canopy/25011 n=1
+S1 loky/day,389.52,task_done,canopy/25011/ROSA01TUW_R_20250110000_01D_05S_AA.rnx cpu=14.40s
+S1 loky/day,389.52,write_start,canopy/25011
+S1 loky/day,389.889,write_done,canopy/25011 dur=0.32s
+S1 loky/day,389.89,tasks_submitted,reference/25012 n=1
+S1 loky/day,407.994,task_done,reference/25012/ROSR01TUW_R_20250120000_01D_05S_AA.rnx cpu=17.83s
+S1 loky/day,407.994,write_start,reference/25012
+S1 loky/day,408.19,write_done,reference/25012 dur=0.18s
+S1 loky/day,408.19,tasks_submitted,canopy/25012 n=1
+S1 loky/day,422.38,task_done,canopy/25012/ROSA01TUW_R_20250120000_01D_05S_AA.rnx cpu=13.89s
+S1 loky/day,422.38,write_start,canopy/25012
+S1 loky/day,422.747,write_done,canopy/25012 dur=0.31s
+S1 loky/day,422.747,tasks_submitted,reference/25013 n=1
+S1 loky/day,438.869,task_done,reference/25013/ROSR01TUW_R_20250130000_01D_05S_AA.rnx cpu=15.11s
+S1 loky/day,438.869,write_start,reference/25013
+S1 loky/day,439.151,write_done,reference/25013 dur=0.25s
+S1 loky/day,439.151,tasks_submitted,canopy/25013 n=1
+S1 loky/day,456.127,task_done,canopy/25013/ROSA01TUW_R_20250130000_01D_05S_AA.rnx cpu=13.88s
+S1 loky/day,456.127,write_start,canopy/25013
+S1 loky/day,456.374,write_done,canopy/25013 dur=0.23s
+S1 loky/day,456.374,tasks_submitted,reference/25014 n=1
+S1 loky/day,475.501,task_done,reference/25014/ROSR01TUW_R_20250140000_01D_05S_AA.rnx cpu=18.67s
+S1 loky/day,475.501,write_start,reference/25014
+S1 loky/day,475.829,write_done,reference/25014 dur=0.30s
+S1 loky/day,475.829,tasks_submitted,canopy/25014 n=1
+S1 loky/day,496.711,task_done,canopy/25014/ROSA01TUW_R_20250140000_01D_05S_AA.rnx cpu=16.69s
+S1 loky/day,496.711,write_start,canopy/25014
+S1 loky/day,496.983,write_done,canopy/25014 dur=0.25s
+S2 loky/flat,0.0,spawn_start,
+S2 loky/flat,0.007,spawn_done,overhead=0.01s
+S2 loky/flat,156.938,task_done,reference/25009/ROSR01TUW_R_20250090000_01D_05S_AA.rnx cpu=154.56s
+S2 loky/flat,156.942,write_start,reference/25009
+S2 loky/flat,161.347,write_done,reference/25009 dur=3.99s
+S2 loky/flat,163.608,task_done,reference/25014/ROSR01TUW_R_20250140000_01D_05S_AA.rnx cpu=155.88s
+S2 loky/flat,163.656,write_start,reference/25014
+S2 loky/flat,166.18,write_done,reference/25014 dur=2.22s
+S2 loky/flat,168.899,task_done,reference/25008/ROSR01TUW_R_20250080000_01D_05S_AA.rnx cpu=161.14s
+S2 loky/flat,168.9,write_start,reference/25008
+S2 loky/flat,173.192,write_done,reference/25008 dur=3.98s
+S2 loky/flat,175.913,task_done,reference/25007/ROSR01TUW_R_20250070000_01D_05S_AA.rnx cpu=161.21s
+S2 loky/flat,175.913,write_start,reference/25007
+S2 loky/flat,177.774,write_done,reference/25007 dur=1.75s
+S2 loky/flat,178.806,task_done,reference/25002/ROSR01TUW_R_20250020000_01D_05S_AA.rnx cpu=161.30s
+S2 loky/flat,178.806,write_start,reference/25002
+S2 loky/flat,181.714,write_done,reference/25002 dur=2.69s
+S2 loky/flat,183.838,task_done,reference/25004/ROSR01TUW_R_20250040000_01D_05S_AA.rnx cpu=162.15s
+S2 loky/flat,183.839,write_start,reference/25004
+S2 loky/flat,185.31,write_done,reference/25004 dur=1.25s
+S2 loky/flat,187.549,task_done,reference/25005/ROSR01TUW_R_20250050000_01D_05S_AA.rnx cpu=168.80s
+S2 loky/flat,187.549,write_start,reference/25005
+S2 loky/flat,188.787,write_done,reference/25005 dur=1.01s
+S2 loky/flat,190.147,task_done,reference/25006/ROSR01TUW_R_20250060000_01D_05S_AA.rnx cpu=168.81s
+S2 loky/flat,190.154,write_start,reference/25006
+S2 loky/flat,191.203,write_done,reference/25006 dur=0.90s
+S2 loky/flat,309.843,task_done,reference/25011/ROSR01TUW_R_20250110000_01D_05S_AA.rnx cpu=147.31s
+S2 loky/flat,309.844,write_start,reference/25011
+S2 loky/flat,313.912,write_done,reference/25011 dur=3.71s
+S2 loky/flat,340.378,task_done,reference/25013/ROSR01TUW_R_20250130000_01D_05S_AA.rnx cpu=169.16s
+S2 loky/flat,340.395,write_start,reference/25013
+S2 loky/flat,346.699,write_done,reference/25013 dur=5.74s
+S2 loky/flat,350.725,task_done,canopy/25014/ROSA01TUW_R_20250140000_01D_05S_AA.rnx cpu=145.03s
+S2 loky/flat,350.725,write_start,canopy/25014
+S2 loky/flat,353.076,write_done,canopy/25014 dur=2.14s
+S2 loky/flat,356.752,task_done,canopy/25013/ROSA01TUW_R_20250130000_01D_05S_AA.rnx cpu=160.83s
+S2 loky/flat,356.752,write_start,canopy/25013
+S2 loky/flat,360.026,write_done,canopy/25013 dur=3.21s
+S2 loky/flat,362.119,task_done,reference/25001/ROSR01TUW_R_20250010000_01D_05S_AA.rnx cpu=187.58s
+S2 loky/flat,362.12,write_start,reference/25001
+S2 loky/flat,364.499,write_done,reference/25001 dur=2.23s
+S2 loky/flat,364.499,task_done,reference/25010/ROSR01TUW_R_20250100000_01D_05S_AA.rnx cpu=176.44s
+S2 loky/flat,364.499,write_start,reference/25010
+S2 loky/flat,365.767,write_done,reference/25010 dur=1.19s
+S2 loky/flat,367.093,task_done,reference/25012/ROSR01TUW_R_20250120000_01D_05S_AA.rnx cpu=184.43s
+S2 loky/flat,367.093,write_start,reference/25012
+S2 loky/flat,368.429,write_done,reference/25012 dur=1.28s
+S2 loky/flat,369.236,task_done,reference/25003/ROSR01TUW_R_20250030000_01D_05S_AA.rnx cpu=181.62s
+S2 loky/flat,369.236,write_start,reference/25003
+S2 loky/flat,370.499,write_done,reference/25003 dur=1.22s
+S2 loky/flat,390.291,task_done,canopy/25002/ROSA01TUW_R_20250020000_01D_05S_AA.rnx cpu=80.26s
+S2 loky/flat,390.292,write_start,canopy/25002
+S2 loky/flat,391.626,write_done,canopy/25002 dur=1.27s
+S2 loky/flat,470.278,task_done,canopy/25005/ROSA01TUW_R_20250050000_01D_05S_AA.rnx cpu=125.18s
+S2 loky/flat,470.279,write_start,canopy/25005
+S2 loky/flat,474.199,write_done,canopy/25005 dur=3.66s
+S2 loky/flat,478.681,task_done,canopy/25001/ROSA01TUW_R_20250010000_01D_05S_AA.rnx cpu=123.75s
+S2 loky/flat,478.681,write_start,canopy/25001
+S2 loky/flat,482.054,write_done,canopy/25001 dur=3.31s
+S2 loky/flat,499.556,task_done,canopy/25006/ROSA01TUW_R_20250060000_01D_05S_AA.rnx cpu=139.70s
+S2 loky/flat,499.562,write_start,canopy/25006
+S2 loky/flat,501.545,write_done,canopy/25006 dur=1.74s
+S2 loky/flat,502.108,task_done,canopy/25004/ROSA01TUW_R_20250040000_01D_05S_AA.rnx cpu=131.10s
+S2 loky/flat,502.108,write_start,canopy/25004
+S2 loky/flat,503.103,write_done,canopy/25004 dur=0.94s
+S2 loky/flat,503.792,task_done,canopy/25009/ROSA01TUW_R_20250090000_01D_05S_AA.rnx cpu=129.05s
+S2 loky/flat,503.792,write_start,canopy/25009
+S2 loky/flat,505.479,write_done,canopy/25009 dur=1.63s
+S2 loky/flat,507.342,task_done,canopy/25008/ROSA01TUW_R_20250080000_01D_05S_AA.rnx cpu=137.45s
+S2 loky/flat,507.342,write_start,canopy/25008
+S2 loky/flat,508.335,write_done,canopy/25008 dur=0.91s
+S2 loky/flat,508.908,task_done,canopy/25007/ROSA01TUW_R_20250070000_01D_05S_AA.rnx cpu=135.63s
+S2 loky/flat,508.908,write_start,canopy/25007
+S2 loky/flat,509.544,write_done,canopy/25007 dur=0.60s
+S2 loky/flat,509.93,task_done,canopy/25012/ROSA01TUW_R_20250120000_01D_05S_AA.rnx cpu=118.50s
+S2 loky/flat,509.93,write_start,canopy/25012
+S2 loky/flat,510.974,write_done,canopy/25012 dur=0.99s
+S2 loky/flat,536.913,task_done,canopy/25010/ROSA01TUW_R_20250100000_01D_05S_AA.rnx cpu=67.70s
+S2 loky/flat,536.913,write_start,canopy/25010
+S2 loky/flat,537.766,write_done,canopy/25010 dur=0.80s
+S2 loky/flat,538.405,task_done,canopy/25003/ROSA01TUW_R_20250030000_01D_05S_AA.rnx cpu=60.11s
+S2 loky/flat,538.405,write_start,canopy/25003
+S2 loky/flat,539.202,write_done,canopy/25003 dur=0.74s
+S2 loky/flat,543.509,task_done,canopy/25011/ROSA01TUW_R_20250110000_01D_05S_AA.rnx cpu=45.21s
+S2 loky/flat,543.51,write_start,canopy/25011
+S2 loky/flat,543.83,write_done,canopy/25011 dur=0.29s

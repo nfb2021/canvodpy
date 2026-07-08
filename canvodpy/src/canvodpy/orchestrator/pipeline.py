@@ -14,7 +14,6 @@ import pint
 import xarray as xr
 from rich.progress import TaskID
 
-from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
 from canvod.readers import MatchedDirs, PairDataDirMatcher
 from canvod.readers.gnss_specs.constants import UREG
 from canvod.store import GnssResearchSite
@@ -153,21 +152,40 @@ class PipelineOrchestrator:
             Detected format name (e.g. ``"rinex3"``, ``"sbf"``).
             Falls back to ``"rinex3"`` if nothing matches.
 
+        Notes
+        -----
+        Uses ``canvod-filemap``'s richer pattern set when that optional
+        package is installed. Without it, falls back to a canonical
+        canVOD-only glob check (``*.sbf``/``*.SBF`` vs. ``*.rnx``/``*.RNX``).
+        Non-canonical filenames require ``canvod-filemap`` + a recipe.
+
         """
-        # Map source pattern names to reader format names
-        _PATTERN_TO_READER = {
-            "septentrio_sbf": "sbf",
-            "rinex_v2_short": "rinex3",
-            "rinex_v3_long": "rinex3",
-            "canvod": "rinex3",
-        }
-        for name in auto_match_order():
-            pat = BUILTIN_PATTERNS[name]
-            if any(
-                f for glob in pat.file_globs for f in data_dir.glob(glob) if f.is_file()
-            ):
-                return _PATTERN_TO_READER.get(name, "rinex3")
-        return "rinex3"
+        try:
+            from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
+
+            # Map source pattern names to reader format names
+            _PATTERN_TO_READER = {
+                "septentrio_sbf": "sbf",
+                "rinex_v2_short": "rinex3",
+                "rinex_v3_long": "rinex3",
+                "canvod": "rinex3",
+            }
+            for name in auto_match_order():
+                pat = BUILTIN_PATTERNS[name]
+                if any(
+                    f
+                    for glob in pat.file_globs
+                    for f in data_dir.glob(glob)
+                    if f.is_file()
+                ):
+                    return _PATTERN_TO_READER.get(name, "rinex3")
+            return "rinex3"
+        except ImportError:
+            has_rnx = any(data_dir.glob(g) for g in ("*.rnx", "*.RNX"))
+            has_sbf = any(data_dir.glob(g) for g in ("*.sbf", "*.SBF"))
+            if has_sbf and not has_rnx:
+                return "sbf"
+            return "rinex3"
 
     def _group_by_date_and_receiver(
         self,
@@ -1074,10 +1092,24 @@ class SingleReceiverProcessor:
         )
 
     def _get_rinex_files(self) -> list[Path]:
-        """Get sorted list of GNSS data files using BUILTIN_PATTERNS globs."""
-        globs: set[str] = set()
-        for name in auto_match_order():
-            globs.update(BUILTIN_PATTERNS[name].file_globs)
+        """Get sorted list of GNSS data files using BUILTIN_PATTERNS globs.
+
+        Uses ``canvod-filemap``'s pattern registry when that optional
+        package is installed. Without it, falls back to canonical
+        canVOD-only names (``*.rnx``/``*.RNX``, ``*.sbf``/``*.SBF``)
+        selected by ``self.reader_name``.
+        """
+        try:
+            from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
+
+            globs: set[str] = set()
+            for name in auto_match_order():
+                globs.update(BUILTIN_PATTERNS[name].file_globs)
+        except ImportError:
+            if self.reader_name == "sbf":
+                globs = {"*.sbf", "*.SBF"}
+            else:
+                globs = {"*.rnx", "*.RNX"}
 
         files: list[Path] = []
         seen: set[Path] = set()

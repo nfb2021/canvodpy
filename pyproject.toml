@@ -6,6 +6,12 @@
 members = ["packages/*", "canvodpy"]
 exclude = ["packages/canvod-streamstats", "packages/canvod-filemap"]
 
+# canvod-filemap lives in the separate canvodpy-extensions repo
+# (https://github.com/nfb2021/canvodpy-extensions), not in this monorepo's
+# workspace. Point uv at a local sibling checkout.
+[tool.uv.sources]
+canvod-filemap = { path = "../canvodpy-extensions/packages/canvod-filemap" }
+
 # ============================================================================
 # Development Dependencies (Workspace-wide)
 # ============================================================================
