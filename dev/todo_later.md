@@ -294,6 +294,33 @@ No implementation needed until object storage is a confirmed target.
   `metadata_records` and passes it to `session.commit(commit_msg, metadata=_commit_meta)`.
   icechunk v2 `Session.commit()` signature: `(message, metadata: dict[str, Any] | None)`.
 
+- ~~**`canvod-grids==0.2.3` `create_hemigrid()` broken for every grid type — wrong
+  logger import**~~ **DONE (2026-07-08)** (found in the external `mp2grids` repo
+  integrating `canvod-grids` as a standalone dependency, not via the full monorepo).
+  `packages/canvod-grids/src/canvod/grids/core/grid_builder.py:12-16`:
+  ```python
+  def _get_logger():
+      """Lazy import to avoid circular dependency."""
+      from canvodpy.logging import get_logger
+      return get_logger(__name__)
+  ```
+  `BaseGridBuilder.__init__` calls this unconditionally, so it fires on
+  construction of every builder (`EqualAreaBuilder`, `EqualAngleBuilder`,
+  `EquirectangularBuilder`, `HTMBuilder`, `GeodesicBuilder`, `HEALPixBuilder`,
+  `FibonacciBuilder`). But `canvodpy` (the orchestrator) is not a distributed
+  dependency of `canvod-grids` — only the `canvod` namespace subpackages are —
+  so any standalone install raises `ModuleNotFoundError: No module named
+  'canvodpy'` on the very first `create_hemigrid(...)` call. Confirmed
+  2026-07-08: this is the **only** `from canvodpy` reference anywhere in
+  `canvod-grids`' source tree; every other call site in the same package
+  already uses the correct local logger (e.g. `operations.py:27` → `from
+  canvod.grids._internal import get_logger`). **Fix:** swap the import in
+  `grid_builder.py` to `from canvod.grids._internal import get_logger` —
+  `_internal/logger.py`'s `get_logger(name: str | None = None)` signature
+  matched exactly. Fixed in `grid_builder.py`; verified with
+  `create_hemigrid('equal_area', angular_resolution=5.0)` and
+  `uv run ty check` — both clean.
+
 - ~~**`DeltaLS` DNU guard** in `_tow_wn_to_utc` (`reader.py:1276`): guard `delta_ls == -128`
   to prevent ~2-min timestamp shift on unsynchronised receivers.~~
   **DONE (2026-07-08):** Fixed at all three `ReceiverTime` match arms (lines ~1276, ~1589,

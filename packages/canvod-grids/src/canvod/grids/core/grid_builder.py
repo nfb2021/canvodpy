@@ -11,7 +11,7 @@ from canvod.grids.core.grid_data import GridData
 
 def _get_logger():
     """Lazy import to avoid circular dependency."""
-    from canvodpy.logging import get_logger
+    from canvod.grids._internal import get_logger
 
     return get_logger(__name__)
 
