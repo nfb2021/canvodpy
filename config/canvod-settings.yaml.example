@@ -172,7 +172,6 @@ processing:
     # aux_data_dir: /path/to/aux_data
 
     gnss_store_strategy: skip      # skip, overwrite, append
-    gnss_store_expire_days: 2
     vod_store_strategy: overwrite
 
   # ---------------------------------------------------------------------------
