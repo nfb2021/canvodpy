@@ -108,6 +108,27 @@ config-validate:
 config-check-data SITE:
     uv run python -c "from canvodpy.workflows.tasks import validate_data_dirs; import json; print(json.dumps(validate_data_dirs('{{ SITE }}'), indent=2))"
 
+# create a naming recipe from the template (for receivers with non-canonical filenames)
+naming-init NAME:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    template="config/recipes/_template.yaml.example"
+    dest="config/recipes/{{ NAME }}.yaml"
+    if [ ! -f "$template" ]; then
+        echo "Template not found: $template"
+        exit 1
+    fi
+    if [ -f "$dest" ]; then
+        echo "Already exists: $dest -- edit it directly, or delete it first to re-scaffold."
+        exit 1
+    fi
+    mkdir -p config/recipes
+    if [[ "{{ NAME }}" == *canopy* ]]; then recv_type="canopy"; else recv_type="reference"; fi
+    sed -e "s/name: CHANGEME/name: {{ NAME }}/" -e "s/receiver_type: reference/receiver_type: $recv_type/" "$template" > "$dest"
+    echo -e "{{ GREEN }}Created $dest{{ NORMAL }}"
+    echo "Next: edit it to match your actual filenames (see the worked examples"
+    echo "in the file), then test with: just config-check-data <site>"
+
 # show the current configuration
 config-show:
     uv run canvodpy config show

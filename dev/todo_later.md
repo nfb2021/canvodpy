@@ -894,7 +894,18 @@ below stay open but are no longer worth pulling forward; fine to leave rough.
 6. Remove the moved files from virtualiconvname; add `canvod-preflight` as an explicit dependency. ← **still open** (convention.py/validator.py still duplicated in both packages)
 7. ~~Log every file skipped by `discover_all/discover_for_date` (mapping.py:145–146, 178–179).~~ **DONE** — `logger.warning()` at lines 149 and 183.
 8. Port `detect_overlaps()` into recipe validation path (tasks.py:402–407) — equal guardrails on both paths. ← **still open**
-9. Remove phantom `just naming-init` reference (tasks.py:344); add `config/recipes/` with 2 commented examples. ← **still open**
+9. ~~Remove phantom `just naming-init` reference (tasks.py:344); add `config/recipes/` with 2 commented examples.~~
+   **DONE (2026-07-09):** found in practice on a real deployment — `config validate`
+   pointed a user at `just naming-init rosalia_reference`, which didn't exist,
+   exactly as flagged here. Implemented for real: `just naming-init <name>`
+   scaffolds `config/recipes/<name>.yaml` from `config/recipes/_template.yaml.example`
+   (substitutes `name:` and infers `receiver_type` from `canopy` appearing in the
+   recipe name), refuses to clobber an existing recipe, and prints next steps.
+   The template embeds two worked examples as comments (RINEX short-name
+   hour-letter style, and an arbitrary `STATION_YYYY_DDD_HH_MM` style) rather
+   than shipping as two separate files — verified end-to-end: a filled-in
+   copy of the template validates against `NamingRecipe` and correctly parses
+   a real filename.
 10. Document the manual integration hook in the package README. ← **still open**
 
 **Phase 3 — `canvod-preflight` new checks (~2 days):**
