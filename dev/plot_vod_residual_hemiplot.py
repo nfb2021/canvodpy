@@ -106,13 +106,23 @@ def main() -> None:
     )
     parser.add_argument(
         "--start",
-        default=None,
-        help="Window start date (inclusive); default = whole record",
+        default="2025-06-01",
+        help=(
+            "Window start date (inclusive), used for BOTH the fit and the "
+            "residual. Defaults to the vegetated season (the drought "
+            "experiment isn't active in winter dormancy, and the bias "
+            "relationship itself isn't seasonally constant -- see "
+            "dev/drought_diff_methodology.md). Pass an empty string for the "
+            "whole record instead."
+        ),
     )
     parser.add_argument(
         "--end",
-        default=None,
-        help="Window end date (inclusive); default = whole record",
+        default="2025-08-31",
+        help=(
+            "Window end date (inclusive) -- see --start. Pass an empty "
+            "string for the whole record instead."
+        ),
     )
     parser.add_argument(
         "--min-days",
@@ -136,6 +146,8 @@ def main() -> None:
         "--show", action="store_true", help="Also display the plot interactively"
     )
     args = parser.parse_args()
+    args.start = args.start or None
+    args.end = args.end or None
 
     slope, intercept = fit_global_relationship(
         args.reference, args.stressed, args.start, args.end

@@ -65,13 +65,23 @@ def main() -> None:
     )
     parser.add_argument(
         "--start",
-        default=None,
-        help="Restrict the fit AND the residual to this window (inclusive); default = whole record",
+        default="2025-06-01",
+        help=(
+            "Restrict the fit AND the residual to this window (inclusive). "
+            "Defaults to the vegetated season (the drought experiment isn't "
+            "active in winter dormancy, and the bias relationship itself "
+            "isn't seasonally constant -- see dev/drought_diff_methodology.md). "
+            "Pass an empty string to use the whole record instead."
+        ),
     )
     parser.add_argument(
         "--end",
-        default=None,
-        help="Restrict the fit AND the residual to this window (inclusive); default = whole record",
+        default="2025-08-31",
+        help=(
+            "Restrict the fit AND the residual to this window (inclusive). "
+            "Defaults to the vegetated season -- see --start. Pass an empty "
+            "string to use the whole record instead."
+        ),
     )
     parser.add_argument(
         "--window", type=int, default=7, help="Savitzky-Golay window (days)"
@@ -98,6 +108,8 @@ def main() -> None:
         "--show", action="store_true", help="Also display the plot interactively"
     )
     args = parser.parse_args()
+    args.start = args.start or None
+    args.end = args.end or None
 
     reference = global_daily_series(args.reference)
     stressed = global_daily_series(args.stressed)

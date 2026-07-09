@@ -35,8 +35,7 @@ doesn't fit the relationship on a given day is the drought signal.
 
 ## The model
 
-Fit a straight line across the **whole record** (all 441 days with valid data
-in both antennas):
+Fit a straight line:
 
 ```
 stressed(t) ≈ slope · reference(t) + intercept
@@ -49,10 +48,33 @@ stressed(t) ≈ slope · reference(t) + intercept
   "what the stressed antenna should read on day `t`, given what the reference
   antenna read, if there were no drought."
 
-This is fit **once**, using every day in the record — not just a hand-picked
-"pre-drought" baseline period. That matters because the point isn't to know
-in advance when drought occurred; it's to let the data itself define the
-normal relationship, with drought showing up as departure from it.
+This is fit using every day **within the analysis window** — not a
+hand-picked "pre-drought" baseline sub-period. That matters because the point
+isn't to know in advance which specific days had drought; it's to let the
+data itself define the normal relationship, with drought showing up as
+departure from it.
+
+### Window: vegetated season only (default 2025-06-01 to 2025-08-31)
+
+Both scripts default to this window rather than the whole record, for a
+domain reason, not a statistical one: **the drought experiment is only
+active during the vegetated season** — winter dormancy dynamics are
+irrelevant to it, and including them doesn't just add noise, it actively
+distorts the fit. Confirmed empirically: the bias relationship itself is
+**not seasonally constant**.
+
+| Fit scope | slope | intercept |
+|---|---|---|
+| Whole record (441 days) | 0.9526 | −0.0326 |
+| Vegetated season only (92 days, Jun–Aug 2025) | 0.6702 | 0.2445 |
+
+These are meaningfully different relationships, not just noisier estimates of
+the same one (the 95% CIs barely overlap). Fitting on the whole record and
+only *windowing the residual afterward* — the first version of this analysis
+— would silently apply an out-of-season relationship to the season that
+actually matters, corrupting the very separation this method exists to do.
+Pass `--start "" --end ""` to either script to opt back into the whole-record
+fit if a different comparison is ever needed.
 
 ## Why Theil-Sen instead of ordinary least squares
 
@@ -67,9 +89,9 @@ of all pairwise slopes `(y_j - y_i) / (x_j - x_i)` between every pair of
 points. The median has a **breakdown point of ~29%** — up to about 29% of the
 data can be arbitrary outliers before the median-based estimate is pulled off
 the true value. As long as the drought-affected days are a *minority* of the
-441-day record, Theil-Sen's fit reflects the normal (non-drought) relationship
-even though drought-day residuals were included in the fit, not excluded from
-it.
+analysis window (92 days by default), Theil-Sen's fit reflects the normal
+(non-drought) relationship even though drought-day residuals were included in
+the fit, not excluded from it.
 
 ## The residual = the drought signal
 
@@ -95,6 +117,22 @@ this analysis, since the underlying daily values are noisy day-to-day.
 
 ## What was actually fit, on real data
 
+**Vegetated-season window (current default, 2025-06-01 to 2025-08-31):**
+
+```
+stressed = 0.6702 · reference + 0.2445
+slope 95% CI: [0.4897, 0.8696]
+```
+
+A slope well below 1.0 with a positive intercept — a different relationship
+than the whole-record fit below, confirming the bias isn't seasonally
+constant (see the window section above). Within this window, the residual
+oscillates near zero with normal noise-level fluctuation (roughly ±0.02-0.03)
+and no dramatic sustained departure — i.e. no strong drought signal *within*
+Jun–Aug 2025 specifically, by this method.
+
+**Whole-record fit (441 days, for comparison / historical reference):**
+
 ```
 stressed = 0.9526 · reference + (-0.0326)
 slope 95% CI: [0.9238, 0.9808]
@@ -102,17 +140,16 @@ slope 95% CI: [0.9238, 0.9808]
 
 A slope near 1.0 with a small negative intercept means the two trees are close
 to a 1:1 scaled relationship (mild attenuation-scale difference) with a small
-fixed offset — i.e. the "identical relative dynamics" assumption holds up
-reasonably well across the record, which is itself worth knowing (if the
-scatter plot in panel 1 of the figure were a diffuse cloud rather than a tight
-line, that would be a warning sign that the assumption doesn't hold and this
-whole approach would be on shaky ground).
-
-The resulting residual is centered near zero for most of the record, with two
-notable sustained departures: a dip through **January–April 2026** and a
-sharper one at the **very end of the record (June–July 2026)** — periods
-where the stressed antenna reads meaningfully below what the reference alone
-predicts.
+fixed offset across the *whole* record — i.e. the "identical relative
+dynamics" assumption holds up reasonably well when winter is included too
+(if the scatter plot in panel 1 of the figure were a diffuse cloud rather
+than a tight line, that would be a warning sign that the assumption doesn't
+hold at all). The resulting whole-record residual is centered near zero for
+most of the record, with two notable sustained departures: a dip through
+**January–April 2026** and a sharper one at the **very end of the record
+(June–July 2026)** — both **outside** the vegetated-season default window,
+which is exactly why they don't appear when the analysis is restricted to
+Jun–Aug.
 
 ## Caveats
 
