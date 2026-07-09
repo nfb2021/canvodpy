@@ -8,11 +8,13 @@ coordinates it depends on (grid cell assignment silently drops any point
 where phi or theta is non-finite, so NaN coordinates look identical to NaN
 VOD once you're looking at the aggregated output).
 
-All reductions below run lazily via dask/xarray (`.compute()` only at the
-final reduction) rather than materializing full (epoch, sid) arrays —
-on the real store that's ~2.1 billion elements, ~16.8GB per variable as a
-dense array, which is exactly what made the first version of this script
-hang instead of finishing.
+All reductions run lazily via dask/xarray and are submitted in ONE batched
+`dask.compute(...)` call at the end, rather than one `.compute()` per
+statistic. On a network-share-backed store (the known bottleneck for this
+site — see dev/todo_later.md), a separate `.compute()` per reduction means a
+separate full read of the underlying chunks each time; batching lets dask
+share one read pass across every reduction instead of re-hitting the share
+per-variable.
 
 Usage
 -----
@@ -26,6 +28,7 @@ Usage
 import argparse
 import sys
 
+import dask
 import numpy as np
 import xarray as xr
 from compute_galileo_vod_timeseries import load_group, select_galileo_sids
@@ -33,24 +36,27 @@ from compute_galileo_vod_timeseries import load_group, select_galileo_sids
 from canvod.store import MyIcechunkStore
 
 
-def report_stats(da: xr.DataArray, name: str) -> int:
-    """Print finite-fraction + min/max/mean for a (possibly huge) dask-backed array.
-
-    Stays lazy until each individual `.compute()` call, so dask only holds
-    one chunk at a time in memory rather than the full array.
-    """
+def lazy_stats(da: xr.DataArray) -> dict[str, xr.DataArray]:
+    """Build (unevaluated) finite-count/min/max/mean reductions for one array."""
     finite = np.isfinite(da)
-    total = int(da.size)
-    n_finite = int(finite.sum().compute())
+    masked = da.where(finite)
+    return {
+        "n_finite": finite.sum(),
+        "min": masked.min(),
+        "max": masked.max(),
+        "mean": masked.mean(),
+    }
+
+
+def print_stats(name: str, total: int, computed: dict[str, float]) -> None:
+    n_finite = int(computed["n_finite"])
     frac = n_finite / total if total else 0.0
     print(f"  {name}: {frac:.1%} finite ({n_finite:,} / {total:,})")
-    if n_finite > 0:
-        masked = da.where(finite)
-        vmin = float(masked.min().compute())
-        vmax = float(masked.max().compute())
-        vmean = float(masked.mean().compute())
-        print(f"    min={vmin:.4g}  max={vmax:.4g}  mean={vmean:.4g}")
-    return n_finite
+    if n_finite > 0 and np.isfinite(computed["min"]):
+        print(
+            f"    min={computed['min']:.4g}  max={computed['max']:.4g}  "
+            f"mean={computed['mean']:.4g}"
+        )
 
 
 def main() -> None:
@@ -78,43 +84,71 @@ def main() -> None:
     vod_ds = load_group(store, args.branch, args.group)
     print(f"Shape: {dict(vod_ds.sizes)}")
 
-    vod_finite_count = 0
-    for var in ("VOD", "phi", "theta"):
-        if var not in vod_ds.variables:
-            print(f"  {var}: NOT PRESENT in this group")
-            continue
-        n_finite = report_stats(vod_ds[var], var)
-        if var == "VOD":
-            vod_finite_count = n_finite
-
     galileo_sids = select_galileo_sids(vod_ds)
+    gal_ds = vod_ds.sel(sid=galileo_sids) if galileo_sids else None
+
+    # Build every reduction lazily first, keyed so results can be unpacked
+    # after the single batched compute() below.
+    lazy: dict[str, xr.DataArray] = {}
+    sizes: dict[str, int] = {}
+    variables = [v for v in ("VOD", "phi", "theta") if v in vod_ds.variables]
+
+    for var in variables:
+        for key, expr in lazy_stats(vod_ds[var]).items():
+            lazy[f"full.{var}.{key}"] = expr
+        sizes[f"full.{var}"] = int(vod_ds[var].size)
+
+    if gal_ds is not None:
+        for var in variables:
+            for key, expr in lazy_stats(gal_ds[var]).items():
+                lazy[f"gal.{var}.{key}"] = expr
+            sizes[f"gal.{var}"] = int(gal_ds[var].size)
+
+        if all(v in gal_ds.variables for v in ("VOD", "phi", "theta")):
+            vod_ok = np.isfinite(gal_ds["VOD"])
+            coord_ok = np.isfinite(gal_ds["phi"]) & np.isfinite(gal_ds["theta"])
+            lazy["overlap.vod_ok"] = vod_ok.sum()
+            lazy["overlap.coord_ok"] = coord_ok.sum()
+            lazy["overlap.both_ok"] = (vod_ok & coord_ok).sum()
+
+    print(f"\nComputing {len(lazy)} reductions in one batched pass...")
+    keys = list(lazy.keys())
+    computed_values = dask.compute(*(lazy[k] for k in keys))
+    computed = dict(zip(keys, computed_values, strict=True))
+
+    print()
+    vod_finite_count = int(computed["full.VOD.n_finite"])
+    for var in variables:
+        stats = {
+            "n_finite": computed[f"full.{var}.n_finite"],
+            "min": computed[f"full.{var}.min"],
+            "max": computed[f"full.{var}.max"],
+            "mean": computed[f"full.{var}.mean"],
+        }
+        print_stats(var, sizes[f"full.{var}"], stats)
+
     print(f"\nGalileo SIDs: {len(galileo_sids)} / {vod_ds.sizes['sid']} total")
 
-    if not galileo_sids:
+    if gal_ds is None:
         return
 
-    gal_ds = vod_ds.sel(sid=galileo_sids)
     print("Within Galileo SIDs only:")
     gal_vod_finite = 0
-    for var in ("VOD", "phi", "theta"):
-        if var not in gal_ds.variables:
-            continue
-        n_finite = report_stats(gal_ds[var], var)
+    for var in variables:
+        stats = {
+            "n_finite": computed[f"gal.{var}.n_finite"],
+            "min": computed[f"gal.{var}.min"],
+            "max": computed[f"gal.{var}.max"],
+            "mean": computed[f"gal.{var}.mean"],
+        }
+        print_stats(var, sizes[f"gal.{var}"], stats)
         if var == "VOD":
-            gal_vod_finite = n_finite
+            gal_vod_finite = int(stats["n_finite"])
 
-    # Points where VOD is valid but phi/theta aren't (or vice versa) are
-    # exactly what silently vanishes during grid cell assignment. Stays
-    # lazy — only the final .sum().compute() calls trigger computation.
-    if all(v in gal_ds.variables for v in ("VOD", "phi", "theta")):
-        vod_ok = np.isfinite(gal_ds["VOD"])
-        coord_ok = np.isfinite(gal_ds["phi"]) & np.isfinite(gal_ds["theta"])
-        both_ok = vod_ok & coord_ok
-
-        vod_ok_count = int(vod_ok.sum().compute())
-        coord_ok_count = int(coord_ok.sum().compute())
-        both_ok_count = int(both_ok.sum().compute())
-
+    if "overlap.vod_ok" in computed:
+        vod_ok_count = int(computed["overlap.vod_ok"])
+        coord_ok_count = int(computed["overlap.coord_ok"])
+        both_ok_count = int(computed["overlap.both_ok"])
         print(
             f"\nVOD finite: {vod_ok_count:,} | "
             f"phi+theta finite: {coord_ok_count:,} | "
