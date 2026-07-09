@@ -249,14 +249,23 @@ def compute_percell_timeseries(
 
     print(f"📊 Data shape: {data_ds[value_var].shape}")
 
-    time_start, time_end = data_ds.epoch.values[0], data_ds.epoch.values[-1]
-
     # Normalise frequency string for pandas
     pandas_freq = _normalise_pandas_freq(temporal_resolution)
 
+    # Floor to the period boundary (e.g. midnight for "1D"), NOT the raw
+    # first/last epoch timestamp. _process_chunk_percell truncates every
+    # observation's timestamp to a period boundary via polars' dt.truncate()
+    # before grouping, so if the first epoch isn't already exactly on a
+    # boundary (e.g. a receiver that started recording mid-day rather than
+    # at midnight), an un-floored output_times grid never matches any
+    # chunk_times value — every _merge_percell_results lookup silently
+    # misses and the entire output ends up empty despite valid input data.
+    time_start = pd.Timestamp(data_ds.epoch.values[0]).floor(pandas_freq)
+    time_end = pd.Timestamp(data_ds.epoch.values[-1]).floor(pandas_freq)
+
     output_times = pd.date_range(
-        start=pd.to_datetime(time_start),
-        end=pd.to_datetime(time_end),
+        start=time_start,
+        end=time_end,
         freq=pandas_freq,
     )
 
