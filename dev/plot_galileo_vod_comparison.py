@@ -3,7 +3,8 @@
 Loads the two NetCDF outputs from `dev/compute_galileo_vod_timeseries.py`
 (lower + upper antenna), collapses each to a single daily timeseries (median
 across all Galileo-observed grid cells), smooths with a Savitzky-Golay
-filter, and plots both lines on one matplotlib figure.
+filter, and plots both lines on one matplotlib figure — with the raw
+(unsmoothed) daily points shown underneath as a semi-transparent scatter.
 
 Usage
 -----
@@ -109,6 +110,15 @@ def main() -> None:
         help="Output image path",
     )
     parser.add_argument(
+        "--raw-alpha",
+        type=float,
+        default=0.3,
+        help="Opacity of the raw (unsmoothed) daily points, 0-1",
+    )
+    parser.add_argument(
+        "--raw-size", type=float, default=10, help="Marker size for raw daily points"
+    )
+    parser.add_argument(
         "--show", action="store_true", help="Also display the plot interactively"
     )
     args = parser.parse_args()
@@ -121,17 +131,34 @@ def main() -> None:
             print(f"Skipping missing file: {path}")
             continue
         raw = global_daily_series(path)
+        plotted_anything = False
+
+        if raw.notna().sum() > 0:
+            ax.scatter(
+                raw.index,
+                raw.values,
+                color=color,
+                alpha=args.raw_alpha,
+                s=args.raw_size,
+                linewidths=0,
+                zorder=1,
+            )
+            plotted_anything = True
+
         smoothed = smooth(raw, args.window, args.polyorder)
-        if smoothed is None:
-            continue
-        ax.plot(
-            smoothed.index,
-            smoothed.values,
-            label=smoothed.name,
-            color=color,
-            linewidth=1.5,
-        )
-        n_plotted += 1
+        if smoothed is not None:
+            ax.plot(
+                smoothed.index,
+                smoothed.values,
+                label=smoothed.name,
+                color=color,
+                linewidth=1.5,
+                zorder=2,
+            )
+            plotted_anything = True
+
+        if plotted_anything:
+            n_plotted += 1
 
     if n_plotted == 0:
         raise SystemExit(
