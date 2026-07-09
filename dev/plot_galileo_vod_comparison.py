@@ -14,6 +14,7 @@ Usage
 """
 
 import argparse
+import warnings
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -27,15 +28,35 @@ def global_daily_series(path: Path) -> pd.Series:
     """Collapse a (cell, time) per-cell dataset to one daily series (median across cells)."""
     ds = xr.open_dataset(path)
     stat = ds.attrs.get("stat", "median")
-    values = np.nanmedian(ds["cell_timeseries"].values, axis=0)
+    with warnings.catch_warnings():
+        # A fully-NaN day is reported explicitly below (with counts) instead
+        # of left as numpy's generic "All-NaN slice" background warning.
+        warnings.filterwarnings("ignore", message="All-NaN slice encountered")
+        values = np.nanmedian(ds["cell_timeseries"].values, axis=0)
     index = pd.to_datetime(ds["time"].values)
     label = ds.attrs.get("source_group", path.stem)
     series = pd.Series(values, index=index, name=f"{label} ({stat}-of-{stat})")
+
+    n_valid_days = int(series.notna().sum())
+    print(f"[{series.name}] {n_valid_days} / {len(series)} days have any valid cell.")
     return series
 
 
-def smooth(series: pd.Series, window_days: int, polyorder: int) -> pd.Series:
-    """Savitzky-Golay smoothing; interpolates small NaN gaps first (savgol can't handle them)."""
+def smooth(series: pd.Series, window_days: int, polyorder: int) -> pd.Series | None:
+    """Savitzky-Golay smoothing; interpolates small NaN gaps first (savgol can't handle them).
+
+    Returns None (with a printed warning) if the series has no valid data at
+    all — the caller skips plotting that line instead of crashing.
+    """
+    if series.notna().sum() == 0:
+        print(
+            f"[{series.name}] every day is NaN — skipping this line. "
+            "This points to near-zero valid (cell, day) coverage in the "
+            "source dataset, not a plotting issue; check the compute step's "
+            "own 'Coverage: X / Y' output for this group."
+        )
+        return None
+
     window = window_days if window_days % 2 == 1 else window_days + 1
     if window != window_days:
         print(
@@ -94,18 +115,28 @@ def main() -> None:
 
     fig, ax = plt.subplots(figsize=(10, 5))
 
+    n_plotted = 0
     for path, color in [(args.lower, "tab:green"), (args.upper, "tab:blue")]:
         if not path.exists():
             print(f"Skipping missing file: {path}")
             continue
         raw = global_daily_series(path)
         smoothed = smooth(raw, args.window, args.polyorder)
+        if smoothed is None:
+            continue
         ax.plot(
             smoothed.index,
             smoothed.values,
             label=smoothed.name,
             color=color,
             linewidth=1.5,
+        )
+        n_plotted += 1
+
+    if n_plotted == 0:
+        raise SystemExit(
+            "Nothing to plot — both inputs were either missing or entirely "
+            "NaN. See the messages above for which."
         )
 
     ax.set_xlabel("Date")
