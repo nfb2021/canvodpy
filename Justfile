@@ -120,6 +120,24 @@ config-init:
 config-edit:
     uv run canvodpy config edit
 
+# delete canvod-settings.yaml (destructive, requires typed confirmation)
+config-delete CONFIG_DIR="config":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target="{{ CONFIG_DIR }}/canvod-settings.yaml"
+    if [ ! -f "$target" ]; then
+        echo "Nothing to delete: $target does not exist."
+        exit 0
+    fi
+    echo -e "{{ BOLD }}This will permanently delete: $target{{ NORMAL }}"
+    read -p "Type 'yes' to confirm: " confirm
+    if [ "$confirm" != "yes" ]; then
+        echo "Aborted -- no changes made."
+        exit 1
+    fi
+    rm -f "$target"
+    echo -e "{{ GREEN }}Deleted $target{{ NORMAL }}"
+
 # ============================================================================
 # Store Metadata
 # ============================================================================

@@ -26,6 +26,7 @@ belongs, is reported immediately with the exact location.
 # Setup
 just config-init                       # scaffold canvod-settings.yaml from template
 just config-edit                       # open canvod-settings.yaml in $EDITOR
+just config-delete                     # delete canvod-settings.yaml (requires typed confirmation)
 
 # Verification
 just config-validate                   # validate config against Pydantic models
@@ -58,6 +59,27 @@ uv run canvodpy run --site mysite --start 2025001 --end 2025028 \
 ```
 
 Only the fields present in the overlay are changed; everything else is read from the main file.
+
+### Overlays can only add or override — never delete
+
+The overlay is merged **on top of** the base `canvod-settings.yaml`; it can add new keys or
+override existing ones, but it cannot remove a key that exists in the base file. If your base
+file defines a site (or any other field) that isn't mentioned in the overlay, that entry stays
+in the resolved config no matter what the overlay contains.
+
+!!! warning "Common trap: the scaffolded placeholder site"
+
+    `canvod-settings.yaml` (from `just config-init`) ships with a live, uncommented `my_site:`
+    placeholder under `sites:` — meant to be **renamed** to your real site, not kept alongside
+    it. If you added your real site as a new block instead of renaming the placeholder,
+    `my_site` is still there with unreachable paths like `/path/to/your/gnss/data/my_site` —
+    and `config validate` / `run` will fail on it, since no overlay can delete it, only the
+    base file itself can.
+
+    Fix: edit the base `canvod-settings.yaml` directly and remove the leftover placeholder
+    site under `sites:`. If the base file has accumulated enough cruft that starting over is
+    easier, `just config-delete` removes it (with a typed confirmation, since this is
+    destructive) so you can `just config-init` fresh.
 
 ---
 
