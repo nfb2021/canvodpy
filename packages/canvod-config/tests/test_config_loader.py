@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import yaml
 
-from canvod.utils.config.loader import ConfigLoader, ConfigValidationError
+from canvod.config.loader import ConfigLoader, ConfigValidationError
 
 
 class TestDeepMerge:

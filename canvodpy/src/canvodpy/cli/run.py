@@ -320,7 +320,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from pathlib import Path
 
-    from canvod.utils.config import load_config
+    from canvod.config import load_config
 
     config_file: Path | None = None
     if args.config is not None:

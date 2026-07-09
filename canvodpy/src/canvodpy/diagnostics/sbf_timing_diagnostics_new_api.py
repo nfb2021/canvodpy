@@ -16,7 +16,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from canvod.utils.config import load_config
+from canvod.config import load_config
 from canvodpy.api import Site
 
 

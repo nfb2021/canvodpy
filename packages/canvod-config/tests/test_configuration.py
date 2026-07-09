@@ -15,7 +15,7 @@ import pytest
 
 def test_config_loads():
     """Test config loads from YAML files."""
-    from canvod.utils.config import load_config
+    from canvod.config import load_config
 
     config_dir = Path("config")
     sites_yaml = config_dir / "sites.yaml"
@@ -35,7 +35,7 @@ def test_config_loads():
 
 def test_credentials_from_yaml():
     """Test credentials are read from processing.yaml."""
-    from canvod.utils.config import load_config
+    from canvod.config import load_config
 
     config_dir = Path("config")
     if not (config_dir / "processing.yaml").exists():
@@ -51,7 +51,7 @@ def test_credentials_from_yaml():
 
 def test_site_data_roots():
     """Test each site has gnss_site_data_root."""
-    from canvod.utils.config import load_config
+    from canvod.config import load_config
 
     config_dir = Path("config")
     if not (config_dir / "sites.yaml").exists():
@@ -66,7 +66,7 @@ def test_site_data_roots():
 
 def test_imports():
     """Test all critical imports work."""
-    from canvod.utils.config.models import (
+    from canvod.config.models import (
         CredentialsConfig,
     )
 

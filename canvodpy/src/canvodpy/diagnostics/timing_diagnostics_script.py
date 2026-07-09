@@ -12,8 +12,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from canvod.config import load_config
 from canvod.store import GnssResearchSite
-from canvod.utils.config import load_config
 from canvodpy.orchestrator import PipelineOrchestrator
 
 

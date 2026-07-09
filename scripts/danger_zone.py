@@ -98,7 +98,7 @@ def _delete_paths(paths: list[tuple[str, Path]]) -> None:
 
 
 def _load_config():
-    from canvod.utils.config import load_config
+    from canvod.config import load_config
 
     return load_config()
 

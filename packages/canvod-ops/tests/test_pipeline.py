@@ -2,15 +2,15 @@
 
 import xarray as xr
 
-from canvod.ops.base import Op, OpResult
-from canvod.ops.pipeline import Pipeline, PipelineResult
-from canvod.ops.registry import build_default_pipeline
-from canvod.ops.temporal import TemporalAggregate
-from canvod.utils.config.models import (
+from canvod.config.models import (
     GridAssignmentConfig,
     PreprocessingConfig,
     TemporalAggregationConfig,
 )
+from canvod.ops.base import Op, OpResult
+from canvod.ops.pipeline import Pipeline, PipelineResult
+from canvod.ops.registry import build_default_pipeline
+from canvod.ops.temporal import TemporalAggregate
 
 
 class _NoOp(Op):

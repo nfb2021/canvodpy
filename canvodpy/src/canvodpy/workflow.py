@@ -144,7 +144,7 @@ class VODWorkflow:
         self.grid_name = grid
         self.vod_calculator_name = vod_calculator
         if keep_vars is None:
-            from canvod.utils.config import load_config
+            from canvod.config import load_config
 
             keep_vars = load_config().processing.params.keep_gnss_observables
         self.keep_vars = keep_vars

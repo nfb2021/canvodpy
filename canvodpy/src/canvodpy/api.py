@@ -289,7 +289,7 @@ class Pipeline:
 
         self.site = site
 
-        from canvod.utils.config import load_config
+        from canvod.config import load_config
 
         config = load_config()
         proc = config.processing.params

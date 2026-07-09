@@ -41,7 +41,7 @@ def _get_configured_sites() -> dict:
     scheduler even when ``canvodpy`` is unavailable (parse-time safety).
     """
     try:
-        from canvod.utils.config import load_config
+        from canvod.config import load_config
 
         return dict(load_config().sites.sites)
     except Exception:

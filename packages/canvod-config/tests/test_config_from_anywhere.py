@@ -53,7 +53,7 @@ def test_config_loader_from_directory(test_dir: str):
         [
             python_exe,
             "-c",
-            "from canvod.utils.config import load_config; "
+            "from canvod.config import load_config; "
             "config = load_config(); "
             "print(f'Sites: {list(config.sites.sites.keys())}')",
         ],

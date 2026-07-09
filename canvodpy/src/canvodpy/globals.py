@@ -2,7 +2,7 @@
 
 Only true physical/technical constants live here.
 All user-configurable settings are managed by the YAML config system
-(``canvod.utils.config.load_config()``).
+(``canvod.config.load_config()``).
 """
 
 import pint

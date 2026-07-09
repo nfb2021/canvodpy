@@ -22,8 +22,7 @@ dependencies = [
     "polars>=1.0.0",
     "numpy>=1.26.0",
     "pandas>=2.1.0",
-    "zarr>=3.0.0",
-    "canvod-utils>=0.1.0",
+    "canvod-config>=0.1.0",
     "canvod-grids>=0.1.0",
     "structlog>=24.1.0",
 ]
@@ -35,7 +34,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-canvod-utils = { workspace = true }
+canvod-config = { workspace = true }
 canvod-grids = { workspace = true }
 
 [project.urls]

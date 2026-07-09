@@ -58,9 +58,9 @@ def test_sid_filtering_integration():
     """Test SID filtering with full orchestrator."""
     from canvodpy.orchestrator.pipeline import PipelineOrchestrator
 
+    from canvod.config import load_config
+    from canvod.config.models import ReceiverConfig, VodAnalysisConfig
     from canvod.store import GnssResearchSite
-    from canvod.utils.config import load_config
-    from canvod.utils.config.models import ReceiverConfig, VodAnalysisConfig
 
     site = GnssResearchSite(site_name="Rosalia")
 

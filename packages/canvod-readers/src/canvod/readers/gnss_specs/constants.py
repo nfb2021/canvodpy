@@ -2,7 +2,7 @@
 
 This module contains only true physical/technical constants that should
 never change. User-configurable settings have been moved to the configuration
-system (canvod.utils.config).
+system (canvod.config).
 
 Removed and moved to config:
 - KEEP_RNX_VARS → processing.keep_gnss_observables

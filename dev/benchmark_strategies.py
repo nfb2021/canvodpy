@@ -53,11 +53,11 @@ from canvod.auxiliary.interpolation import (
 )
 from canvod.auxiliary.pipeline import AuxDataPipeline
 from canvod.auxiliary.position.position import ECEFPosition
-from canvod.readers.matching import MatchedDirs
-from canvod.store.store import MyIcechunkStore
 
 # ── canvodpy / canvod imports ─────────────────────────────────────────────────
-from canvod.utils.config import load_config
+from canvod.config import load_config
+from canvod.readers.matching import MatchedDirs
+from canvod.store.store import MyIcechunkStore
 from canvod.utils.tools import YYYYDOY
 
 # ── optional loky (S1 / S2) ──────────────────────────────────────────────────

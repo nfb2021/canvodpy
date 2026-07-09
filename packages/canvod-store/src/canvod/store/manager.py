@@ -19,7 +19,7 @@ import xarray as xr
 if TYPE_CHECKING:
     from canvod.vod import VODCalculator
 
-from canvod.utils.config.models import VodAnalysisConfig
+from canvod.config.models import VodAnalysisConfig
 from canvodpy.logging import get_logger
 
 from canvod.store.store import (
@@ -65,7 +65,7 @@ class GnssResearchSite:
         site_name : str
             Name of the research site.
         """
-        from canvod.utils.config import load_config
+        from canvod.config import load_config
 
         config = load_config()
         sites = config.sites.sites
@@ -182,7 +182,7 @@ class GnssResearchSite:
             If no matching site is found for the given path.
         """
         # Load config to get store paths
-        from canvod.utils.config import load_config
+        from canvod.config import load_config
 
         config = load_config()
 
@@ -590,7 +590,7 @@ class GnssResearchSite:
 
         # Apply config-gated derived quantities
         if processing_params is None:
-            from canvod.utils.config import load_config as _load_config
+            from canvod.config import load_config as _load_config
 
             processing_params = _load_config().processing.params
 
@@ -886,7 +886,7 @@ def create_default_site() -> GnssResearchSite:
     GnssResearchSite
         Instance for the ``DEFAULT_RESEARCH_SITE``.
     """
-    from canvod.utils.config import load_config
+    from canvod.config import load_config
 
     _sites = load_config().sites.sites
     if not _sites:

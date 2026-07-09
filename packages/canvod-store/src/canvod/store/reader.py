@@ -11,8 +11,8 @@ from typing import Any, cast
 import numpy as np
 import xarray as xr
 from canvod.auxiliary.preprocessing import prep_aux_ds
+from canvod.config import load_config
 from canvod.readers import MatchedDirs, Rnxv3Obs
-from canvod.utils.config import load_config
 from canvod.utils.tools import _worker_init, get_version_from_pyproject
 from canvodpy.logging import get_logger
 from natsort import natsorted

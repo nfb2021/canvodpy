@@ -25,6 +25,7 @@ dependencies = [
     "canvod-store",
     "canvod-store-metadata",
     "canvod-utils",
+    "canvod-config",
     "canvod-viz",
     "canvod-vod",
     "canvod-ops",
@@ -84,6 +85,7 @@ canvod-grids = { workspace = true }
 canvod-store = { workspace = true }
 canvod-store-metadata = { workspace = true }
 canvod-utils = { workspace = true }
+canvod-config = { workspace = true }
 canvod-viz = { workspace = true }
 canvod-vod = { workspace = true }
 canvod-ops = { workspace = true }

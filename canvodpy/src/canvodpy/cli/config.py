@@ -18,8 +18,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from canvod.utils.config.loader import find_monorepo_root
-from canvod.utils.config.models import ProcessingConfig, SidsConfig, SitesConfig
+from canvod.config.loader import find_monorepo_root
+from canvod.config.models import ProcessingConfig, SidsConfig, SitesConfig
 
 # Config subcommand
 config_app = typer.Typer(
@@ -181,11 +181,11 @@ def validate(
     -------
     None
     """
+    from canvod.config.loader import load_config
     from canvod.readers.gnss_specs.constants import (
         FORMAT_GLOB_PATTERNS,
         RINEX_OBS_GLOB_PATTERNS,
     )
-    from canvod.utils.config.loader import load_config
 
     console.print("\n[bold]Validating configuration...[/bold]\n")
 
@@ -313,7 +313,7 @@ def show(
     -------
     None
     """
-    from canvod.utils.config.loader import load_config
+    from canvod.config.loader import load_config
 
     try:
         config = load_config(config_dir)
@@ -463,7 +463,7 @@ def _show_sites(config: SitesConfig) -> None:
     -------
     None
     """
-    from canvod.utils.config.loader import load_config as _load_config
+    from canvod.config.loader import load_config as _load_config
 
     try:
         full_config = _load_config()

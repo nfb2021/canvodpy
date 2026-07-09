@@ -18,7 +18,7 @@ from typing import Any
 
 import structlog
 
-from canvod.utils.config import load_config
+from canvod.config import load_config
 
 
 def _process_log_suffix() -> str:

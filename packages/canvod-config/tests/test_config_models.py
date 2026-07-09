@@ -1,4 +1,4 @@
-"""Unit tests for canvod.utils.config.models Pydantic validators.
+"""Unit tests for canvod.config.models Pydantic validators.
 
 Tests the validation logic, cross-field constraints, and helper methods
 on the configuration models. No YAML files or filesystem config required.
@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from canvod.utils.config.models import (
+from canvod.config.models import (
     AuxDataConfig,
     CanvodConfig,
     ChunkStrategy,

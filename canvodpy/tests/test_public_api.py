@@ -77,7 +77,7 @@ class TestPipelineAPI:
 
         with (
             patch("canvod.store.GnssResearchSite", return_value=mock_gnss_site),
-            patch("canvod.utils.config.load_config") as mock_config,
+            patch("canvod.config.load_config") as mock_config,
             patch("canvodpy.orchestrator.PipelineOrchestrator"),
         ):
             # Set up config mock
@@ -106,7 +106,7 @@ class TestPipelineAPI:
 
         with (
             patch("canvod.store.GnssResearchSite", return_value=mock_gnss_site),
-            patch("canvod.utils.config.load_config") as mock_config,
+            patch("canvod.config.load_config") as mock_config,
             patch("canvodpy.orchestrator.PipelineOrchestrator"),
         ):
             mock_proc = MagicMock()
@@ -133,7 +133,7 @@ class TestPipelineAPI:
 
         with (
             patch("canvod.store.GnssResearchSite", return_value=mock_gnss_site),
-            patch("canvod.utils.config.load_config") as mock_config,
+            patch("canvod.config.load_config") as mock_config,
             patch("canvodpy.orchestrator.PipelineOrchestrator"),
         ):
             mock_proc = MagicMock()
@@ -211,7 +211,7 @@ class TestAPICoexistence:
 
         with (
             patch("canvod.store.GnssResearchSite", return_value=mock_gnss_site),
-            patch("canvod.utils.config.load_config") as mock_config,
+            patch("canvod.config.load_config") as mock_config,
             patch("canvodpy.orchestrator.PipelineOrchestrator"),
         ):
             mock_proc = MagicMock()
@@ -266,7 +266,7 @@ class TestConfigurationCompatibility:
 
     def test_keep_gnss_observables_available_via_config(self):
         """keep_gnss_observables should be available via load_config()."""
-        from canvod.utils.config import load_config
+        from canvod.config import load_config
 
         try:
             cfg = load_config()

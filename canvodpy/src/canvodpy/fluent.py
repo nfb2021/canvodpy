@@ -174,7 +174,7 @@ class FluentWorkflow:
         self._grid_type = grid_type
         self._vod_calculator_name = vod_calculator
         if keep_vars is None:
-            from canvod.utils.config import load_config
+            from canvod.config import load_config
 
             keep_vars = load_config().processing.params.keep_gnss_observables
         self._keep_vars = keep_vars
@@ -208,7 +208,7 @@ class FluentWorkflow:
 
         from pathlib import Path
 
-        from canvod.utils.config import load_config
+        from canvod.config import load_config
 
         config = load_config()
         site_cfg = config.sites.sites[self._site.name]
@@ -379,7 +379,7 @@ class FluentWorkflow:
         from canvod.auxiliary.ephemeris.provider import (
             AgencyEphemerisProvider,
         )
-        from canvod.utils.config import load_config
+        from canvod.config import load_config
 
         log = self.log.bind(source=source, agency=agency)
 

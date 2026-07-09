@@ -103,7 +103,7 @@ class MyIcechunkStore:
         self._logger = get_logger(__name__)
 
         try:
-            from canvod.utils.config import load_config
+            from canvod.config import load_config
 
             cfg = load_config()
             ic_cfg = cfg.processing.icechunk
@@ -111,7 +111,7 @@ class MyIcechunkStore:
             _vod_store_strategy = cfg.processing.storage.vod_store_strategy
             _log_path_depth = cfg.processing.logging.log_path_depth
         except Exception:
-            from canvod.utils.config.models import IcechunkConfig
+            from canvod.config.models import IcechunkConfig
 
             ic_cfg = IcechunkConfig()
             _rinex_store_strategy = "append"

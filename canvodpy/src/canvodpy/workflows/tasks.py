@@ -26,8 +26,8 @@ import xarray as xr
 
 from canvod.auxiliary.pipeline import AuxDataPipeline
 from canvod.auxiliary.position import ECEFPosition
+from canvod.config import load_config
 from canvod.readers import MatchedDirs
-from canvod.utils.config import load_config
 from canvod.utils.tools import YYYYDOY
 from canvodpy.orchestrator.interpolator import (
     ClockConfig,
@@ -340,7 +340,7 @@ def _resolve_recipe(recipe_name: str) -> Path:
 
     Searches ``config/recipes/`` relative to the monorepo root.
     """
-    from canvod.utils.config.loader import find_monorepo_root
+    from canvod.config.loader import find_monorepo_root
 
     recipe_path = find_monorepo_root() / "config" / "recipes" / f"{recipe_name}.yaml"
     if not recipe_path.exists():

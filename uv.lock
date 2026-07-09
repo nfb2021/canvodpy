@@ -12,6 +12,7 @@ resolution-markers = [
 members = [
     "canvod-audit",
     "canvod-auxiliary",
+    "canvod-config",
     "canvod-grids",
     "canvod-ops",
     "canvod-preflight",
@@ -19,7 +20,6 @@ members = [
     "canvod-store",
     "canvod-store-metadata",
     "canvod-utils",
-    "canvod-virtualiconvname",
     "canvod-viz",
     "canvod-vod",
     "canvodpy",
@@ -248,6 +248,7 @@ name = "canvod-auxiliary"
 version = "0.2.3"
 source = { editable = "packages/canvod-auxiliary" }
 dependencies = [
+    { name = "canvod-config" },
     { name = "canvod-readers" },
     { name = "canvod-utils" },
     { name = "numpy" },
@@ -274,6 +275,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "canvod-config", editable = "packages/canvod-config" },
     { name = "canvod-readers", editable = "packages/canvod-readers" },
     { name = "canvod-utils", editable = "packages/canvod-utils" },
     { name = "numpy", specifier = ">=1.24.0" },
@@ -296,6 +298,25 @@ dev = [
     { name = "pytest-cov", specifier = ">=5.0" },
     { name = "ruff", specifier = ">=0.14" },
     { name = "ty", specifier = ">=0.0.9" },
+]
+
+[[package]]
+name = "canvod-config"
+version = "0.3.0"
+source = { editable = "packages/canvod-config" }
+dependencies = [
+    { name = "email-validator" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "email-validator", specifier = ">=2.0" },
+    { name = "pydantic", specifier = ">=2.0" },
+    { name = "pydantic-settings", specifier = ">=2.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [[package]]
@@ -367,14 +388,13 @@ name = "canvod-ops"
 version = "0.3.0"
 source = { editable = "packages/canvod-ops" }
 dependencies = [
+    { name = "canvod-config" },
     { name = "canvod-grids" },
-    { name = "canvod-utils" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "polars" },
     { name = "structlog" },
     { name = "xarray" },
-    { name = "zarr" },
 ]
 
 [package.dev-dependencies]
@@ -385,14 +405,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "canvod-config", editable = "packages/canvod-config" },
     { name = "canvod-grids", editable = "packages/canvod-grids" },
-    { name = "canvod-utils", editable = "packages/canvod-utils" },
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "pandas", specifier = ">=2.1.0" },
     { name = "polars", specifier = ">=1.0.0" },
     { name = "structlog", specifier = ">=24.1.0" },
     { name = "xarray", specifier = ">=2024.1.0" },
-    { name = "zarr", specifier = ">=3.0.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -408,7 +427,6 @@ source = { editable = "packages/canvod-preflight" }
 dependencies = [
     { name = "natsort" },
     { name = "pydantic" },
-    { name = "pyyaml" },
     { name = "typer" },
 ]
 
@@ -416,7 +434,6 @@ dependencies = [
 requires-dist = [
     { name = "natsort", specifier = ">=8.4.0" },
     { name = "pydantic", specifier = ">=2.5.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
     { name = "typer", specifier = ">=0.12" },
 ]
 
@@ -425,6 +442,7 @@ name = "canvod-readers"
 version = "0.2.3"
 source = { editable = "packages/canvod-readers" }
 dependencies = [
+    { name = "canvod-config" },
     { name = "canvod-utils" },
     { name = "georinex" },
     { name = "matplotlib" },
@@ -449,6 +467,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "canvod-config", editable = "packages/canvod-config" },
     { name = "canvod-utils", editable = "packages/canvod-utils" },
     { name = "georinex", specifier = ">=1.16.0" },
     { name = "matplotlib", specifier = ">=3.7.0" },
@@ -477,6 +496,7 @@ version = "0.2.3"
 source = { editable = "packages/canvod-store" }
 dependencies = [
     { name = "canvod-auxiliary" },
+    { name = "canvod-config" },
     { name = "canvod-grids" },
     { name = "canvod-readers" },
     { name = "canvod-utils" },
@@ -500,6 +520,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "canvod-auxiliary", editable = "packages/canvod-auxiliary" },
+    { name = "canvod-config", editable = "packages/canvod-config" },
     { name = "canvod-grids", editable = "packages/canvod-grids" },
     { name = "canvod-readers", editable = "packages/canvod-readers" },
     { name = "canvod-utils", editable = "packages/canvod-utils" },
@@ -525,7 +546,7 @@ name = "canvod-store-metadata"
 version = "0.3.0"
 source = { editable = "packages/canvod-store-metadata" }
 dependencies = [
-    { name = "canvod-utils" },
+    { name = "canvod-config" },
     { name = "icechunk" },
     { name = "polars" },
     { name = "pydantic" },
@@ -542,7 +563,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "canvod-utils", editable = "packages/canvod-utils" },
+    { name = "canvod-config", editable = "packages/canvod-config" },
     { name = "icechunk", specifier = ">=2.0.0" },
     { name = "polars", specifier = ">=1.0.0" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -562,39 +583,16 @@ name = "canvod-utils"
 version = "0.3.0"
 source = { editable = "packages/canvod-utils" }
 dependencies = [
-    { name = "email-validator" },
     { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "pyyaml" },
     { name = "structlog" },
     { name = "tenacity" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "email-validator", specifier = ">=2.0" },
     { name = "pydantic", specifier = ">=2.0" },
-    { name = "pydantic-settings", specifier = ">=2.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
     { name = "structlog", specifier = ">=24.1.0" },
     { name = "tenacity", specifier = ">=8.2.0" },
-]
-
-[[package]]
-name = "canvod-virtualiconvname"
-version = "0.3.0"
-source = { editable = "packages/canvod-virtualiconvname" }
-dependencies = [
-    { name = "natsort" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "natsort", specifier = ">=8.4.0" },
-    { name = "pydantic", specifier = ">=2.5.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [[package]]
@@ -658,6 +656,7 @@ source = { editable = "canvodpy" }
 dependencies = [
     { name = "altair" },
     { name = "canvod-auxiliary" },
+    { name = "canvod-config" },
     { name = "canvod-grids" },
     { name = "canvod-ops" },
     { name = "canvod-readers" },
@@ -702,6 +701,7 @@ dev = [
 requires-dist = [
     { name = "altair", specifier = ">=6.0.0" },
     { name = "canvod-auxiliary", editable = "packages/canvod-auxiliary" },
+    { name = "canvod-config", editable = "packages/canvod-config" },
     { name = "canvod-filemap", marker = "extra == 'filemap'", git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap" },
     { name = "canvod-grids", editable = "packages/canvod-grids" },
     { name = "canvod-ops", editable = "packages/canvod-ops" },

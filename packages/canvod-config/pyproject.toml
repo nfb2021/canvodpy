@@ -1,7 +1,7 @@
 [project]
-name = "canvod-utils"
+name = "canvod-config"
 version = "0.3.0"
-description = "Shared utilities and diagnostics for canVODpy"
+description = "Configuration models and YAML loading for canVODpy"
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [
@@ -11,13 +11,14 @@ license = {text = "Apache-2.0"}
 
 dependencies = [
     "pydantic>=2.0",
-    "tenacity>=8.2.0",
-    "structlog>=24.1.0",
+    "pydantic-settings>=2.0",
+    "pyyaml>=6.0",
+    "email-validator>=2.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/nfb2021/canvodpy"
-Documentation = "https://nfb2021.github.io/canvodpy/packages/utils/overview/"
+Documentation = "https://nfb2021.github.io/canvodpy/packages/config/overview/"
 Repository = "https://github.com/nfb2021/canvodpy"
 Issues = "https://github.com/nfb2021/canvodpy/issues"
 
@@ -26,4 +27,4 @@ requires = ["uv_build>=0.9.17,<0.10.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = "canvod.utils"
+module-name = "canvod.config"

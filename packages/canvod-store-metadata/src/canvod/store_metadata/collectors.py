@@ -86,7 +86,7 @@ def collect_uv_version() -> str | None:
 def _find_monorepo_root() -> Path | None:
     """Walk up from this file to find pyproject.toml with workspace."""
     try:
-        from canvod.utils.config.loader import find_monorepo_root
+        from canvod.config.loader import find_monorepo_root
 
         return find_monorepo_root()
     except Exception:

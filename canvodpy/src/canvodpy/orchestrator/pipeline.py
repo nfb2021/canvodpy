@@ -13,10 +13,10 @@ from pathlib import Path
 import pint
 import xarray as xr
 
+from canvod.config import load_config
 from canvod.readers import MatchedDirs, PairDataDirMatcher
 from canvod.readers.gnss_specs.constants import UREG
 from canvod.store import GnssResearchSite
-from canvod.utils.config import load_config
 from canvod.utils.tools import YYYYDOY, _worker_init
 
 try:
@@ -1167,8 +1167,8 @@ class SingleReceiverProcessor:
 
 
 if __name__ == "__main__":
+    from canvod.config import load_config
     from canvod.store import GnssResearchSite
-    from canvod.utils.config import load_config
 
     cfg = load_config()
     proc = cfg.processing.params

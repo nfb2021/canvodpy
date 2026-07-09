@@ -1315,7 +1315,7 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
         keep_sids = cast(list[str] | None, kwargs.pop("keep_sids", None))
 
         if keep_data_vars is None:
-            from canvod.utils.config import load_config
+            from canvod.config import load_config
 
             keep_data_vars = load_config().processing.params.keep_gnss_observables
 
@@ -1349,7 +1349,7 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
                 ds[name] = ds[name].astype(object)
 
         if outname:
-            from canvod.utils.config import load_config as _load_config
+            from canvod.config import load_config as _load_config
 
             comp = _load_config().processing.netcdf_compression
             encoding = {

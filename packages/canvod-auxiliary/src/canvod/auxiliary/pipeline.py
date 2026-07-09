@@ -395,7 +395,7 @@ class AuxDataPipeline:
         >>> pipeline.load_all()
         >>> ephem_ds = pipeline.get_ephemerides()
         """
-        from canvod.utils.config import load_config
+        from canvod.config import load_config
 
         from canvod.auxiliary.clock import ClkFile
         from canvod.auxiliary.ephemeris import Sp3File

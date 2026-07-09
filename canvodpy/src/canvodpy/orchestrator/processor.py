@@ -37,9 +37,9 @@ from canvod.auxiliary.position import (
     add_spherical_coords_to_dataset,
     compute_spherical_coordinates,
 )
+from canvod.config import load_config
 from canvod.readers import DataDirMatcher, MatchedDirs
 from canvod.store import GnssResearchSite
-from canvod.utils.config import load_config
 from canvod.utils.tools import _worker_init, get_version_from_pyproject
 from canvodpy.logging import get_logger
 from canvodpy.orchestrator.interpolator import (

@@ -254,7 +254,7 @@ def get_global_attrs() -> dict[str, str]:
         available (e.g. standalone ``canvod-readers`` install without a
         ``canvod-settings.yaml``).
     """
-    from canvod.utils.config import load_config
+    from canvod.config import load_config
 
     try:
         cfg = load_config()

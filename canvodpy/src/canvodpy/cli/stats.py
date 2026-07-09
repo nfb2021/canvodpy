@@ -34,7 +34,7 @@ def stats_compute(
     Loads data, runs the UpdateStatistics pipeline, and saves results
     to the statistics Zarr store.
     """
-    from canvod.utils.config.loader import load_config
+    from canvod.config.loader import load_config
 
     try:
         config = load_config(config_dir)
@@ -85,7 +85,7 @@ def stats_show(
     config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
 ) -> None:
     """Display stored statistics for a site."""
-    from canvod.utils.config.loader import load_config
+    from canvod.config.loader import load_config
 
     try:
         config = load_config(config_dir)
@@ -156,7 +156,7 @@ def stats_reset(
     config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
 ) -> None:
     """Delete the statistics store for a site."""
-    from canvod.utils.config.loader import load_config
+    from canvod.config.loader import load_config
 
     try:
         config = load_config(config_dir)

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from canvod.config.models import PreprocessingConfig
 from canvod.ops.grid import GridAssignment
 from canvod.ops.pipeline import Pipeline
 from canvod.ops.temporal import TemporalAggregate
-from canvod.utils.config.models import PreprocessingConfig
 
 
 def build_default_pipeline(
@@ -27,7 +27,7 @@ def build_default_pipeline(
     """
     if config is None:
         try:
-            from canvod.utils.config import load_config
+            from canvod.config import load_config
 
             config = load_config().processing.preprocessing
         except Exception:

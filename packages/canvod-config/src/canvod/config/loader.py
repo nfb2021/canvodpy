@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from .models import CanvodConfig, ProcessingConfig, SidsConfig, SitesConfig
 
-logger = logging.getLogger("canvod.utils.config")
+logger = logging.getLogger("canvod.config")
 
 
 class ConfigValidationError(ValueError):
@@ -32,7 +32,11 @@ class ConfigValidationError(ValueError):
 
 
 def find_monorepo_root() -> Path:
-    """Find the monorepo root by looking for a .git directory.
+    """Find the monorepo root by looking for a .git entry.
+
+    A repo root's ``.git`` is a directory for a normal clone, but a file
+    (containing a ``gitdir:`` pointer) for a git worktree or submodule — both
+    are valid roots, so any ``.git`` entry (file or directory) counts.
 
     Returns
     -------
@@ -46,27 +50,27 @@ def find_monorepo_root() -> Path:
     """
     current = Path.cwd().resolve()
 
-    # Walk up directory tree looking for .git directory (not file).
+    # Walk up directory tree looking for a .git entry (directory or file).
     for parent in [current, *list(current.parents)]:
         git_path = parent / ".git"
-        if git_path.exists() and git_path.is_dir():
+        if git_path.exists():
             return parent
 
     # Fallback: if this file is in
-    # packages/canvod-utils/src/canvod/utils/config/loader.py then monorepo root
-    # is 7 levels up.
+    # packages/canvod-config/src/canvod/config/loader.py then monorepo root
+    # is 6 levels up.
     try:
         loader_file = Path(__file__).resolve()
-        # loader.py -> config -> utils -> canvod -> src -> canvod-utils ->
+        # loader.py -> config -> canvod -> src -> canvod-config ->
         # packages -> root.
-        monorepo_root = loader_file.parent.parent.parent.parent.parent.parent.parent
+        monorepo_root = loader_file.parent.parent.parent.parent.parent.parent
         git_path = monorepo_root / ".git"
-        if git_path.exists() and git_path.is_dir():
+        if git_path.exists():
             return monorepo_root
     except Exception:
         pass
 
-    raise RuntimeError("Cannot find monorepo root (no .git directory found)")
+    raise RuntimeError("Cannot find monorepo root (no .git entry found)")
 
 
 class ConfigLoader:
@@ -270,7 +274,7 @@ def load_config(
 
     Examples
     --------
-    >>> from canvod.utils.config import load_config
+    >>> from canvod.config import load_config
     >>> config = load_config()
     >>> print(config.nasa_earthdata_acc_mail)
     >>> print(config.processing.aux_data.agency)
