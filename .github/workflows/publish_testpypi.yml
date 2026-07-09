@@ -54,7 +54,7 @@ jobs:
             packages/canvod-viz \
             packages/canvod-vod \
             packages/canvod-ops \
-            packages/canvod-virtualiconvname \
+            packages/canvod-preflight \
             packages/canvod-audit \
             canvodpy; do
             echo "Building $pkg..."

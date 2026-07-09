@@ -17,6 +17,7 @@ see Open Questions before starting.
 | DAG structure tests (AST-based, no Airflow needed) | `canvodpy/tests/test_dag_structure.py` | **Moves** (hardcodes `parents[2] / "dags"`, must be re-pathed) |
 | Task functions (10 public fns) | `canvodpy/src/canvodpy/workflows/tasks.py` | **Stays** — plain-Python functional API, no Airflow import |
 | Task tests | `canvodpy/tests/test_airflow_tasks.py`, `test_task_serialization.py`, `test_fluent_workflow.py`, `test_workflow_integration.py` | **Stay** (they test `canvodpy.workflows.tasks`, not the DAGs) |
+| Airflow-specific diagnostics (`TaskMetrics`/`task_metrics`, XCom+StatsD push) | `packages/canvod-utils/src/canvod/utils/diagnostics/airflow.py` | **Stays for now** — see §3 below; not part of this extraction |
 
 **Exact dependency surface of the two DAG files** (all deferred into task bodies except `structlog` and `airflow.*`):
 - `canvodpy.workflows.tasks`: `validate_data_dirs`, `check_sbf`, `check_rinex`, `check_sp3_availability`, `fetch_aux_data`, `process_sbf`, `process_rinex`, `validate_ingest`, `calculate_vod`, `cleanup`
@@ -32,6 +33,35 @@ All canvodpy-side imports are covered by the single PyPI dependency `canvodpy` (
 - Correction 1: `packages/canvod-filemap/pyproject.toml` `[project.urls]` point at `github.com/nfb2021/canvodpy` (the **core** repo), *not* canvodpy-extensions. Pre-existing inconsistency; `canvod-airflow` should point at the extensions repo, and fixing filemap's URLs is a candidate drive-by.
 - Correction 2 / inconsistency: `canvod-filemap` is **not on PyPI** (404) even though the extensions repo has OIDC publish workflows, and `canvodpy-perf/docs/guides/extensions.md` explicitly says "Extensions are not published to PyPI — install via git+…#subdirectory=". Install docs for `canvod-airflow` must follow the git-subdirectory pattern unless publishing is activated first.
 - Commitizen: lockstep versioning, `version_files` in root `pyproject.toml` currently lists only filemap; both packages sit at **0.3.0**, so `canvod-airflow` must start at **0.3.0** (commitizen requires a single shared version).
+
+## 0.1 `canvod-utils/diagnostics/airflow.py` — checked, out of scope for now (2026-07-09)
+
+While scoping an unrelated `canvod-config` extraction (splitting `canvod-utils/config`
+into its own package), found that `canvod-utils/diagnostics/` (1187 lines:
+`timing.py`, `memory.py`, `dataset.py`, `airflow.py`, `retry.py`, `_store.py`) is a
+dead chain with zero real callers anywhere in the repo — its only "consumer" is
+`canvodpy/utils/perf.py`, a pure re-export shim, itself only re-exported again by
+`canvodpy/utils/__init__.py`, which nothing imports. The live telemetry system is
+a completely separate one, `canvodpy/utils/telemetry.py` (OpenTelemetry-based),
+actively used by `canvod-store/store.py` and `canvodpy/orchestrator/processor.py`.
+Full writeup: `dev/todo_later.md` §21.
+
+**Directly relevant to this migration:** `diagnostics/airflow.py` specifically
+(`TaskMetrics`/`task_metrics`, designed to push to Airflow XCom + StatsD) has zero
+consumers — confirmed neither `dags/gnss_daily_processing.py` nor
+`dags/gnss_backfill.py` import it. So today, moving these two DAG files to
+`canvod-airflow` does **not** need to touch `diagnostics/airflow.py` at all — it's
+truly independent of the DAGs that exist right now.
+
+**Decision: `diagnostics/` (including `airflow.py`) stays in `canvod-utils` for
+this extraction.** Not folded into Phase A–D below. The open question of whether
+`airflow.py` should eventually move to live alongside `canvod-airflow` instead
+(to avoid the external repo needing to depend back on a narrow slice of the main
+monorepo, the same cross-repo-split shape already hit once with
+`canvod-virtualiconvname`/`canvod-preflight`/`canvod-filemap`) is deferred to the
+separate `canvod-utils/diagnostics` cleanup tracked in `dev/todo_later.md` §21 —
+not this document's scope. If that cleanup lands *before* this extraction executes,
+re-check whether `diagnostics/airflow.py` still exists at the path referenced above.
 
 ---
 
@@ -118,7 +148,8 @@ All in `canvodpy-perf/`:
 5. `docs/guides/extensions.md` line 19: flip `canvod-airflow` row from Planned → Available; add the git-install snippet mirroring filemap's (line 27).
 6. Root `pyproject.toml`:
    - Line 7: delete the dead `exclude = ["packages/canvod-streamstats", "packages/canvod-filemap"]` entries (neither dir exists) — the requested drive-by cleanup.
-   - Line 128: remove `"dags/**"` from `[tool.ty.src] exclude` (dir gone).
+   - Line 131 (was line 128 as of 2026-07-08; re-verify at execution time since
+     the file shifts): remove `"dags/**"` from `[tool.ty.src] exclude` (dir gone).
 7. Grep-check remaining references: `docs/index.md:136` (mentions Airflow only as a consumer of the functional API — fine, stays), `README.md` Airflow badge (fine, canvodpy still ships Airflow-ready task functions), `CLAUDE.md:28-29` skills rows (fine — `canvodpy.workflows.tasks` remains Airflow-adjacent; optionally annotate they now serve the external package).
 8. Keep `canvodpy/src/canvodpy/workflows/tasks.py` docs intact — sections of the old `guides/airflow.md` documenting the task functions ("Task Functions", "Calling Tasks Without Airflow") arguably belong to canvodpy, not the extension. Consider salvaging those into a perf-side `docs/guides/workflow-tasks.md` rather than losing them (O4).
 9. Optional: add `airflow = ["canvod-airflow"]` to `canvodpy/pyproject.toml` `[project.optional-dependencies]` mirroring `filemap = [...]` — but this creates a benign extra→base dependency cycle (canvod-airflow depends on canvodpy) and, like the filemap extra, is unresolvable for end users until extensions are on PyPI. Recommend **not** adding it (O3).
@@ -135,6 +166,7 @@ All in `canvodpy-perf/`:
 - **O5 — PyPI publishing activation.** Extensions repo has full OIDC publish workflows, but canvod-filemap was never published and perf docs say "not published to PyPI". Decide whether the `v0.4.0` release should be the first actual PyPI publish (would simplify all install docs and unblock O3).
 - **O6 — Versioning.** Lockstep forces `canvod-airflow` to be born at 0.3.0 and released as 0.4.0 alongside a filemap bump with no filemap changes. Acceptable per repo policy, but confirm.
 - **O7 — Config loading at parse time.** `_get_configured_sites()` runs `load_config()` inside the Airflow scheduler's parse loop on every DagBag refresh. No change strictly required for the move, but the packaged context is a natural moment to add the `config_path` Variable/Param support the guide describes (Options 1–3 in `guides/airflow.md` are documented but only partially implemented). Recommend deferring — keep the extraction a pure move.
+- **O8 — `diagnostics/airflow.py` (`TaskMetrics`, XCom+StatsD push) resolved as out-of-scope, 2026-07-09.** Checked whether this extraction should also move `canvod-utils/diagnostics/airflow.py` alongside the DAGs, since leaving Airflow-specific code behind in a generic package while the DAG logic moves out recreates the exact cross-repo split already hit with `canvod-virtualiconvname`/`canvod-preflight`/`canvod-filemap`. Confirmed it has zero consumers today, including the two DAG files being moved here — so nothing forces a decision now. **Decision: `diagnostics/` stays in `canvod-utils` for this extraction**, tracked separately in `dev/todo_later.md` §21 (whole `canvod-utils/diagnostics` module is a dead re-export chain superseded by the OpenTelemetry-based `canvodpy/utils/telemetry.py`, slated for its own GitHub issue). Full detail in §0.1 above.
 - **n8n — resolved:** nothing exists; nothing to migrate; no `canvod-n8n` placeholder warranted (the `todo_later.md` decision already routed automation through the CLI).
 
 ### Critical files for implementation

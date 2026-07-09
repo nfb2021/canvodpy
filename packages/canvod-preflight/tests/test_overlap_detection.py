@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from canvod.virtualiconvname import CanVODFilename, FilenameMapper
-from canvod.virtualiconvname.mapping import VirtualFile
+from canvod.preflight import CanVODFilename, FilenameMapper
+from canvod.preflight.mapping import VirtualFile
 
 
 def _vf(

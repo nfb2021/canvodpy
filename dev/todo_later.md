@@ -1369,3 +1369,157 @@ on-disk epoch chunk sizes/counts before running the full aggregation).
 4. Verify (chunk size, metadata row counts, root attrs, spot-check data
    values) before resuming the pipeline.
 5. Resume ingestion — new writes should now be clean appends.
+
+## 20. Pre-existing test failures (18) — found while verifying canvod-virtualiconvname removal, 2026-07-09
+
+Confirmed via `git stash`/`stash pop` that all 18 fail identically with or
+without today's changes (`canvod-virtualiconvname` removal, `find_monorepo_root()`
+worktree fix, `canvod-preflight` test port) — none of these are regressions
+from that work, just newly noticed because a full `pytest -m "not integration"`
+run was done to validate the removal.
+
+1. **`packages/canvod-utils/tests/test_config_loader.py`** (4 failures):
+   `TestConfigLoaderRoundTrip::test_load_from_temp_config_dir`,
+   `test_user_config_overrides_defaults`,
+   `TestConfigLoaderDefaults::test_missing_user_config_uses_defaults` — all
+   `FileNotFoundError: Settings file not found: /private/var/folders/...`;
+   `TestConfigLoaderValidationError::test_invalid_config_raises_config_validation_error`
+   — `AttributeError: ... does not have the attribute '_load_sids'` (mock
+   patches a method that no longer exists on `ConfigLoader`). Likely stale
+   after a `ConfigLoader` refactor — tests weren't updated to match.
+2. **`packages/canvod-readers/tests/test_builder.py`** (13 failures, all
+   `TestDatasetBuilder`): every test raises `ValueError: Dataset validation
+   failed: ...` — looks like `DatasetBuilder`'s output stopped satisfying its
+   own validation step across the board, so likely one shared root cause
+   rather than 13 separate bugs.
+3. **`packages/canvod-store/tests/test_store_crud.py::TestStoreCreation::test_create_rinex_store`**
+   (1 failure): `AssertionError: assert 'gnss_store' == 'rinex_store'` — looks
+   like a store/group naming default changed without updating this test's
+   expectation.
+
+Not investigated further yet — just confirmed pre-existing and catalogued so
+they don't get mistaken for new regressions later.
+
+## 21. `canvod-utils/diagnostics/` is a dead chain, superseded by OpenTelemetry — needs a GitHub issue
+
+**Found 2026-07-09**, while scoping the `canvod-config` extraction (checking
+what else lives in `canvod-utils` besides `config/`).
+
+`canvod-utils/diagnostics/` (1187 lines: `timing.py`, `memory.py`,
+`dataset.py`, `airflow.py`, `retry.py`, `_store.py` — a homegrown
+timing/memory/dataset-quality/Airflow-metrics toolkit with an optional
+SQLite-backed metrics store) has exactly **one** consumer anywhere in the
+repo: `canvodpy/utils/perf.py`, which is a pure re-export shim (`"""Re-exports
+from canvod.utils.diagnostics ... the canonical implementation lives in
+canvod-utils so all workspace packages can use it."""`). That shim is in turn
+only re-exported again by `canvodpy/utils/__init__.py`. **Nothing imports
+either re-export layer** — confirmed via repo-wide grep for
+`canvodpy.utils.perf`/`canvodpy.utils.<symbol>`. Three layers deep, zero real
+callers.
+
+The actual, live telemetry system is a completely separate one:
+`canvodpy/utils/telemetry.py` (OpenTelemetry-based traces/metrics), actively
+imported by `canvod-store/store.py` (`trace_icechunk_write`) and
+`canvodpy/orchestrator/processor.py` (`trace_rinex_processing`). So there are
+two parallel diagnostics systems — one dead, one live — same shape as the
+`canvod-virtualiconvname`/`canvod-preflight`/`canvod-filemap` situation
+resolved above (see §12 history).
+
+**Airflow-specific angle, checked per explicit request:** `diagnostics/airflow.py`
+(`TaskMetrics`/`task_metrics`, designed to push to Airflow XCom + StatsD) has
+zero consumers — confirmed the two real DAGs in this repo
+(`dags/gnss_daily_processing.py`, `dags/gnss_backfill.py`) don't import it
+either, so it's disconnected even from the one place it's explicitly designed
+for. This matters for the planned Airflow outsourcing
+(`canvodpy-extensions/packages/canvod-airflow` or `canvod-pipeline-orchestration`,
+see `memory/canvodpy_extensions_repo.md`): if DAG/operator logic moves out to
+that external repo while `diagnostics/airflow.py` stays behind in the main
+monorepo's `canvod-utils` (or its post-split successor), any future real use
+of `TaskMetrics` from the external package would require `canvod-airflow` to
+depend back on a narrow slice of the main monorepo — the exact cross-repo
+split problem already hit once with naming-convention code. Since it has zero
+consumers today, this is the cheap moment to decide, before it accretes real
+callers: either move `airflow.py` to live with the eventual `canvod-airflow`
+package, or delete it outright and rebuild simple Airflow instrumentation
+directly in that package if/when actually needed (OpenTelemetry's `telemetry.py`
+may already cover the real need — worth checking before rebuilding anything).
+
+**Cross-referenced 2026-07-09** into `dev/airflow_extraction_plan.md` (§0.1 and
+O8): confirmed `diagnostics/airflow.py` is not imported by either DAG file
+being migrated in that plan, so `diagnostics/` stays in `canvod-utils` for
+that extraction — resolving the open question there without blocking on this
+cleanup.
+
+**Action:** translate this into a GitHub issue when doing the next cleanup
+pass — not created yet. Decide: (a) delete the whole dead `diagnostics/`
+re-export chain (`canvod-utils/diagnostics/` + `canvodpy/utils/perf.py` +
+the re-export in `canvodpy/utils/__init__.py`) since nothing calls it, or
+(b) keep it and actually wire it in somewhere, with `airflow.py` specifically
+relocated to (or deleted in favor of) the eventual `canvod-airflow` package
+rather than staying in the generic config/utils layer.
+
+## 22. `canvod-readers` standalone install: stale-warning report resolved, real missing-deps + circular-dep bug found, 2026-07-09
+
+**Context:** user reproduced a real standalone-install pain point — `uv init` +
+`uv add canvod-readers` in a fresh directory, then `SbfReader(...).to_ds()`.
+
+**Part 1 — the double config warning, resolved as a non-issue on current HEAD.**
+Live repro printed:
+```
+⚠️  Warning: .../config/processing.yaml not found, using defaults
+   Run: just config-init
+⚠️  Warning: .../config/sites.yaml not found, no sites configured
+   Run: just config-init
+.../pydantic/main.py:263: UserWarning: No research sites defined in sites.yaml. Run: just config-init
+```
+Traced the exact literal text — it does **not** exist anywhere in this branch's
+`canvod-config`/`canvod-utils` source (grepped `models.py`/`loader.py`, no
+match). The Dataset attrs in the user's repro show `Software: canVODpy,
+Version: 0.2.3` — PyPI is serving the **old, pre-`canvod-settings.yaml`-unification**
+release (before §16 "pydantic-settings: 12-factor config resolution", DONE
+2026-07-08). Verified directly: called `canvod.config.load_config()` from an
+empty cwd using this branch's current code — raises a clean `FileNotFoundError`,
+**zero warnings printed** (`warnings.catch_warnings(record=True)` recorded 0).
+The `SitesConfig.validate_at_least_one_site` `UserWarning` (`models.py:1074`,
+"No research sites defined...") still exists in current code, but the new
+unified loader raises `FileNotFoundError` before ever constructing an empty
+`SitesConfig`, so it doesn't fire in the "nothing configured at all" case
+anymore. **Conclusion: already fixed on this branch, just not released to
+PyPI yet.** Re-verify once a new version publishes — if the warning still
+appears in a real `uv add canvod-readers` after that release, this needs a
+second look.
+
+**Part 2 — a real, separate bug: missing dependencies + a genuine circular
+dependency.** After installing `pymap3d` and `canvod-auxiliary` manually to
+get past two `ModuleNotFoundError`s, the read succeeded. Confirmed in source:
+`packages/canvod-readers/src/canvod/readers/sbf/reader.py` does deferred
+(inside-method, not top-level) hard imports —
+`import pymap3d as pm` (lines 1471, 2417) and
+`from canvod.auxiliary.preprocessing import pad_to_global_sid` (lines 1517,
+2038, 2457) — reachable from ordinary `to_ds()` usage on SBF files, but
+neither `pymap3d` nor `canvod-auxiliary` is declared in
+`packages/canvod-readers/pyproject.toml`'s `dependencies`. **Worse than a
+missing-dependency bug:** `canvod-auxiliary/pyproject.toml` itself declares
+`canvod-readers` as a dependency (confirmed) and imports it in 5 files. So
+`canvod-readers` cannot simply add `canvod-auxiliary` as a hard dependency —
+that would create a real cycle (`canvod-readers → canvod-auxiliary →
+canvod-readers`), not just an awkward one. This is the same shape of problem
+as the `canvod-config`-in-`canvodpy` question resolved earlier this session,
+one layer down the dependency graph.
+
+**Not fixed yet — needs a real design decision, not a quick patch:**
+1. `pymap3d` — straightforward, just add it to `canvod-readers`'s
+   `dependencies` (it has no reverse dependency on `canvod-readers`).
+2. `pad_to_global_sid` — the actual cycle. Options: (a) move
+   `pad_to_global_sid` (or whatever `sbf/reader.py` specifically needs from
+   it) down into `canvod-readers` or a lower-level shared package that both
+   can depend on without a cycle; (b) make the SBF-auxiliary-augmentation
+   path in `sbf/reader.py` a true optional/lazy feature with a clear
+   `ImportError` message telling the user to `uv add canvod-auxiliary`
+   themselves (matches today's *de facto* behavior, just needs a friendlier
+   error instead of a raw `ModuleNotFoundError`); (c) restructure so
+   `sbf/reader.py`'s augmentation step lives in `canvod-auxiliary` instead
+   (which already legitimately depends on `canvod-readers`), not in
+   `canvod-readers` reaching upward into `canvod-auxiliary`.
+3. Translate into a GitHub issue alongside §21 — same "found while doing
+   something else, needs its own decision" bucket.

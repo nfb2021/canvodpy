@@ -1,8 +1,8 @@
-"""Tests for canvod.virtualiconvname.patterns."""
+"""Tests for canvod.preflight.patterns."""
 
 import pytest
 
-from canvod.virtualiconvname.patterns import (
+from canvod.preflight.patterns import (
     AUTO_PATTERN_ORDER,
     BUILTIN_PATTERNS,
     hour_letter_to_int,
