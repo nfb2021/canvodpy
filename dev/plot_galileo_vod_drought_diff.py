@@ -1,16 +1,36 @@
-"""Plot the reference-vs-drought VOD difference (raw and normalized).
+"""Isolate the drought-specific VOD signal, correcting for inter-tree bias.
 
-Treats the lower antenna as the undisturbed reference and the upper antenna
-as the drought-subjected one. Computes, per day:
+The naive (reference - stressed) difference conflates two things:
+  1. A structural bias — the two antennas observe different trees, so they
+     have different baseline biomass/canopy density, and likely a different
+     SCALE of response to shared seasonal dynamics too (not just an offset).
+  2. The drought-specific signal we actually want to isolate.
 
-    diff      = reference - stressed          (lower - upper)
-    norm_diff = (reference - stressed) / reference
+Assumption (per domain input): the two trees' *relative* dynamics are
+identical — both respond to the same weather/seasonal drivers in the same
+way — except for drought-induced vegetation water changes at the stressed
+antenna. Under that assumption, a robust LINEAR fit of
 
-Positive values mean the drought-subjected antenna has LOWER VOD than the
-reference — i.e. a drought stress signal. Both are smoothed with the same
-Savitzky-Golay approach as `plot_galileo_vod_comparison.py` and plotted as
-two stacked panels on one figure, with raw (unsmoothed) daily values shown
-as a semi-transparent scatter underneath each line.
+    stressed ≈ slope * reference + intercept
+
+fit across the whole record describes "what stressed normally reads, given
+what reference reads" — i.e. the shared dynamics plus the fixed structural
+bias (both scale and offset). The RESIDUAL (observed stressed - predicted
+stressed) is then the part of the stressed signal NOT explained by the
+shared dynamics — which, under the stated assumption, is the drought signal.
+
+Theil-Sen (median-of-pairwise-slopes) is used instead of ordinary
+least-squares specifically because it's robust to outliers: as long as the
+drought-affected days are a minority of the whole record (breakdown point
+~29%), the fit reflects the "normal" (non-drought) relationship instead of
+being dragged toward it by the drought period itself.
+
+Produces a 3-panel figure:
+  1. Scatter of reference vs. stressed (all days) with the fitted line —
+     a visual check of "the correction," in the same joint-distribution
+     terms the fit itself operates on.
+  2. Residual over time (raw units): observed - predicted.
+  3. Normalized residual over time: residual / predicted.
 
 Usage
 -----
@@ -24,7 +44,9 @@ import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 from plot_galileo_vod_comparison import global_daily_series, smooth
+from scipy.stats import theilslopes
 
 
 def main() -> None:
@@ -70,27 +92,49 @@ def main() -> None:
     reference = global_daily_series(args.reference)
     stressed = global_daily_series(args.stressed)
 
-    # Only compare days where BOTH antennas have a valid value — a
-    # difference is meaningless if one side is NaN.
     aligned = reference.to_frame("reference").join(
         stressed.to_frame("stressed"), how="inner"
     )
-    n_common = int((aligned["reference"].notna() & aligned["stressed"].notna()).sum())
-    print(f"{n_common} / {len(aligned)} days have both reference and stressed values.")
+    aligned = aligned.dropna()
+    n_common = len(aligned)
+    print(f"{n_common} days have both reference and stressed values.")
 
-    diff = (aligned["reference"] - aligned["stressed"]).rename("diff")
-    norm_diff = (diff / aligned["reference"]).rename("norm_diff")
+    x = aligned["reference"].to_numpy()
+    y = aligned["stressed"].to_numpy()
 
-    fig, (ax_diff, ax_norm) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+    slope, intercept, slope_lo, slope_hi = theilslopes(y, x)
+    print(
+        f"Robust fit: stressed = {slope:.4f} * reference + {intercept:.4f} "
+        f"(slope 95% CI: [{slope_lo:.4f}, {slope_hi:.4f}])"
+    )
+
+    predicted = slope * aligned["reference"] + intercept
+    residual = (aligned["stressed"] - predicted).rename("residual")
+    norm_residual = (residual / predicted).rename("norm_residual")
+
+    fig = plt.figure(figsize=(10, 11))
+    gs = fig.add_gridspec(3, 1, height_ratios=[1.2, 1, 1])
+    ax_scatter = fig.add_subplot(gs[0])
+    ax_resid = fig.add_subplot(gs[1])
+    ax_norm = fig.add_subplot(gs[2], sharex=ax_resid)
+
+    ax_scatter.scatter(x, y, alpha=args.raw_alpha, s=args.raw_size, color="tab:purple")
+    x_line = np.array([x.min(), x.max()])
+    ax_scatter.plot(
+        x_line,
+        slope * x_line + intercept,
+        color="black",
+        linewidth=1.5,
+        label=f"stressed = {slope:.3f}·reference + {intercept:.3f}",
+    )
+    ax_scatter.set_xlabel("Reference VOD")
+    ax_scatter.set_ylabel("Stressed VOD")
+    ax_scatter.set_title("Joint distribution + robust (Theil-Sen) fit")
+    ax_scatter.legend()
 
     for ax, series, ylabel, title in [
-        (ax_diff, diff, "VOD difference", "Reference − stressed (raw units)"),
-        (
-            ax_norm,
-            norm_diff,
-            "Normalized VOD difference",
-            "(Reference − stressed) / reference",
-        ),
+        (ax_resid, residual, "Residual VOD", "Stressed − predicted (raw units)"),
+        (ax_norm, norm_residual, "Normalized residual", "Residual / predicted"),
     ]:
         if series.notna().sum() > 0:
             ax.scatter(
@@ -117,7 +161,8 @@ def main() -> None:
 
     ax_norm.set_xlabel("Date")
     fig.suptitle(
-        f"Drought signal (positive = stressed antenna lower VOD), "
+        f"Drought signal after removing shared dynamics + inter-tree bias "
+        f"(negative = stressed antenna below prediction), "
         f"{args.window}-day Savitzky-Golay smoothed"
     )
     fig.autofmt_xdate()
