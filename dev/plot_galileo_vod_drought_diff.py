@@ -64,6 +64,16 @@ def main() -> None:
         help="Drought-subjected antenna's per-cell dataset",
     )
     parser.add_argument(
+        "--start",
+        default=None,
+        help="Restrict the fit AND the residual to this window (inclusive); default = whole record",
+    )
+    parser.add_argument(
+        "--end",
+        default=None,
+        help="Restrict the fit AND the residual to this window (inclusive); default = whole record",
+    )
+    parser.add_argument(
         "--window", type=int, default=7, help="Savitzky-Golay window (days)"
     )
     parser.add_argument(
@@ -95,9 +105,12 @@ def main() -> None:
     aligned = reference.to_frame("reference").join(
         stressed.to_frame("stressed"), how="inner"
     )
+    if args.start is not None or args.end is not None:
+        aligned = aligned.loc[args.start : args.end]
     aligned = aligned.dropna()
     n_common = len(aligned)
-    print(f"{n_common} days have both reference and stressed values.")
+    window_label = f"{args.start or 'record start'} to {args.end or 'record end'}"
+    print(f"{n_common} days have both reference and stressed values ({window_label}).")
 
     x = aligned["reference"].to_numpy()
     y = aligned["stressed"].to_numpy()
@@ -163,7 +176,7 @@ def main() -> None:
     fig.suptitle(
         f"Drought signal after removing shared dynamics + inter-tree bias "
         f"(negative = stressed antenna below prediction), "
-        f"{args.window}-day Savitzky-Golay smoothed"
+        f"{args.window}-day Savitzky-Golay smoothed, {window_label}"
     )
     fig.autofmt_xdate()
     fig.tight_layout()

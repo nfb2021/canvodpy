@@ -54,21 +54,32 @@ from canvod.viz import HemisphereVisualizer2D, PolarPlotStyle
 
 
 def fit_global_relationship(
-    reference_path: Path, stressed_path: Path
+    reference_path: Path,
+    stressed_path: Path,
+    start: str | None = None,
+    end: str | None = None,
 ) -> tuple[float, float]:
-    """Theil-Sen fit of stressed ~= slope * reference + intercept, whole record."""
+    """Theil-Sen fit of stressed ~= slope * reference + intercept.
+
+    Restricted to [start, end] if given -- the fit and the residual it feeds
+    should use the SAME window, otherwise "predicted" reflects a relationship
+    from outside the period being analyzed.
+    """
     reference = global_daily_series(reference_path)
     stressed = global_daily_series(stressed_path)
     aligned = reference.to_frame("reference").join(
         stressed.to_frame("stressed"), how="inner"
     )
+    if start is not None or end is not None:
+        aligned = aligned.loc[start:end]
     aligned = aligned.dropna()
     slope, intercept, lo, hi = theilslopes(
         aligned["stressed"].to_numpy(), aligned["reference"].to_numpy()
     )
     print(
-        f"Global fit: stressed = {slope:.4f} * reference + {intercept:.4f} "
-        f"(slope 95% CI: [{lo:.4f}, {hi:.4f}])"
+        f"Global fit ({len(aligned)} days, {start or 'record start'} to "
+        f"{end or 'record end'}): stressed = {slope:.4f} * reference + "
+        f"{intercept:.4f} (slope 95% CI: [{lo:.4f}, {hi:.4f}])"
     )
     return slope, intercept
 
@@ -126,7 +137,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    slope, intercept = fit_global_relationship(args.reference, args.stressed)
+    slope, intercept = fit_global_relationship(
+        args.reference, args.stressed, args.start, args.end
+    )
 
     ref_ds = xr.open_dataset(args.reference)
     stressed_ds = xr.open_dataset(args.stressed)
