@@ -98,7 +98,7 @@ def main() -> None:
         help="Upper-antenna per-cell dataset",
     )
     parser.add_argument(
-        "--window", type=int, default=30, help="Savitzky-Golay window (days)"
+        "--window", type=int, default=7, help="Savitzky-Golay window (days)"
     )
     parser.add_argument(
         "--polyorder", type=int, default=2, help="Savitzky-Golay polynomial order"
