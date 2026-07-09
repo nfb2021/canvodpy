@@ -283,8 +283,8 @@ def compute_percell_timeseries(
     time_to_idx = {pd.Timestamp(t): i for i, t in enumerate(output_times)}
 
     chunk_starts = pd.date_range(
-        start=pd.to_datetime(time_start),
-        end=pd.to_datetime(time_end),
+        start=time_start,
+        end=time_end,
         freq=f"{chunk_days}D",
     )
 
@@ -293,7 +293,7 @@ def compute_percell_timeseries(
     for chunk_start in tqdm(chunk_starts, desc="Processing chunks"):
         chunk_end = min(
             chunk_start + pd.Timedelta(days=chunk_days),
-            pd.to_datetime(time_end),
+            time_end,
         )
         chunk_data = data_ds.sel(epoch=slice(chunk_start, chunk_end))
 
