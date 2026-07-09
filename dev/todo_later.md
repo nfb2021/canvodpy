@@ -1164,7 +1164,31 @@ thumbnails are keyed by the old filename stems and won't exist for
 
 ---
 
-## 18. Multi-process logging race — `RotatingFileHandler` shared across loky workers
+## 18. ~~Multi-process logging race~~ — FIXED 2026-07-08
+
+**Fix:** option 3 from the candidates below — per-process log filenames.
+`_process_log_suffix()` in `logging_config.py` returns `""` for the main
+process (unchanged filenames, fully backwards compatible) and `.{pid}` for
+any other process. Every handler's filename (`full{suffix}.json`,
+`main{suffix}.log`, `errors{suffix}.log`, `performance{suffix}.json`,
+`{component}{suffix}.log`) now includes it, so concurrent loky workers never
+share a physical path — the `os.rename()` race in `doRollover()` is
+structurally impossible, not just less likely. No log content is dropped or
+silenced (rejected option 1/4); no new dependency (rejected option 2).
+Trade-off accepted: `machine/full.json` is now fragmented per worker PID
+during a run with active parallelism — a `full*.json` glob is needed for
+full-run analysis instead of a single file (matches what the log-analysis
+work in this same session already did for rotated `.1`–`.10` files).
+
+**Also removed** the `HANDLER 9: Legacy compatibility` file handler (writing
+to the raw `logfile` path, i.e. `canvodpy.log`) — it duplicated
+`machine/full.json`'s content with no remaining consumer and was already
+tagged `# Remove this after migration`; no reason to also suffix a dead
+handler.
+
+Verified with a real `ProcessPoolExecutor` run: main process wrote
+unsuffixed files, each of 2 workers wrote its own `*.{pid}.*` set, zero
+collisions.
 
 **Found 2026-07-08**, live production run on the remote processing machine, under
 `days_per_batch=14`. Non-fatal (Python's `logging` module catches handler `emit()`
@@ -1308,6 +1332,20 @@ currently safe to run concurrently with active ingestion into the same group
 during the rechunk window) — fine for a one-time migration with the pipeline
 stopped first, but would need a "detect branch moved, abort" guard before ever
 becoming a recurring/automated job.
+
+**Rechunk NOT needed before one-off analysis reads (2026-07-09).** The
+misalignment above is a write-amplification problem (daily appends forcing
+read-modify-write of a straddling chunk) — it does not force a rechunk
+before a bulk read-and-aggregate pass like a VOD timeseries plot. Reading
+the whole store once touches every chunk regardless of how they're cut;
+an oversized-but-uniform epoch chunk just means slightly more data pulled
+per fetch, not a correctness or major performance problem. The one thing
+that *would* matter for reads: if the RMW churn during backfill left the
+store with many small, irregular chunks (fragmented) rather than a uniform
+oversized grid — that's a genuinely different failure mode from "just
+bigger than a day" and worth a quick check first. `dev/plot_galileo_vod_timeseries.py`
+includes a chunk-layout diagnostic cell for exactly this (reports actual
+on-disk epoch chunk sizes/counts before running the full aggregation).
 
 **Still pending:**
 1. Stop the remote pipeline.

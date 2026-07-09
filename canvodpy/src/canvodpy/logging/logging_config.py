@@ -8,6 +8,8 @@ This module configures structured logging with multiple outputs:
 """
 
 import logging
+import multiprocessing
+import os
 import sys
 from collections.abc import Callable
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
@@ -17,6 +19,22 @@ from typing import Any
 import structlog
 
 from canvod.utils.config import load_config
+
+
+def _process_log_suffix() -> str:
+    """Return a filename suffix identifying the current OS process.
+
+    Empty in the main process (unchanged filenames, backwards compatible).
+    Non-empty in any other process (e.g. a loky/ProcessPoolExecutor worker),
+    since ``RotatingFileHandler``/``TimedRotatingFileHandler`` are only safe
+    within a single process — multiple processes rotating the same physical
+    file race on ``os.rename()``. Giving each process its own file set
+    removes the shared path entirely instead of trying to coordinate rotation
+    across processes.
+    """
+    if multiprocessing.current_process().name == "MainProcess":
+        return ""
+    return f".{os.getpid()}"
 
 
 def _setup_log_directories(base_dir: Path) -> dict[str, Path]:
@@ -233,6 +251,10 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
     base_dir = logfile.parent
     log_dirs = _setup_log_directories(base_dir)
 
+    # Distinguishes worker-process log files from the main process's, so
+    # concurrent processes never share a physical path (see _process_log_suffix).
+    suffix = _process_log_suffix()
+
     timestamper = structlog.processors.TimeStamper(fmt="iso", utc=True)
 
     shared_processors = [
@@ -269,7 +291,7 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
     # ========================================================================
     # HANDLER 2: Machine JSON - Complete structured logs with rotation
     # ========================================================================
-    machine_log = log_dirs["machine"] / "full.json"
+    machine_log = log_dirs["machine"] / f"full{suffix}.json"
     machine_handler = RotatingFileHandler(
         machine_log,
         maxBytes=100 * 1024 * 1024,  # 100MB max per file
@@ -289,7 +311,7 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
     # ========================================================================
     # HANDLER 3: Human-readable - Traditional logs with rotation
     # ========================================================================
-    human_log = log_dirs["human"] / "main.log"
+    human_log = log_dirs["human"] / f"main{suffix}.log"
     human_handler = TimedRotatingFileHandler(
         human_log,
         when="midnight",  # Rotate at midnight
@@ -310,7 +332,7 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
     # ========================================================================
     # HANDLER 4: Errors Only - Detailed error logs with stack traces
     # ========================================================================
-    error_log = log_dirs["human"] / "errors.log"
+    error_log = log_dirs["human"] / f"errors{suffix}.log"
     error_handler = RotatingFileHandler(
         error_log,
         maxBytes=50 * 1024 * 1024,  # 50MB max per file
@@ -331,7 +353,7 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
     # ========================================================================
     # HANDLER 5: Performance Metrics - Timing and throughput data
     # ========================================================================
-    perf_log = log_dirs["machine"] / "performance.json"
+    perf_log = log_dirs["machine"] / f"performance{suffix}.json"
     perf_handler = RotatingFileHandler(
         perf_log,
         maxBytes=50 * 1024 * 1024,  # 50MB max per file
@@ -354,7 +376,7 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
     # ========================================================================
     component_handlers = []
     for component_name in ["processor", "auxiliary", "icechunk"]:
-        comp_log = log_dirs["component"] / f"{component_name}.log"
+        comp_log = log_dirs["component"] / f"{component_name}{suffix}.log"
         comp_handler = TimedRotatingFileHandler(
             comp_log,
             when="midnight",
@@ -374,20 +396,6 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
         comp_handler.setFormatter(comp_formatter)
         component_handlers.append(comp_handler)
 
-    # ========================================================================
-    # HANDLER 9: Legacy compatibility - Keep single file for now
-    # ========================================================================
-    legacy_handler = logging.FileHandler(logfile, encoding="utf-8")
-    legacy_handler.setLevel(logging.INFO)
-    legacy_formatter = structlog.stdlib.ProcessorFormatter(
-        foreign_pre_chain=shared_processors,
-        processors=[
-            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            json_renderer,
-        ],
-    )
-    legacy_handler.setFormatter(legacy_formatter)
-
     # Register all handlers
     root_logger.addHandler(console_handler)
     root_logger.addHandler(machine_handler)
@@ -396,7 +404,6 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
     root_logger.addHandler(perf_handler)
     for handler in component_handlers:
         root_logger.addHandler(handler)
-    root_logger.addHandler(legacy_handler)  # Remove this after migration
 
     # Structlog config
     structlog.configure(

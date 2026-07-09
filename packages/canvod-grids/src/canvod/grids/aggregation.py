@@ -185,6 +185,7 @@ def compute_percell_timeseries(
     temporal_resolution: str = "1D",
     chunk_days: int = 21,
     min_obs_per_cell_time: int = 1,
+    stat: str = "mean",
 ) -> xr.Dataset:
     """Compute time series per cell with SID aggregation.
 
@@ -214,6 +215,9 @@ def compute_percell_timeseries(
         Days per processing chunk.
     min_obs_per_cell_time : int
         Minimum SID observations per (cell, time-bin) to retain.
+    stat : {'mean', 'median'}
+        Statistic to compute per (cell, time-bin), mirroring
+        :func:`aggregate_data_to_grid`'s ``stat`` parameter.
 
     Returns
     -------
@@ -223,6 +227,9 @@ def compute_percell_timeseries(
         ``cell_theta``, ``cell_phi``.
 
     """
+    if stat not in ("mean", "median"):
+        raise ValueError(f"Unsupported stat: {stat!r} (expected 'mean' or 'median')")
+
     print("📍 PER-CELL TIME SERIES AGGREGATION")
     print("=" * 60)
     print(f"📦 Chunk size: {chunk_days} days")
@@ -291,6 +298,7 @@ def compute_percell_timeseries(
             value_var,
             cell_var,
             min_obs_per_cell_time,
+            stat,
         )
 
         if chunk_results:
@@ -537,8 +545,9 @@ def _process_chunk_percell(
     value_var: str,
     cell_var: str,
     min_obs_per_cell_time: int,
+    stat: str = "mean",
 ) -> dict | None:
-    """Aggregate one time chunk into (time_bin, cell_id) means via polars."""
+    """Aggregate one time chunk into (time_bin, cell_id) stats via polars."""
     vod_values = chunk_data[value_var].values
     cell_values = chunk_data[cell_var].values
     epochs = chunk_data.epoch.values
@@ -562,6 +571,10 @@ def _process_chunk_percell(
     flat_epochs = epochs[epoch_idx]
 
     polars_resolution = _convert_to_polars_freq(temporal_resolution)
+    stat_expr = {
+        "mean": pl.col("vod").mean(),
+        "median": pl.col("vod").median(),
+    }[stat]
 
     try:
         result = (
@@ -578,7 +591,7 @@ def _process_chunk_percell(
             .group_by(["time_bin", "cell_id"])
             .agg(
                 [
-                    pl.col("vod").mean().alias("cell_mean"),
+                    stat_expr.alias("cell_mean"),
                     pl.col("vod").count().alias("cell_count"),
                 ]
             )
@@ -713,17 +726,25 @@ def _create_percell_dataset(
             "processing_time_min": processing_time / 60,
             "temporal_resolution": temporal_resolution,
             "chunk_days": chunk_days,
-            "spatial_selection": {
-                "theta_range": theta_range,
-                "phi_range": phi_range,
-                "selected_cells_count": len(selected_cells),
-                "total_cells": grid.ncells,
-            },
-            "usage_examples": {
-                "global_average": "compute_global_average(ds)",
-                "regional_subset": "ds.sel(cell=region_cells)",
-                "diurnal_analysis": "ds.groupby('time.hour').mean()",
-                "spatial_patterns": "ds.mean(dim='time')",
-            },
+            # Dict values aren't valid netCDF/CF attrs (must be str, Number,
+            # ndarray, list, tuple, or bytes) — stringify so the output of
+            # this function round-trips through to_netcdf()/open_dataset()
+            # without callers having to know to clean attrs themselves.
+            "spatial_selection": str(
+                {
+                    "theta_range": theta_range,
+                    "phi_range": phi_range,
+                    "selected_cells_count": len(selected_cells),
+                    "total_cells": grid.ncells,
+                }
+            ),
+            "usage_examples": str(
+                {
+                    "global_average": "compute_global_average(ds)",
+                    "regional_subset": "ds.sel(cell=region_cells)",
+                    "diurnal_analysis": "ds.groupby('time.hour').mean()",
+                    "spatial_patterns": "ds.mean(dim='time')",
+                }
+            ),
         },
     )
