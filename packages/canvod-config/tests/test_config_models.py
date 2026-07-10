@@ -363,8 +363,10 @@ class TestStorageConfig:
         sc = StorageConfig(stores_root_dir=tmp_path)
         gnss = sc.get_gnss_store_path("rosalia")
         vod = sc.get_vod_store_path("rosalia")
+        rollup = sc.get_rollup_store_path("rosalia")
         assert gnss == tmp_path / "rosalia" / "rinex"
         assert vod == tmp_path / "rosalia" / "vod"
+        assert rollup == tmp_path / "rosalia" / "rollup"
 
     def test_deprecated_get_rinex_store_path(self, tmp_path):
         import warnings

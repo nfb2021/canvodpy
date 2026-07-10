@@ -119,6 +119,16 @@ processing:
   # ---------------------------------------------------------------------------
   # Preprocessing Pipeline
   # ---------------------------------------------------------------------------
+  # NOTE (2026-07-10): temporal_aggregation and grid_assignment below only feed
+  # canvod-ops's build_default_pipeline()/Pipeline (TemporalAggregate,
+  # GridAssignment ops) — nothing in the live orchestrator (processor.py,
+  # workflows/tasks.py) or the CLI calls that pipeline yet. Grid-cell
+  # assignment for real ingested data currently happens ad hoc downstream
+  # instead (e.g. canvod-streamviz's own KDTree-based ingest step), not from
+  # this angular_resolution value. Intent: once wired in, these become the
+  # community-agreed standard grid resolution + temporal aggregation applied
+  # uniformly across all sites, enforced (not just default) in a future
+  # version.
   preprocessing:
     temporal_aggregation:
       enabled: true
