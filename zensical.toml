@@ -43,7 +43,6 @@ nav = [
     { "Optional Extensions" = "guides/extensions.md" },
     { "API Levels" = "guides/api-levels.md" },
     { "Parallel Processing" = "guides/parallel-processing.md" },
-    { "Airflow Integration" = "guides/airflow.md" },
     { "Diagnostics & Monitoring" = "guides/diagnostics.md" },
     { "Notebooks" = "notebooks/index.md" },
     { "Packages" = [

@@ -16,7 +16,7 @@ no config beyond what the package itself asks for.
 | Package | Purpose | Status |
 |---|---|---|
 | `canvod-filemap` | Recipe-based filename mapping for non-canonical GNSS filenames (proprietary receiver output, legacy RINEX v2 short names, custom layouts) | Available |
-| `canvod-airflow` | Airflow DAG definitions for canvodpy pipelines | Planned |
+| `canvod-airflow` | Airflow DAG definitions (daily SBF/RINEX/SBF-agency + backfill) for canvodpy pipelines | Available |
 
 ## Installing an extension
 
@@ -47,6 +47,17 @@ canvod-filemap = { path = "../canvodpy-extensions/packages/canvod-filemap" }
     optional-dependency-group sources even when the extra isn't requested,
     so committing a local path breaks `uv run`/`uv sync` for everyone else.
     Keep the git source in version control; only override it locally.
+
+`canvod-airflow` is installed directly rather than via a canvodpy extra
+(it depends on `canvodpy`, not the other way around — wiring it as a
+`canvodpy` extra would create a circular reference):
+
+```bash
+uv add "canvod-airflow[airflow] @ git+https://github.com/nfb2021/canvodpy-extensions.git#subdirectory=packages/canvod-airflow"
+```
+
+See [canvod-airflow's overview](https://nfb2021.github.io/canvodpy-extensions/packages/airflow/overview/)
+for DAG structure, deployment, and configuration.
 
 ## What happens if an extension isn't installed
 
