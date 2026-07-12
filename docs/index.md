@@ -115,7 +115,7 @@ pip install canvodpy
     Recommended for production runs; resumes automatically:
 
     ```bash
-    uv run python -m canvodpy.cli.run --site Rosalia --start 2025001 --end 2025007
+    canvodpy run --site Rosalia --start 2025001 --end 2025007
     ```
 
 === "Site.pipeline() — Python-native"

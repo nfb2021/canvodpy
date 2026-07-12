@@ -2,151 +2,59 @@
 
 ## Purpose
 
-The `canvod-utils` package provides configuration management and command-line tooling for the canVODpy ecosystem. It implements a YAML-based configuration system with Pydantic validation, shared date utilities, and CLI shortcuts.
+The `canvod-utils` package provides date/time utilities and processing
+diagnostics shared across the canVODpy ecosystem. Configuration management
+moved to a dedicated package — see
+[canvod-config](../config/overview.md) — so `canvod-utils` has no
+Pydantic/YAML dependency and no CLI code of its own.
 
 ---
 
-## Configuration System
-
-A single `config/canvod-settings.yaml` controls all aspects of a canVODpy deployment:
-
-<div class="grid cards" markdown>
-
--   :fontawesome-solid-sliders: &nbsp; **`processing:`**
-
-    ---
-
-    Author metadata, NASA CDDIS credentials, auxiliary data agency,
-    parallel processing limits, Icechunk compression, store strategies.
-
--   :fontawesome-solid-map-location-dot: &nbsp; **`sites:`**
-
-    ---
-
-    Research site definitions — data root paths, receiver types,
-    directory layout, SCS expansion (`scs_from`), VOD analysis pairs.
-
--   :fontawesome-solid-broadcast-tower: &nbsp; **`sids:`**
-
-    ---
-
-    Signal ID (SID) filtering — `all`, a named `preset` (e.g. `default`),
-    or a `custom` list of SIDs to retain.
-
-</div>
-
-User values override package defaults for any specified keys. Unset keys fall back to bundled defaults. Any field can also be overridden via environment variable or `config/.env` — see [Configuration Guide](../../guides/configuration.md).
-
----
-
-## Configuration File
-
-```yaml
-processing:
-  metadata:
-    author: Your Name
-    email: your.email@example.com
-    institution: Your Institution
-
-  credentials:
-    nasa_earthdata_acc_mail: null  # prefer config/.env instead
-
-  aux_data:
-    agency: COD
-    product_type: final
-
-  params:
-    keep_rnx_vars: [SNR]
-    store_radial_distance: false
-    receiver_position_mode: shared     # or per_receiver
-    file_pairing: complete             # or paired
-    days_per_batch: 1
-    resource_mode: auto
-    # n_max_threads: 8       # manual mode only
-    # max_memory_gb: 16      # manual mode only
-    # cpu_affinity: [0, 1, 2, 3]
-    # nice_priority: 10
-
-  preprocessing:
-    temporal_aggregation:
-      enabled: true
-      freq: "1min"
-      method: mean
-    grid_assignment:
-      enabled: true
-      grid_type: equal_area
-      angular_resolution: 2.0
-
-  compression:
-    zlib: true
-    complevel: 5
-
-  icechunk:
-    compression_level: 5
-    compression_algorithm: zstd
-    inline_threshold: 512
-    get_concurrency: 1
-    chunk_strategies:
-      rinex_store: {epoch: 34560, sid: -1}
-      vod_store:   {epoch: 34560, sid: -1}
-
-  storage:
-    stores_root_dir: /path/to/your/gnss/stores
-    rinex_store_strategy: skip
-    vod_store_strategy: overwrite
-
-sites:
-  rosalia:
-    gnss_site_data_root: /path/to/rosalia
-    receivers:
-      reference_01:
-        type: reference
-        directory: 01_reference
-        recipe: rosalia_reference
-        reader_format: auto
-        scs_from: all
-      canopy_01:
-        type: canopy
-        directory: 02_canopy
-        recipe: rosalia_canopy
-        reader_format: auto
-    vod_analyses:
-      canopy_01_vs_reference_01:
-        canopy_receiver: canopy_01
-        reference_receiver: reference_01
-
-sids:
-  mode: preset
-  preset: default
-  # mode: all                 # keep every observed SID
-  # mode: custom
-  # custom_sids: ["G01|L1|C", "E01|E1|C"]
-```
-
----
-
-## Loading Configuration
+## Tools
 
 ```python
-from canvod.utils.config import load_config
+from canvod.utils.tools import YYYYDOY, file_hash
 
-config = load_config()
-
-# Access any section
-author  = config.processing.metadata.author
-agency  = config.processing.aux_data.agency
-n_cores = config.processing.params.n_max_threads
+YYYYDOY.from_str("2025032").date   # datetime.date(2025, 2, 1)
+file_hash(path)                    # SHA-256 of a file, used by store dedup guardrails
 ```
 
-!!! tip "Validation at load time"
+| Function | Purpose |
+|---|---|
+| `YYYYDOY` / `YYDOY` | Year + Day-of-Year date parsing/formatting (the GNSS-standard date convention) |
+| `get_gps_week_from_filename` | Extract GPS week from a standard product filename |
+| `gpsweekday` | GPS week/day-of-week conversion |
+| `file_hash` | SHA-256 hashing used by the store's dedup guardrails |
+| `isfloat` | Safe float-parsing check |
+| `get_version_from_pyproject` | Read a package version directly from `pyproject.toml` |
 
-    All values are validated by Pydantic models. Invalid emails, non-existent paths,
-    and out-of-range parameters produce structured error messages immediately
-    — not at runtime hours into a long processing run.
+---
+
+## Diagnostics
+
+```python
+from canvod.utils.diagnostics import track_time, track_memory, BatchTracker
+
+with track_time("ingest batch"):
+    ...
+```
+
+| Component | Purpose |
+|---|---|
+| `TaskMetrics` | Structured timing/memory record for one unit of work |
+| `track_time` / `track_memory` | Context managers for measuring a code block |
+| `BatchTracker` | Aggregates `TaskMetrics` across a batch (e.g. a day's worth of files) |
+| `DatasetReport` | Summary report over an `xarray.Dataset` (shape, nulls, memory) |
+| `retry` | Retry decorator for auxiliary-data downloads and other flaky I/O |
 
 ---
 
 ## CLI Quick Reference
+
+canVODpy's CLI lives entirely in the `canvodpy` package (see
+[canvod-config](../config/overview.md) for `config`/`doctor`, and
+[canvod-store](../store/overview.md) for `store`) — collected here for a
+one-stop reference:
 
 === "Setup"
 
@@ -176,4 +84,14 @@ n_cores = config.processing.params.n_max_threads
     just process          # Run full pipeline
     just process-date YYYYDOY     # Process single day
     just process-range START END  # Process date range
+    ```
+
+=== "Store inspection"
+
+    ```bash
+    canvodpy store list                    # Every site's gnss/vod store paths + status
+    canvodpy store info <site>             # Tree of branches/groups + compression stats
+    canvodpy store info <site> --group X   # Full dataset + metadata table for one group
+    canvodpy store log <site>              # Commit graph
+    canvodpy store log <site> --ops        # Ops audit trail
     ```

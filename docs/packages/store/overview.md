@@ -192,6 +192,24 @@ store.compare_snapshots(snapshot_id_1="abc123", snapshot_id_2="def456")
 
 ---
 
+## CLI Quick Reference
+
+`canvodpy store` wraps the Python API above for terminal use — inspecting a
+site's store doesn't require dropping into Python or a notebook:
+
+```bash
+canvodpy store list                          # every configured site's gnss/vod store paths + status
+canvodpy store info Rosalia                  # tree of branches/groups + compression stats
+canvodpy store info Rosalia --group canopy_01   # full dataset + metadata table for one group
+canvodpy store log Rosalia                   # commit graph (wraps repo.ancestry_graph())
+canvodpy store log Rosalia --ops             # ops audit trail (wraps repo.ops_log())
+```
+
+`--store vod` targets the VOD store instead of the default GNSS observation
+store; `--branch` selects a non-`main` branch for `info`/`log`.
+
+---
+
 ## Store-Level Provenance
 
 Rich DataCite 4.5 / ACDD 1.3 / STAC 1.1 metadata is stored as a root

@@ -155,7 +155,7 @@ Claude will:
 > Process the last week of data for site Rosalia
 
 Claude will:
-1. Recommend the CLI: uv run python -m canvodpy.cli.run --site Rosalia --start ... --end ...
+1. Recommend the CLI: canvodpy run --site Rosalia --start ... --end ...
 2. Suggest omitting --start on subsequent runs (auto-resumes from the store)
 3. Only drop to Site(site).pipeline() in Python if the user needs scripted,
    multi-site, or notebook-embedded control

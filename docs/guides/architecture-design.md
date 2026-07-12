@@ -151,7 +151,7 @@ detail; `FluentWorkflow`, the flat `process_date()`/`calculate_vod()`/
 === "CLI — Running the Pipeline"
 
     ```bash
-    uv run python -m canvodpy.cli.run --site Rosalia --start 2025001 --end 2025007
+    canvodpy run --site Rosalia --start 2025001 --end 2025007
     ```
 
 === "Site.pipeline() — Python-native"
@@ -218,7 +218,7 @@ flowchart TD
 ```
 
 ```python
-from canvod.utils.config import load_config
+from canvod.config import load_config
 
 cfg = load_config()
 cfg.processing.aux_data.nasa_earthdata_acc_mail

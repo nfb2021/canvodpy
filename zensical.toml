@@ -80,6 +80,9 @@ nav = [
       { "canvod-viz" = [
         { "Overview" = "packages/viz/overview.md" },
       ]},
+      { "canvod-config" = [
+        { "Overview" = "packages/config/overview.md" },
+      ]},
       { "canvod-utils" = [
         { "Overview" = "packages/utils/overview.md" },
       ]},
@@ -134,6 +137,7 @@ nav = [
     { "canvod.store" = "api/canvod-store.md" },
     { "canvod.store_metadata" = "api/canvod-store-metadata.md" },
     { "canvod.viz" = "api/canvod-viz.md" },
+    { "canvod.config" = "api/canvod-config.md" },
     { "canvod.utils" = "api/canvod-utils.md" },
     { "canvod.ops" = "api/canvod-ops.md" },
     { "canvod.audit" = "api/canvod-audit.md" },

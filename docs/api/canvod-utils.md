@@ -1,24 +1,7 @@
 # canvod.utils API Reference
 
-Shared utilities: configuration management, date handling, and CLI tools.
-
-## Configuration
-
-::: canvod.utils.config
-    options:
-      members:
-        - load_config
-        - CanvodConfig
-        - MetadataConfig
-        - ProcessingConfig
-        - SiteConfig
-        - SitesConfig
-        - SidsConfig
-        - ProcessingParams
-        - ReceiverConfig
-        - PreprocessingConfig
-        - TemporalAggregationConfig
-        - GridAssignmentConfig
+Shared date/time utilities and processing diagnostics. Configuration
+management lives in [canvod.config](canvod-config.md) instead.
 
 ## Tools
 
@@ -27,7 +10,21 @@ Shared utilities: configuration management, date handling, and CLI tools.
       members:
         - YYYYDOY
         - YYDOY
+        - file_hash
         - get_gps_week_from_filename
         - gpsweekday
         - isfloat
         - get_version_from_pyproject
+
+## Diagnostics
+
+::: canvod.utils.diagnostics
+    options:
+      members:
+        - TaskMetrics
+        - task_metrics
+        - track_time
+        - track_memory
+        - BatchTracker
+        - DatasetReport
+        - retry

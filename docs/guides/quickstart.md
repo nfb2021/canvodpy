@@ -74,8 +74,7 @@ uv add canvodpy    # or: pip install canvodpy
 ```
 
 adds it to a project's own environment — only invocable via `uv run canvodpy`
-(or `python -m canvodpy`) from within that project, not as a bare `canvodpy`
-command elsewhere.
+from within that project, not as a bare `canvodpy` command elsewhere.
 
 Then follow the two steps below — configure the project and run your first pipeline day.
 

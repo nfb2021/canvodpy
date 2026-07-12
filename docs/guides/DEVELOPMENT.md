@@ -283,6 +283,7 @@ canvodpy config init     # scaffold canvod-settings.yaml from template
 just config-validate     # validate configuration
 just config-show         # view resolved configuration
 canvodpy doctor          # environment + config diagnostics
+canvodpy store list      # list every site's gnss/vod stores + status
 just docs                # preview documentation (localhost:3000)
 just build-all           # build all packages
 just deps-report         # dependency metrics report

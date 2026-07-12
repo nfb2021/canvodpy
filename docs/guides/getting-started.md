@@ -430,7 +430,7 @@ date convention in GNSS data products.
 Recommended: run it via the CLI —
 
 ```bash
-uv run python -m canvodpy.cli.run --site Rosalia --start 2025001 --end 2025001
+canvodpy run --site Rosalia --start 2025001 --end 2025001
 ```
 
 This reads the raw files, augments them with satellite positions (ephemeris),

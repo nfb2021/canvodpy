@@ -7,7 +7,7 @@ description: Running the pipeline via CLI or Site.pipeline(), and scripting/anal
 
 **Two supported surfaces, plus the CLI on top of one of them.**
 
-- **CLI** (`uv run python -m canvodpy.cli.run ...`) — recommended way to run the pipeline. Wraps `Site.pipeline()`.
+- **CLI** (`canvodpy run ...`) — recommended way to run the pipeline. Wraps `Site.pipeline()`.
 - **`Site.pipeline()`** (L3) — the same thing from Python, when you need to script a
   run rather than shell out (e.g. looping over sites, embedding in a notebook).
 - **`canvodpy.functional`** (L4) — stateless, component-level functions for
@@ -30,7 +30,7 @@ All three produce the same `(epoch, sid)` xarray Dataset format.
 
 | | CLI | L3: `Site.pipeline()` | L4: Functional |
 |---|---|---|---|
-| **Pattern** | `python -m canvodpy.cli.run --site ... --start ... --end ...` | `site.pipeline().process_date(...)` | `read_rinex(path)` |
+| **Pattern** | `canvodpy run --site ... --start ... --end ...` | `site.pipeline().process_date(...)` | `read_rinex(path)` |
 | **Ephemeris** | Automatic (from config) | Automatic (from config) | `augment_with_ephemeris(ds, pos, ...)` |
 | **Store writes** | Automatic (Icechunk) | Automatic (Icechunk) | None (NetCDF / pickle files) |
 | **File discovery** | `canvod-filemap` `BUILTIN_PATTERNS` if installed, else canonical globs (`*.rnx`/`*.sbf`) | Same as CLI | Caller provides paths |
@@ -43,47 +43,45 @@ All three produce the same `(epoch, sid)` xarray Dataset format.
 ## CLI: Running the Pipeline
 
 The recommended way to run the pipeline — production runs, cron jobs, resumable.
-There is no registered `canvodpy run` subcommand yet (the installed `canvodpy`
-console script is currently the config tool only — see
-[Configuration](configuration.md)), so invoke it as a module for now:
+`run` is a registered subcommand of the installed `canvodpy` console script
+(alongside `config`, `doctor`, `stats`, and `store` — see
+[Configuration](configuration.md)):
 
 ```bash
 # Process a specific range
-uv run python -m canvodpy.cli.run --site Rosalia --start 2025001 --end 2025007
+canvodpy run --site Rosalia --start 2025001 --end 2025007
 
 # Process new data only — start omitted means "resume from the last
 # processed date in the store", end omitted means "today"
-uv run python -m canvodpy.cli.run --site Rosalia
+canvodpy run --site Rosalia
 
 # Cron: run daily, picks up new data automatically
-# 0 3 * * * cd /path/to/canvodpy && uv run python -m canvodpy.cli.run --site Rosalia
+# 0 3 * * * cd /path/to/canvodpy && uv run canvodpy run --site Rosalia
 
 # Observation ingestion only, no VOD
-uv run python -m canvodpy.cli.run --site Rosalia --no-vod
+canvodpy run --site Rosalia --no-vod
 
 # Preview what would be processed, without executing
-uv run python -m canvodpy.cli.run --site Rosalia --dry-run
+canvodpy run --site Rosalia --dry-run
+
+# Multiple sites — repeat --site, processed sequentially
+canvodpy run --site Rosalia --site OtherSite
 ```
 
 | Flag | Meaning |
 |---|---|
-| `--site` | Site name from `canvod-settings.yaml` (required) |
+| `--site` | Site name from `canvod-settings.yaml` (required). Repeat the flag for multiple sites. |
 | `--start` / `--end` | `YYYYDOY`. Omit `--start` to resume from the store; omit `--end` for "up to today" |
 | `--no-vod` | Ingest observations only, skip VOD |
 | `--dry-run` | Preview the processing plan without executing |
 | `--workers` | Override worker count (default: from config) |
 | `--days-per-batch` | Override batch size (default: from config) |
 | `--config` | Overlay YAML applied on top of `canvod-settings.yaml` |
+| `--ephemeris-source` | Override the configured ephemeris source: `final` (agency SP3/CLK) or `broadcast` (SBF SatVisibility) |
+| `--vod-calculator` | VOD calculator to use (currently only `tau_omega`) |
 
 Internally the CLI builds a `Site` and calls `.pipeline(...)` — see the next
 section for the exact same thing from Python.
-
-!!! note "Ephemeris source and VOD calculator are not yet CLI flags"
-
-    `Pipeline` currently hardcodes the VOD calculator (`TauOmegaZerothOrder`) and
-    only reads the ephemeris source (agency vs. broadcast) from
-    `canvod-settings.yaml`, not as a CLI parameter. This is open follow-up work —
-    see `dev/todo_later.md` §4.
 
 ---
 
@@ -159,7 +157,7 @@ paths and manages all orchestration.
 ```python
 from canvodpy.functional import read_rinex, augment_with_ephemeris, calculate_vod
 from canvod.auxiliary.position.position import ECEFPosition
-from canvod.utils.config import load_config
+from canvod.config import load_config
 
 # Read a single file
 ds = read_rinex("ROSA01TUW_R_20250010000_15M_05S_AA.rnx")
@@ -393,7 +391,7 @@ retrieval, and the result is written to the site's VOD store (pass
 
 ??? question "I want to process data daily as a cron job"
 
-    **CLI**: `uv run python -m canvodpy.cli.run --site Rosalia`. Omit `--start`
+    **CLI**: `canvodpy run --site Rosalia`. Omit `--start`
     and it resumes from the last processed date in the store automatically.
 
 ??? question "I want to script a multi-day batch run from Python"

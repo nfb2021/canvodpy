@@ -346,7 +346,7 @@ Two supported surfaces, plus the CLI on top of one of them:
 
 | Surface | Entry point | Use case |
 |-------|-------------|----------|
-| CLI | `uv run python -m canvodpy.cli.run --site ...` | Running the pipeline — recommended |
+| CLI | `canvodpy run --site ...` | Running the pipeline — recommended |
 | `Site.pipeline()` (L3) | `Site(name).pipeline()` | Python-native configured pipeline runs — what the CLI wraps |
 | Functional (L4) | `canvodpy.functional.*` | Pure functions for custom pipelines, testing, and analysis |
 
