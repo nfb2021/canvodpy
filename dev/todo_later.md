@@ -189,6 +189,14 @@ name. ~1,765 LOC, 9 test modules.
   --ephemeris-source {final,broadcast}` and `--vod-calculator` added; see
   `dev/cli_home_and_flags_plan.md` Parts B/C. Docs/demo scrubbing still open
   (tracked separately in §17, the `canvodpy-demo` submodule work).
+  ~~**Docs API-levels/CLAUDE.md tables specifically:** still stale as of
+  2026-07-08~~ **RESOLVED (2026-07-12, `d99405da`):** fixed the stale
+  `uv run python -m canvodpy.cli.run ...` invocation (6 files) and
+  `docs/guides/api-levels.md`'s false claims that `run` "isn't registered
+  yet" and that `--ephemeris-source`/`--vod-calculator` "aren't CLI flags" —
+  both were true when written, both wrong by the time this was checked.
+  `CLAUDE.md`'s own package/API-levels tables had the same staleness, fixed
+  in the same pass.
 - Should `CanvodConfig` snapshots be persisted into store metadata per run (the
   store-metadata package already has a `config` section) for drift auditability?
   — still open, unanswered.
@@ -228,8 +236,17 @@ No implementation needed until object storage is a confirmed target.
   package moved to the separate `canvodpy-extensions` repo (§12), the deletion did
   not carry over — `catalog.py`, `tests/test_catalog.py`, and the `duckdb>=1.0`
   dependency are all still present in
-  `canvodpy-extensions/packages/canvod-filemap` (verified 2026-07-08). **Still open:**
-  re-apply the deletion in the extensions repo.
+  `canvodpy-extensions/packages/canvod-filemap` (verified 2026-07-08).
+  ~~**Still open:** re-apply the deletion in the extensions repo.~~
+  **RESOLVED (2026-07-12, `canvodpy-extensions@49c0627`, branch
+  `chore/remove-dead-filecatalog`, not yet merged/pushed):** deleted
+  `catalog.py` + `tests/test_catalog.py`, removed `FilenameCatalog` from
+  `__init__.py`'s exports, removed `duckdb>=1.0` from `pyproject.toml`, and
+  fixed the 4 docs that documented it (`CLAUDE.md`, `README.md`,
+  `docs/packages/filemap/overview.md`, `docs/api/canvod-filemap.md` — the
+  last one had a dangling mkdocstrings `::: canvod.filemap.catalog` block
+  that would have failed the docs build once the module was gone). 140
+  tests pass, `zensical build` clean.
 - ~~**`canvod-filemap` hard dependency**: made it a required `canvodpy` dependency
   while installing it for testing, then reverted per user direction — it must stay
   optional so regular installs have zero footprint.~~ **DONE (2026-07-08):**
@@ -252,8 +269,8 @@ No implementation needed until object storage is a confirmed target.
   page `docs/guides/extensions.md` covers install (`uv add "canvod-filemap @
   git+...#subdirectory=..."` or the sibling-path form) and is linked from
   `docs/index.md` and `docs/guides/configuration.md`.
-- **Silent recipe-without-filemap failure (found 2026-07-08, real production run
-  on the remote processing machine).** A site's receivers were configured with
+- ~~**Silent recipe-without-filemap failure** (found 2026-07-08, real production run
+  on the remote processing machine). A site's receivers were configured with
   `recipe: rosalia_canopy` / `recipe: rosalia_reference` in `canvod-settings.yaml`
   — i.e. non-canonical filenames requiring `canvod-filemap` to match them — but
   `canvod-filemap` wasn't installed (plain `uv sync`, no `--extra filemap`). The
@@ -262,14 +279,18 @@ No implementation needed until object storage is a confirmed target.
   site's real files. Symptom was a confusing `no_rinex_files_found` warning per
   receiver-day with no indication of the actual cause, discovered only through
   manual diagnosis (checking `config.sites.*.receivers.*.recipe` against whether
-  `canvod.filemap` importable). **Needed:** a clear, fail-fast, actionable error
+  `canvod.filemap` importable). Needed: a clear, fail-fast, actionable error
   instead of a silent degrade whenever a receiver has `recipe:` configured but
-  `canvod-filemap` isn't importable — e.g. in `canvodpy config validate`
-  (`canvodpy/src/canvodpy/cli/config.py`) and/or at
-  `PipelineOrchestrator`/`RinexDataProcessor` startup, something like:
-  `"Receiver {name} configures recipe '{recipe}' but canvod-filemap is not
-  installed. Install with: uv sync --extra filemap"`. Should fail before any
-  processing starts, not surface as a per-day discovery warning deep in a run.
+  `canvod-filemap` isn't importable.~~ **RESOLVED (2026-07-12):** added at both
+  suggested gates. `canvodpy config validate` (`cli/config.py`) checks every
+  receiver up front and exits 1 listing every offending `site/receiver` plus
+  `Install with: uv sync --extra filemap` before checking directories at all.
+  `PipelineOrchestrator.__init__` (`orchestrator/pipeline.py`,
+  `_check_recipe_receivers_have_filemap`) raises the same actionable
+  `ImportError` at construction — covers every invocation path (`canvodpy run`,
+  `Site.pipeline()`) since both go through this one constructor, not just the
+  CLI validate subcommand. Tests: `test_pipeline_filemap_guard.py` (3),
+  `test_cli_config.py::TestValidateRecipeWithoutFilemap` (2).
 
 - ~~**Dueling Rich `Live` displays cause flashing/reprinting progress bars** (found
   2026-07-08, live production run on the remote processing machine). Two
@@ -740,8 +761,19 @@ Do C first (fixes silent traps that would poison any new UX), then B (structural
 - Update `justfile` targets `config-validate`/`config-init` (justfile:104–116).
 
 **Phase 3 — wizard (3–4 days; +3–4 later for recipe inference):**
-- `cli.py`: `canvod config init --interactive` (make it default; `--templates` keeps old behaviour). Reuse directory/format detection from `validate` (cli.py:246–309). Writes minimal `canvod-settings.yaml`, runs validation immediately.
+- ~~`cli.py`: `canvod config init --interactive` ... Writes minimal
+  `canvod-settings.yaml`, runs validation immediately.~~ **DONE, partially
+  (2026-07-12, `5296bcb5`):** `canvodpy config init --interactive` exists —
+  asks 8 fixed questions (author, email, institution, stores_root_dir,
+  site_name, data_root, canopy/reference dir names), patches answers into
+  the raw template text (preserving all comments — no YAML parse/re-dump),
+  then runs `load_config()` immediately and reports validity via
+  `format_validation_error()`. **Not done:** it's opt-in (`--force`-guarded,
+  doesn't touch an existing file), not the default; no directory/format
+  auto-detection reused from `validate` — the wizard asks fixed questions
+  rather than scanning the data directory first.
 - Follow-up: recipe inference — user pastes one filename, wizard aligns it against `CanVODFilename` fields and emits `config/recipes/<name>.yaml`.
+  **Still open** — not attempted.
 
 **Tests/docs (1–2 days):** extend `packages/canvod-utils/tests/test_config_models.py`; rewrite `docs/guides/configuration.md` around the single file; add "5-minute setup" to `docs/guides/getting-started.md`.
 
@@ -1430,19 +1462,21 @@ resolved above (see §12 history).
 zero consumers — confirmed the two real DAGs in this repo
 (`dags/gnss_daily_processing.py`, `dags/gnss_backfill.py`) don't import it
 either, so it's disconnected even from the one place it's explicitly designed
-for. This matters for the planned Airflow outsourcing
-(`canvodpy-extensions/packages/canvod-airflow` or `canvod-pipeline-orchestration`,
-see `memory/canvodpy_extensions_repo.md`): if DAG/operator logic moves out to
-that external repo while `diagnostics/airflow.py` stays behind in the main
-monorepo's `canvod-utils` (or its post-split successor), any future real use
-of `TaskMetrics` from the external package would require `canvod-airflow` to
-depend back on a narrow slice of the main monorepo — the exact cross-repo
-split problem already hit once with naming-convention code. Since it has zero
-consumers today, this is the cheap moment to decide, before it accretes real
-callers: either move `airflow.py` to live with the eventual `canvod-airflow`
-package, or delete it outright and rebuild simple Airflow instrumentation
-directly in that package if/when actually needed (OpenTelemetry's `telemetry.py`
-may already cover the real need — worth checking before rebuilding anything).
+for. This matters for the Airflow outsourcing — **done as of 2026-07-10,
+`54db8617`:** the DAGs moved to `canvodpy-extensions/packages/canvod-airflow`
+(confirmed `canvod-airflow` is the actual name, not `canvod-pipeline-orchestration`);
+`dags/gnss_daily_processing.py`/`dags/gnss_backfill.py` and this repo's own
+`docs/guides/airflow.md` were deleted here, see `docs/guides/extensions.md` for
+the install path. `diagnostics/airflow.py` stayed behind in `canvod-utils`, so
+the exact risk flagged below is now live, not hypothetical — if
+`canvod-airflow` ever wants `TaskMetrics`, it needs a narrow dependency back
+into the main monorepo, the same cross-repo split problem already hit once
+with naming-convention code. Since it has zero consumers today, this is the
+cheap moment to decide, before it accretes real callers: either move
+`airflow.py` to live with `canvod-airflow`, or delete it outright and rebuild
+simple Airflow instrumentation directly in that package if/when actually
+needed (OpenTelemetry's `telemetry.py` may already cover the real need —
+worth checking before rebuilding anything).
 
 **Cross-referenced 2026-07-09** into `dev/airflow_extraction_plan.md` (§0.1 and
 O8): confirmed `diagnostics/airflow.py` is not imported by either DAG file
@@ -1523,3 +1557,27 @@ one layer down the dependency graph.
    `canvod-readers` reaching upward into `canvod-auxiliary`.
 3. Translate into a GitHub issue alongside §21 — same "found while doing
    something else, needs its own decision" bucket.
+
+## 23. Revisit logging + a simplified performance tracker
+
+**Flagged 2026-07-12** — not investigated yet, just capturing the intent
+before it's lost. Two related but separate threads to look at together:
+
+- **Logging.** §18 fixed the multi-process log-rotation race (per-process
+  filenames), but that was a structural fix for a specific race, not a full
+  review of the logging setup as it now stands — worth a fresh look at
+  `logging_config.py` as a whole (handler count/purpose, the `full*.json`
+  fragmentation-per-worker-PID trade-off accepted in §18, whether the
+  now-suffixed filenames need better run-level aggregation tooling).
+- **Performance tracker.** §21 found `canvod-utils/diagnostics/` (including
+  `timing.py`/`memory.py`) to be a fully dead chain with zero real callers,
+  superseded by the live OpenTelemetry-based `canvodpy/utils/telemetry.py`.
+  Before deleting that dead chain outright (§21's open decision), worth
+  deciding whether OpenTelemetry is actually the right weight for day-to-day
+  local perf checks, or whether a much simpler, purpose-built performance
+  tracker (closer to what the dead `timing.py`/`memory.py` were going for,
+  minus the unused Airflow/StatsD/SQLite machinery) is what's actually wanted
+  — rather than just re-wiring the old dead code back in as-is.
+
+**Action:** no decision made yet — revisit both together next time logging or
+perf instrumentation comes up, rather than as two separate one-off fixes.

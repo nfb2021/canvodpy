@@ -315,10 +315,22 @@ def validate(
         # Check receiver directories exist and contain data
         console.print("[bold]Checking receiver directories...[/bold]")
         dir_errors: list[str] = []
+        recipe_errors: list[str] = []
+
+        try:
+            import canvod.filemap  # noqa: F401
+
+            filemap_available = True
+        except ImportError:
+            filemap_available = False
 
         for site_name, site in config.sites.sites.items():
             base_path = site.get_base_path()
             for recv_name, recv in site.receivers.items():
+                if recv.recipe and not filemap_available:
+                    recipe_errors.append(
+                        f"{site_name}/{recv_name} (recipe: {recv.recipe})"
+                    )
                 recv_dir = base_path / recv.directory
                 if not recv_dir.exists():
                     msg = f"  [red]❌ {site_name}/{recv_name}: {recv_dir} (directory not found)[/red]"
@@ -367,6 +379,17 @@ def validate(
                         f"  [yellow]⚠️  {site_name}/{recv_name}: {recv_dir} "
                         f"(directory exists but no GNSS data files found)[/yellow]"
                     )
+
+        if recipe_errors:
+            console.print(
+                f"\n[red]❌ {len(recipe_errors)} receiver(s) configure a naming "
+                f"recipe but canvod-filemap is not installed:[/red]"
+            )
+            for entry in recipe_errors:
+                console.print(f"  {entry}")
+            console.print("  Install with: uv sync --extra filemap")
+            console.print()
+            raise typer.Exit(1)
 
         if dir_errors:
             console.print(

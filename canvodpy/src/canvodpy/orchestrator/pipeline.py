@@ -36,6 +36,29 @@ from canvodpy.orchestrator.processor import (
 from canvodpy.orchestrator.resources import MemoryMonitor
 
 
+def _check_recipe_receivers_have_filemap(receivers: dict[str, dict]) -> None:
+    """Fail fast if any receiver configures a naming recipe but canvod-filemap
+    isn't installed.
+
+    Recipes are meaningless without canvod-filemap to resolve them — letting
+    this surface only as a silent canonical-glob fallback deep inside a run
+    (a confusing "no files found" warning per receiver-day) hides the actual
+    cause. Raise once, at pipeline construction, before any processing starts.
+    """
+    recipe_receivers = [name for name, cfg in receivers.items() if cfg.get("recipe")]
+    if not recipe_receivers:
+        return
+    try:
+        import canvod.filemap  # noqa: F401
+    except ImportError as exc:
+        names = ", ".join(recipe_receivers)
+        raise ImportError(
+            f"Receiver(s) {names} configure a naming recipe, which requires "
+            f"canvod-filemap, but it is not installed. Install with: "
+            f"uv sync --extra filemap"
+        ) from exc
+
+
 class PipelineOrchestrator:
     """Orchestrate RINEX processing pipeline for all receiver pairs at a site.
 
@@ -86,6 +109,8 @@ class PipelineOrchestrator:
         threads_per_worker: int | None = None,
         on_group_written: Callable[[str], None] | None = None,
     ) -> None:
+        _check_recipe_receivers_have_filemap(site.receivers)
+
         self.site = site
         self.n_max_workers = n_max_workers
         self.dry_run = dry_run

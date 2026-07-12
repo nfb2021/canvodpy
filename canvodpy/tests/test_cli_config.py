@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import canvodpy.cli.config as cfg
 import typer
+import yaml
 from typer.testing import CliRunner
 
 runner = CliRunner()
@@ -113,3 +114,57 @@ class TestInteractiveWizard:
         assert "still need attention" in result.output
         assert "metadata.author" in result.output
         assert "Traceback" not in result.output
+
+
+class TestValidateRecipeWithoutFilemap:
+    """canvod-filemap is an optional extra, not installed in this test env —
+    a receiver with recipe: set must fail fast and clearly, not silently
+    degrade to canonical globs deep inside a real run."""
+
+    def _write_config(self, config_dir, tmp_path, *, with_recipe: bool):
+        config_dir.mkdir(parents=True)
+        receiver = {"type": "canopy", "directory": "02_canopy"}
+        if with_recipe:
+            receiver["recipe"] = "rosalia_canopy"
+        (config_dir / "canvod-settings.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "processing": {
+                        "metadata": {
+                            "author": "A",
+                            "email": "a@example.com",
+                            "institution": "B",
+                        },
+                        "storage": {"stores_root_dir": str(tmp_path / "stores")},
+                    },
+                    "sites": {
+                        "TestSite": {
+                            "gnss_site_data_root": str(tmp_path / "data"),
+                            "receivers": {"canopy_01": receiver},
+                        }
+                    },
+                }
+            )
+        )
+
+    def test_recipe_without_filemap_fails_fast(self, tmp_path):
+        config_dir = tmp_path / "config"
+        self._write_config(config_dir, tmp_path, with_recipe=True)
+
+        result = runner.invoke(
+            _app(), ["config", "validate", "--config-dir", str(config_dir)]
+        )
+
+        assert result.exit_code == 1
+        assert "canopy_01" in result.output
+        assert "uv sync --extra filemap" in result.output
+
+    def test_no_recipe_does_not_trip_the_filemap_check(self, tmp_path):
+        config_dir = tmp_path / "config"
+        self._write_config(config_dir, tmp_path, with_recipe=False)
+
+        result = runner.invoke(
+            _app(), ["config", "validate", "--config-dir", str(config_dir)]
+        )
+
+        assert "uv sync --extra filemap" not in result.output
