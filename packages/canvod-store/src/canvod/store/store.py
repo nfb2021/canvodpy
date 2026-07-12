@@ -1335,17 +1335,23 @@ class MyIcechunkStore:
             Store statistics.
         """
         groups = self.get_group_names()
+        # groups maps branch name -> list of group names (e.g. {"main": ["canopy_01"]});
+        # flatten + dedup to count distinct groups rather than branches.
+        all_group_names = {name for names in groups.values() for name in names}
         stats = {
             "store_path": str(self.store_path),
             "store_type": self.store_type,
             "compression_level": self.compression_level,
-            "compression_algorithm": self.compression_algorithm.name,
-            "total_groups": len(groups),
+            # icechunk v2's CompressionAlgorithm has no .name attribute
+            # (PyO3 enum wrapper, unlike Python's enum.Enum) — str() gives
+            # "CompressionAlgorithm.Zstd"; take the part after the dot.
+            "compression_algorithm": str(self.compression_algorithm).rsplit(".", 1)[-1],
+            "total_groups": len(all_group_names),
             "groups": groups,
         }
 
-        # Add group-specific stats
-        for group_name in groups:
+        # Add group-specific stats (from "main" — get_group_info()'s default branch)
+        for group_name in groups.get("main", []):
             try:
                 info = self.get_group_info(group_name)
                 stats[f"group_{group_name}"] = {
