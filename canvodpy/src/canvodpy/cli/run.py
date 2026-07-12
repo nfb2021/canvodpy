@@ -8,8 +8,8 @@ Usage
     # Process new data only (auto-detect start from store, end = today)
     uv run canvodpy run --site Rosalia
 
-    # Multiple sites in one invocation (processed sequentially)
-    uv run canvodpy run --site Rosalia OtherSite
+    # Multiple sites in one invocation (processed sequentially) — repeat the flag
+    uv run canvodpy run --site Rosalia --site OtherSite
 
     # Cron: run daily, picks up new data automatically
     # 0 3 * * * cd /path/to/canvodpy && uv run canvodpy run --site Rosalia
@@ -23,99 +23,41 @@ Usage
 
 from __future__ import annotations
 
-import argparse
+import enum
 import os
 import sys
 import time
 from datetime import UTC, datetime
+from types import SimpleNamespace
+from typing import Annotated
 
 import numpy as np
 import structlog
+import typer
 import xarray as xr
 
 log = structlog.get_logger(__name__)
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        prog="canvodpy",
-        description="Process GNSS observations into Icechunk stores and compute VOD.",
-    )
-    p.add_argument(
-        "--site",
-        required=True,
-        nargs="+",
-        metavar="SITE",
-        help=(
-            "One or more site names as defined in sites.yaml (e.g. Rosalia). "
-            "Multiple sites are processed sequentially."
-        ),
-    )
-    p.add_argument(
-        "--start",
-        default=None,
-        help=(
-            "Start date in YYYYDOY format (e.g. 2025001). "
-            "If omitted, resumes from the last processed date in the store."
-        ),
-    )
-    p.add_argument(
-        "--end",
-        default=None,
-        help=(
-            "End date in YYYYDOY format (e.g. 2025007). "
-            "If omitted, processes up to today."
-        ),
-    )
-    p.add_argument(
-        "--no-vod",
-        action="store_true",
-        default=False,
-        help="Skip VOD calculation (only ingest observations)",
-    )
-    p.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Preview processing plan without executing",
-    )
-    p.add_argument(
-        "--workers",
-        type=int,
-        default=None,
-        help="Number of Dask workers (default: from config)",
-    )
-    p.add_argument(
-        "--days-per-batch",
-        type=int,
-        default=None,
-        help="Number of DOYs per loky wave (default: from config)",
-    )
-    p.add_argument(
-        "--config",
-        default=None,
-        metavar="FILE",
-        help="Overlay config YAML applied on top of the main canvod-settings.yaml",
-    )
-    p.add_argument(
-        "--ephemeris-source",
-        choices=["final", "broadcast"],
-        default=None,
-        help=(
-            "Override the configured ephemeris source ('final' = agency "
-            "SP3/CLK, 'broadcast' = SBF SatVisibility). "
-            "Default: from canvod-settings.yaml."
-        ),
-    )
+def _build_vod_calculator_choice() -> type[enum.StrEnum]:
+    """Build the VOD-calculator choice enum from the live factory registry.
+
+    A dynamic StrEnum: Typer renders it as a restricted choice in --help,
+    while downstream code can keep treating the value as a plain string
+    (calculator_name=args.vod_calculator works unchanged).
+    """
     from canvodpy.factories import VODFactory
 
-    p.add_argument(
-        "--vod-calculator",
-        choices=VODFactory.list_available(),
-        default="tau_omega",
-        help="VOD calculator to use.",
-    )
-    return p
+    names = VODFactory.list_available()
+    return enum.StrEnum("VodCalculatorChoice", {name: name for name in names})
+
+
+VodCalculatorChoice = _build_vod_calculator_choice()
+
+
+class EphemerisSourceChoice(enum.StrEnum):
+    final = "final"
+    broadcast = "broadcast"
 
 
 def _last_processed_date(store) -> str | None:
@@ -314,10 +256,7 @@ def _compute_vod_for_day(
     return results
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = _build_parser()
-    args = parser.parse_args(argv)
-
+def _main_impl(args: SimpleNamespace) -> int:
     from pathlib import Path
 
     from canvod.config import load_config
@@ -440,5 +379,99 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def run(
+    site: Annotated[
+        list[str],
+        typer.Option(
+            "--site",
+            help=(
+                "Site name as defined in sites.yaml (e.g. Rosalia). Repeat "
+                "the flag for multiple sites — processed sequentially."
+            ),
+        ),
+    ],
+    start: Annotated[
+        str | None,
+        typer.Option(
+            "--start",
+            help=(
+                "Start date in YYYYDOY format (e.g. 2025001). If omitted, "
+                "resumes from the last processed date in the store."
+            ),
+        ),
+    ] = None,
+    end: Annotated[
+        str | None,
+        typer.Option(
+            "--end",
+            help="End date in YYYYDOY format (e.g. 2025007). If omitted, processes up to today.",
+        ),
+    ] = None,
+    no_vod: Annotated[
+        bool,
+        typer.Option(
+            "--no-vod/--vod",
+            help="Skip VOD calculation (only ingest observations).",
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run/--no-dry-run",
+            help="Preview processing plan without executing.",
+        ),
+    ] = False,
+    workers: Annotated[
+        int | None,
+        typer.Option(
+            "--workers", help="Number of Dask workers (default: from config)."
+        ),
+    ] = None,
+    days_per_batch: Annotated[
+        int | None,
+        typer.Option(
+            "--days-per-batch",
+            help="Number of DOYs per loky wave (default: from config).",
+        ),
+    ] = None,
+    config: Annotated[
+        str | None,
+        typer.Option(
+            "--config",
+            help="Overlay config YAML applied on top of the main canvod-settings.yaml.",
+        ),
+    ] = None,
+    ephemeris_source: Annotated[
+        EphemerisSourceChoice | None,
+        typer.Option(
+            "--ephemeris-source",
+            help=(
+                "Override the configured ephemeris source ('final' = agency "
+                "SP3/CLK, 'broadcast' = SBF SatVisibility). Default: from "
+                "canvod-settings.yaml."
+            ),
+        ),
+    ] = None,
+    vod_calculator: Annotated[
+        VodCalculatorChoice,
+        typer.Option("--vod-calculator", help="VOD calculator to use."),
+    ] = VodCalculatorChoice["tau_omega"],
+) -> None:
+    """Process GNSS observations into Icechunk stores and compute VOD."""
+    args = SimpleNamespace(
+        site=site,
+        start=start,
+        end=end,
+        no_vod=no_vod,
+        dry_run=dry_run,
+        workers=workers,
+        days_per_batch=days_per_batch,
+        config=config,
+        ephemeris_source=ephemeris_source.value if ephemeris_source else None,
+        vod_calculator=vod_calculator.value,
+    )
+    raise typer.Exit(code=_main_impl(args))
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    typer.run(run)

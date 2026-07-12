@@ -15,25 +15,12 @@ main_app = typer.Typer(
 )
 
 from canvodpy.cli.config import config_app  # noqa: E402
-from canvodpy.cli.run import main as _run_main  # noqa: E402
+from canvodpy.cli.run import run as run_command  # noqa: E402
 from canvodpy.cli.stats import stats_app  # noqa: E402
 
 main_app.add_typer(config_app, name="config")
 main_app.add_typer(stats_app, name="stats")
-
-
-@main_app.command(
-    "run",
-    help="Process GNSS observations into Icechunk stores and compute VOD.",
-    context_settings={
-        "allow_extra_args": True,
-        "ignore_unknown_options": True,
-        "help_option_names": [],
-    },
-    add_help_option=False,
-)
-def run_cmd(ctx: typer.Context) -> None:
-    raise typer.Exit(code=_run_main(ctx.args))
+main_app.command("run")(run_command)
 
 
 def main() -> None:
