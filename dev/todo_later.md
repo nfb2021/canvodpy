@@ -237,9 +237,31 @@ name. ~1,765 LOC, 9 test modules.
   both were true when written, both wrong by the time this was checked.
   `CLAUDE.md`'s own package/API-levels tables had the same staleness, fixed
   in the same pass.
-- Should `CanvodConfig` snapshots be persisted into store metadata per run (the
-  store-metadata package already has a `config` section) for drift auditability?
-  — still open, unanswered.
+- ~~Should `CanvodConfig` snapshots be persisted into store metadata per run
+  (the store-metadata package already has a `config` section) for drift
+  auditability? — still open, unanswered.~~ **RESOLVED (2026-07-12) —
+  user decision: yes, implement it.** Turned out the schema/collector
+  (`ConfigSnapshot`, `collect_config_snapshot()`) already existed and was
+  already wired into `collect_metadata()` — the actual gap was that
+  `processor.py`'s STEP 5b only wrote the snapshot **once**, on first
+  ingest; every subsequent ingest only bumped `temporal.updated`, so the
+  stored config silently froze at whatever was true on day one, forever.
+  Fixed: the STEP 5b "else" branch (existing-metadata case) now re-runs
+  `collect_config_snapshot()` every ingest, compares its `config_hash`
+  against the stored one, and if different, updates the `config` section
+  and appends a `"Config changed (<old> -> <new>)"` history entry.
+  Found and fixed two adjacent bugs while wiring this in: (1)
+  `collect_config_snapshot()` collected the compression section under key
+  `"netcdf_compression"` but read it back as `sections.get("compression")`
+  — always `None`, silently; (2) `update_metadata()`'s dotted-key updates
+  **replace** list fields wholesale rather than appending, so every repeat
+  ingest was already quietly wiping `summaries.history` down to one entry
+  — fixed at the call site (read-merge-write in `processor.py`) rather than
+  changing `update_metadata()`'s generic semantics, since other callers may
+  rely on replace-not-append. `collect_config_snapshot` and `read_metadata`
+  now both exported from `canvod.store_metadata`'s top level. Tests:
+  `test_config_drift.py` (3, mirrors the exact processor.py logic since a
+  full orchestrator-level test would need a real pipeline run).
 
 ---
 

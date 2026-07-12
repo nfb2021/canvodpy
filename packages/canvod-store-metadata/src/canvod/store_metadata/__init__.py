@@ -7,7 +7,7 @@ Not to be confused with the *file registry* in ``canvod.store``
 (``{group}/metadata/table``), which tracks individual ingested files.
 """
 
-from .collectors import collect_metadata
+from .collectors import collect_config_snapshot, collect_metadata
 from .inventory import (
     scan_stores,
     scan_stores_as_stac,
@@ -21,6 +21,7 @@ from .validate import validate_all, validate_datacite, validate_fair
 
 __all__ = [
     "StoreMetadata",
+    "collect_config_snapshot",
     "collect_metadata",
     "extract_env",
     "format_metadata",

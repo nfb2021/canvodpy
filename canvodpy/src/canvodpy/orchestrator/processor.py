@@ -2093,11 +2093,16 @@ class RinexDataProcessor:
             except Exception:
                 log.warning("Failed to set source_format root attr")
 
-        # STEP 5b: Write rich store metadata (once, on first ingest)
+        # STEP 5b: Write rich store metadata (once, on first ingest); on
+        # subsequent ingests, re-snapshot the config and record any drift —
+        # otherwise a store's config section silently freezes at whatever
+        # was true on the very first ingest, forever (dev/todo_later.md §4).
         try:
             from canvod.store_metadata import (
+                collect_config_snapshot,
                 collect_metadata,
                 metadata_exists,
+                read_metadata,
                 update_metadata,
                 write_metadata,
             )
@@ -2131,18 +2136,40 @@ class RinexDataProcessor:
                     log.info("Wrote rich store metadata")
                 else:
                     now = datetime.now(UTC).isoformat()
-                    update_metadata(
-                        store_path,
-                        {
-                            "temporal.updated": now,
-                            "summaries.history": [
-                                f"{now}: Ingested {len(augmented_datasets)}"
-                                f" files for {receiver_name}"
-                            ],
-                        },
-                        branch=branch,
+                    existing_meta = read_metadata(store_path, branch=branch)
+                    new_snapshot = collect_config_snapshot(self._config)
+
+                    history_entries = [
+                        f"{now}: Ingested {len(augmented_datasets)}"
+                        f" files for {receiver_name}"
+                    ]
+                    updates: dict[str, object] = {"temporal.updated": now}
+
+                    drifted = (
+                        new_snapshot.config_hash != existing_meta.config.config_hash
                     )
-                    log.info("Updated store metadata timestamp")
+                    if drifted:
+                        old_hash = (existing_meta.config.config_hash or "unknown")[:12]
+                        new_hash = (new_snapshot.config_hash or "unknown")[:12]
+                        history_entries.append(
+                            f"{now}: Config changed ({old_hash} -> {new_hash})"
+                        )
+                        updates["config"] = new_snapshot.model_dump(mode="json")
+
+                    # update_metadata() replaces (doesn't append to) list
+                    # fields, so merge history here rather than in io.py —
+                    # keeps that generic dotted-update helper's semantics
+                    # unchanged for its other callers.
+                    updates["summaries.history"] = [
+                        *existing_meta.summaries.history,
+                        *history_entries,
+                    ]
+
+                    update_metadata(store_path, updates, branch=branch)
+                    log.info(
+                        "Updated store metadata%s",
+                        " (config drift detected)" if drifted else "",
+                    )
         except Exception:
             log.debug(
                 "canvod-store-metadata not available or write failed",

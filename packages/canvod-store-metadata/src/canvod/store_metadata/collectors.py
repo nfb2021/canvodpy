@@ -198,7 +198,7 @@ def collect_config_snapshot(config: Any) -> ConfigSnapshot:
         processing=sections.get("processing"),
         preprocessing=sections.get("preprocessing"),
         aux_data=sections.get("aux_data"),
-        compression=sections.get("compression"),
+        compression=sections.get("netcdf_compression"),
         icechunk=sections.get("icechunk"),
         sids=sections.get("sids"),
         config_hash=config_hash,
