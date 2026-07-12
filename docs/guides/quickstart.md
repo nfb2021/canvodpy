@@ -97,6 +97,19 @@ To initialize from the template:
 just config-init          # runs: uv run canvodpy config init
 ```
 
+Prefer a guided setup over hand-editing YAML? Answer a few questions instead:
+
+```bash
+canvodpy config init --interactive   # -i for short
+```
+
+This asks for your name, email, institution, where to store processed
+results, and your first site's name/data root/receiver directories, writes
+them straight into `canvod-settings.yaml`, and validates the result
+immediately — no YAML editing required to get a working config. (Only runs
+the guided setup on a freshly-created file; if `canvod-settings.yaml`
+already exists, use `--force` to start over.)
+
 After editing, validate your configuration:
 
 ```bash
@@ -107,6 +120,16 @@ To view the resolved configuration:
 
 ```bash
 just config-show          # runs: uv run canvodpy config show
+```
+
+Something not working? `canvodpy doctor` reports canvodpy's version, where
+it resolved your config from and why (dev checkout vs. XDG default),
+whether bundled templates are reachable, and whether your
+`canvod-settings.yaml` currently validates — a single read-only command
+instead of checking each of those by hand:
+
+```bash
+canvodpy doctor
 ```
 
 !!! note "Overriding config without editing files"

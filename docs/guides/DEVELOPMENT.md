@@ -57,10 +57,10 @@ All three sections live in a single `config/canvod-settings.yaml`. Template: `co
 === "First-time setup"
 
     ```bash
-    canvodpy config init      # scaffold canvod-settings.yaml from template
-    # edit config/canvod-settings.yaml
-    canvodpy config validate  # check for errors
-    canvodpy config show      # print resolved config
+    canvodpy config init                # scaffold canvod-settings.yaml from template
+    # edit config/canvod-settings.yaml (or: canvodpy config init --interactive)
+    canvodpy config validate            # check for errors
+    canvodpy config show                # print resolved config
     ```
 
 === "Daily use"
@@ -68,6 +68,7 @@ All three sections live in a single `config/canvod-settings.yaml`. Template: `co
     ```bash
     just config-validate    # after editing
     just config-show        # inspect current values
+    canvodpy doctor         # environment + config diagnostics when something's off
     ```
 
 ---
@@ -281,6 +282,7 @@ just hooks               # install pre-commit hooks
 canvodpy config init     # scaffold canvod-settings.yaml from template
 just config-validate     # validate configuration
 just config-show         # view resolved configuration
+canvodpy doctor          # environment + config diagnostics
 just docs                # preview documentation (localhost:3000)
 just build-all           # build all packages
 just deps-report         # dependency metrics report

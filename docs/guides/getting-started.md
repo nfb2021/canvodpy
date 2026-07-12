@@ -363,6 +363,11 @@ To initialize from the template:
 just config-init          # runs: uv run canvodpy config init
 ```
 
+Prefer a guided setup over hand-editing YAML? `canvodpy config init --interactive`
+(`-i` for short) asks a few setup questions and writes the answers straight
+into `canvod-settings.yaml` instead — see the [Quickstart](quickstart.md) for
+details.
+
 After editing, validate your configuration:
 
 ```bash
@@ -374,6 +379,10 @@ To view the resolved configuration:
 ```bash
 just config-show          # runs: uv run canvodpy config show
 ```
+
+Something not working? `canvodpy doctor` reports your resolved config
+location, whether bundled templates are reachable, and whether
+`canvod-settings.yaml` currently validates, all in one read-only command.
 
 !!! note "Overriding config without editing files"
 

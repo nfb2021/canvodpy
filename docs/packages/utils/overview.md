@@ -151,11 +151,12 @@ n_cores = config.processing.params.n_max_threads
 === "Setup"
 
     ```bash
-    canvodpy config init      # Scaffold canvod-settings.yaml + recipe templates
-    canvodpy config migrate   # Convert legacy three-file layout → canvod-settings.yaml
-    canvodpy config validate  # Validate configuration
-    canvodpy config show      # Display resolved configuration
-    canvodpy config edit      # Open canvod-settings.yaml in $EDITOR
+    canvodpy config init                # Scaffold canvod-settings.yaml + recipe templates
+    canvodpy config init --interactive  # ...or answer a few questions instead of hand-editing YAML
+    canvodpy config validate            # Validate configuration
+    canvodpy config show                # Display resolved configuration
+    canvodpy config edit                # Open canvod-settings.yaml in $EDITOR
+    canvodpy doctor                     # Environment + config diagnostics (read-only)
     ```
 
 === "Development"
