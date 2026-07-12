@@ -15,7 +15,9 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+import yaml
 from rich.console import Console
+from rich.prompt import Prompt
 from rich.table import Table
 
 from canvod.config.loader import (
@@ -64,6 +66,74 @@ def config_callback(
         os.environ["CANVOD_CONFIG_FILE"] = str(config.expanduser().resolve())
 
 
+def _yaml_scalar(value: str) -> str:
+    """Render value as a safely-quoted YAML scalar for inline text substitution.
+
+    Used to patch specific placeholder lines in the template's raw text
+    (not a full YAML parse/re-dump, which would strip all its comments).
+    """
+    dumped = yaml.safe_dump(value).strip()
+    return dumped.removesuffix("...").strip()
+
+
+def _run_interactive_wizard(canvod_dest: Path) -> None:
+    """Ask ~8 setup questions and patch their answers into canvod_dest's text.
+
+    Targeted string replacement of known placeholder lines from the
+    template — not a full YAML parse/re-dump, so every comment in the file
+    survives untouched. Only ever called on a file this same ``init``
+    invocation just created (never one that already existed), so the known
+    placeholder strings are guaranteed present.
+    """
+    console.print("\n[bold]Interactive setup[/bold] — answer a few questions:\n")
+
+    author = Prompt.ask("  Your name")
+    email = Prompt.ask("  Your email")
+    institution = Prompt.ask("  Institution")
+    stores_root_dir = Prompt.ask("  Where should processed results be stored?")
+    site_name = Prompt.ask("  Site name (e.g. Rosalia)")
+    data_root = Prompt.ask(f"  Data root directory for site '{site_name}'")
+    canopy_dir = Prompt.ask(
+        "  Canopy receiver directory (relative to the data root)",
+        default="02_canopy",
+    )
+    reference_dir = Prompt.ask(
+        "  Reference receiver directory (relative to the data root)",
+        default="01_reference",
+    )
+
+    text = canvod_dest.read_text()
+    replacements = {
+        "    author: Your Name": f"    author: {_yaml_scalar(author)}",
+        "    email: your.email@example.com": f"    email: {_yaml_scalar(email)}",
+        "    institution: Your Institution": f"    institution: {_yaml_scalar(institution)}",
+        "    stores_root_dir: /path/to/your/gnss/stores": (
+            f"    stores_root_dir: {_yaml_scalar(stores_root_dir)}"
+        ),
+        "  my_site:": f"  {site_name}:",
+        "    gnss_site_data_root: /path/to/your/gnss/data/my_site": (
+            f"    gnss_site_data_root: {_yaml_scalar(data_root)}"
+        ),
+        "        directory: 01_reference": f"        directory: {_yaml_scalar(reference_dir)}",
+        "        directory: 02_canopy": f"        directory: {_yaml_scalar(canopy_dir)}",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new, 1)
+    canvod_dest.write_text(text)
+
+    console.print("\n[bold]Validating your new configuration...[/bold]\n")
+    from canvod.config.loader import load_config
+
+    try:
+        load_config(canvod_dest.parent)
+    except ConfigValidationError as e:
+        console.print("[yellow]⚠️  A few things still need attention:[/yellow]\n")
+        console.print(format_validation_error(e))
+        console.print()
+    else:
+        console.print("[green]✓ Configuration is valid — you're ready to go![/green]\n")
+
+
 @config_app.command()
 def init(
     config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
@@ -72,6 +142,12 @@ def init(
         "--force",
         "-f",
         help="Overwrite existing files",
+    ),
+    interactive: bool = typer.Option(
+        False,
+        "--interactive",
+        "-i",
+        help="Walk through setup with a guided Q&A instead of hand-editing YAML",
     ),
 ) -> None:
     """Initialize configuration from the canvod-settings.yaml template.
@@ -86,6 +162,9 @@ def init(
         Directory where configuration files are created.
     force : bool
         Overwrite existing files.
+    interactive : bool
+        Ask setup questions instead of leaving placeholder values for the
+        user to hand-edit afterward.
 
     Returns
     -------
@@ -151,12 +230,31 @@ def init(
             console.print(f"  {f}")
         console.print("\n  Use --force to overwrite")
 
+    if interactive and canvod_dest in files_created:
+        _run_interactive_wizard(canvod_dest)
+        console.print("[bold]Optional next steps:[/bold]")
+        console.print("  - For NASA CDDIS access, set this environment variable:")
+        console.print(
+            "      export CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com"
+        )
+        console.print(
+            "  - Edit config/recipes/*.yaml if your receivers use non-canonical filenames\n"
+        )
+        return
+
+    if interactive:
+        console.print(
+            "\n[yellow]⊘ canvod-settings.yaml already exists — skipping interactive "
+            "setup.[/yellow] Use --force to start over.\n"
+        )
+
     # Next steps
     console.print("\n[bold]Next steps:[/bold]")
     console.print("  1. Edit config/canvod-settings.yaml:")
     console.print("     - processing.metadata: fill in author, email, institution")
     console.print("     - processing.storage.stores_root_dir: set your store path")
     console.print("     - sites: replace the example site with your own")
+    console.print("     (or re-run with --interactive/-i for a guided Q&A instead)")
     console.print("  2. For NASA CDDIS access, set this environment variable:")
     console.print(
         "       export CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com"
