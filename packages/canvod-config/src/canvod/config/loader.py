@@ -73,6 +73,65 @@ def find_monorepo_root() -> Path:
     raise RuntimeError("Cannot find monorepo root (no .git entry found)")
 
 
+def get_template_dir() -> Path:
+    """Return the directory containing bundled config templates.
+
+    Fixed, package-relative path — ``templates/`` ships inside the
+    ``canvod-config`` wheel as real package data (verified: ``uv_build``
+    includes non-Python files under the module's source tree automatically,
+    same as the pre-existing ``defaults/`` directory). No monorepo-root
+    search needed here, unlike config *output* location below — the
+    templates always live at a fixed path relative to this installed module,
+    regardless of install method (editable checkout, wheel, ``uv tool
+    install``) or invocation directory.
+
+    Returns
+    -------
+    Path
+        Directory containing ``canvod-settings.yaml.example`` and
+        ``recipes/*.yaml.example``.
+    """
+    return Path(__file__).parent / "templates"
+
+
+def get_default_config_dir() -> Path:
+    """Resolve the default configuration directory.
+
+    Priority:
+    1. Dev-mode convenience: if running from within a canvodpy monorepo
+       checkout that already has a ``config/`` directory, use
+       ``{monorepo_root}/config`` — preserves the existing contributor
+       workflow unchanged.
+    2. Otherwise, XDG: ``$XDG_CONFIG_HOME/canvodpy`` or
+       ``~/.config/canvodpy`` — the real default for a standalone install
+       (``uv tool install``/``pipx``/wheel), where no monorepo checkout
+       exists at all.
+
+    This is the single shared implementation of what used to be three
+    separate "find monorepo root, else cwd()/config" copies (here, in
+    ``canvodpy/cli/config.py``'s module-level default, and in that same
+    file's ``init`` command) — none of which defaulted to a user-level
+    location, so a globally-installed CLI invoked from an arbitrary
+    directory always ended up looking for ``./config`` right there.
+
+    Returns
+    -------
+    Path
+        Default configuration directory.
+    """
+    try:
+        monorepo_root = find_monorepo_root()
+        monorepo_config = monorepo_root / "config"
+        if monorepo_config.exists():
+            return monorepo_config
+    except RuntimeError:
+        pass
+
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+    base = Path(xdg_config_home) if xdg_config_home else Path.home() / ".config"
+    return base / "canvodpy"
+
+
 class ConfigLoader:
     """
     Load and merge configuration from YAML files.
@@ -102,12 +161,7 @@ class ConfigLoader:
             Optional overlay YAML file applied on top of the main config.
         """
         if config_dir is None:
-            try:
-                monorepo_root = find_monorepo_root()
-                config_dir = monorepo_root / "config"
-            except RuntimeError:
-                # Fallback if monorepo root cannot be found
-                config_dir = Path.cwd() / "config"
+            config_dir = get_default_config_dir()
 
         self.config_dir = Path(config_dir)
         self.defaults_dir = Path(__file__).parent / "defaults"

@@ -18,7 +18,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from canvod.config.loader import find_monorepo_root
+from canvod.config.loader import get_default_config_dir, get_template_dir
 from canvod.config.models import ProcessingConfig, SidsConfig, SitesConfig
 
 # Config subcommand
@@ -30,13 +30,9 @@ config_app = typer.Typer(
 
 console = Console()
 
-# Always use monorepo root config directory
-try:
-    MONOREPO_ROOT = find_monorepo_root()
-    DEFAULT_CONFIG_DIR = MONOREPO_ROOT / "config"
-except RuntimeError:
-    # Fallback if we can't find monorepo root
-    DEFAULT_CONFIG_DIR = Path.cwd() / "config"
+# Dev-checkout config/ if present, else XDG (~/.config/canvodpy) — see
+# get_default_config_dir()'s docstring for the full precedence rule.
+DEFAULT_CONFIG_DIR = get_default_config_dir()
 
 CONFIG_DIR_OPTION = typer.Option(
     "--config-dir",
@@ -95,21 +91,18 @@ def init(
     # Create config directory
     config_dir.mkdir(parents=True, exist_ok=True)
 
-    # Get template directory (from monorepo root)
-    try:
-        monorepo_root = find_monorepo_root()
-        template_dir = monorepo_root / "config"
-    except RuntimeError:
-        # Fallback to path calculation if monorepo root not found
-        template_dir = (
-            Path(__file__).parent.parent.parent.parent.parent.parent.parent / "config"
-        )
+    # Templates ship as real package data inside canvod-config (see
+    # get_template_dir()'s docstring) — always reachable regardless of
+    # install method or invocation directory, no monorepo search needed.
+    template_dir = get_template_dir()
 
     if not template_dir.exists():
         console.print(
             f"[red]❌ Template directory not found: {template_dir}[/red]",
         )
-        console.print("\nMake sure you're running from the repository root.")
+        console.print(
+            "\nThis looks like a broken canvod-config install — reinstall it."
+        )
         raise typer.Exit(1)
 
     files_created = []
@@ -127,13 +120,14 @@ def init(
     else:
         console.print(f"[yellow]⚠️  Template not found: {canvod_example}[/yellow]")
 
-    # Copy example recipe files
+    # Copy example recipe files (bundled as *.yaml.example, same convention
+    # as canvod-settings.yaml.example above — strip the suffix on copy).
     recipes_src = template_dir / "recipes"
     recipes_dest = config_dir / "recipes"
     if recipes_src.exists():
         recipes_dest.mkdir(parents=True, exist_ok=True)
-        for recipe_file in sorted(recipes_src.glob("*.yaml")):
-            dest = recipes_dest / recipe_file.name
+        for recipe_file in sorted(recipes_src.glob("*.yaml.example")):
+            dest = recipes_dest / recipe_file.name.removesuffix(".example")
             if dest.exists() and not force:
                 files_skipped.append(dest)
             else:

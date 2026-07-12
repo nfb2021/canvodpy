@@ -4,8 +4,11 @@
 import shutil
 import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
+
+from canvod.config import loader as loader_module
 
 
 def find_monorepo_root(start_path: Path) -> Path:
@@ -74,6 +77,61 @@ def test_config_loader_from_directory(test_dir: str):
     assert "rosalia" in result.stdout.lower(), (
         f"Expected 'rosalia' site in output from {test_dir}\nGot: {result.stdout}"
     )
+
+
+class TestGetTemplateDir:
+    """Templates ship as real package data — always reachable, no search needed."""
+
+    def test_template_dir_exists_and_has_expected_files(self):
+        template_dir = loader_module.get_template_dir()
+        assert template_dir.exists()
+        assert (template_dir / "canvod-settings.yaml.example").exists()
+        assert (template_dir / "recipes" / "_template.yaml.example").exists()
+
+    def test_template_dir_independent_of_monorepo_lookup(self):
+        """Even if monorepo-root discovery fails, templates are still found."""
+        with patch.object(
+            loader_module, "find_monorepo_root", side_effect=RuntimeError("no repo")
+        ):
+            template_dir = loader_module.get_template_dir()
+            assert template_dir.exists()
+
+
+class TestGetDefaultConfigDir:
+    """XDG-first default, with dev-checkout convenience when available."""
+
+    def test_falls_back_to_xdg_when_no_monorepo_found(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        with patch.object(
+            loader_module, "find_monorepo_root", side_effect=RuntimeError("no repo")
+        ):
+            result = loader_module.get_default_config_dir()
+        assert result == tmp_path / "canvodpy"
+
+    def test_falls_back_to_home_config_when_no_xdg_env(self, monkeypatch):
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+        with patch.object(
+            loader_module, "find_monorepo_root", side_effect=RuntimeError("no repo")
+        ):
+            result = loader_module.get_default_config_dir()
+        assert result == Path.home() / ".config" / "canvodpy"
+
+    def test_prefers_monorepo_config_dir_when_it_exists(self, tmp_path):
+        """Dev-checkout convenience: an existing {monorepo_root}/config wins."""
+        fake_root = tmp_path / "checkout"
+        (fake_root / "config").mkdir(parents=True)
+        with patch.object(loader_module, "find_monorepo_root", return_value=fake_root):
+            result = loader_module.get_default_config_dir()
+        assert result == fake_root / "config"
+
+    def test_ignores_monorepo_root_without_config_dir(self, tmp_path, monkeypatch):
+        """A .git found upward with no config/ dir still falls through to XDG."""
+        fake_root = tmp_path / "checkout_no_config"
+        fake_root.mkdir(parents=True)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        with patch.object(loader_module, "find_monorepo_root", return_value=fake_root):
+            result = loader_module.get_default_config_dir()
+        assert result == tmp_path / "xdg" / "canvodpy"
 
 
 if __name__ == "__main__":
