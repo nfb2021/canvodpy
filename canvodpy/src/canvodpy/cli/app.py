@@ -7,6 +7,9 @@ canvodpy's user-facing surface (``Site``, ``Pipeline``, the functional API)
 already lives.
 """
 
+from importlib.metadata import version as _pkg_version
+from typing import Annotated
+
 import typer
 
 main_app = typer.Typer(
@@ -28,6 +31,30 @@ main_app.command("run")(run_command)
 main_app.command(
     "doctor", help="Report canvodpy's version, environment, and config resolution."
 )(doctor_command)
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        try:
+            typer.echo(f"canvodpy {_pkg_version('canvodpy')}")
+        except Exception:
+            typer.echo("canvodpy 0.0.0+unknown")
+        raise typer.Exit()
+
+
+@main_app.callback()
+def _main_callback(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            callback=_version_callback,
+            is_eager=True,
+            help="Show canvodpy's version and exit.",
+        ),
+    ] = False,
+) -> None:
+    """canvodpy CLI tools"""
 
 
 def main() -> None:
