@@ -59,7 +59,8 @@ graph TB
         Aux["📡 canvod-auxiliary<br/>SP3/CLK/Position"]
         Store["💾 canvod-store<br/>Icechunk Storage"]
         StoreMeta["📋 canvod-store-metadata<br/>Provenance & Standards"]
-        Utils["🛠️ canvod-utils<br/>Config & Tools"]
+        CanvodConfig["⚙️ canvod-config<br/>Settings & Validation"]
+        Utils["🛠️ canvod-utils<br/>Date & Diagnostics"]
     end
 
     subgraph AnalysisPkg[Analysis and Output Packages]
@@ -70,8 +71,13 @@ graph TB
 
     subgraph InfraPkg[Infrastructure Packages]
         Ops["⚙️ canvod-ops<br/>Preprocessing Pipeline"]
-        Naming["🏷️ canvod-filemap<br/>File Naming & Discovery"]
+        Preflight["🚦 canvod-preflight<br/>Naming Convention & Validation"]
         Audit["🔍 canvod-audit<br/>Verification Suite"]
+    end
+
+    subgraph ExtPkg["Optional Extensions (canvodpy-extensions repo)"]
+        Filemap["🏷️ canvod-filemap<br/>Non-canonical Filename Mapping"]
+        Airflow["🌀 canvod-airflow<br/>Airflow DAGs"]
     end
 
     Config --> Canvodpy
@@ -79,12 +85,15 @@ graph TB
     Canvodpy --> Aux
     Canvodpy --> Store
     Canvodpy --> StoreMeta
+    Canvodpy --> CanvodConfig
     Canvodpy --> VOD
     Canvodpy --> Grids
     Canvodpy --> Viz
     Canvodpy --> Ops
-    Canvodpy --> Naming
+    Canvodpy --> Preflight
     Canvodpy --> Audit
+    Canvodpy -.optional.-> Filemap
+    Canvodpy -.optional.-> Airflow
 
     Aux --> Readers
     Store --> Grids
@@ -320,8 +329,9 @@ canvodpy/                       # Monorepo root
 │   ├── canvod-store-metadata/  #   Store provenance & compliance
 │   ├── canvod-viz/             #   Visualisation
 │   ├── canvod-ops/             #   Preprocessing pipeline
-│   ├── canvod-utils/           #   Configuration & utilities
-│   ├── canvod-filemap/#   Filename mapping
+│   ├── canvod-config/          #   Configuration management
+│   ├── canvod-utils/           #   Date/time utilities & diagnostics
+│   ├── canvod-preflight/       #   Naming convention & pre-flight validation
 │   └── canvod-audit/           #   Three-tier verification suite
 ├── canvodpy/                   # Umbrella package + orchestrator
 ├── demo/                       # marimo notebooks (submodule)
@@ -332,6 +342,11 @@ canvodpy/                       # Monorepo root
 ├── NOTICE                      # Apache 2.0 attribution
 └── LICENSE                     # Apache License 2.0
 ```
+
+Two optional packages — `canvod-filemap` (non-canonical filename mapping)
+and `canvod-airflow` (Airflow DAG definitions) — are published separately in
+[canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions), not
+in this repo's `packages/`.
 
 </details>
 

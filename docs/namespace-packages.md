@@ -61,9 +61,12 @@ A namespace package is created by **omitting `__init__.py`** from the shared par
         store/            ← from canvod-store
         store_metadata/   ← from canvod-store-metadata
         viz/              ← from canvod-viz
+        config/           ← from canvod-config
         utils/            ← from canvod-utils
         ops/              ← from canvod-ops
-        filemap/ ← from canvod-filemap
+        preflight/        ← from canvod-preflight
+        audit/            ← from canvod-audit
+        filemap/          ← from canvod-filemap (only if the optional extra/group is installed)
     ```
 
 ---

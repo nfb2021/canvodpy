@@ -206,11 +206,18 @@ flowchart TD
 
     2D polar hemisphere plots and 3D interactive Plotly surfaces.
 
+-   :fontawesome-solid-sliders: &nbsp; **canvod-config**
+
+    ---
+
+    YAML configuration loading with Pydantic validation, XDG-aware
+    defaults, and bundled templates.
+
 -   :fontawesome-solid-gear: &nbsp; **canvod-utils**
 
     ---
 
-    Pydantic configuration, YYYYDOY date utilities, shared tooling.
+    YYYYDOY date utilities, processing diagnostics, shared tooling.
 
 -   :fontawesome-solid-circle-check: &nbsp; **canvod-preflight**
 
@@ -227,6 +234,15 @@ flowchart TD
     (Septentrio SBF, RINEX v2 short names). Lives in the separate
     [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions)
     repo — see [Optional Extensions](guides/extensions.md).
+
+-   :fontawesome-solid-wind: &nbsp; **canvod-airflow** *(optional)*
+
+    ---
+
+    Airflow DAG definitions (daily SBF/RINEX/SBF-agency + backfill) for
+    canvodpy pipelines. Also lives in
+    [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions) —
+    see [Optional Extensions](guides/extensions.md).
 
 -   :fontawesome-solid-wand-magic-sparkles: &nbsp; **canvod-ops**
 

@@ -75,7 +75,7 @@ ds = assign_grid_cells(ds, grid_type="equal_area", resolution=2.0)
 
 ## Included Packages
 
-Installing `canvodpy` provides access to all 11 sub-packages:
+Installing `canvodpy` provides access to all 10 sub-packages:
 
 | Package | Namespace | Role |
 |---|---|---|
@@ -86,10 +86,13 @@ Installing `canvodpy` provides access to all 11 sub-packages:
 | `canvod-store-metadata` | `canvod.store_metadata` | FAIR/DataCite/ACDD/STAC metadata lifecycle |
 | `canvod-vod` | `canvod.vod` | Tau-Omega VOD retrieval algorithms |
 | `canvod-viz` | `canvod.viz` | 2D polar and 3D interactive visualization |
-| `canvod-utils` | `canvod.utils` | Pydantic configuration models, shared utilities |
+| `canvod-config` | `canvod.config` | Configuration management: YAML loading, Pydantic validation |
+| `canvod-utils` | `canvod.utils` | Date/time utilities, processing diagnostics |
 | `canvod-ops` | `canvod.ops` | Composable preprocessing operations pipeline |
-| `canvod-filemap` | `canvod.filemap` | Canonical GNSS-T filename parser and validator |
-| `canvod-audit` | `canvod.audit` | Three-tier verification and regression suite |
+
+`canvod-filemap` (virtual renaming for non-canonical receiver filenames) is
+an optional extra (`pip install "canvodpy[filemap]"`), published separately
+in [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions).
 
 ## Platform Support
 

@@ -52,7 +52,6 @@ graph TD
     subgraph DATAIO["Data I/O"]
         READERS["canvod-readers"]
         AUX["canvod-auxiliary"]
-        NAMING["canvod-filemap"]
     end
 
     subgraph PRESENT["Presentation"]
@@ -65,15 +64,16 @@ graph TD
     end
 
     subgraph FOUNDATION["Foundation"]
+        CONFIG["canvod-config"]
         UTILS["canvod-utils"]
     end
 
-    CANVODPY --> READERS & AUX & NAMING
+    CANVODPY --> READERS & AUX
     CANVODPY --> STORE & STOREMETA
     CANVODPY --> VOD & GRIDS & OPS & VIZ
+    CANVODPY --> CONFIG
 
     READERS -.-> UTILS
-    READERS -.-> NAMING
     AUX -.-> READERS
     AUX -.-> UTILS
     STORE -.-> READERS
@@ -96,10 +96,16 @@ graph TD
 | **Orchestration** | canvodpy | Pipeline orchestrator, Wave A/B parallel processing, 4-level public API |
 | **Computation** | canvod-vod, canvod-grids, canvod-ops | VOD retrieval (Tau-Omega model), hemispheric grids, preprocessing pipeline |
 | **Persistence** | canvod-store, canvod-store-metadata | Icechunk versioned storage, three-layer deduplication, provenance metadata (DataCite/ACDD/STAC) |
-| **Data I/O** | canvod-readers, canvod-auxiliary, canvod-filemap | RINEX/SBF parsing, SP3/CLK retrieval, filename convention mapping |
+| **Data I/O** | canvod-readers, canvod-auxiliary | RINEX/SBF parsing, SP3/CLK retrieval |
 | **Presentation** | canvod-viz | 2D polar projections, 3D interactive surfaces, store viewer |
-| **Quality Assurance** | canvod-audit, canvod-preflight | Three-tier scientific verification suite; pre-run environment and data checks |
-| **Foundation** | canvod-utils | Pydantic configuration, date utilities, shared tooling |
+| **Quality Assurance** | canvod-audit, canvod-preflight | Three-tier scientific verification suite; naming convention parsing and pre-run data checks |
+| **Foundation** | canvod-config, canvod-utils | Configuration loading/validation; date utilities and diagnostics |
+
+Two more packages — `canvod-filemap` (non-canonical filename mapping) and
+`canvod-airflow` (Airflow DAG definitions) — are optional and published
+separately in
+[canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions), not
+part of this twelve-package core.
 
 ---
 
@@ -149,7 +155,7 @@ graph TD
     ---
 
     Four packages have zero inter-package dependencies
-    (`canvod-utils`, `canvod-vod`, `canvod-filemap`,
+    (`canvod-utils`, `canvod-vod`, `canvod-config`,
     `canvod-preflight`). The remaining packages build on them in
     shallow layers; only the umbrella package depends on everything.
 
@@ -176,9 +182,9 @@ canvodpy/                           # Repository root
     canvod-store/
     canvod-store-metadata/
     canvod-viz/
+    canvod-config/
     canvod-utils/
     canvod-ops/
-    canvod-filemap/
     canvod-audit/
     canvod-preflight/
   canvodpy/                         # Umbrella package
@@ -198,18 +204,18 @@ canvodpy/                           # Repository root
 Inter-package dependencies as declared in each package's `pyproject.toml`:
 
 ```
+canvod-config           ──── no inter-package deps
+canvod-preflight        ──── no inter-package deps
 canvod-utils            ──── no inter-package deps
 canvod-vod              ──── no inter-package deps
-canvod-filemap ──── no inter-package deps
-canvod-preflight        ──── no inter-package deps
-canvod-readers          ──── depends on canvod-utils, canvod-filemap
-canvod-auxiliary        ──── depends on canvod-readers, canvod-utils
+canvod-readers          ──── depends on canvod-config, canvod-utils
+canvod-auxiliary        ──── depends on canvod-config, canvod-readers, canvod-utils
 canvod-grids            ──── depends on canvod-store (workflow adapters)
-canvod-store            ──── depends on canvod-auxiliary, canvod-grids,
+canvod-store            ──── depends on canvod-auxiliary, canvod-config, canvod-grids,
                               canvod-readers, canvod-utils, canvod-vod
-canvod-store-metadata   ──── depends on canvod-utils
+canvod-store-metadata   ──── depends on canvod-config
 canvod-viz              ──── depends on canvod-grids
-canvod-ops              ──── depends on canvod-grids, canvod-utils
+canvod-ops              ──── depends on canvod-config, canvod-grids
 canvod-audit            ──── depends on canvod-readers, canvod-store,
                               canvod-utils, canvod-vod
 canvodpy                ──── depends on all core packages

@@ -98,12 +98,22 @@ RINEX/SBF files → Reader → xarray.Dataset(epoch, sid)
 | `canvod-vod` | `canvod.vod` | VOD retrieval algorithms |
 | `canvod-grids` | `canvod.grids` | Spatial grid operations (EqualArea hemigrid) |
 | `canvod-auxiliary` | `canvod.auxiliary` | Ephemeris, troposphere, auxiliary data pipeline |
-| `canvod-utils` | `canvod.utils` | Config models (Pydantic), shared utilities |
+| `canvod-config` | `canvod.config` | Configuration management: YAML loading, Pydantic validation |
+| `canvod-utils` | `canvod.utils` | Date/time utilities, processing diagnostics |
 | `canvod-viz` | `canvod.viz` | Visualization and store viewer |
 | `canvod-ops` | `canvod.ops` | Operational pipeline (streaming, monitoring) |
-| `canvod-filemap` | `canvod.filemap` | GNSS filename convention parsing and validation |
+| `canvod-preflight` | `canvod.preflight` | Naming convention parsing and pre-pipeline data directory validation |
 | `canvod-audit` | `canvod.audit` | Three-tier verification suite (internal consistency, regression, vs gnssvod) |
 | `canvodpy` | `canvodpy` | Orchestrator, API levels (L1-L4), VodComputer |
+
+Optional, published as separate packages in
+[canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions) (not
+part of this monorepo's workspace):
+
+| Package | Namespace | Role |
+|---|---|---|
+| `canvod-filemap` | `canvod.filemap` | Virtual renaming for non-canonical receiver filenames (recipe-based) |
+| `canvod-airflow` | `canvod.airflow` | Airflow DAG definitions for canvodpy pipelines |
 
 ### API levels
 
@@ -112,7 +122,7 @@ deprecated (`DeprecationWarning` on use) — kept working, no longer taught.
 
 | Level | Style | Entry point | Use case | Status |
 |---|---|---|---|---|
-| CLI | Command-line | `uv run python -m canvodpy.cli.run --site ... --start ... --end ...` | Running the pipeline — recommended | Active |
+| CLI | Command-line | `canvodpy run --site ... --start ... --end ...` | Running the pipeline — recommended | Active |
 | L3 | Site pipeline (OOP) | `Site(site).pipeline()` | Python-native configured pipeline runs — what the CLI wraps | Active |
 | L4 | Functional | `canvodpy.functional.*` | Component-level scripting/analysis; also used by Airflow (stateless) | Active |
 | L1 | Convenience | `process_date()`, `calculate_vod()`, `preview_processing()` | Superseded by `Site(site).pipeline()` | Deprecated |
@@ -213,7 +223,7 @@ to test edge cases (see `pyproject.toml:90` for ruff exemptions).
 - **VOD formula** (`canvod-vod`) — Tau-Omega radiative transfer model
 - **Coordinate transforms** (`canvod-auxiliary`) — ECEF ↔ spherical, deg/rad conversions
 - **Store dedup logic** (`canvod-store`) — hash + temporal overlap + intra-batch guards
-- **Naming convention parser** (`canvod-filemap`) — IGS/RINEX standard
+- **Naming convention parser** (`canvod-preflight`) — IGS/RINEX standard
 - **Ephemeris interpolation** (`canvod-auxiliary`) — Hermite spline on SP3 data
 - **SID construction** (`canvod-readers`) — must match across readers and store
 
