@@ -1,10 +1,81 @@
 # Quickstart — Retrieve VOD
 
-Install canVODpy like any other Python package:
+## Installation
+
+canVODpy is a terminal-first CLI tool. Pick the install method that matches
+what you're doing:
+
+### Persistent CLI, published release
+
+```bash
+uv tool install canvodpy
+uv tool update-shell   # one-time: adds ~/.local/bin to PATH if it isn't already there
+```
+
+`uv tool install` builds an isolated environment and drops a `canvodpy` shim
+on your `PATH` — persistent across terminal sessions and reboots, just like
+any other installed command (`git`, `just`, etc.). Only goes away via an
+explicit uninstall.
+
+**Update to the latest release:**
+
+```bash
+uv tool upgrade canvodpy
+```
+
+**Uninstall:**
+
+```bash
+uv tool uninstall canvodpy
+```
+
+### Persistent CLI, local development checkout (live edits)
+
+If you're working from a cloned monorepo and want `canvodpy` on your `PATH`
+while it tracks your local edits (not `uv tool install --editable` — that
+only makes the one top-level package editable, the ~10 internal workspace
+packages would still resolve from PyPI instead of your local changes):
+
+```bash
+cd /path/to/canvodpy && uv sync
+ln -s "$(pwd)/.venv/bin/canvodpy" ~/.local/bin/canvodpy
+```
+
+`uv sync` bakes an absolute path to the checkout's Python into the shim's
+shebang, so the symlink works from any directory regardless of your current
+working directory.
+
+**Update:** pull and re-sync — the symlink itself doesn't need to change:
+
+```bash
+git pull && uv sync
+```
+
+**Uninstall:** remove just the shim (the checkout and its `.venv` are untouched):
+
+```bash
+rm ~/.local/bin/canvodpy
+```
+
+!!! warning "If you move or rename the checkout"
+
+    The symlink's target path is fixed at creation time. If the checkout
+    directory is ever moved or renamed, rebuild the venv and recreate the
+    symlink:
+    ```bash
+    rm -rf .venv && uv sync
+    ln -sf "$(pwd)/.venv/bin/canvodpy" ~/.local/bin/canvodpy
+    ```
+
+### One-off use, no persistent install
 
 ```bash
 uv add canvodpy    # or: pip install canvodpy
 ```
+
+adds it to a project's own environment — only invocable via `uv run canvodpy`
+(or `python -m canvodpy`) from within that project, not as a bare `canvodpy`
+command elsewhere.
 
 Then follow the two steps below — configure the project and run your first pipeline day.
 
@@ -84,7 +155,7 @@ date convention in GNSS data products.
 Recommended: run it via the CLI —
 
 ```bash
-uv run python -m canvodpy.cli.run --site Rosalia --start 2025001 --end 2025001
+canvodpy run --site Rosalia --start 2025001 --end 2025001
 ```
 
 This reads the raw files, augments them with satellite positions (ephemeris),
