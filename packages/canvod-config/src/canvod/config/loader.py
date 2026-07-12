@@ -141,7 +141,7 @@ class ConfigLoader:
         if not settings_yaml.exists():
             raise FileNotFoundError(
                 f"Settings file not found: {settings_yaml}\n"
-                "Run 'canvod config init' to create it from the template."
+                "Run 'canvodpy config init' to create it from the template."
             )
         return self._load_single_file(settings_yaml)
 

@@ -163,7 +163,7 @@ def init(
         "       export CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com"
     )
     console.print("  3. Edit config/recipes/*.yaml to match your filename format")
-    console.print("  4. Run: canvod config validate\n")
+    console.print("  4. Run: canvodpy config validate\n")
 
 
 @config_app.command()
@@ -356,7 +356,7 @@ def edit(
 
     if not file_path.exists():
         console.print(f"[red]File not found:[/red] {file_path}")
-        console.print("\nRun: just config-init")
+        console.print("\nRun: canvodpy config init")
         raise typer.Exit(1)
 
     editor = os.getenv("EDITOR", "nano")

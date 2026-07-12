@@ -226,9 +226,9 @@ cfg.processing.storage.stores_root_dir
 ```
 
 ```bash
-canvod config init      # Scaffold canvod-settings.yaml from template
-canvod config validate  # Validate current config
-canvod config show      # Print resolved config
+canvodpy config init      # Scaffold canvod-settings.yaml from template
+canvodpy config validate  # Validate current config
+canvodpy config show      # Print resolved config
 ```
 
 ---
