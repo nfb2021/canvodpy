@@ -23,6 +23,16 @@ steps to GNSS datasets. Operations are composable and chainable via `Pipeline`.
 uv pip install canvod-ops
 ```
 
+## Configuration (optional)
+
+`build_default_pipeline()` falls back to `PreprocessingConfig()` defaults when
+no config is found — `canvod-config`'s `load_config()` is only consulted if
+available. In a standalone install outside a canvodpy monorepo checkout,
+point it at a settings file with:
+
+- `CANVOD_CONFIG_DIR` — directory containing `canvod-settings.yaml`
+- `CANVOD_CONFIG_FILE` — an overlay YAML file merged on top
+
 ## Quick Start
 
 ```python

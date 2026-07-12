@@ -11,7 +11,12 @@ installed on its own.
 
 | Module | Purpose |
 |---|---|
-| `models.py` | 40+ Pydantic models: `CanvodConfig`, `SiteConfig`, `ProcessingParams`, `StorageConfig`, `MetadataConfig`, `LoggingConfig` |
+| `models/` | Pydantic models, split by config section (dev/todo_later.md §4) — `__init__.py` re-exports everything, so `from canvod.config.models import X` is unaffected |
+| `models/root.py` | `CanvodConfig` — top-level settings, composes `processing`/`sites`/`sids` |
+| `models/processing.py` | `ProcessingConfig` — composes metadata/credentials/aux_data/params/compression/icechunk/storage/logging/preprocessing/references |
+| `models/sites.py` | `SiteConfig`, `SitesConfig`, `ReceiverConfig`, `VodAnalysisConfig` |
+| `models/sids.py` | `SidsConfig` — note: `_get_preset_sids()` resolves `presets/` via `Path(__file__).parent.parent`, one level up from this subpackage |
+| `models/metadata.py`, `processing_params.py`, `compression.py`, `storage.py`, `logging.py`, `preprocessing.py`, `references.py`, `aux_data.py`, `base.py` | One config section each |
 | `loader.py` | `ConfigLoader` — YAML config loading with overlay support, `find_monorepo_root()` |
 
 ## Config hierarchy

@@ -10,6 +10,17 @@ validates, and catalogs metadata aligned with **DataCite 4.5**, **ACDD 1.3**, an
 uv add canvod-store-metadata
 ```
 
+## Configuration (optional)
+
+`collect_metadata()` uses `canvod-config`'s `find_monorepo_root()` (wrapped
+in a fallback — a missing/unresolvable config doesn't block metadata
+collection) to help identify the environment a store was written in. In a
+standalone install outside a canvodpy monorepo checkout, point it at a
+settings file with:
+
+- `CANVOD_CONFIG_DIR` — directory containing `canvod-settings.yaml`
+- `CANVOD_CONFIG_FILE` — an overlay YAML file merged on top
+
 ## Naming: "store metadata" vs "file registry"
 
 canvod has two distinct concepts that both involve "metadata":

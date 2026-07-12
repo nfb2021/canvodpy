@@ -42,6 +42,15 @@ Part of the [canVODpy](https://github.com/nfb2021/canvodpy) ecosystem.
 uv pip install canvod-auxiliary
 ```
 
+## Configuration (optional)
+
+`AuxDataPipeline`'s default agency/product-type ephemeris settings come from
+`canvod-config`'s `load_config()`. In a standalone install outside a canvodpy
+monorepo checkout, point it at a settings file with:
+
+- `CANVOD_CONFIG_DIR` — directory containing `canvod-settings.yaml`
+- `CANVOD_CONFIG_FILE` — an overlay YAML file merged on top
+
 ## Quick Start
 
 ### Basic SP3 Usage

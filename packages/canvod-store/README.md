@@ -17,6 +17,16 @@ This package provides versioned storage for GNSS data using Icechunk, managing:
 uv pip install canvod-store
 ```
 
+## Configuration (optional)
+
+`MyIcechunkStore`, `GnssResearchSite`, and `IcechunkDataReader` read
+compression/chunking/resource settings from `canvod-config`'s
+`load_config()`. In a standalone install outside a canvodpy monorepo
+checkout, point it at a settings file with:
+
+- `CANVOD_CONFIG_DIR` — directory containing `canvod-settings.yaml`
+- `CANVOD_CONFIG_FILE` — an overlay YAML file merged on top
+
 ## Quick Start
 
 ```python

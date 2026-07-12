@@ -149,7 +149,21 @@ name. ~1,765 LOC, 9 test modules.
 **Directions:**
 - ~~Make `canvod-*` packages usable without a config file.~~ **RESOLVED (c7bcad13):** `GnssResearchSite.calculate_vod()` accepts `processing_params=None`; `extra="forbid"` on all 24 models catches bad YAML at load time; `ConfigValidationError` replaces `sys.exit`.
 - ~~`sys.exit` → raise throughout `loader.py`.~~ **RESOLVED (c7bcad13)**
-- Split `models.py` into focused files — still open (deferred to §11 Phase 1).
+- ~~Split `models.py` into focused files~~ **RESOLVED (2026-07-12):** converted
+  `models.py` (1244 lines, 24 model classes) into a `models/` subpackage —
+  `base.py`, `metadata.py`, `aux_data.py`, `processing_params.py`,
+  `compression.py`, `storage.py`, `logging.py`, `preprocessing.py`,
+  `references.py`, `processing.py`, `sites.py`, `sids.py`, `root.py`
+  (`CanvodConfig`), with `__init__.py` re-exporting everything so `from
+  canvod.config.models import X` is 100% unaffected — verified against all
+  10 known repo-wide consumers. Two relative-path gotchas fixed in the move:
+  `LoggingConfig.get_log_dir()`'s `from .loader import ...` → `from
+  ..loader import ...` (now one level deeper), and
+  `SidsConfig._get_preset_sids()`'s `Path(__file__).parent / "presets"` →
+  `.parent.parent / "presets"` (presets/ is a sibling of `models.py`, not of
+  the new `models/` dir) — both verified working (277-SID preset loads,
+  log dir resolves). Full regression: 1445 passed / 85 failed / 49 errors,
+  identical to the pre-split baseline.
 - ~~Separate science config from machine config / Introduce `ParallelismConfig`.~~ **RESOLVED differently (366c7eab + 4f855dde):** Dask gone, loky Wave A/B in place; credentials moved to `.env` (4f855dde); `days_per_batch` replaces `batch_hours`; `aggregate_glonass_fdma` dead wire removed; `scs_from → paired_canopies`; `ProcessingConfig.processing → .params`.
 - ~~**Merge the two CLIs**~~ **RESOLVED (2026-07-08).** `find_monorepo_root()` was
   deduplicated in c7bcad13, but the user-facing entry point wasn't unified until
@@ -163,8 +177,34 @@ name. ~1,765 LOC, 9 test modules.
   utility library again — no CLI code, no `typer`/`rich` deps. Installed console
   script: `canvodpy/pyproject.toml` → `canvodpy.cli.app:main`. Full rationale in
   `dev/cli_home_and_flags_plan.md`.
-- Validate naming-section config at `SitesConfig` load time — still open (§12 preflight).
-- ~~Surface `CANVOD_CONFIG_DIR` in `--help` and all package READMEs.~~ **RESOLVED (96e58c73 + prior):** `CANVOD_CONFIG_FILE` + `CANVOD_CONFIG_DIR` both handled in `load_config()`; `@lru_cache(maxsize=8)`, `logger.warning()` (no print()), `ConfigValidationError` (no sys.exit) all in place. **Still open:** mention both env vars in each `canvod-*` package README.
+- ~~Validate naming-section config at `SitesConfig` load time~~ **PARTIALLY
+  RESOLVED (2026-07-12):** deep structural validation of the `naming:` dict
+  still correctly stays out of `canvod-config` — that package has zero
+  inter-package dependencies by design (see the models.py-split entry above),
+  and `canvod-preflight` (which owns `SiteNamingConfig`/`ReceiverNamingConfig`)
+  doesn't depend on `canvod-config`, so importing preflight's models here
+  would create a fresh circular-dependency risk, the same class of problem
+  already flagged in §22. What canvod-config *can* validate without a new
+  dependency, added now: a `ReceiverConfig` cross-field check rejecting
+  `recipe` and `naming` both being set — `recipe`'s own description already
+  said it "replaces the naming block for file discovery," but nothing
+  enforced that, so both could be set with no indication of which one
+  actually took effect. Deep structural validation of `naming`'s contents
+  itself is still deferred to `canvod-preflight`/`canvod-filemap`, by design.
+- ~~Surface `CANVOD_CONFIG_DIR` in `--help` and all package READMEs.~~ **RESOLVED (96e58c73 + prior):** `CANVOD_CONFIG_FILE` + `CANVOD_CONFIG_DIR` both handled in `load_config()`; `@lru_cache(maxsize=8)`, `logger.warning()` (no print()), `ConfigValidationError` (no sys.exit) all in place.
+  ~~**Still open:** mention both env vars in each `canvod-*` package README.~~
+  **RESOLVED (2026-07-12):** added a "Configuration (optional)" section to
+  the 6 package READMEs that actually call `load_config()`/`find_monorepo_root()`
+  (verified by grep, not guessed) — `canvod-config` itself, `canvod-readers`,
+  `canvod-auxiliary`, `canvod-ops`, `canvod-store`, `canvod-store-metadata`.
+  The other 6 packages (`canvod-audit`, `canvod-grids`, `canvod-preflight`,
+  `canvod-utils`, `canvod-viz`, `canvod-vod`) don't touch config at all, so
+  left untouched. Side finding, not fixed: `canvod-config/README.md` itself
+  is quite stale beyond this (documents the old 3-file `processing.yaml`/
+  `sites.yaml`/`sids.yaml` format and pre-unified-config `just config-edit
+  processing` commands, superseded by `canvod-settings.yaml` +
+  `canvodpy config init/edit`) — flagging, not fixing, since it's a bigger,
+  separate rewrite.
 - ~~`defaults/sites.yaml` never read by `_load_sites()`.~~ **RESOLVED (moot):** With the unified `canvod-settings.yaml`, sites are always user-defined — `defaults/sites.yaml` contains `sites: {}` and there is nothing to merge. Dead file; delete or leave as a stub.
 
 **Open questions:**

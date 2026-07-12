@@ -141,6 +141,18 @@ just config-edit sids
 1. Package defaults (lowest priority)
 2. User configuration files (highest priority)
 
+## Resolving the settings file location
+
+Outside a canvodpy monorepo checkout (e.g. a standalone `pip install
+canvod-config`), there's no `.git` to find, so `load_config()` falls back to
+XDG: `$XDG_CONFIG_HOME/canvodpy`, or `~/.config/canvodpy` if that isn't set.
+Two environment variables override this:
+
+- `CANVOD_CONFIG_DIR` — directory containing `canvod-settings.yaml`
+- `CANVOD_CONFIG_FILE` — an overlay YAML file merged on top
+
+`canvodpy doctor` reports which of these was actually used for a given run.
+
 ## API-Ready Design
 
 Same Pydantic models work for both local files and future API:

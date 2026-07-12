@@ -17,6 +17,17 @@ GNSS data format readers for canVODpy.
 uv pip install canvod-readers
 ```
 
+## Configuration (optional)
+
+Readers pull optional defaults (author/email/institution metadata for
+dataset attrs, `keep_rnx_vars`, compression settings) from `canvod-config`'s
+`load_config()` when available — missing config just falls back to
+minimal attrs, it's never required. If you do want those defaults in a
+standalone install, point `load_config()` at a settings file with:
+
+- `CANVOD_CONFIG_DIR` — directory containing `canvod-settings.yaml`
+- `CANVOD_CONFIG_FILE` — an overlay YAML file merged on top
+
 ## Quick Start
 
 ```python
