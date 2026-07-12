@@ -137,9 +137,17 @@ config-show:
 config-init:
     uv run canvodpy config init
 
+# initialize configuration via guided interactive wizard
+config-init-interactive:
+    uv run canvodpy config init --interactive
+
 # open canvod-settings.yaml in $EDITOR
 config-edit:
     uv run canvodpy config edit
+
+# report canvodpy's version, environment, and config resolution
+doctor:
+    uv run canvodpy doctor
 
 # delete canvod-settings.yaml (destructive, requires typed confirmation)
 config-delete CONFIG_DIR="config":
@@ -158,6 +166,30 @@ config-delete CONFIG_DIR="config":
     fi
     rm -f "$target"
     echo -e "{{ GREEN }}Deleted $target{{ NORMAL }}"
+
+# ============================================================================
+# Store Inspection
+# ============================================================================
+
+# list every configured site's gnss/vod store paths and status
+store-list:
+    uv run canvodpy store list
+
+# show branches, groups, and stats for one site's store (STORE: gnss|vod)
+store-info SITE STORE="gnss":
+    uv run canvodpy store info {{ SITE }} --store {{ STORE }}
+
+# show a group's full dataset + metadata table for one site's store
+store-info-group SITE GROUP STORE="gnss":
+    uv run canvodpy store info {{ SITE }} --store {{ STORE }} --group {{ GROUP }}
+
+# show commit history as a graph for one site's store (STORE: gnss|vod)
+store-log SITE STORE="gnss":
+    uv run canvodpy store log {{ SITE }} --store {{ STORE }}
+
+# show the ops audit trail for one site's store (STORE: gnss|vod)
+store-ops SITE STORE="gnss":
+    uv run canvodpy store log {{ SITE }} --store {{ STORE }} --ops
 
 # ============================================================================
 # Store Metadata

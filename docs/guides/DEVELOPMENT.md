@@ -280,10 +280,13 @@ just sync                # install/update dependencies
 just clean               # remove build artifacts
 just hooks               # install pre-commit hooks
 canvodpy config init     # scaffold canvod-settings.yaml from template
+just config-init-interactive  # scaffold canvod-settings.yaml via guided wizard
 just config-validate     # validate configuration
 just config-show         # view resolved configuration
-canvodpy doctor          # environment + config diagnostics
-canvodpy store list      # list every site's gnss/vod stores + status
+just doctor              # environment + config diagnostics
+just store-list          # list every site's gnss/vod stores + status
+just store-info SITE     # branches/groups/stats for one site's store
+just store-log SITE      # commit history graph for one site's store
 just docs                # preview documentation (localhost:3000)
 just build-all           # build all packages
 just deps-report         # dependency metrics report
