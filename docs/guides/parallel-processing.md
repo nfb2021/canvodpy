@@ -57,6 +57,14 @@ provides a **reusable process pool** that stays alive between batches:
 This makes the overhead of spawning scale with the number of workers (a one-time cost),
 not with the number of files or days being processed.
 
+!!! note "The first minute or two of a run can look idle"
+    A run's initial "warm-up" — before the first files start visibly
+    processing — can take a minute or more on a cold start. Besides the
+    scientific-dependency imports above, this window also covers one-time
+    setup work (e.g. database/index creation) that only happens once per
+    worker lifetime, not per file or per day. This is expected, not a hang —
+    give it a couple of minutes before assuming something is stuck.
+
 !!! note "Reading from the store is always fast"
     `xarray.open_zarr()` loads only the array chunks you actually access — the
     full dataset is never read into memory at once.

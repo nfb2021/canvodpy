@@ -1356,7 +1356,7 @@ plumbing) and #3/#4 are partial mitigations, not fixes.
 
 ---
 
-## 19. Chunk-size misalignment on the Rosalia store — root cause found, `rechunk_group()` fixed, migration still pending
+## 19. ~~Chunk-size misalignment on the Rosalia store~~ — root cause + fix documented (2026-07-13)
 
 **Found 2026-07-08**, analyzing performance logs from the remote processing
 machine's live backfill run (`dev/*.md` log analysis, not a code investigation).
@@ -1452,17 +1452,27 @@ bigger than a day" and worth a quick check first. `dev/plot_galileo_vod_timeseri
 includes a chunk-layout diagnostic cell for exactly this (reports actual
 on-disk epoch chunk sizes/counts before running the full aggregation).
 
-**Still pending:**
-1. Stop the remote pipeline.
-2. Set `epoch=17280` for Rosalia in `canvod-settings.yaml`'s
-   `icechunk.chunk_strategies` (both `gnss_store` and `vod_store` if VOD
-   analyses are also affected — not yet checked whether VOD store has the same
-   sampling-rate assumption).
-3. Run `store.rechunk_group(group_name, chunks={"epoch": 17280, "sid": -1})`
-   for each of the 4 groups.
-4. Verify (chunk size, metadata row counts, root attrs, spot-check data
-   values) before resuming the pipeline.
-5. Resume ingestion — new writes should now be clean appends.
+**RESOLVED (2026-07-13) — repurposed per user direction: turned into
+permanent documentation instead of a one-off remote-migration checklist**
+(the actual remote-store migration on Rosalia is outside this repo's
+tracking — not verifiable from here either way). Added two things a
+future site setup needs to know, so this doesn't have to be rediscovered
+per-site:
+1. `docs/packages/store/icechunk.md`'s "Chunk Strategy" section now has a
+   warning box with the general formula (`epoch_chunk_size = 86400 s/day ÷
+   sampling_interval_seconds`, equivalently `× logging_rate_hz`), the
+   write-amplification consequence of getting it wrong, and the
+   fixed-at-first-write / needs-`rechunk_group()`-to-change caveat.
+2. `docs/guides/parallel-processing.md`'s loky section now has a note that
+   the first minute or two of a run can look idle — one-time per-worker
+   setup (dependency imports, database/index creation) happens once per
+   worker lifetime, not per file/day, and isn't a hang.
+
+The 4-step remote-migration checklist (stop pipeline, set `epoch=17280`,
+`rechunk_group()`, verify, resume) is still the right recipe *if and when*
+that specific migration needs doing — just no longer tracked here as a
+pending action, since whether it happened lives on the remote machine, not
+in this repo.
 
 ## 20. Pre-existing test failures (18) — found while verifying canvod-virtualiconvname removal, 2026-07-09
 

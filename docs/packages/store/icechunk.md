@@ -135,6 +135,27 @@ Icechunk is a cloud-native transactional storage format for multidimensional arr
     )
     ```
 
+!!! warning "Match epoch chunk size to your site's sampling rate"
+    The default `epoch: 34560` is tuned for **2.5 s sampling** — one full day
+    is `86400 s ÷ 2.5 s = 34560` epochs. If a site samples at a different
+    rate, compute its chunk size the same way instead of using the default
+    as-is:
+
+    ```
+    epoch_chunk_size = (24 h × 60 min × 60 s) × logging_rate_hz
+                      = 86400 seconds/day ÷ sampling_interval_seconds
+    ```
+
+    For example, 5 s sampling (0.2 Hz) needs `epoch: 17280`, not `34560`.
+    Using the 2.5 s-tuned default there means every day is exactly half a
+    chunk, so every daily commit lands mid-chunk and forces a
+    read-modify-write of the whole chunk instead of a clean append.
+
+    Set `chunk_strategies` in `canvod-settings.yaml` to match **before** a
+    group's first-ever write — chunk shape is fixed at creation and does not
+    change on later config edits. An existing store needs an explicit
+    `store.rechunk_group()` migration instead.
+
 ---
 
 ## Configuration
