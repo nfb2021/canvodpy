@@ -18,7 +18,12 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from canvod.config.loader import get_default_config_dir, get_template_dir
+from canvod.config.loader import (
+    ConfigValidationError,
+    format_validation_error,
+    get_default_config_dir,
+    get_template_dir,
+)
 from canvod.config.models import ProcessingConfig, SidsConfig, SitesConfig
 
 # Config subcommand
@@ -277,6 +282,11 @@ def validate(
 
         console.print()
 
+    except ConfigValidationError as e:
+        console.print("[red]❌ Validation failed:[/red]\n")
+        console.print(format_validation_error(e))
+        console.print()
+        raise typer.Exit(1) from e
     except Exception as e:
         console.print("[red]❌ Validation failed:[/red]\n")
         console.print(str(e))
@@ -311,6 +321,11 @@ def show(
 
     try:
         config = load_config(config_dir)
+    except ConfigValidationError as e:
+        console.print(
+            f"\n[red]❌ Error loading config:[/red]\n\n{format_validation_error(e)}\n"
+        )
+        raise typer.Exit(1) from e
     except Exception as e:
         console.print(f"\n[red]❌ Error loading config:[/red] {e}\n")
         raise typer.Exit(1) from e

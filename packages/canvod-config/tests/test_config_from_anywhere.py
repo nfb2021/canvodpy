@@ -134,6 +134,52 @@ class TestGetDefaultConfigDir:
         assert result == tmp_path / "xdg" / "canvodpy"
 
 
+class TestFormatValidationError:
+    """format_validation_error() turns a ConfigValidationError into
+    actionable, human-readable text — no Pydantic internals, no traceback."""
+
+    def _make_error(self, config_dir: Path) -> loader_module.ConfigValidationError:
+        from pydantic import ValidationError
+
+        from canvod.config.models import ProcessingConfig
+
+        try:
+            ProcessingConfig(
+                metadata={
+                    "author": "Your Name",
+                    "email": "your.email@example.com",
+                    "institution": "X",
+                },
+                storage={"stores_root_dir": str(config_dir)},
+            )
+        except ValidationError as e:
+            return loader_module.ConfigValidationError(e, config_dir)
+        raise AssertionError("expected ProcessingConfig to reject placeholder values")
+
+    def test_leads_with_dotted_field_path(self, tmp_path):
+        error = self._make_error(tmp_path)
+        formatted = loader_module.format_validation_error(error)
+        assert "metadata.author" in formatted
+        assert "metadata.email" in formatted
+
+    def test_strips_value_error_prefix_and_pydantic_url(self, tmp_path):
+        error = self._make_error(tmp_path)
+        formatted = loader_module.format_validation_error(error)
+        assert "Value error," not in formatted
+        assert "errors.pydantic.dev" not in formatted
+
+    def test_names_the_actual_settings_file(self, tmp_path):
+        error = self._make_error(tmp_path)
+        formatted = loader_module.format_validation_error(error)
+        assert str(tmp_path / "canvod-settings.yaml") in formatted
+
+    def test_preserves_the_custom_validator_message(self, tmp_path):
+        error = self._make_error(tmp_path)
+        formatted = loader_module.format_validation_error(error)
+        assert "fill in your real name" in formatted
+        assert "fill in your real email" in formatted
+
+
 if __name__ == "__main__":
     """Allow running as script for manual testing."""
     if not HAS_CONFIG:

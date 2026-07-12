@@ -31,6 +31,37 @@ class ConfigValidationError(ValueError):
         super().__init__(str(error))
 
 
+def format_validation_error(error: ConfigValidationError) -> str:
+    """Format a ConfigValidationError as human-readable, actionable text.
+
+    Leads with the dotted field path (e.g. ``processing.metadata.author``)
+    so a user can jump straight to the offending key in their YAML, strips
+    Pydantic's ``"Value error, "`` prefix (added when a custom validator
+    raises a plain ``ValueError``) and its ``https://errors.pydantic.dev/...``
+    footer — both are developer-facing noise for a config-file typo, not
+    something a scientist editing YAML needs to see.
+
+    Parameters
+    ----------
+    error : ConfigValidationError
+        The error raised by ``ConfigLoader.load()``.
+
+    Returns
+    -------
+    str
+        Multi-line, human-readable error report.
+    """
+    settings_file = error.config_dir / "canvod-settings.yaml"
+    lines = [f"Configuration error in {settings_file}:", ""]
+    for err in error.validation_error.errors():
+        loc = ".".join(str(part) for part in err["loc"])
+        msg = err["msg"].removeprefix("Value error, ")
+        lines.append(f"  {loc}")
+        lines.append(f"    {msg}")
+        lines.append("")
+    return "\n".join(lines).rstrip()
+
+
 def find_monorepo_root() -> Path:
     """Find the monorepo root by looking for a .git entry.
 

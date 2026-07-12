@@ -260,6 +260,7 @@ def _main_impl(args: SimpleNamespace) -> int:
     from pathlib import Path
 
     from canvod.config import load_config
+    from canvod.config.loader import ConfigValidationError, format_validation_error
 
     config_file: Path | None = None
     if args.config is not None:
@@ -271,7 +272,14 @@ def _main_impl(args: SimpleNamespace) -> int:
             return 1
         os.environ["CANVOD_CONFIG_FILE"] = str(config_file.expanduser().resolve())
 
-    config = load_config(config_file=config_file)
+    try:
+        config = load_config(config_file=config_file)
+    except ConfigValidationError as e:
+        print(format_validation_error(e), file=sys.stderr)
+        return 1
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
 
     if args.ephemeris_source is not None:
         config.processing.params.ephemeris_source = args.ephemeris_source
