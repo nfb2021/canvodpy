@@ -17,7 +17,7 @@ Examples
 --------
 Object-oriented (recommended for Python-native pipeline runs):
     >>> from canvodpy import Site, Pipeline
-    >>> site = Site("Rosalia")
+    >>> site = Site("ExampleSite")
     >>> pipeline = site.pipeline()
     >>> data = pipeline.process_date("2025001")
 
@@ -54,7 +54,7 @@ class Site:
     Parameters
     ----------
     name : str
-        Site name from configuration (e.g., "Rosalia")
+        Site name from configuration (e.g., "ExampleSite")
 
     Attributes
     ----------
@@ -73,7 +73,7 @@ class Site:
 
     Examples
     --------
-    >>> site = Site("Rosalia")
+    >>> site = Site("ExampleSite")
     >>> print(site.receivers)
     {'canopy_01': {...}, 'reference_01': {...}}
 
@@ -183,7 +183,7 @@ class Site:
 
         Examples
         --------
-        >>> site = Site("Rosalia")
+        >>> site = Site("ExampleSite")
         >>> pipeline = site.pipeline(n_workers=8, max_memory_gb=16)
         >>> data = pipeline.process_date("2025001")
 
@@ -254,11 +254,11 @@ class Pipeline:
     Examples
     --------
     >>> # From site object
-    >>> site = Site("Rosalia")
+    >>> site = Site("ExampleSite")
     >>> pipeline = Pipeline(site)
 
     >>> # Or directly from name
-    >>> pipeline = Pipeline("Rosalia")
+    >>> pipeline = Pipeline("ExampleSite")
 
     >>> # Process single date
     >>> data = pipeline.process_date("2025001")
@@ -394,7 +394,7 @@ class Pipeline:
 
         Examples
         --------
-        >>> pipeline = Pipeline("Rosalia")
+        >>> pipeline = Pipeline("ExampleSite")
         >>> data = pipeline.process_date("2025001")
         >>> print(data.keys())
         dict_keys(['canopy_01', 'canopy_02', 'reference_01'])
@@ -445,7 +445,7 @@ class Pipeline:
 
         Examples
         --------
-        >>> pipeline = Pipeline("Rosalia")
+        >>> pipeline = Pipeline("ExampleSite")
         >>> for date, datasets in pipeline.process_range("2025001", "2025007"):
         ...     print(f"Processed {date}: {len(datasets)} receivers")
         Processed 2025001: 3 receivers
@@ -486,7 +486,7 @@ class Pipeline:
 
         Examples
         --------
-        >>> pipeline = Pipeline("Rosalia")
+        >>> pipeline = Pipeline("ExampleSite")
         >>> vod = pipeline.calculate_vod("canopy_01", "reference_01", "2025001")
         >>> print(vod.vod.mean().values)
         0.42
@@ -560,7 +560,7 @@ class Pipeline:
 
         Examples
         --------
-        >>> pipeline = Pipeline("Rosalia")
+        >>> pipeline = Pipeline("ExampleSite")
         >>> plan = pipeline.preview()
         >>> print(f"Total files: {plan['total_files']}")
 
@@ -601,7 +601,7 @@ def process_date(
     Parameters
     ----------
     site : str
-        Site name (e.g., "Rosalia")
+        Site name (e.g., "ExampleSite")
     date : str
         Date in YYYYDOY format (e.g., "2025001")
     keep_vars : list[str], optional
@@ -619,13 +619,13 @@ def process_date(
     Examples
     --------
     >>> from canvodpy import process_date
-    >>> data = process_date("Rosalia", "2025001")
+    >>> data = process_date("ExampleSite", "2025001")
     >>> print(data.keys())
     dict_keys(['canopy_01', 'canopy_02', 'reference_01'])
 
     >>> # With custom settings
     >>> data = process_date(
-    ...     "Rosalia",
+    ...     "ExampleSite",
     ...     "2025001",
     ...     keep_vars=["C1C", "L1C"],
     ...     aux_agency="ESA"
@@ -685,7 +685,7 @@ def calculate_vod(
     --------
     >>> from canvodpy import calculate_vod
     >>> vod = calculate_vod(
-    ...     site="Rosalia",
+    ...     site="ExampleSite",
     ...     canopy="canopy_01",
     ...     reference="reference_01",
     ...     date="2025001"
@@ -724,7 +724,7 @@ def preview_processing(site: str) -> dict:
     Examples
     --------
     >>> from canvodpy import preview_processing
-    >>> plan = preview_processing("Rosalia")
+    >>> plan = preview_processing("ExampleSite")
     >>> print(f"Total files: {plan['total_files']}")
     Total files: 8640
 

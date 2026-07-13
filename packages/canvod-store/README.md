@@ -37,7 +37,7 @@ from pathlib import Path
 rinex_store = create_rinex_store(Path("./rinex_store"))
 
 # Or use site manager
-site = GnssResearchSite(site_name="Rosalia")
+site = GnssResearchSite(site_name="ExampleSite")
 ```
 
 ## Features

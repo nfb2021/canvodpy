@@ -9,7 +9,7 @@ Get a logger:
 
     >>> from canvodpy.logging import get_logger
     >>> log = get_logger(__name__)
-    >>> log.info("processing_started", site="Rosalia", date="2025001")
+    >>> log.info("processing_started", site="ExampleSite", date="2025001")
 
 Setup logging (optional, already configured by default):
 

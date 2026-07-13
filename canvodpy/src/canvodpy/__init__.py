@@ -9,12 +9,12 @@ Three levels of API to match your needs:
 
 **Level 1: Simple (one-liners)**
     >>> from canvodpy import process_date, calculate_vod
-    >>> data = process_date("Rosalia", "2025001")
-    >>> vod = calculate_vod("Rosalia", "canopy_01", "reference_01", "2025001")
+    >>> data = process_date("ExampleSite", "2025001")
+    >>> vod = calculate_vod("ExampleSite", "canopy_01", "reference_01", "2025001")
 
 **Level 2: Object-oriented (more control)**
     >>> from canvodpy import Site, Pipeline
-    >>> site = Site("Rosalia")
+    >>> site = Site("ExampleSite")
     >>> pipeline = site.pipeline()
     >>> data = pipeline.process_date("2025001")
     >>> vod = pipeline.calculate_vod("canopy_01", "reference_01", "2025001")
@@ -51,18 +51,18 @@ Examples
 --------
 Process one day of data:
     >>> from canvodpy import process_date
-    >>> data = process_date("Rosalia", "2025001")
+    >>> data = process_date("ExampleSite", "2025001")
 
 Process a week:
     >>> from canvodpy import Pipeline
-    >>> pipeline = Pipeline("Rosalia")
+    >>> pipeline = Pipeline("ExampleSite")
     >>> for date, datasets in pipeline.process_range("2025001", "2025007"):
     ...     print(f"Processed {date}")
 
 Calculate and visualize VOD:
     >>> from canvodpy import calculate_vod
     >>> from canvod.viz import HemisphereVisualizer
-    >>> vod = calculate_vod("Rosalia", "canopy_01", "reference_01", "2025001")
+    >>> vod = calculate_vod("ExampleSite", "canopy_01", "reference_01", "2025001")
     >>> viz = HemisphereVisualizer()
     >>> fig = viz.plot_2d(vod)
 
@@ -115,7 +115,7 @@ def workflow(site: str, **kwargs) -> FluentWorkflow:
     Parameters
     ----------
     site : str
-        Site name (e.g. ``"Rosalia"``).
+        Site name (e.g. ``"ExampleSite"``).
     **kwargs
         Forwarded to :class:`FluentWorkflow`.
 
@@ -126,7 +126,7 @@ def workflow(site: str, **kwargs) -> FluentWorkflow:
     Examples
     --------
     >>> import canvodpy
-    >>> result = (canvodpy.workflow("Rosalia")
+    >>> result = (canvodpy.workflow("ExampleSite")
     ...     .read("2025001")
     ...     .preprocess()
     ...     .grid()

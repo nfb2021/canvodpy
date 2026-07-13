@@ -1197,7 +1197,7 @@ if __name__ == "__main__":
 
     cfg = load_config()
     proc = cfg.processing.params
-    site = GnssResearchSite(site_name="Rosalia")
+    site = GnssResearchSite(site_name="ExampleSite")
 
     # All params from config — no hardcoded defaults
     keep_vars = proc.keep_gnss_observables

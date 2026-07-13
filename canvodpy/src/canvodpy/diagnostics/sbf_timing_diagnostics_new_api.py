@@ -132,7 +132,7 @@ def diagnose_processing_new_api(
     print()
 
     # Initialize site and pipeline using NEW API
-    site = Site("Rosalia")
+    site = Site("ExampleSite")
     # reader_format is now per-receiver in sites.yaml (no global reader= param)
     pipeline = site.pipeline(keep_vars=keep_vars, dry_run=False)
 

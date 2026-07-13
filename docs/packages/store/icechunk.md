@@ -54,7 +54,7 @@ Icechunk is a cloud-native transactional storage format for multidimensional arr
 
     ```
     stores/
-      rosalia/
+      examplesite/
         rinex/
           snapshots/      # Immutable snapshot objects
           transactions/   # Transaction logs
@@ -73,7 +73,7 @@ Icechunk is a cloud-native transactional storage format for multidimensional arr
 
     ```
     stores/
-      rosalia/
+      examplesite/
         rinex/
           refs/           # Branch and tag refs
           snapshots/      # Immutable snapshot files
@@ -246,10 +246,10 @@ Once the backend is wired up, tune these knobs in order of impact:
     from canvod.store import MyIcechunkStore
 
     # Open or create (filesystem)
-    store = MyIcechunkStore("/data/stores/rosalia/rinex")
+    store = MyIcechunkStore("/data/stores/examplesite/rinex")
 
     # Open existing (read-only)
-    store = MyIcechunkStore("/data/stores/rosalia/rinex", read_only=True)
+    store = MyIcechunkStore("/data/stores/examplesite/rinex", read_only=True)
     ```
 
 === "Write with Versioning"
@@ -257,7 +257,7 @@ Once the backend is wired up, tune these knobs in order of impact:
     ```python
     from canvod.site import Site
 
-    site = Site("Rosalia")
+    site = Site("ExampleSite")
 
     # Append one day of observations → creates snapshot
     snapshot_id = site.rinex_store.append_dataset(
@@ -312,7 +312,7 @@ Once the backend is wired up, tune these knobs in order of impact:
 
     ```python
     # No code change — set the store path to an S3 URI
-    store = MyIcechunkStore("s3://my-bucket/rosalia/rinex")
+    store = MyIcechunkStore("s3://my-bucket/examplesite/rinex")
     ```
 
     Configure credentials via environment variables or instance roles:
@@ -331,7 +331,7 @@ Once the backend is wired up, tune these knobs in order of impact:
     os.environ["AWS_ACCESS_KEY_ID"] = "minioadmin"
     os.environ["AWS_SECRET_ACCESS_KEY"] = "minioadmin"
 
-    store = MyIcechunkStore("s3://canvod-data/rosalia/rinex")
+    store = MyIcechunkStore("s3://canvod-data/examplesite/rinex")
     ```
 
 === "Cloudflare R2"
@@ -341,7 +341,7 @@ Once the backend is wired up, tune these knobs in order of impact:
     os.environ["AWS_ACCESS_KEY_ID"] = "<r2_access_key>"
     os.environ["AWS_SECRET_ACCESS_KEY"] = "<r2_secret_key>"
 
-    store = MyIcechunkStore("s3://canvod-data/rosalia/rinex")
+    store = MyIcechunkStore("s3://canvod-data/examplesite/rinex")
     ```
 
 !!! tip "Local → Cloud"

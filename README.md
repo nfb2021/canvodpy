@@ -195,10 +195,10 @@ uv add canvod-readers canvod-grids
 from canvodpy import process_date, calculate_vod
 
 # Process one day: read + augment + write to Icechunk store
-process_date("Rosalia", "2025001")
+process_date("ExampleSite", "2025001")
 
 # Compute VOD from stored data
-vod = calculate_vod("Rosalia", "canopy_01", "reference_01", "2025001")
+vod = calculate_vod("ExampleSite", "canopy_01", "reference_01", "2025001")
 ```
 
 Four API levels are available — from one-liners to Airflow-ready stateless functions:
@@ -206,14 +206,14 @@ Four API levels are available — from one-liners to Airflow-ready stateless fun
 ```mermaid
 flowchart TD
     subgraph L1["Level 1: Convenience"]
-        L1A["process_date('Rosalia', '2025001')"]
+        L1A["process_date('ExampleSite', '2025001')"]
         L1A --> L1B["Pipeline (internal)"]
         L1B --> L1C["PipelineOrchestrator"]
         L1C --> L1D["Dask Workers"]
     end
 
     subgraph L2["Level 2: Fluent"]
-        L2A[".workflow('Rosalia')"]
+        L2A[".workflow('ExampleSite')"]
         L2A --> L2B[".read('2025001')"]
         L2B --> L2C[".augment(source='final')"]
         L2C --> L2E[".grid(grid_type='equal_area')"]
@@ -222,7 +222,7 @@ flowchart TD
     end
 
     subgraph L3["Level 3: Site + Pipeline"]
-        L3A["Site('Rosalia')"]
+        L3A["Site('ExampleSite')"]
         L3A --> L3B[".pipeline(n_workers=8)"]
         L3B --> L3C[".process_range(...)"]
         L3C --> L3D["Reusable Dask Cluster"]

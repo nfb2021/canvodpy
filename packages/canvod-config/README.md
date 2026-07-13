@@ -88,8 +88,8 @@ processing:
 
 ```yaml
 sites:
-  rosalia:
-    gnss_site_data_root: /path/to/rosalia
+  examplesite:
+    gnss_site_data_root: /path/to/examplesite
     receivers:
       reference_01:
         type: reference

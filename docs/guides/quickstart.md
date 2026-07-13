@@ -177,7 +177,7 @@ date convention in GNSS data products.
 Recommended: run it via the CLI —
 
 ```bash
-canvodpy run --site Rosalia --start 2025001 --end 2025001
+canvodpy run --site ExampleSite --start 2025001 --end 2025001
 ```
 
 This reads the raw files, augments them with satellite positions (ephemeris),
@@ -189,7 +189,7 @@ From Python, the same thing via `Site.pipeline()`:
 ```python
 from canvodpy import Site
 
-site = Site("Rosalia")
+site = Site("ExampleSite")
 pipeline = site.pipeline()          # options like n_workers default to config values
 data = pipeline.process_date("2025001")
 ```

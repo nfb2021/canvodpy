@@ -51,7 +51,7 @@ ROSR01TUW_R_20250010000_01D_05S_AA.rnx
 
 | Part | Value | Meaning |
 |------|-------|---------|
-| `ROS` | Site | Rosalia |
+| `ROS` | Site | ExampleSite |
 | `R` | Type | Reference (above-canopy) |
 | `01` | Number | Receiver 01 |
 | `TUW` | Agency | TU Wien |
@@ -118,8 +118,8 @@ sites:
 A recipe tells the mapper how to extract canonical fields from a physical filename:
 
 ```yaml
-name: rosalia_reference
-description: Septentrio RINEX v2 files from Rosalia reference receiver
+name: examplesite_reference
+description: Septentrio RINEX v2 files from ExampleSite reference receiver
 site: ROS
 agency: TUW
 receiver_number: 1

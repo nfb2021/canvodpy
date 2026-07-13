@@ -34,19 +34,19 @@ aggregate bar entirely, not sit alongside it.
 
 **Current state** (`canvodpy/src/canvodpy/cli/run.py:_build_parser`):
 ```python
-p.add_argument("--site", required=True, help="Site name as defined in sites.yaml (e.g. Rosalia)")
+p.add_argument("--site", required=True, help="Site name as defined in sites.yaml (e.g. ExampleSite)")
 ```
 Single required string.
 
-**Change:** `nargs="+"` so `--site Rosalia` (still works, list of one) and
-`--site Rosalia OtherSite ThirdSite` both work.
+**Change:** `nargs="+"` so `--site ExampleSite` (still works, list of one) and
+`--site ExampleSite OtherSite ThirdSite` both work.
 ```python
 p.add_argument(
     "--site",
     required=True,
     nargs="+",
     metavar="SITE",
-    help="One or more site names as defined in sites.yaml (e.g. Rosalia)",
+    help="One or more site names as defined in sites.yaml (e.g. ExampleSite)",
 )
 ```
 
@@ -151,7 +151,7 @@ receiver spanning ALL dates" comment already in the current code
 
 ## Testing / verification
 
-- `uv run canvodpy run --site Rosalia --dry-run` — single-site form still
+- `uv run canvodpy run --site ExampleSite --dry-run` — single-site form still
   works unchanged.
 - `uv run canvodpy run --site SiteA SiteB --dry-run` — multi-site parses,
   both previews print.

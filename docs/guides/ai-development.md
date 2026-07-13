@@ -152,10 +152,10 @@ Claude will:
 ### Running the pipeline
 
 ```
-> Process the last week of data for site Rosalia
+> Process the last week of data for site ExampleSite
 
 Claude will:
-1. Recommend the CLI: canvodpy run --site Rosalia --start ... --end ...
+1. Recommend the CLI: canvodpy run --site ExampleSite --start ... --end ...
 2. Suggest omitting --start on subsequent runs (auto-resumes from the store)
 3. Only drop to Site(site).pipeline() in Python if the user needs scripted,
    multi-site, or notebook-embedded control

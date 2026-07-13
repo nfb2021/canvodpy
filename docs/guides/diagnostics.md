@@ -125,7 +125,7 @@ def download_orbits(date):
     ...
 
 # Context manager: times a specific block
-with track_time("pipeline.batch", site="rosalia", date="2025001"):
+with track_time("pipeline.batch", site="examplesite", date="2025001"):
     process_batch(files)
 ```
 
@@ -238,7 +238,7 @@ Context manager that combines timing + memory + success/failure tracking. Design
 from canvod.utils.diagnostics import task_metrics
 
 # Standalone (no Airflow)
-with task_metrics("ingest_rinex", site="rosalia") as m:
+with task_metrics("ingest_rinex", site="examplesite") as m:
     process_all_files()
 print(f"Took {m.duration_s:.1f}s, peak {m.peak_memory_mb:.0f} MB, status: {m.status}")
 
@@ -327,7 +327,7 @@ from canvod.utils.diagnostics import bottlenecks, plot_bottlenecks
 df = bottlenecks(top_n=10)
 
 # Horizontal bar chart with percentage labels
-fig = plot_bottlenecks(top_n=8, title="Pipeline bottlenecks — Rosalia 2025")
+fig = plot_bottlenecks(top_n=8, title="Pipeline bottlenecks — ExampleSite 2025")
 fig.savefig("bottlenecks.png")
 ```
 
@@ -499,7 +499,7 @@ def write_store(ds, store, group):
 ```python
 from canvod.utils.diagnostics import BatchTracker, task_metrics
 
-with task_metrics("daily_ingest", push=True, site="rosalia") as m:
+with task_metrics("daily_ingest", push=True, site="examplesite") as m:
     tracker = BatchTracker("files")
     for f in rinex_files:
         with tracker.step(f.name):

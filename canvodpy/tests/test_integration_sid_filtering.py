@@ -2,7 +2,7 @@
 """Integration test to verify SID filtering works.
 
 Uses self-contained test data and receiver config so the test is independent
-of the user's local ``config/sites.yaml``.
+of the user's local ``config/canvod-settings.yaml``.
 """
 
 from pathlib import Path
@@ -11,7 +11,7 @@ import pytest
 
 # Check if config files and store paths are available
 CONFIG_DIR = Path.cwd() / "config"
-HAS_CONFIG = (CONFIG_DIR / "sites.yaml").exists()
+HAS_CONFIG = (CONFIG_DIR / "canvod-settings.yaml").exists()
 
 # Reference test data inside the test-data submodule
 _TEST_DATA = (
@@ -54,15 +54,34 @@ _TEST_VOD_ANALYSES = {
     not (HAS_CONFIG and HAS_TEST_DATA and HAS_STORE),
     reason="Integration test requires config files, test data, and store directory",
 )
-def test_sid_filtering_integration():
+def test_sid_filtering_integration(tmp_path, monkeypatch):
     """Test SID filtering with full orchestrator."""
     from canvodpy.orchestrator.pipeline import PipelineOrchestrator
 
-    from canvod.config import load_config
-    from canvod.config.models import ReceiverConfig, VodAnalysisConfig
+    import canvod.config as config_pkg
+    from canvod.config.models import ReceiverConfig, SiteConfig, VodAnalysisConfig
     from canvod.store import GnssResearchSite
 
-    site = GnssResearchSite(site_name="Rosalia")
+    # GnssResearchSite.__init__ calls load_config() and looks up
+    # sites.sites[site_name] to build the store + site config — fully
+    # monkeypatch both so this test never depends on the real local
+    # config/canvod-settings.yaml having a "rosalia" site defined (or
+    # existing at all). Mutate the already-validated config object directly
+    # (models are frozen=False) rather than an env var override —
+    # CANVOD__PROCESSING__STORAGE__... env vars replace the whole nested
+    # `storage`/`sites` dict rather than merging into it (pydantic-settings'
+    # BaseSettings source-merging), which would drop other sections.
+    patched_config = config_pkg.load_config()
+    patched_config.processing.storage.stores_root_dir = tmp_path / "stores"
+    patched_config.sites.sites["rosalia"] = SiteConfig(
+        gnss_site_data_root=str(_ROSALIA_DATA),
+        receivers={
+            "canopy_01": ReceiverConfig(type="canopy", directory="placeholder"),
+        },
+    )
+    monkeypatch.setattr(config_pkg, "load_config", lambda *a, **kw: patched_config)
+
+    site = GnssResearchSite(site_name="rosalia")
 
     # Override site config to use self-contained test data
     site._site_config.gnss_site_data_root = str(_ROSALIA_DATA)
@@ -77,7 +96,7 @@ def test_sid_filtering_integration():
 
     counter = 0
     for date_key, _datasets, _receiver_times in orchestrator.process_by_date(
-        keep_vars=load_config().processing.params.keep_gnss_observables,
+        keep_vars=patched_config.processing.params.keep_gnss_observables,
         start_from=None,
         end_at=None,
     ):

@@ -34,7 +34,7 @@ uv pip install canvodpy
 ```python
 from canvodpy import Site
 
-site = Site("Rosalia")
+site = Site("ExampleSite")
 result = site.process_date("2025001")
 ```
 
@@ -44,7 +44,7 @@ result = site.process_date("2025001")
 import canvodpy
 
 result = (
-    canvodpy.workflow("Rosalia")
+    canvodpy.workflow("ExampleSite")
     .read("2025001")
     .augment()
     .grid()

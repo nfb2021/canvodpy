@@ -115,7 +115,7 @@ pip install canvodpy
     Recommended for production runs; resumes automatically:
 
     ```bash
-    canvodpy run --site Rosalia --start 2025001 --end 2025007
+    canvodpy run --site ExampleSite --start 2025001 --end 2025007
     ```
 
 === "Site.pipeline() — Python-native"
@@ -125,7 +125,7 @@ pip install canvodpy
     ```python
     from canvodpy import Site
 
-    site = Site("Rosalia")
+    site = Site("ExampleSite")
     with site.pipeline() as pipeline:
         data = pipeline.process_date("2025001")
         vod = pipeline.calculate_vod("canopy_01", "reference_01", "2025001")

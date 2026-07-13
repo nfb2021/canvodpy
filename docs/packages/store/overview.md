@@ -100,7 +100,7 @@ graph TD
     ```python
     from canvodpy import Site
 
-    site = Site("Rosalia")
+    site = Site("ExampleSite")
     site.rinex_store.list_groups()          # ["canopy_01", "reference_01"]
     site.rinex_store.get_group_info("canopy_01")
 
@@ -199,10 +199,10 @@ site's store doesn't require dropping into Python or a notebook:
 
 ```bash
 canvodpy store list                          # every configured site's gnss/vod store paths + status
-canvodpy store info Rosalia                  # tree of branches/groups + compression stats
-canvodpy store info Rosalia --group canopy_01   # full dataset + metadata table for one group
-canvodpy store log Rosalia                   # commit graph (wraps repo.ancestry_graph())
-canvodpy store log Rosalia --ops             # ops audit trail (wraps repo.ops_log())
+canvodpy store info ExampleSite                  # tree of branches/groups + compression stats
+canvodpy store info ExampleSite --group canopy_01   # full dataset + metadata table for one group
+canvodpy store log ExampleSite                   # commit graph (wraps repo.ancestry_graph())
+canvodpy store log ExampleSite --ops             # ops audit trail (wraps repo.ops_log())
 ```
 
 `--store vod` targets the VOD store instead of the default GNSS observation

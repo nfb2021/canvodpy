@@ -112,19 +112,19 @@ processing:
     vod_store_strategy: overwrite
 
 sites:
-  rosalia:
-    gnss_site_data_root: /path/to/rosalia
+  examplesite:
+    gnss_site_data_root: /path/to/examplesite
     receivers:
       reference_01:
         type: reference
         directory: 01_reference
-        recipe: rosalia_reference
+        recipe: examplesite_reference
         reader_format: auto
         scs_from: all
       canopy_01:
         type: canopy
         directory: 02_canopy
-        recipe: rosalia_canopy
+        recipe: examplesite_canopy
         reader_format: auto
     vod_analyses:
       canopy_01_vs_reference_01:

@@ -241,7 +241,7 @@ def trace_rinex_processing(
 
     Examples
     --------
-    >>> with trace_rinex_processing("ract213a00.25o", site="Rosalia"):
+    >>> with trace_rinex_processing("ract213a00.25o", site="ExampleSite"):
     ...     df = process_rinex_file(file_path)
     """
     attributes = {"rinex.file": file_name}
@@ -331,7 +331,7 @@ def trace_vod_calculation(
 
     Examples
     --------
-    >>> with trace_vod_calculation("tau_omega", site="Rosalia"):
+    >>> with trace_vod_calculation("tau_omega", site="ExampleSite"):
     ...     vod_result = calculate_vod(data)
     """
     attributes = {"vod.operation": operation}

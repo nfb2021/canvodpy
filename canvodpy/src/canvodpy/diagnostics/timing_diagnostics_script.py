@@ -128,7 +128,7 @@ def diagnose_processing(
     print()
 
     # Initialize site and orchestrator
-    site = GnssResearchSite(site_name="Rosalia")
+    site = GnssResearchSite(site_name="ExampleSite")
     proc = cfg.processing.processing
     # Get all configured receivers
     all_receivers = sorted(site.active_receivers.keys())

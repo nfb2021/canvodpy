@@ -13,7 +13,7 @@ Examples
 Process RINEX data and compute VOD:
 
     >>> import canvodpy
-    >>> result = (canvodpy.workflow("Rosalia")
+    >>> result = (canvodpy.workflow("ExampleSite")
     ...     .read("2025001")
     ...     .preprocess(agency="COD")
     ...     .grid("equal_area", angular_resolution=5.0)
@@ -22,7 +22,7 @@ Process RINEX data and compute VOD:
 
 Preview the execution plan without running it:
 
-    >>> plan = (canvodpy.workflow("Rosalia")
+    >>> plan = (canvodpy.workflow("ExampleSite")
     ...     .read("2025001")
     ...     .preprocess()
     ...     .grid()

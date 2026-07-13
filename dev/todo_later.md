@@ -1856,3 +1856,89 @@ WIP in that same file. Can't be committed separately without either
 resolving the WIP first or accepting it gets folded into whatever commit
 that WIP eventually becomes. Not blocking; just needs the WIP sorted out
 first (on `canvod-streamstats`'s own timeline, not tracked further here).
+
+---
+
+## 27. Airflow DAGs forked — `canvod-streamstats` vs. `canvod-airflow`, needs a decision (2026-07-13)
+
+**Flagged 2026-07-13** — found while checking on canvod-streamstats, not
+investigated further, no decision made.
+
+There isn't duplication to clean up here — there's a genuine fork with two
+different DAG designs for the same jobs:
+
+- **`canvod-airflow`** (`canvodpy-extensions`, committed `b66aae2` on branch
+  `chore/remove-dead-filecatalog`, **not yet merged to main**) — the
+  "official" extraction destination per the earlier migration plan
+  (`airflow_extraction_plan.md`). Simpler 2-DAG design (`daily_processing`,
+  `backfill`): `validate_dirs → check_sbf/process_rinex → validate_ingest →
+  calculate_vod → cleanup`. Uses `structlog`. No streaming-statistics
+  integration.
+- **`canvod-streamstats/dags/`** (committed in that repo's own single
+  "initial import" commit) — a **more elaborate 3-DAG design** covering the
+  same two DAGs plus a third (SBF+agency hybrid), each extended with
+  `run_preprocessing_pipeline → update_statistics → update_climatology →
+  detect_anomalies/detect_changepoints → snapshot_statistics` steps.
+  Explicitly requires `canvod-streamstats` installed on the Airflow worker
+  per its own docstring. Uses stdlib `logging`.
+- **`canvodpy-perf/dags/`** (the presumed original source both were derived
+  from) — **no longer exists in this repo.** The extraction plan explicitly
+  said not to delete it until `canvod-airflow` had a tagged release (Phase D
+  was supposed to be last, gated on Phase C) — worth checking whether that
+  release already happened, or whether this deletion happened out of order.
+
+**Open questions, none decided:**
+1. Should `canvod-airflow` absorb the statistics-pipeline steps from
+   `canvod-streamstats`'s version, making it the one canonical DAG design?
+2. Should `canvod-streamstats` depend on `canvod-airflow` and contribute
+   just the statistics-pipeline task functions to be composed there, rather
+   than vendoring its own full DAG copies?
+3. Is the simpler `canvod-airflow` 2-DAG version an intentional first cut
+   (ship the core pipeline, add stats integration later), or was it
+   extracted from a stale/pre-stats-integration snapshot of the original
+   `canvodpy-perf/dags/`?
+4. Why/when did `canvodpy-perf/dags/` get deleted, and was that consistent
+   with the extraction plan's Phase D gating?
+
+**Action:** no decision made yet — revisit when ready to consolidate on one
+canonical DAG design.
+
+---
+
+## 28. Deactivate CLK (clock correction) file usage — not deleted, just turned off (2026-07-13)
+
+**User note:** we do not need CLK files. Deactivate their use, don't delete
+the code.
+
+**Confirmed via code trace, not yet implemented:**
+- `canvod-auxiliary`'s `AgencyEphemerisProvider` downloads CLK files
+  alongside SP3 orbit files (`ephemeris/provider.py`), parses them
+  (`clock/parser.py`, `clock/reader.py`, `clock/validator.py`), interpolates
+  them (`ClockInterpolationStrategy`, piecewise linear), and merges the
+  result into the augmented dataset as a `clock` variable
+  (`augmentation.py:281-289`, `provider.py:205-212,288-290`).
+- **`canvod-vod` never references `clock` at all** — grepped the whole
+  package, zero hits. Matches the documented VOD formula
+  (`VOD = -ln(T) · cos(θ)`, CLAUDE.md) — only needs transmittance (from SNR)
+  and polar angle (from ephemeris/position), no clock correction. The `clock`
+  variable is pure overhead today: extra downloads, extra parsing, extra
+  dataset size, zero downstream consumer.
+
+**Not done yet — needs a real implementation pass:**
+1. Find the actual toggle point(s) — likely `augmentation.py:166,246,449`'s
+   `["ephemerides", "clock"]` lists (what decides which aux files to
+   fetch/match) and wherever `AgencyEphemerisProvider` decides to also
+   request CLK alongside SP3.
+2. Add a config flag (e.g. under `ProcessingParams` or
+   `AuxDataConfig`) — `fetch_clock: bool = False` or similar — gating the
+   CLK download/parse/interpolate/merge steps without deleting any of that
+   code, per the user's explicit "don't delete" instruction.
+3. Verify nothing downstream silently breaks when `clock` is absent from the
+   augmented dataset (the `if "clock" in aux_slice.data_vars` guard in
+   `provider.py:289` suggests it's already optional-safe, but confirm this
+   holds through the full pipeline, not just that one call site).
+4. Run the audit suite after, per the CLAUDE.md guardrail for
+   `canvod-auxiliary` changes.
+
+**Action:** not implemented — this is a capture-the-intent entry, revisit to
+actually wire the toggle.

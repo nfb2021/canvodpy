@@ -1,7 +1,7 @@
-➜  dev git:(explore/performance-review) ✗ rm -rf /Volumes/ExtremePro/Daily_data/aux_*.zarr && rm -rf /Volumes/ExtremePro/canvod_stores/rosalia && cd
-  /Users/work/Developer/GNSS/canvodpy-perf && uv run python -m canvodpy.cli.run --site rosalia --start 2025001 --end 2025028
+➜  dev git:(explore/performance-review) ✗ rm -rf /Volumes/ExtremePro/Daily_data/aux_*.zarr && rm -rf /Volumes/ExtremePro/canvod_stores/examplesite && cd
+  /Users/work/Developer/GNSS/canvodpy-perf && uv run python -m canvodpy.cli.run --site examplesite --start 2025001 --end 2025028
 ========================================================================
-canvodpy  site=rosalia  2025001 .. 2025028
+canvodpy  site=examplesite  2025001 .. 2025028
 ========================================================================
   started        2026-07-05 16:29:41
   ephemeris      final

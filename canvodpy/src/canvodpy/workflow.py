@@ -17,13 +17,13 @@ Examples
 Basic workflow:
 
     >>> from canvodpy import VODWorkflow
-    >>> workflow = VODWorkflow(site="Rosalia")
+    >>> workflow = VODWorkflow(site="ExampleSite")
     >>> result = workflow.process_date("2025001")
 
 With custom components:
 
     >>> workflow = VODWorkflow(
-    ...     site="Rosalia",
+    ...     site="ExampleSite",
     ...     grid="equal_area",
     ...     grid_params={"angular_resolution": 5.0},
     ... )
@@ -31,8 +31,8 @@ With custom components:
 
 Debug logging:
 
-    >>> workflow = VODWorkflow(site="Rosalia", log_level="DEBUG")
-    >>> # All logs include site="Rosalia" context
+    >>> workflow = VODWorkflow(site="ExampleSite", log_level="DEBUG")
+    >>> # All logs include site="ExampleSite" context
 """
 
 from __future__ import annotations
@@ -94,7 +94,7 @@ class VODWorkflow:
     --------
     Process one date:
 
-        >>> workflow = VODWorkflow(site="Rosalia")
+        >>> workflow = VODWorkflow(site="ExampleSite")
         >>> data = workflow.process_date("2025001")
         >>> print(data.keys())
         dict_keys(['canopy_01', 'reference_01'])
@@ -110,7 +110,7 @@ class VODWorkflow:
     Custom grid:
 
         >>> workflow = VODWorkflow(
-        ...     site="Rosalia",
+        ...     site="ExampleSite",
         ...     grid="equal_area",
         ...     grid_params={"angular_resolution": 5.0},
         ... )
@@ -187,7 +187,7 @@ class VODWorkflow:
 
         Examples
         --------
-        >>> workflow = VODWorkflow("Rosalia")
+        >>> workflow = VODWorkflow("ExampleSite")
         >>> data = workflow.process_date("2025001")
         >>> canopy = data["canopy_01"]
         >>> print(canopy.sizes)
@@ -271,7 +271,7 @@ class VODWorkflow:
 
         Examples
         --------
-        >>> workflow = VODWorkflow("Rosalia")
+        >>> workflow = VODWorkflow("ExampleSite")
         >>> vod = workflow.calculate_vod(
         ...     "canopy_01", "reference_01", "2025001"
         ... )

@@ -49,23 +49,23 @@ The recommended way to run the pipeline — production runs, cron jobs, resumabl
 
 ```bash
 # Process a specific range
-canvodpy run --site Rosalia --start 2025001 --end 2025007
+canvodpy run --site ExampleSite --start 2025001 --end 2025007
 
 # Process new data only — start omitted means "resume from the last
 # processed date in the store", end omitted means "today"
-canvodpy run --site Rosalia
+canvodpy run --site ExampleSite
 
 # Cron: run daily, picks up new data automatically
-# 0 3 * * * cd /path/to/canvodpy && uv run canvodpy run --site Rosalia
+# 0 3 * * * cd /path/to/canvodpy && uv run canvodpy run --site ExampleSite
 
 # Observation ingestion only, no VOD
-canvodpy run --site Rosalia --no-vod
+canvodpy run --site ExampleSite --no-vod
 
 # Preview what would be processed, without executing
-canvodpy run --site Rosalia --dry-run
+canvodpy run --site ExampleSite --dry-run
 
 # Multiple sites — repeat --site, processed sequentially
-canvodpy run --site Rosalia --site OtherSite
+canvodpy run --site ExampleSite --site OtherSite
 ```
 
 | Flag | Meaning |
@@ -87,7 +87,7 @@ section for the exact same thing from Python.
 
 ## Deprecated: `FluentWorkflow` and flat convenience functions
 
-`FluentWorkflow` (`canvodpy.workflow("Rosalia").read(...).augment(...)...`) and
+`FluentWorkflow` (`canvodpy.workflow("ExampleSite").read(...).augment(...)...`) and
 the flat `process_date()` / `calculate_vod()` / `preview_processing()` functions
 are deprecated (`DeprecationWarning` on use). Both are thin wrappers around the
 same `Pipeline` class the CLI and `Site.pipeline()` use — they added a second and
@@ -105,7 +105,7 @@ run avoids repeated setup and teardown.
 ```python
 from canvodpy import Site
 
-site = Site("Rosalia")
+site = Site("ExampleSite")
 
 with site.pipeline(n_workers=8) as pipeline:
     for date_key, datasets in pipeline.process_range("2025001", "2025007"):
@@ -166,7 +166,7 @@ ds = read_rinex("ROSA01TUW_R_20250010000_15M_05S_AA.rnx")
 rx_pos = ECEFPosition.from_ds_metadata(ds)
 
 # Add satellite geometry (downloads and caches SP3/CLK for that day)
-site_cfg = load_config().sites.sites["Rosalia"]
+site_cfg = load_config().sites.sites["ExampleSite"]
 ds = augment_with_ephemeris(
     ds,
     rx_pos,
@@ -391,7 +391,7 @@ retrieval, and the result is written to the site's VOD store (pass
 
 ??? question "I want to process data daily as a cron job"
 
-    **CLI**: `canvodpy run --site Rosalia`. Omit `--start`
+    **CLI**: `canvodpy run --site ExampleSite`. Omit `--start`
     and it resumes from the last processed date in the store automatically.
 
 ??? question "I want to script a multi-day batch run from Python"

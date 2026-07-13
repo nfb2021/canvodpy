@@ -54,13 +54,13 @@ The write strategy controls how `MyIcechunkStore` handles the time range already
 
     # Raw observations — skip if already ingested
     rinex_store = MyIcechunkStore(
-        "/data/stores/rosalia/rinex",
+        "/data/stores/examplesite/rinex",
         strategy="skip",
     )
 
     # Processed VOD — rewrite on algorithm update
     vod_store = MyIcechunkStore(
-        "/data/stores/rosalia/vod",
+        "/data/stores/examplesite/vod",
         strategy="overwrite",
     )
 
@@ -84,7 +84,7 @@ The write strategy controls how `MyIcechunkStore` handles the time range already
 
     ```python
     from canvod.site import Site
-    site = Site("Rosalia")           # strategy from config
+    site = Site("ExampleSite")           # strategy from config
     site.rinex_store.strategy        # → "skip"
     site.vod_store.strategy          # → "overwrite"
     ```

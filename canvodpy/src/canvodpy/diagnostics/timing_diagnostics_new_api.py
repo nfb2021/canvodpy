@@ -138,7 +138,7 @@ def diagnose_processing_new_api(
     print()
 
     # Initialize site and pipeline using NEW API
-    site = Site("Rosalia")
+    site = Site("ExampleSite")
 
     # Get all configured receivers
     all_receivers = sorted(site.active_receivers.keys())

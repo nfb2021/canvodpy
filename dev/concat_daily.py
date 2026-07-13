@@ -111,7 +111,7 @@ def main() -> None:
 
     doys = discover_doys(args.doy)
     if not doys:
-        print("No source DOYs found — has fetch_rosalia.sh run yet?")
+        print("No source DOYs found — has fetch_examplesite.sh run yet?")
         sys.exit(1)
 
     print(

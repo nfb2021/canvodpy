@@ -3422,7 +3422,7 @@ if __name__ == "__main__":
         canopy_pattern=Path("02_canopy/01_GNSS/01_raw"),
     )
 
-    site = GnssResearchSite(site_name="Rosalia")
+    site = GnssResearchSite(site_name="ExampleSite")
 
     stats = {"processed": 0, "skipped": 0, "failed": 0}
 

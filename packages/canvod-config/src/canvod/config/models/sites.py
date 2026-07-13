@@ -55,7 +55,7 @@ class ReceiverConfig(_StrictModel):
     recipe: str | None = Field(
         None,
         description=(
-            "Name of a naming recipe (e.g. 'rosalia_reference'). "
+            "Name of a naming recipe (e.g. 'examplesite_reference'). "
             "Resolved from config/recipes/{recipe}.yaml. "
             "When set, replaces the 'naming' block for file discovery."
         ),

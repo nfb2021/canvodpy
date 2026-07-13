@@ -239,11 +239,11 @@ def main() -> None:
     sub.add_parser("delete-aux", help="Delete auxiliary data (SP3, CLK, Zarr caches)")
 
     p_store = sub.add_parser("delete-store", help="Delete a specific Icechunk store")
-    p_store.add_argument("site", help="Site name (e.g. rosalia)")
+    p_store.add_argument("site", help="Site name (e.g. examplesite)")
     p_store.add_argument("store", choices=["rinex", "vod"], help="Store type")
 
     p_all = sub.add_parser("delete-all-stores", help="Delete ALL stores for a site")
-    p_all.add_argument("site", help="Site name (e.g. rosalia)")
+    p_all.add_argument("site", help="Site name (e.g. examplesite)")
 
     args = parser.parse_args()
 

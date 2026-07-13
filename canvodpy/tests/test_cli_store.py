@@ -55,6 +55,13 @@ def _write_synthetic_store(store_path, n_slots: int = 2) -> None:
             "canopy_01",
             commit_message=f"slot {slot}",
         )
+    # MyIcechunkStore.__init__ calls load_config() (outside any CliRunner env
+    # patch) to read IcechunkConfig defaults. If the real local
+    # config/canvod-settings.yaml happens to be valid, that call succeeds and
+    # lru_cache caches it under the no-arg key — masking the test's own
+    # CANVOD_CONFIG_DIR override in the runner.invoke() call that follows.
+    # Clear it so that invoke() always resolves fresh, under its own env.
+    loader_module.load_config.cache_clear()
 
 
 def _write_config(config_dir, stores_root) -> None:

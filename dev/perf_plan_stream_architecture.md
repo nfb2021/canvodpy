@@ -53,12 +53,12 @@ must either init the subrepo or point at the main checkout.
 
 | Subdir (`valid/`) | Files | Format | Size range | PERIOD | Notes |
 |---|---|---|---|---|---|
-| `rinex_v3_04/01_Rosalia` | 192 | RINEX v3.04 obs | 1.41–2.45 MB | `15M` @ `05S` | 96 canopy (~1.4 MB) + 96 reference (~2.2–2.3 MB), day 25001 |
-| `sbf/01_Rosalia` | 192 | SBF binary | 11.29–13.71 MB | `15M` @ `05S` | Same day/receivers as above; canopy ~11.3 MB, ref ~13.6 MB |
+| `rinex_v3_04/01_ExampleSite` | 192 | RINEX v3.04 obs | 1.41–2.45 MB | `15M` @ `05S` | 96 canopy (~1.4 MB) + 96 reference (~2.2–2.3 MB), day 25001 |
+| `sbf/01_ExampleSite` | 192 | SBF binary | 11.29–13.71 MB | `15M` @ `05S` | Same day/receivers as above; canopy ~11.3 MB, ref ~13.6 MB |
 | `rinex_v2_11/02_Moflux` | 48 | RINEX v2.11 obs | 0.46–0.81 MB | `01H` @ `15S` | Hourly files, 2 days |
 | `rinex_v3_05_stripped` | 2 | RINEX v3.05 obs | 29–44 KB | `10S` | Tiny fixtures |
 | `rinex_v3_04_nav_data` | 192 | RINEX nav | 9–51 KB | 15M | Broadcast ephemeris companions |
-| `nmea/01_Rosalia` | 96 | NMEA text | ~0.52 MB | `15M` | |
+| `nmea/01_ExampleSite` | 96 | NMEA text | ~0.52 MB | `15M` | |
 | `aux_data` | 2 + zarr | SP3 (2.2 MB), CLK (36.9 MB), aux Zarr | | `01D` | |
 | `invalid/` | 36 | corrupted `.25o` fixtures | tiny | | corruption suite |
 
@@ -167,7 +167,7 @@ that is fast enough not to need it).
 
 ### 2.2 Measured single-file timings (new, this session)
 
-Scratch run against the real Rosalia test files (warm imports, single process):
+Scratch run against the real ExampleSite test files (warm imports, single process):
 
 | Measurement | Value |
 |---|---|

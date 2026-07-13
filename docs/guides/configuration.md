@@ -399,7 +399,7 @@ just config-validate
 the canVOD naming convention before any data is read:
 
 ```bash
-canvod-preflight validate /data/rosalia/02_canopy \
+canvod-preflight validate /data/examplesite/02_canopy \
     --site ROS --agency TUW --receiver 1 --role canopy
 ```
 

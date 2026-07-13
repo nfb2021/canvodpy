@@ -91,7 +91,7 @@ def _run_interactive_wizard(canvod_dest: Path) -> None:
     email = Prompt.ask("  Your email")
     institution = Prompt.ask("  Institution")
     stores_root_dir = Prompt.ask("  Where should processed results be stored?")
-    site_name = Prompt.ask("  Site name (e.g. Rosalia)")
+    site_name = Prompt.ask("  Site name (e.g. ExampleSite)")
     data_root = Prompt.ask(f"  Data root directory for site '{site_name}'")
     canopy_dir = Prompt.ask(
         "  Canopy receiver directory (relative to the data root)",

@@ -315,7 +315,7 @@ the canvodpy workspace.
 - The pipeline checks whether `canvod-virtualiconvname` is importable at runtime.
 - If present: `FilenameMapper` + recipe files handle physical→canonical name mapping
   transparently (as demonstrated: RINEX v2 short names `ract087p45.25o` worked out of
-  the box via `rosalia_reference.yaml` / `rosalia_canopy.yaml`).
+  the box via `examplesite_reference.yaml` / `examplesite_canopy.yaml`).
 - If absent: pipeline expects files to already follow the canVOD naming convention
   (`{SIT}{T}{NN}{AGC}_R_{YYYY}{DOY}{HHMM}_{PERIOD}_{SAMPLING}_{CONTENT}.{TYPE}`).
 - Recipes (`config/recipes/*.yaml`) are the extension point — they live in the user's

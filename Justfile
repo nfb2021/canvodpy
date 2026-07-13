@@ -62,6 +62,11 @@ check: check-lint check-format check-types
 test:
     uv run pytest
 
+# run tests for all packages, skipping integration tests that need real
+# credentials/network/test data (e.g. NASA Earthdata for ephemeris downloads)
+test-fast:
+    uv run pytest -m "not integration"
+
 # run tests for all supported Python versions
 testall:
     uv run --python=3.13 pytest

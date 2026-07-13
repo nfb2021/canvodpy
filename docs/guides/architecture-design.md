@@ -151,7 +151,7 @@ detail; `FluentWorkflow`, the flat `process_date()`/`calculate_vod()`/
 === "CLI — Running the Pipeline"
 
     ```bash
-    canvodpy run --site Rosalia --start 2025001 --end 2025007
+    canvodpy run --site ExampleSite --start 2025001 --end 2025007
     ```
 
 === "Site.pipeline() — Python-native"
@@ -159,7 +159,7 @@ detail; `FluentWorkflow`, the flat `process_date()`/`calculate_vod()`/
     ```python
     from canvodpy import Site
 
-    site = Site("Rosalia")
+    site = Site("ExampleSite")
     with site.pipeline(n_workers=8) as pipeline:
         for date_key, datasets in pipeline.process_range("2025001", "2025007"):
             site.vod.compute_day(datasets, "canopy_01_vs_reference_01")

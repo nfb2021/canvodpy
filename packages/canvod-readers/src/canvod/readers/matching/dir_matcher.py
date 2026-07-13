@@ -77,7 +77,7 @@ class DataDirMatcher:
     --------
     >>> from pathlib import Path
     >>> matcher = DataDirMatcher(
-    ...     root=Path("/data/01_Rosalia"),
+    ...     root=Path("/data/01_ExampleSite"),
     ...     reference_pattern=Path("01_reference/01_GNSS/01_raw"),
     ...     canopy_pattern=Path("02_canopy/01_GNSS/01_raw")
     ... )
@@ -265,7 +265,7 @@ class PairDataDirMatcher:
     ... }
     >>>
     >>> matcher = PairDataDirMatcher(
-    ...     base_dir=Path("/data/01_Rosalia"),
+    ...     base_dir=Path("/data/01_ExampleSite"),
     ...     receivers=receivers,
     ...     analysis_pairs=pairs
     ... )

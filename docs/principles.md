@@ -276,7 +276,7 @@ ROSR01TUW_R_20250010000_01D_05S_AA.rnx
 │  │ │ └── agency: TU Wien
 │  │ └── receiver number 01
 │  └── R = reference
-└── site: Rosalia
+└── site: ExampleSite
 ```
 
 **Daily merged, 5-second sampling (active / below-canopy):**

@@ -3,22 +3,22 @@
 Usage
 -----
     # Process a specific range
-    uv run canvodpy run --site Rosalia --start 2025001 --end 2025007
+    uv run canvodpy run --site ExampleSite --start 2025001 --end 2025007
 
     # Process new data only (auto-detect start from store, end = today)
-    uv run canvodpy run --site Rosalia
+    uv run canvodpy run --site ExampleSite
 
     # Multiple sites in one invocation (processed sequentially) — repeat the flag
-    uv run canvodpy run --site Rosalia --site OtherSite
+    uv run canvodpy run --site ExampleSite --site OtherSite
 
     # Cron: run daily, picks up new data automatically
-    # 0 3 * * * cd /path/to/canvodpy && uv run canvodpy run --site Rosalia
+    # 0 3 * * * cd /path/to/canvodpy && uv run canvodpy run --site ExampleSite
 
     # Observation ingestion only, no VOD
-    uv run canvodpy run --site Rosalia --no-vod
+    uv run canvodpy run --site ExampleSite --no-vod
 
     # Preview what would be processed
-    uv run canvodpy run --site Rosalia --dry-run
+    uv run canvodpy run --site ExampleSite --dry-run
 """
 
 from __future__ import annotations
@@ -393,7 +393,7 @@ def run(
         typer.Option(
             "--site",
             help=(
-                "Site name as defined in sites.yaml (e.g. Rosalia). Repeat "
+                "Site name as defined in sites.yaml (e.g. ExampleSite). Repeat "
                 "the flag for multiple sites — processed sequentially."
             ),
         ),

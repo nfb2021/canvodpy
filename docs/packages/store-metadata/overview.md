@@ -88,7 +88,7 @@ from canvod.store_metadata import collect_metadata, write_metadata
 # Collect metadata from the current environment and config
 metadata = collect_metadata(
     config=config,
-    site_name="Rosalia",
+    site_name="ExampleSite",
     site_config=site_config,
     store_type="rinex_store",
     source_format="rinex3",
@@ -231,8 +231,8 @@ processing:
 
 ```yaml
 sites:
-  Rosalia:
-    description: "Rosalia GNSS-T research site"
+  ExampleSite:
+    description: "ExampleSite GNSS-T research site"
     country: "Austria"
     latitude: 47.702
     longitude: 16.299
