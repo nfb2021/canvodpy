@@ -17,6 +17,7 @@ no config beyond what the package itself asks for.
 |---|---|---|
 | `canvod-filemap` | Recipe-based filename mapping for non-canonical GNSS filenames (proprietary receiver output, legacy RINEX v2 short names, custom layouts) | Available |
 | `canvod-airflow` | Airflow DAG definitions (daily SBF/RINEX/SBF-agency + backfill) for canvodpy pipelines | Available |
+| `canvod-adapters` | Bidirectional data adapters between canvodpy and third-party GNSS-VOD tools (gnssvod) | Available |
 
 ## Installing an extension
 
@@ -58,6 +59,18 @@ uv add "canvod-airflow[airflow] @ git+https://github.com/nfb2021/canvodpy-extens
 
 See [canvod-airflow's overview](https://nfb2021.github.io/canvodpy-extensions/packages/airflow/overview/)
 for DAG structure, deployment, and configuration.
+
+`canvod-adapters` is used directly wherever you're converting data (not
+gated by a canvodpy config flag or extra on the `canvodpy` package itself):
+
+```bash
+uv add "canvod-adapters[store] @ git+https://github.com/nfb2021/canvodpy-extensions.git#subdirectory=packages/canvod-adapters"
+```
+
+`canvod-audit`'s Tier-3 comparison against gnssvod already depends on it
+(the plain, non-`store` form) as a hard dependency. See
+[canvod-adapters's overview](https://nfb2021.github.io/canvodpy-extensions/packages/adapters/overview/)
+for the gnssvod conversion API and its known lossy-reconstruction caveat.
 
 ## What happens if an extension isn't installed
 

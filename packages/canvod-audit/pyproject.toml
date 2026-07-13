@@ -14,6 +14,7 @@ dependencies = [
     "canvod-store",
     "canvod-vod",
     "canvod-utils",
+    "canvod-adapters",
     "xarray>=2024.1.0",
     "numpy>=1.26.0",
     "polars>=1.0.0",

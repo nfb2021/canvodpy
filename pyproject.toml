@@ -6,14 +6,15 @@
 members = ["packages/*", "canvodpy"]
 exclude = ["packages/canvod-streamstats", "packages/canvod-filemap"]
 
-# canvod-filemap lives in the separate canvodpy-extensions repo
-# (https://github.com/nfb2021/canvodpy-extensions), not in this monorepo's
-# workspace. Point uv at the public repo directly — a local sibling-path
-# source would break `uv run`/`uv sync` on any machine without that repo
-# cloned alongside canvodpy, since uv resolves optional-dependency-group
-# sources even when the extra isn't requested.
+# canvod-filemap and canvod-adapters live in the separate canvodpy-extensions
+# repo (https://github.com/nfb2021/canvodpy-extensions), not in this
+# monorepo's workspace. Point uv at the public repo directly — a local
+# sibling-path source would break `uv run`/`uv sync` on any machine without
+# that repo cloned alongside canvodpy, since uv resolves optional-dependency-
+# group sources even when the extra isn't requested.
 [tool.uv.sources]
 canvod-filemap = { git = "https://github.com/nfb2021/canvodpy-extensions.git", subdirectory = "packages/canvod-filemap" }
+canvod-adapters = { git = "https://github.com/nfb2021/canvodpy-extensions.git", subdirectory = "packages/canvod-adapters" }
 
 # ============================================================================
 # Development Dependencies (Workspace-wide)

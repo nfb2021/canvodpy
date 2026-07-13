@@ -1835,7 +1835,7 @@ perf instrumentation comes up, rather than as two separate one-off fixes.
 
 ---
 
-## 24. Adapter to feed canvodpy data back into gnssvod (Humphrey et al.)
+## 24. ~~Adapter to feed canvodpy data back into gnssvod (Humphrey et al.)~~ — RESOLVED (2026-07-14)
 
 **Flagged 2026-07-13** — not investigated yet, just capturing the intent.
 
@@ -1847,18 +1847,37 @@ canvodpy uses SID like `G01|L1|C`, gnssvod uses PRN like `G01`). See the
 `canvod-audit Package` memory entry for the full comparison pipeline and the
 fillna-merge-order finding (`gnssvod_merge_codes()`).
 
-What's not built: the reverse direction — an adapter that takes canvodpy's
-*own* processed data (Icechunk-stored observables/VOD, not just a trimmed raw
-RINEX file) and reshapes/exports it into whatever input format gnssvod's own
-processing functions expect, so gnssvod can be run directly on canvodpy-native
-data rather than only being fed the same raw RINEX file in parallel. Check
-what `canvod-audit`'s existing trimming/comparison scaffolding
-(`packages/canvod-audit/`) can be reused or extended for this before designing
-anything new.
-
-**Action:** no decision made yet on scope (one-off script vs. a real adapter
-module) or exact target format gnssvod expects — revisit when this becomes a
-real need.
+**Built (2026-07-14):** new `canvod-adapters` package in
+`canvodpy-extensions` (`canvod.adapters.gnssvod`), extracting
+`GnssvodAdapter`/`detect_band_map`/`BAND_MAP`/`gnssvod_merge_codes`/
+`gnssvod_df_to_xarray` out of `vs_gnssvod.py` (re-exported from their new
+location for backward compatibility — no test-file changes needed) plus two
+new multi-band functions:
+- `to_gnssvod_dataset(vod_ds)` — converts an already-computed canvodpy VOD
+  Icechunk-store dataset (`VOD`/`delta_snr`/`phi`/`theta`, one code per
+  band) into one gnssvod-shaped dataset with all bands as sibling columns
+  (`S1C`... not emitted for `delta_snr` — kept as `dSNRn` since it's a
+  canopy-minus-reference difference, not real per-receiver SNR), directly
+  consumable by gnssvod's own `Hemi.add_CellID()`/plotting/hemispheric
+  stats.
+- `from_gnssvod_dataset(gnssvod_ds)` — the reverse. Lossy for per-code
+  identity (gnssvod fillna-merges codes before ever exporting), flagged via
+  `attrs["vod_reconstructed_code_ambiguous"] = True`.
+- `provenance.py`: every conversion gets
+  `conversion_source`/`_url`/`_version`, `conversion_tool`
+  (`"canvod-adapters.gnssvod"`), `conversion_direction`, `conversion_timestamp`,
+  `analysis_name` in the output's global attrs.
+- `io.py` (optional `store` extra): `vod_store_to_gnssvod_nc()` /
+  `gnssvod_nc_to_vod_store()` — read/write an Icechunk VOD store directly
+  (accepts a `MyIcechunkStore`, a site/manager object via `.vod_store`, or
+  a path).
+- `canvod-audit` now depends on `canvod-adapters` instead of vendoring its
+  own copy — 60 audit tests still pass unchanged.
+- **Not done yet:** `canvod-adapters` needs to actually be committed/pushed
+  to the `canvodpy-extensions` GitHub repo before
+  `canvod-audit`'s new git-subdirectory dependency resolves anywhere but a
+  local sibling-checkout override — `uv sync` in this repo will fail on
+  that dependency until then.
 
 ---
 
