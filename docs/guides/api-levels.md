@@ -235,7 +235,7 @@ which come from an ephemeris source.
 
 | Source | What it is | Internet | Provider class |
 |--------|------------|----------|----------------|
-| **Agency products** (`"final"`, `"rapid"`) | Post-processed SP3 orbit + CLK clock files from an analysis centre (COD, ESA, ...), downloaded and Hermite-interpolated | Required (results cached locally) | `AgencyEphemerisProvider` |
+| **Agency products** (`"final"`, `"rapid"`) | Post-processed SP3 orbit files from an analysis centre (COD, ESA, ...), downloaded and Hermite-interpolated; CLK clock files too, by default (`aux_data.fetch_clock`, unused by VOD, can be disabled) | Required (results cached locally) | `AgencyEphemerisProvider` |
 | **SBF broadcast** (`"broadcast"`) | Satellite geometry the receiver itself recorded (SBF `SatVisibility` block) | None — embedded in the SBF file | `SbfBroadcastProvider` |
 
 A provider for RINEX navigation files (`RinexNavProvider`) is planned but not
@@ -246,7 +246,7 @@ yet implemented.
 ```mermaid
 flowchart LR
     subgraph Agency["Agency products (SP3/CLK)"]
-        A1[Download SP3+CLK] --> A2[Hermite interpolation]
+        A1["Download SP3 (+ CLK, optional)"] --> A2[Hermite interpolation]
         A2 --> A3["ECEF → θ, φ, r"]
     end
 
@@ -288,7 +288,7 @@ class EphemerisProvider(ABC):
 
 | Provider | `preprocess_day()` | `augment_dataset()` |
 |----------|-------------------|---------------------|
-| `AgencyEphemerisProvider` | Downloads SP3/CLK, Hermite interpolation → Zarr cache | Opens cache, selects epochs, computes spherical coordinates |
+| `AgencyEphemerisProvider` | Downloads SP3 (+ CLK, unless `fetch_clock=False`), Hermite interpolation → Zarr cache | Opens cache, selects epochs, computes spherical coordinates |
 | `SbfBroadcastProvider` | No-op (geometry embedded in file) | Extracts theta/phi from the SBF `sbf_obs` auxiliary dataset |
 
 ---

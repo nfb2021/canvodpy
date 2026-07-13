@@ -34,7 +34,13 @@ complexity without a measured Linux benefit.
 
 ---
 
-## 3. `canvod-virtualiconvname` — needs drastic redesign (Task C)
+## 3. ~~`canvod-virtualiconvname` — needs drastic redesign (Task C)~~ — MOOT, package deleted (confirmed 2026-07-14)
+
+**Confirmed 2026-07-14:** the package no longer exists anywhere in the repo
+(`find . -iname "*virtualiconvname*"` returns nothing) — removed in commit
+`0b2e7027` ("remove canvod-virtualiconvname, port tests to canvod-preflight"),
+2026-07-09. Everything below is now historical context for how that
+descoping decision was reached, not an open redesign task.
 
 **Status (2026-07-08) — scope changed, not just superseded:** the decision was not
 to redesign the mapping mechanism, but to **not need one** for the default path.
@@ -573,7 +579,16 @@ class RollupConfig(BaseModel):
 
 - ~~**`batch_hours: 24`**~~ — **RESOLVED (96e58c73):** `batch_hours` removed entirely from `ProcessingParams`; pipeline handles file granularity via `FilenameMapper`, not a time-based batch window.
 - ~~**`resource_mode: auto`**~~ — **RESOLVED (96e58c73):** `auto` now caps at `cpu_count − 2` workers and applies `nice=3`. Add `auto_uncapped: true` only on a dedicated machine. Shared server no longer needs manual intervention by default.
-- **`preprocessing.grid_assignment`** — still open: 2° equal-area grid assignment is currently baked into preprocessing. Confirm this is the intended behavior (vs. doing grid assignment only at VOD time) and that it doesn't conflict with the rollup-native store's own `cell_id` assignment.
+- ~~**`preprocessing.grid_assignment`** — still open: 2° equal-area grid assignment is currently baked into preprocessing. Confirm this is the intended behavior (vs. doing grid assignment only at VOD time) and that it doesn't conflict with the rollup-native store's own `cell_id` assignment.~~
+  **RESOLVED, non-issue (confirmed 2026-07-14):** it isn't actually baked into
+  preprocessing today. `config/canvod-settings.yaml`'s own 2026-07-10 note
+  says `grid_assignment`/`temporal_aggregation` only feed `canvod-ops`'s
+  standalone `build_default_pipeline()`, which nothing in the live
+  orchestrator (`processor.py`, `workflows/tasks.py`) or the CLI calls yet —
+  the config value is currently dormant. Real ingested data gets grid-cell
+  assignment ad hoc downstream instead (canvod-streamviz's own KDTree-based
+  ingest step). No conflict exists because the orchestrator-side path isn't
+  wired in at all; revisit if/when it is.
 
 ---
 
@@ -900,8 +915,12 @@ Do C first (fixes silent traps that would poison any new UX), then B (structural
   doesn't touch an existing file), not the default; no directory/format
   auto-detection reused from `validate` — the wizard asks fixed questions
   rather than scanning the data directory first.
-- Follow-up: recipe inference — user pastes one filename, wizard aligns it against `CanVODFilename` fields and emits `config/recipes/<name>.yaml`.
-  **Still open** — not attempted.
+- ~~Follow-up: recipe inference — user pastes one filename, wizard aligns it against `CanVODFilename` fields and emits `config/recipes/<name>.yaml`.
+  **Still open** — not attempted.~~
+  **MOOT (2026-07-14):** contradicted Phase 2's own cancellation note above
+  ("we don't need config/recipe inference — the user controls what goes
+  in") — this line was a stale leftover from before that decision, not a
+  real open item.
 
 **Tests/docs (1–2 days):** extend `packages/canvod-utils/tests/test_config_models.py`; rewrite `docs/guides/configuration.md` around the single file; add "5-minute setup" to `docs/guides/getting-started.md`.
 
@@ -1975,7 +1994,7 @@ canonical DAG design.
 
 ---
 
-## 28. Deactivate CLK (clock correction) file usage — not deleted, just turned off (2026-07-13)
+## 28. ~~Deactivate CLK (clock correction) file usage — not deleted, just turned off~~ — RESOLVED (2026-07-14)
 
 **User note:** we do not need CLK files. Deactivate their use, don't delete
 the code.
@@ -1994,24 +2013,58 @@ the code.
   variable is pure overhead today: extra downloads, extra parsing, extra
   dataset size, zero downstream consumer.
 
-**Not done yet — needs a real implementation pass:**
-1. Find the actual toggle point(s) — likely `augmentation.py:166,246,449`'s
-   `["ephemerides", "clock"]` lists (what decides which aux files to
-   fetch/match) and wherever `AgencyEphemerisProvider` decides to also
-   request CLK alongside SP3.
-2. Add a config flag (e.g. under `ProcessingParams` or
-   `AuxDataConfig`) — `fetch_clock: bool = False` or similar — gating the
-   CLK download/parse/interpolate/merge steps without deleting any of that
-   code, per the user's explicit "don't delete" instruction.
-3. Verify nothing downstream silently breaks when `clock` is absent from the
-   augmented dataset (the `if "clock" in aux_slice.data_vars` guard in
-   `provider.py:289` suggests it's already optional-safe, but confirm this
-   holds through the full pipeline, not just that one call site).
-4. Run the audit suite after, per the CLAUDE.md guardrail for
-   `canvod-auxiliary` changes.
+**Implemented (2026-07-14):**
+1. New `AuxDataConfig.fetch_clock: bool = True` (`canvod-config`,
+   `models/aux_data.py`) — the single source of truth for the toggle.
+2. `AuxDataPipeline.create_standard()` (`pipeline.py`) now only registers
+   `"clock"` when `fetch_clock` is true (explicit kwarg overrides the config
+   default). Ephemerides registration is unaffected.
+3. `AgencyEphemerisProvider` (`ephemeris/provider.py`) gained a `fetch_clock`
+   constructor param threaded into `create_standard()`; `preprocess_day()`
+   now checks `pipeline.is_loaded("clock")` before interpolating/merging it
+   — falls back to ephemerides-only when disabled.
+4. The **real production hot path**, `processor.py`'s
+   `_preprocess_aux_data_with_hermite()` (not `AgencyEphemerisProvider` —
+   that's only used by the L4/deprecated-fluent paths), got the same
+   guard: `clock_ds` is `None` when clock wasn't registered, skipping
+   interpolation/merge entirely and using `ephem_interp` alone.
+5. `ClockCorrectionAugmentation.get_required_aux_files()` (`augmentation.py`,
+   used by the separate `AuxDataAugmenter` L4 path) changed from
+   `["clock"]` to `[]` — it already handled clock's absence gracefully in
+   its body; the old required-file declaration would have hard-failed
+   `AuxDataAugmenter.augment_dataset()` whenever clock fetching is disabled.
+6. Nothing deleted, per the "don't delete" instruction — `ClkFile`,
+   `ClockInterpolationStrategy`, `clock/parser.py` etc. are all untouched
+   and still exercised when `fetch_clock=True` (the default).
+7. Tests added: `AuxDataConfig` defaults/override
+   (`canvod-config/tests/test_config_models.py`), `create_standard()`
+   clock-gating incl. explicit-kwarg-overrides-config
+   (`canvod-auxiliary/tests/test_pipeline_unit.py`), updated the now-stale
+   `ClockCorrectionAugmentation` required-files assertion
+   (`test_augmentation.py`). Full `canvod-auxiliary`/`canvod-config` suites
+   (331 tests) and the `canvod-audit` suite (60 tests) pass.
+8. Config templates (`config/canvod-settings.yaml.example`,
+   `canvod-config/templates/canvod-settings.yaml.example`) document the new
+   field as a commented-out opt-in line, matching the `ftp_timeout_s` pattern.
+9. Docs + Mermaid diagrams updated to note CLK is optional (not removed —
+   it's still real, still-running code, on by default): `architecture.md`,
+   `packages/auxiliary/overview.md`, `api/canvod-auxiliary.md`,
+   `guides/configuration.md`, `guides/api-levels.md`,
+   `packages/readers/overview.md`, `packages/readers/ephemeris-sources.md`,
+   `guides/quickstart.md`, `guides/getting-started.md`, `index.md`, and 4
+   `docs/diagrams/*.mmd` sources (`02-processing-pipeline`,
+   `05-gnss-t-methodology`, `06-ephemeris-sources`,
+   `10-complete-logical-flow` — clock nodes/edges now dashed + labelled
+   "optional"/"if fetch_clock"). **Not done:** the matching pre-rendered
+   `.html` exports for those 4 diagrams are now stale — the
+   `beautiful-mermaid` CLI wasn't available in this environment to
+   regenerate them with the correct house style; `.mmd` sources (the
+   tracked source of truth) are correct and validated to parse cleanly via
+   `mmdc`. Re-render those 4 `.html` files next time `beautiful-mermaid` is
+   available.
 
-**Action:** not implemented — this is a capture-the-intent entry, revisit to
-actually wire the toggle.
+**Action:** done. Only remaining loose end is the stale `.html` diagram
+exports noted above.
 
 ---
 

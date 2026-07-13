@@ -839,15 +839,19 @@ class RinexDataProcessor:
         self._logger.debug("fetching_auxiliary_datasets")
         assert self.aux_pipeline is not None, "aux_pipeline must be initialized"
         ephem_ds = self.aux_pipeline.get("ephemerides")
-        clock_ds = self.aux_pipeline.get("clock")
+        clock_ds = (
+            self.aux_pipeline.get("clock")
+            if self.aux_pipeline.is_loaded("clock")
+            else None
+        )
         t3 = time.perf_counter()
         self._logger.debug(
             "auxiliary_datasets_fetched",
             duration_seconds=round(t3 - t2, 4),
             ephemeris_dims=dict(ephem_ds.sizes) if ephem_ds else None,
-            clock_dims=dict(clock_ds.sizes) if clock_ds else None,
+            clock_dims=dict(clock_ds.sizes) if clock_ds is not None else None,
             ephemeris_vars=list(ephem_ds.data_vars.keys()) if ephem_ds else [],
-            clock_vars=list(clock_ds.data_vars.keys()) if clock_ds else [],
+            clock_vars=list(clock_ds.data_vars.keys()) if clock_ds is not None else [],
         )
 
         # 5. Interpolate ephemerides using Hermite splines
@@ -873,38 +877,47 @@ class RinexDataProcessor:
         # Store interpolation metadata
         ephem_interp.attrs["interpolator_config"] = sp3_interpolator.to_attrs()
 
-        # 6. Interpolate clock corrections using piecewise linear
-        self._logger.info(
-            "clock_interpolation_started",
-            method="piecewise_linear",
-            target_epochs=len(target_epochs),
-        )
-        clock_config = ClockConfig(window_size=9, jump_threshold=1e-6)
-        clock_interpolator = ClockInterpolationStrategy(config=clock_config)
-
+        # 6. Interpolate clock corrections using piecewise linear (unless
+        # fetch_clock is disabled in config — see AuxDataConfig.fetch_clock)
         t6 = time.perf_counter()
-        clock_interp = clock_interpolator.interpolate(clock_ds, target_epochs)
-        t7 = time.perf_counter()
+        if clock_ds is not None:
+            self._logger.info(
+                "clock_interpolation_started",
+                method="piecewise_linear",
+                target_epochs=len(target_epochs),
+            )
+            clock_config = ClockConfig(window_size=9, jump_threshold=1e-6)
+            clock_interpolator = ClockInterpolationStrategy(config=clock_config)
 
-        self._logger.info(
-            "clock_interpolation_complete",
-            duration_seconds=round(t7 - t6, 2),
-            output_shape=dict(clock_interp.sizes),
-        )
+            clock_interp = clock_interpolator.interpolate(clock_ds, target_epochs)
+            t7 = time.perf_counter()
 
-        # Store interpolation metadata
-        clock_interp.attrs["interpolator_config"] = clock_interpolator.to_attrs()
+            self._logger.info(
+                "clock_interpolation_complete",
+                duration_seconds=round(t7 - t6, 2),
+                output_shape=dict(clock_interp.sizes),
+            )
 
-        # 7. Merge ephemerides and clock into single dataset
-        self._logger.debug("merging_auxiliary_datasets")
-        aux_processed = xr.merge([ephem_interp, clock_interp])
-        t8 = time.perf_counter()
-        self._logger.debug(
-            "merge_complete",
-            duration_seconds=round(t8 - t7, 4),
-            final_dims=dict(aux_processed.sizes),
-            final_vars=list(aux_processed.data_vars.keys()),
-        )
+            # Store interpolation metadata
+            clock_interp.attrs["interpolator_config"] = clock_interpolator.to_attrs()
+
+            # 7. Merge ephemerides and clock into single dataset
+            self._logger.debug("merging_auxiliary_datasets")
+            aux_processed = xr.merge([ephem_interp, clock_interp])
+            t8 = time.perf_counter()
+            self._logger.debug(
+                "merge_complete",
+                duration_seconds=round(t8 - t7, 4),
+                final_dims=dict(aux_processed.sizes),
+                final_vars=list(aux_processed.data_vars.keys()),
+            )
+        else:
+            self._logger.info(
+                "clock_interpolation_skipped", reason="fetch_clock disabled"
+            )
+            t7 = t6
+            aux_processed = ephem_interp
+            t8 = time.perf_counter()
 
         # 8. Write to Zarr
         self._logger.info(

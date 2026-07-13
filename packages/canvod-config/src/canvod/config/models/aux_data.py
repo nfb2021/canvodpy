@@ -25,6 +25,16 @@ class AuxDataConfig(_StrictModel):
     ftp_timeout_s: int = Field(
         30, ge=1, description="FTP connection timeout in seconds"
     )
+    fetch_clock: bool = Field(
+        True,
+        description=(
+            "Download and interpolate CLK clock-correction files alongside "
+            "SP3 ephemerides. canvod-vod's VOD formula only needs "
+            "transmittance and polar angle — clock is not consumed "
+            "downstream. Set to False to skip the extra downloads, "
+            "parsing, and interpolation."
+        ),
+    )
 
     def get_ftp_servers(
         self,

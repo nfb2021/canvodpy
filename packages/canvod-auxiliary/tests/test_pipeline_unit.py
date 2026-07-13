@@ -1,5 +1,6 @@
 """Unit tests for canvod.auxiliary.pipeline.AuxDataPipeline."""
 
+from datetime import date
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import numpy as np
@@ -265,3 +266,81 @@ class TestAuxDataPipeline:
         r = repr(pipeline)
         assert "AuxDataPipeline" in r
         assert "2024302" in r
+
+
+class TestCreateStandardFetchClock:
+    """create_standard()'s clock-fetching gate (§28, dev/todo_later.md)."""
+
+    @staticmethod
+    def _make_config(fetch_clock: bool):
+        cfg = MagicMock()
+        cfg.processing.aux_data.agency = "COD"
+        cfg.processing.aux_data.product_type = "final"
+        cfg.processing.aux_data.ftp_timeout_s = 30
+        cfg.processing.aux_data.fetch_clock = fetch_clock
+        cfg.processing.aux_data.get_ftp_servers.return_value = [
+            ("ftp://gssc.esa.int", None)
+        ]
+        cfg.nasa_earthdata_acc_mail = None
+        return cfg
+
+    @staticmethod
+    def _make_matched_dirs():
+        md = _make_mock_matched_dirs()
+        md.yyyydoy.date = date(2024, 10, 29)
+        return md
+
+    @patch("canvod.auxiliary.ephemeris.Sp3File")
+    @patch("canvod.auxiliary.clock.ClkFile")
+    @patch("canvod.config.load_config")
+    def test_fetch_clock_true_registers_both(
+        self, mock_load_config, mock_clk, mock_sp3, tmp_path
+    ):
+        mock_load_config.return_value = self._make_config(fetch_clock=True)
+        mock_sp3.from_datetime_date.return_value = MagicMock(fpath="/fake/sp3")
+        mock_clk.from_datetime_date.return_value = MagicMock(fpath="/fake/clk")
+
+        pipeline = AuxDataPipeline.create_standard(
+            matched_dirs=self._make_matched_dirs(),
+            aux_file_path=tmp_path,
+        )
+
+        assert "ephemerides" in pipeline._registry
+        assert "clock" in pipeline._registry
+
+    @patch("canvod.auxiliary.ephemeris.Sp3File")
+    @patch("canvod.auxiliary.clock.ClkFile")
+    @patch("canvod.config.load_config")
+    def test_fetch_clock_false_via_config_skips_clock(
+        self, mock_load_config, mock_clk, mock_sp3, tmp_path
+    ):
+        mock_load_config.return_value = self._make_config(fetch_clock=False)
+        mock_sp3.from_datetime_date.return_value = MagicMock(fpath="/fake/sp3")
+
+        pipeline = AuxDataPipeline.create_standard(
+            matched_dirs=self._make_matched_dirs(),
+            aux_file_path=tmp_path,
+        )
+
+        assert "ephemerides" in pipeline._registry
+        assert "clock" not in pipeline._registry
+        mock_clk.from_datetime_date.assert_not_called()
+
+    @patch("canvod.auxiliary.ephemeris.Sp3File")
+    @patch("canvod.auxiliary.clock.ClkFile")
+    @patch("canvod.config.load_config")
+    def test_explicit_fetch_clock_overrides_config(
+        self, mock_load_config, mock_clk, mock_sp3, tmp_path
+    ):
+        # Config says True; explicit kwarg (False) should win.
+        mock_load_config.return_value = self._make_config(fetch_clock=True)
+        mock_sp3.from_datetime_date.return_value = MagicMock(fpath="/fake/sp3")
+
+        pipeline = AuxDataPipeline.create_standard(
+            matched_dirs=self._make_matched_dirs(),
+            aux_file_path=tmp_path,
+            fetch_clock=False,
+        )
+
+        assert "clock" not in pipeline._registry
+        mock_clk.from_datetime_date.assert_not_called()

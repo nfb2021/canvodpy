@@ -102,6 +102,9 @@ class AgencyEphemerisProvider(EphemerisProvider):
         SID filter list.
     store_radial_distance : bool
         Whether to keep ``r`` in the output.
+    fetch_clock : bool, optional
+        Whether to also download/interpolate CLK clock-correction files.
+        If None, uses ``config.processing.aux_data.fetch_clock``.
     """
 
     def __init__(
@@ -111,12 +114,14 @@ class AgencyEphemerisProvider(EphemerisProvider):
         aux_data_dir: Path | None = None,
         keep_sids: list[str] | None = None,
         store_radial_distance: bool = False,
+        fetch_clock: bool | None = None,
     ) -> None:
         self.agency = agency
         self.product_type = product_type
         self.aux_data_dir = aux_data_dir
         self.keep_sids = keep_sids
         self.store_radial_distance = store_radial_distance
+        self.fetch_clock = fetch_clock
         self._aux_zarr_path: Path | None = None
 
     def preprocess_day(
@@ -182,6 +187,7 @@ class AgencyEphemerisProvider(EphemerisProvider):
             agency=self.agency,
             product_type=self.product_type,
             keep_sids=self.keep_sids,
+            fetch_clock=self.fetch_clock,
         )
         pipeline.load_all()
 
@@ -202,14 +208,17 @@ class AgencyEphemerisProvider(EphemerisProvider):
         ephem_ds = pipeline.get("ephemerides")
         ephem_interp = sp3_interp.interpolate(ephem_ds, target_epochs)
 
-        # Interpolate clock (piecewise linear)
-        clock_config = ClockConfig(window_size=9, jump_threshold=1e-6)
-        clock_interp_strategy = ClockInterpolationStrategy(config=clock_config)
-        clock_ds = pipeline.get("clock")
-        clock_interp = clock_interp_strategy.interpolate(clock_ds, target_epochs)
+        # Interpolate clock (piecewise linear), unless disabled
+        if pipeline.is_loaded("clock"):
+            clock_config = ClockConfig(window_size=9, jump_threshold=1e-6)
+            clock_interp_strategy = ClockInterpolationStrategy(config=clock_config)
+            clock_ds = pipeline.get("clock")
+            clock_interp = clock_interp_strategy.interpolate(clock_ds, target_epochs)
+            aux_processed = xr.merge([ephem_interp, clock_interp])
+        else:
+            aux_processed = ephem_interp
 
         # Merge and write
-        aux_processed = xr.merge([ephem_interp, clock_interp])
         aux_processed = aux_processed.dropna(dim="epoch", how="all")
         aux_processed.to_zarr(aux_zarr_path, mode="w", consolidated=False)
 

@@ -17,7 +17,9 @@ The `canvod-readers` package provides validated parsers for [GNSS](https://gssc.
     plain-text format for GNSS observations, supported by every major receiver manufacturer.
     Observation files (`.rnx`) contain timestamped pseudorange, carrier phase, Doppler, and
     signal-to-noise measurements per satellite and signal.
-    Satellite geometry is not embedded — it requires external SP3 + CLK precise ephemerides.
+    Satellite geometry is not embedded — it requires external SP3 precise ephemerides
+    (CLK clock corrections are fetched too by default, though unused for VOD;
+    see `aux_data.fetch_clock`).
 
     [:octicons-arrow-right-24: RINEX format](rinex-format.md)
 
@@ -58,7 +60,8 @@ The `canvod-readers` package provides validated parsers for [GNSS](https://gssc.
     SNR in dB-Hz. The same dimensions, coordinates, and required attributes
     are guaranteed, so downstream analysis code is reader-agnostic for observables.
     Geometry provisioning differs: RINEX datasets are augmented with satellite
-    positions from SP3/CLK files; SBF datasets carry embedded SatVisibility
+    positions from SP3 files (CLK too, by default — optional, see
+    `aux_data.fetch_clock`); SBF datasets carry embedded SatVisibility
     data from the receiver.
 
 ---

@@ -217,6 +217,7 @@ processing:
   aux_data:
     agency: COD          # SP3/CLK analysis center code
     product_type: final  # final, rapid, or ultra-rapid
+    # fetch_clock: true  # set false to skip CLK download/interpolation — unused by VOD
 
   params:
     keep_gnss_observables: [SNR]   # observables to keep (SNR, Pseudorange, Phase, Doppler)
@@ -273,6 +274,7 @@ processing:
 | `params.receiver_position_mode` | `shared`, `per_receiver` | `shared` uses canopy receiver position for all receivers (enables 1:1 SNR comparison). `per_receiver` uses each receiver's own position.                                                 |
 | `params.file_pairing`           | `complete`, `paired`     | `complete` ingests all files per receiver independently. `paired` only processes dates where both receivers have data.                                                                   |
 | `params.ephemeris_source`       | `final`, `broadcast`     | `final` computes satellite positions from agency SP3/CLK products. `broadcast` uses ephemerides from SBF SatVisibility blocks (SBF only, no SP3/CLK download, faster but less accurate). |
+| `aux_data.fetch_clock`          | `true`, `false`          | Whether to download and interpolate CLK clock-correction files alongside SP3 (only applies to `ephemeris_source: final`). Default `true`. VOD doesn't consume clock data — disable to save downloads/parsing/interpolation time. |
 | `params.days_per_batch`         | 1–30                     | Calendar days pooled per parallel processing wave.                                                                                                                                       |
 | `params.resource_mode`          | `auto`, `manual`         | `auto` detects available CPU cores and leaves two free for the operating system. `manual` enforces explicit limits (`n_max_threads` is then required) — use this on shared servers.      |
 | `params.store_radial_distance`  | `true`, `false`          | Whether to store satellite radial distance in the output.                                                                                                                                |

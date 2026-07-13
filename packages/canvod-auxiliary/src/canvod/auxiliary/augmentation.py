@@ -242,8 +242,15 @@ class ClockCorrectionAugmentation(AugmentationStep):
         super().__init__(name="ClockCorrection")
 
     def get_required_aux_files(self) -> list[str]:
-        """Return required auxiliary file names."""
-        return ["clock"]
+        """Return required auxiliary file names.
+
+        Empty on purpose: clock is optional (``AuxDataConfig.fetch_clock``
+        may disable it), and ``augment()`` below already handles its
+        absence gracefully — declaring it here would make
+        ``AuxDataAugmenter.augment_dataset()`` hard-fail whenever clock
+        fetching is disabled.
+        """
+        return []
 
     def augment(
         self,

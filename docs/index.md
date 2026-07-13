@@ -88,7 +88,7 @@ signal-to-noise ratio observations.
 !!! success "RINEX v3.04"
 
     Text-based standard format from all manufacturers.
-    Satellite geometry computed from [SP3](https://gssc.esa.int/navipedia/index.php/SP3){:target="_blank"} + CLK precise [ephemerides](https://gssc.esa.int/navipedia/index.php/Precise_GNSS_Orbits){:target="_blank"}.
+    Satellite geometry computed from precise [SP3](https://gssc.esa.int/navipedia/index.php/SP3){:target="_blank"} [ephemerides](https://gssc.esa.int/navipedia/index.php/Precise_GNSS_Orbits){:target="_blank"} (CLK clock corrections fetched too, by default — optional).
 
     **Reader:** `Rnxv3Obs` — all GNSS constellations, all bands
 
@@ -149,9 +149,9 @@ pip install canvodpy
 
 ```mermaid
 flowchart TD
-    RINEX["RINEX 3.04"] --> PARSE["Parse + SP3/CLK interpolation"]
+    RINEX["RINEX 3.04"] --> PARSE["Parse + SP3 interpolation"]
     SBF["Septentrio SBF"] --> PARSE2["Parse (geometry embedded)"]
-    SP3["SP3 / CLK"] --> PARSE
+    SP3["SP3 (+ CLK, optional)"] --> PARSE
     PARSE --> STORE["Icechunk store"]
     PARSE2 --> STORE
     STORE --> VOD["Tau-Omega VOD retrieval"]
@@ -176,7 +176,7 @@ flowchart TD
 
     ---
 
-    SP3 ephemeris and CLK clock retrieval.
+    SP3 ephemeris (and optional CLK clock) retrieval.
     Hermite spline interpolation, FTP fallback chain.
 
 -   :fontawesome-solid-border-all: &nbsp; **canvod-grids**

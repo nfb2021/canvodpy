@@ -19,11 +19,11 @@ with different accuracy, latency, and connectivity requirements.
 
     ---
 
-    Precise orbits and clocks from analysis centres (CODE, ESA, IGS).
-    Downloaded via FTP. ~2-3 cm orbit accuracy. Available 12-18 days
-    after observation.
+    Precise orbits (and, by default, clocks) from analysis centres (CODE,
+    ESA, IGS). Downloaded via FTP. ~2-3 cm orbit accuracy. Available 12-18
+    days after observation.
 
-    **Input:** SP3 + CLK files (downloaded)
+    **Input:** SP3 (+ CLK, optional — `aux_data.fetch_clock`) files (downloaded)
     **Output:** ECEF XYZ → theta, phi, r
 
 -   :fontawesome-solid-satellite: &nbsp; **SBF Broadcast (SatVisibility)**
@@ -76,13 +76,17 @@ The production path used by the orchestrator (Levels 1 and 3).
 ### Pipeline
 
 ```
-1. AuxDataPipeline: download SP3 + CLK from FTP (CODE/ESA/IGS)
+1. AuxDataPipeline: download SP3 (+ CLK, if aux_data.fetch_clock) from FTP (CODE/ESA/IGS)
 2. Hermite interpolation: SP3 positions → target epoch grid
-3. Clock piecewise linear interpolation
+3. Clock piecewise linear interpolation (skipped if fetch_clock=False)
 4. Write Zarr cache: aux_{date}.zarr
 5. Per file: open Zarr → sel(epoch) → compute_spherical_coordinates()
 6. Output: ds["theta"], ds["phi"], ds["r"]
 ```
+
+CLK is not consumed by the VOD formula (`VOD = -ln(T) · cos(θ)` — only
+transmittance and polar angle). Set `aux_data.fetch_clock: false` to skip
+steps 1's clock download and step 3 entirely.
 
 ### Configuration
 
@@ -95,6 +99,7 @@ processing:
     agencies: ["COD"]
     product_type: "final"
     ftp_timeout_s: 30
+    fetch_clock: true  # set false to skip CLK download/interpolation
 ```
 
 ### Component locations
@@ -104,7 +109,7 @@ processing:
 | SP3/CLK download | canvod-auxiliary | `pipeline.py` |
 | FTP with fallback | canvod-auxiliary | `core/downloader.py` |
 | Hermite interpolation | canvodpy | `orchestrator/interpolator.py` |
-| Clock interpolation | canvodpy | `orchestrator/interpolator.py` |
+| Clock interpolation (optional, `aux_data.fetch_clock`) | canvodpy | `orchestrator/interpolator.py` |
 | ECEF → theta/phi/r | canvod-auxiliary | `position/spherical_coords.py` |
 
 ---

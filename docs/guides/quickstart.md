@@ -206,9 +206,11 @@ vod = calculate_vod(canopy_ds, reference_ds)
 
 !!! info "Ephemeris downloads"
 
-    Satellite orbit products (SP3/CLK) are downloaded automatically from
-    **ESA GSSC** (no account needed). If you configure NASA Earthdata (CDDIS)
-    credentials in `canvod-settings.yaml`, NASA is tried first with ESA as fallback.
+    Satellite orbit products (SP3, and by default CLK) are downloaded
+    automatically from **ESA GSSC** (no account needed). If you configure NASA
+    Earthdata (CDDIS) credentials in `canvod-settings.yaml`, NASA is tried
+    first with ESA as fallback. CLK isn't used by the VOD formula — set
+    `aux_data.fetch_clock: false` to skip it.
 
 ---
 
