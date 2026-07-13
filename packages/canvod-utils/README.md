@@ -1,13 +1,16 @@
 # canvod-utils
 
-Shared utilities and diagnostics for canvodpy.
+Shared utilities for canvodpy.
 
 ## Features
 
 - **Date/time tools**: `YYYYDOY`/`YYDOY` GNSS date handling, GPS week helpers
 - **Validation and hashing**: `isfloat`, `file_hash`
-- **Diagnostics**: timing, memory, dataset, and Airflow task-metric tracking
-- **Retry**: `tenacity`-based retry wrapper
+
+Performance tracing lives in `canvodpy.utils.telemetry` (OpenTelemetry-based),
+not here — this package's old `diagnostics` module (timing/memory/dataset/
+Airflow tracking, SQLite-backed) was removed 2026-07-14 as a fully dead
+chain with zero real callers anywhere in the pipeline.
 
 ## Installation
 
@@ -22,16 +25,6 @@ from canvod.utils.tools import YYYYDOY, get_version_from_pyproject, file_hash
 
 date = YYYYDOY.from_str("2025024")
 print(date.to_datetime())
-
-from canvod.utils.diagnostics import track_time, track_memory, task_metrics
-
-@track_time("rinex.read")
-def read_rinex(path):
-    ...
-
-with track_memory("vod.compute") as m:
-    compute(ds)
-print(f"Peak: {m.peak_mb:.1f} MB")
 ```
 
 ## Documentation

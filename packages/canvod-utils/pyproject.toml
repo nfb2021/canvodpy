@@ -11,8 +11,6 @@ license = {text = "Apache-2.0"}
 
 dependencies = [
     "pydantic>=2.0",
-    "tenacity>=8.2.0",
-    "structlog>=24.1.0",
 ]
 
 [project.urls]

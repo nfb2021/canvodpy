@@ -703,7 +703,18 @@ Files: `models.py`, `defaults/` templates, `canvodpy/src/canvodpy/cli/config.py`
 
 **Risk:** field rename ripples into `canvodpy/src/canvodpy/orchestrator/pipeline.py` and `workflows/tasks.py` — grep `scs_from` across the workspace before merging. Depends on Phase 0 item 4.
 
-### Phase 2 — Discovery wizard: `canvodpy init` (~3–4 days)
+### Phase 2 — Discovery wizard: `canvodpy init` — CANCELLED (2026-07-14)
+
+**User direction (2026-07-14):** we don't need config/recipe inference — the
+user controls what goes in. This kills the whole data-directory-scanning +
+recipe-inference premise below, not just the recipe-inference stretch goal.
+The already-existing `canvodpy config init --interactive` (fixed 8 questions,
+no directory scanning, no recipe inference — see Phase 3's "DONE, partially"
+note above) is now the **final** state here, not a partial step toward this
+Phase 2. Nothing further planned.
+
+<details>
+<summary>Original plan (2026-07-05), kept for history — not being built</summary>
 
 Files: `canvodpy/src/canvodpy/cli/config.py` (upgrade `init` command), new `wizard.py` alongside it. New dep: `questionary` (MIT, actively maintained, prompt_toolkit 3.x).
 
@@ -719,6 +730,8 @@ Files: `canvodpy/src/canvodpy/cli/config.py` (upgrade `init` command), new `wiza
 3. `canvodpy run` after `init` needs no further config — just `--site <name> --start --end`.
 
 **Risk:** heterogeneous data dirs (daily + sub-daily files) confuse inference → reuse `FilenameMapper` dedup logic already in the codebase. Hard-depends on Phase 0 (strict load) and Phase 1 (small template = small wizard output).
+
+</details>
 
 ### Phase 3 — TUI dashboard + `canvodpy vod` subcommand (~3–5 days)
 
@@ -767,8 +780,19 @@ uv run python -m canvodpy.cli.run --site Rosalia 2>&1 | tee run.log
 
 #### Still open in Phase 3
 
-2. `canvodpy vod` subcommand: `--site`, `--analysis`, `--start`, `--end`, `--calculator`. Thread `calculator_cls` through `VodComputer.compute_bulk()` (vod_computer.py:127) — currently hardcoded `TauOmegaZerothOrder` at L236.
-3. Calculator registry in `VODFactory` (factories.py:362): resolve `importlib.metadata.entry_points(group="canvodpy.calculators")` first; if `":"` in the name, import dotted path (`mylab.module:MyClass`). Register `tau_omega_zeroth_order` (`canvod-vod/.../calculator.py:148`) in `pyproject.toml` `[project.entry-points."canvodpy.calculators"]`.
+**Correction (2026-07-14):** items 2/3 below are stale — verified directly
+against current code. `VodComputer.__init__(calculator: str = "tau_omega")`
+already resolves through `VODFactory` for both `compute_day()` and
+`compute_bulk()` — it is **not** hardcoded to `TauOmegaZerothOrder` anymore.
+`canvodpy run --vod-calculator <name>` already exists too, dynamically
+populated from `VODFactory.list_available()`
+(`cli/run.py:_build_vod_calculator_choice`). What's actually still missing —
+the standalone `canvodpy vod` CLI subcommand itself, plus the bigger
+VOD-store organizational/metadata design this surfaced — is now specified in
+full in **§29**, not here.
+
+~~2. `canvodpy vod` subcommand: `--site`, `--analysis`, `--start`, `--end`, `--calculator`. Thread `calculator_cls` through `VodComputer.compute_bulk()` (vod_computer.py:127) — currently hardcoded `TauOmegaZerothOrder` at L236.~~
+~~3. Calculator registry in `VODFactory` (factories.py:362): resolve `importlib.metadata.entry_points(group="canvodpy.calculators")` first; if `":"` in the name, import dotted path (`mylab.module:MyClass`). Register `tau_omega_zeroth_order` (`canvod-vod/.../calculator.py:148`) in `pyproject.toml` `[project.entry-points."canvodpy.calculators"]`.~~
 
 **Constraint:** no `xr.concat()` anywhere in `compute_bulk` changes.
 
@@ -1053,17 +1077,24 @@ below stay open but are no longer worth pulling forward; fine to leave rough.
 
 ---
 
-## 13. CLI: TUI + `canvodpy vod` subcommand
-
-> **Merged into §11 (Phase 3).** All detail — Textual app design, three-pane layout, TTY detection, `canvodpy vod` subcommand, `--calculator` registry, `VodComputer.compute_bulk(calculator_cls=...)` threading — is documented in §11 Phase 3. This stub remains for section numbering.
-
----
-
 ## 14. Visual design language — Rich/Textual aesthetic spec
 
 **Context (2026-07-05):** Agreed design direction: clean, modern, instrument-like.
 No emoji (render inconsistently, look cheap). All marks are plain Unicode or ASCII.
 Nordic Green palette from `docs/assets/canvod-nordic.css` carried into the terminal.
+
+**Correction (2026-07-14):** verified directly against `cli/dashboard.py` — the
+live multi-row per-(site, receiver) progress display this section's "Target
+progress layout" describes **already exists and is live**
+(`RichReporter._task_ids: dict[(site, group), TaskID]`, one `Progress` task
+per receiver, advanced via the `on_group_written` callback wired in
+`cli/run.py`, all rendered together in one shared `Live(Group(...))` region).
+The header mark (`─[◉]─`) and `green3`/`dim green` palette are also already
+implemented, not just documented. What's genuinely still open is narrower
+than this section implies: just the per-row glyph styling (◉ active / ◎
+waiting / ● done, `▸ stage` labels) — cosmetic, not structural. Deprioritized
+per 2026-07-14 discussion: revisit only if the current dashboard proves
+insufficient in practice, not worth building preemptively.
 
 ### Symbol system
 
@@ -1594,7 +1625,7 @@ has placeholder `author: Your Name` / `email: your.email@example.com`,
 confirmed via `git stash` to predate all of today's changes — not something
 to fix here, it's local dev-environment config, not shipped code).
 
-## 21. `canvod-utils/diagnostics/` is a dead chain, superseded by OpenTelemetry — needs a GitHub issue
+## 21. ~~`canvod-utils/diagnostics/` is a dead chain, superseded by OpenTelemetry~~ — DELETED 2026-07-14
 
 **Found 2026-07-09**, while scoping the `canvod-config` extraction (checking
 what else lives in `canvod-utils` besides `config/`).
@@ -1646,13 +1677,25 @@ being migrated in that plan, so `diagnostics/` stays in `canvod-utils` for
 that extraction — resolving the open question there without blocking on this
 cleanup.
 
-**Action:** translate this into a GitHub issue when doing the next cleanup
-pass — not created yet. Decide: (a) delete the whole dead `diagnostics/`
-re-export chain (`canvod-utils/diagnostics/` + `canvodpy/utils/perf.py` +
-the re-export in `canvodpy/utils/__init__.py`) since nothing calls it, or
-(b) keep it and actually wire it in somewhere, with `airflow.py` specifically
-relocated to (or deleted in favor of) the eventual `canvod-airflow` package
-rather than staying in the generic config/utils layer.
+**Resolved 2026-07-14:** chose (a) — deleted the whole dead chain rather than
+filing a GitHub issue first (user opted to skip that formality since it was
+fully confirmed dead). Removed `canvod-utils/diagnostics/` (all 7 files +
+`grafana_dashboard.json`), `canvodpy/utils/perf.py`, and both re-export
+layers (`canvodpy/utils/__init__.py`, `canvod-utils/__init__.py`). Also found
+and removed two now-orphaned dependencies in `canvod-utils/pyproject.toml`
+that existed only to support the deleted `retry.py`/logging in the dead
+modules: `tenacity` and `structlog` (neither had any remaining import in the
+package — verified via grep before removing, not assumed). `structlog`
+remains correctly declared as its own independent dependency in the 6 other
+packages that actually use it (`canvodpy`, `canvod-grids`, `canvod-readers`,
+`canvod-ops`, `canvod-auxiliary`, `canvod-vod`) — this workspace has no
+transitive dependency inheritance between packages, so removing it from
+`canvod-utils` specifically has zero effect on them. Updated
+`canvod-utils/README.md` and `CLAUDE.md` to match. `diagnostics/airflow.py`'s
+fate (the one item genuinely tied to the Airflow extraction) is moot now —
+it's gone along with everything else; if `canvod-airflow` ever wants
+task-metric instrumentation, it starts from scratch there, not from this
+dead code.
 
 ## 22. `canvod-readers` standalone install: stale-warning report resolved, real missing-deps + circular-dep bug found, 2026-07-09
 
@@ -1704,8 +1747,35 @@ as the `canvod-config`-in-`canvodpy` question resolved earlier this session,
 one layer down the dependency graph.
 
 **Not fixed yet — needs a real design decision, not a quick patch:**
-1. `pymap3d` — straightforward, just add it to `canvod-readers`'s
-   `dependencies` (it has no reverse dependency on `canvod-readers`).
+1. ~~`pymap3d` — straightforward, just add it to `canvod-readers`'s
+   `dependencies` (it has no reverse dependency on `canvod-readers`).~~
+   **RESOLVED 2026-07-14:** added `pymap3d>=3.0.0` to
+   `canvod-readers/pyproject.toml` (matching the existing pin in
+   `canvod-auxiliary`). **But this was a symptom, not the real fix** — per
+   user direction 2026-07-14, replacing this narrow item with a proper
+   methodology instead of chasing individual missing-dependency reports one
+   at a time:
+
+   **New: genuinely verify standalone installs for every package in a real
+   sandboxed environment.** This bug was only found because a user manually
+   reproduced it (`uv init` + `uv add canvod-readers` in a fresh directory) —
+   nobody had actually tried a clean standalone install of any package
+   before that. Grepping `pyproject.toml` dependency lists (what caught this
+   specific case) only catches declared-vs-imported mismatches; it doesn't
+   catch things that only surface at runtime (lazy/deferred imports inside
+   function bodies, like the `pymap3d`/`canvod-auxiliary` imports here were
+   — both hidden inside `sbf/reader.py` methods, not at module top level, so
+   even reading the file's top imports wouldn't have caught them).
+   **Needs an actual sandboxed test, not just static analysis:** for each of
+   the 12 `canvod-*` packages, in a genuinely isolated environment (fresh
+   `uv init` + `uv add <package>` from PyPI or a local path, no access to the
+   monorepo's own `.venv`/lockfile), run a small set of real smoke commands
+   that exercise the package's main documented entry points (per its own
+   README "Quick Start" section) and see what actually happens — not just
+   `import canvod.X` succeeding, but calling the functions a real standalone
+   user would call. Catalogue every `ModuleNotFoundError`/warning/crash
+   found, the same way this one was found, rather than assuming the
+   dependency lists are correct because they look complete on paper.
 2. `pad_to_global_sid` — the actual cycle. Options: (a) move
    `pad_to_global_sid` (or whatever `sbf/reader.py` specifically needs from
    it) down into `canvod-readers` or a lower-level shared package that both
@@ -1942,3 +2012,137 @@ the code.
 
 **Action:** not implemented — this is a capture-the-intent entry, revisit to
 actually wire the toggle.
+
+---
+
+## 29. Standalone `canvodpy vod` + multi-model VOD store hierarchy + metadata (2026-07-14)
+
+**Debated and designed 2026-07-14** — full spec below, not implemented yet.
+Started from "we need a `canvodpy vod` subcommand," grew into a real VOD
+store redesign once we dug into what already exists vs. what's missing.
+
+### What's already built (verified against current code, not assumed)
+
+- `canvodpy run --vod-calculator <name>` already exists, dynamically
+  populated from `VODFactory.list_available()`
+  (`cli/run.py:_build_vod_calculator_choice`) — registering a new calculator
+  automatically makes it selectable here. No work needed.
+- `VodComputer.__init__(calculator: str = "tau_omega")` already resolves via
+  the same `VODFactory` for both `compute_day()` (inline, pipeline path) and
+  `compute_bulk()` (standalone, from an existing store). The old §11/§13
+  claim that `compute_bulk()` hardcodes `TauOmegaZerothOrder` is stale —
+  already fixed.
+- The storage layer already supports branches end-to-end:
+  `append_to_group(branch: str = "main")` / `write_or_append_group(branch:
+  str = "main")` both take a `branch` param. (Decided below: branches are
+  the *wrong* tool for model-differentiation anyway — see hierarchy
+  decision.)
+- `RichReporter` already has live per-(site, receiver) progress bars (see
+  §14's correction) — not related to this section, noted here only because
+  it came up in the same discussion and was wrongly claimed missing earlier.
+
+### What's actually missing
+
+**1. The `canvodpy vod` CLI subcommand itself.** Thin wrapper around
+`Site(site).vod.compute_bulk(analysis_name, calculator=..., start=..., end=...)`,
+reusing the same dynamic `VodCalculatorChoice` enum pattern `run.py` already
+built. `--site`, `--analysis`, `--start`, `--end`, `--calculator`. This part
+really is just wiring — the calculator-selection logic underneath already
+works.
+
+**2. VOD store group hierarchy: add a `model` layer, drop `site` from it.**
+Decided: `{model}/{analysis_name}` as the group path (e.g.
+`tau_omega_zeroth_order/canopy_01_vs_reference_01`), not the originally
+proposed `branch/model/site/receiver`:
+- **Branch stays orthogonal, not used for model-differentiation** — the
+  original idea of one Icechunk branch per model was rejected: branches are
+  git-like (meant for a small number of temporary parallel histories), not a
+  permanent categorical axis; using them for models would make "give me all
+  VOD across all models for site X" awkward and doesn't scale to many
+  models. Branch keeps its normal meaning (defaults to `main`, versioning
+  only).
+- **`site` is redundant as an in-store level** — verified `get_vod_store_path(site_name)`
+  already returns a path like `{stores_root_dir}/{site_name}/vod`: one
+  physical Icechunk store *per site*, always. A single VOD store instance
+  can never contain more than one site's data, so nesting "site" inside it
+  would repeat the same path segment on every group — pure ceremony.
+- **"receiver" → "analysis"** — VOD is inherently computed over a pair
+  (canopy + reference), matching the existing `analysis_name`
+  (`vod_analyses` config, `store_vod_analysis(analysis_name=...)`), not a
+  single receiver.
+- `viewer.py` already branches on `store_type == "vod_store"` at a few call
+  sites (`_get_display_type` and others) — there's an existing seam to add
+  "group the tree by model first" rendering without a bigger refactor.
+
+**3. Wire up the VOD dedup/overwrite gap — a real prerequisite, found while
+designing this, not just a metadata nice-to-have.** `store_vod_analysis()`
+calls `write_or_append_group(...)` **without** `dedup=True` (its default is
+`False`). That method's own docstring says: *"suitable for VOD stores...
+where rinex-style dedup does not apply."* Net effect today: reprocessing the
+same VOD analysis for the same date range doesn't skip or overwrite — it
+just blindly appends via `to_icechunk(..., append_dim="epoch")`,
+**duplicating those epochs**. This needs fixing before the new metadata
+table's `action` field (below) can mean anything. The hash-match part of
+`should_skip_file` doesn't map cleanly to VOD (no single "File Hash" for a
+computation over two receivers' data) — needs its own temporal-overlap-style
+check, analogous to but not identical to the RINEX guardrail.
+
+**4. Rich store-level metadata for VOD stores.** Traced why `show.py` prints
+"No metadata found" for VOD stores: `collect_metadata()`/`write_metadata()`
+(the DataCite/ACDD/STAC provenance writer) is only ever called from
+`processor.py`'s RINEX ingest path (STEP 5b) — `vod_computer.py`'s
+`store_vod_analysis()` never calls it. Fix: wire the *existing*
+`collect_metadata()`/`write_metadata()` into `VodComputer._write_to_store()`,
+same pattern as processor.py. Gets config-drift detection (built earlier
+2026-07-13) for free on VOD stores too.
+
+**5. New per-computation VOD metadata ledger table** —
+`{model}/{analysis_name}/metadata/table`, modeled directly on the GNSS
+store's `{group}/metadata/table` at the same level of completeness (commit
+tracking via `snapshot_id`, `action`, `write_strategy`, not just a couple of
+fields):
+
+| Field | Notes |
+|---|---|
+| `index` | same as GNSS table |
+| `source_file_hashes` | JSON `{receiver_name: [hashes]}` — was going to be a flat `rinex_hash` like the GNSS table, but VOD reads from *two* receivers so it needs to be per-receiver |
+| `source_gnss_stores` | **added per user direction** — JSON `{receiver_name: store_path}`; provenance needs to trace back to *which* GNSS store, not just which file hashes |
+| `start`, `end` | same |
+| `snapshot_id` | same — meaningless until item 3 (dedup/overwrite) is wired |
+| `action` | same (`write`/`append`/`overwrite`) — see item 3 |
+| `commit_msg`, `written_at`, `write_strategy`, `attrs` | same as GNSS table (`write_strategy` reads `vod_store_strategy` instead of `gnss_store_strategy`) |
+| `calculator_name` | new, e.g. `"tau_omega_zeroth_order"` |
+| ~~`canonical_name`, `physical_path`~~ | dropped as separate fields — folded into `source_gnss_stores` above instead |
+| ~~`ephemeris_source`~~, ~~`config_hash`~~ | considered, then **deferred** — see item 6 |
+
+**6. Deferred — open a GitHub issue (not implemented now):** add
+`ephemeris_source`, `ephemeris_file_name`, and the applied interpolation
+strategy to **both** metadata tables — the GNSS store's existing one (a
+genuine current gap there too, not just for VOD: the GNSS store's own
+ingested data is already ephemeris-augmented and *also* doesn't record which
+ephemeris source/file/interpolation strategy produced those angles) and the
+new VOD table above. Same deferred treatment for `config_hash` on both
+tables. All four fields are real reproducibility gaps, just scoped out of
+this pass — track as a single GitHub issue covering both tables together
+when picked up.
+
+### Implementation order (when ready)
+
+1. Wire dedup/overwrite logic for VOD writes (item 3) — real prerequisite,
+   do first.
+2. Group hierarchy change: `{model}/{analysis_name}` (item 2) — touches
+   `store_vod_analysis()`, `read_vod_analysis()`, and any other caller of the
+   current flat `analysis_name` group path (grep before merging).
+3. Wire `collect_metadata()`/`write_metadata()` into the VOD write path
+   (item 4).
+4. New VOD metadata ledger table + writer, modeled on `_append_metadata_row`
+   (item 5).
+5. `viewer.py` model-aware tree rendering for `store_type == "vod_store"`.
+6. `canvodpy vod` CLI subcommand (item 1) — comes last since it's the
+   thinnest layer, depends on nothing above being done first, but ships the
+   whole thing together.
+7. File the deferred GitHub issue for item 6 (ephemeris_source/file/
+   interpolation strategy + config_hash on both tables) — separate from this
+   implementation, no code change needed to file it.
+
+**Action:** fully specified, not implemented. Revisit when ready to build.
