@@ -157,11 +157,11 @@ processing:
     get_partial_values_concurrency: 1   # Concurrent partial-value reads (increase for S3/GCS)
 
     chunk_strategies:
-      gnss_store:
-        epoch: 34560  # 2 days of 5s data
+      rinex_store:
+        epoch: 17280  # 24h of 5s data; override to match your site's sampling rate
         sid: -1       # Don't chunk along sid
       vod_store:
-        epoch: 34560
+        epoch: 17280
         sid: -1
 
   # ---------------------------------------------------------------------------

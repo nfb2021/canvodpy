@@ -26,8 +26,8 @@ The `canvod-store` package provides versioned storage management for GNSS vegeta
 
     ---
 
-    Default chunks: `epoch: 34560, sid: -1` — one receiver-day (34560 epochs
-    ≈ 24 h at 2.5 s sampling). Zstd compression, O(1) epoch-range reads.
+    Default chunks: `epoch: 17280, sid: -1` — one receiver-day (17280 epochs
+    ≈ 24 h at 5 s sampling). Zstd compression, O(1) epoch-range reads.
 
 -   :fontawesome-solid-fingerprint: &nbsp; **Three-layer deduplication**
 
@@ -166,7 +166,7 @@ All three layers must pass before `session.commit()` is called.
 | Property | Value |
 | -------- | ----- |
 | Backend format | Icechunk (Zarr v3) |
-| Default chunks | `epoch: 34560`, `sid: -1` |
+| Default chunks | `epoch: 17280`, `sid: -1` |
 | Compression | Zstd level 3 |
 | Storage backend | Local filesystem (Icechunk library supports S3) |
 | Versioning | Git-like snapshots, hash-addressable |

@@ -103,8 +103,8 @@ processing:
     inline_threshold: 512
     get_concurrency: 1
     chunk_strategies:
-      rinex_store: {epoch: 34560, sid: -1}
-      vod_store:   {epoch: 34560, sid: -1}
+      rinex_store: {epoch: 17280, sid: -1}
+      vod_store:   {epoch: 17280, sid: -1}
 
   storage:
     stores_root_dir: /path/to/your/gnss/stores

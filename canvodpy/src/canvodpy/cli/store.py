@@ -49,7 +49,7 @@ def _open_store(site_name: str, store_kind: str):
     storage = config.processing.storage
     if store_kind == "gnss":
         path = storage.get_gnss_store_path(site_name)
-        store_type = "gnss_store"
+        store_type = "rinex_store"
     else:
         path = storage.get_vod_store_path(site_name)
         store_type = "vod_store"

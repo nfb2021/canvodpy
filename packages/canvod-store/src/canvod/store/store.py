@@ -59,8 +59,8 @@ class MyIcechunkStore:
     ----------
     store_path : Path
         Path to the Icechunk store directory.
-    store_type : str, default "gnss_store"
-        Type of store ("gnss_store" or "vod_store").
+    store_type : str, default "rinex_store"
+        Type of store ("rinex_store" or "vod_store").
     compression_level : int | None, optional
         Override default compression level.
     compression_algorithm : str | None, optional
@@ -71,7 +71,7 @@ class MyIcechunkStore:
     store_path : Path
         Path to the Icechunk store directory.
     store_type : str
-        Type of store ("gnss_store" or "vod_store").
+        Type of store ("rinex_store" or "vod_store").
     compression_level : int
         Compression level (1-9).
     compression_algorithm : icechunk.CompressionAlgorithm
@@ -83,7 +83,7 @@ class MyIcechunkStore:
     def __init__(
         self,
         store_path: Path,
-        store_type: str = "gnss_store",
+        store_type: str = "rinex_store",
         compression_level: int | None = None,
         compression_algorithm: str | None = None,
     ) -> None:
@@ -623,7 +623,7 @@ class MyIcechunkStore:
         with self.readonly_session(branch) as session:
             # Use default chunking strategy if none provided
             if chunks is None:
-                chunks = self.chunk_strategy or {"epoch": 34560, "sid": -1}
+                chunks = self.chunk_strategy or {"epoch": 17280, "sid": -1}
 
             ds = xr.open_zarr(
                 session.store,
@@ -782,7 +782,7 @@ class MyIcechunkStore:
             Write mode: 'w' (overwrite) or 'a' (append)
         chunks : dict[str, int] | None
             Chunking spec. If None, uses store's chunk_strategy.
-            Example: {'epoch': 34560, 'sid': -1}
+            Example: {'epoch': 17280, 'sid': -1}
         """
         # Use explicit chunks, or fall back to store's chunk strategy
         if chunks is None:
@@ -1222,7 +1222,7 @@ class MyIcechunkStore:
             Repository branch.
         chunks : dict | None, optional
             Dask chunk specification.  Defaults to
-            ``{"epoch": 34560, "sid": -1}``.
+            ``{"epoch": 17280, "sid": -1}``.
 
         Returns
         -------
@@ -1234,7 +1234,7 @@ class MyIcechunkStore:
             return xr.open_zarr(
                 session.store,
                 group=path,
-                chunks=chunks or self.chunk_strategy or {"epoch": 34560, "sid": -1},
+                chunks=chunks or self.chunk_strategy or {"epoch": 17280, "sid": -1},
                 consolidated=False,
             )
 
@@ -2681,7 +2681,7 @@ def create_rinex_store(store_path: Path) -> MyIcechunkStore:
     MyIcechunkStore
         Configured store for RINEX data.
     """
-    return MyIcechunkStore(store_path=store_path, store_type="gnss_store")
+    return MyIcechunkStore(store_path=store_path, store_type="rinex_store")
 
 
 def create_vod_store(store_path: Path) -> MyIcechunkStore:

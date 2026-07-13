@@ -1516,35 +1516,83 @@ that specific migration needs doing — just no longer tracked here as a
 pending action, since whether it happened lives on the remote machine, not
 in this repo.
 
-## 20. Pre-existing test failures (18) — found while verifying canvod-virtualiconvname removal, 2026-07-09
+## 20. ~~Pre-existing test failures (18)~~ — RESOLVED 2026-07-13
 
-Confirmed via `git stash`/`stash pop` that all 18 fail identically with or
-without today's changes (`canvod-virtualiconvname` removal, `find_monorepo_root()`
-worktree fix, `canvod-preflight` test port) — none of these are regressions
-from that work, just newly noticed because a full `pytest -m "not integration"`
-run was done to validate the removal.
+**Found** while verifying `canvod-virtualiconvname` removal, 2026-07-09.
+**Resolved** 2026-07-13 — re-verified all 18 still reproduced exactly as
+catalogued (moved locations aside: `test_config_loader.py` now lives in
+`canvod-config`, per the split), then root-caused all three clusters. Two
+were genuine bugs, not just stale tests:
 
-1. **`packages/canvod-utils/tests/test_config_loader.py`** (4 failures):
-   `TestConfigLoaderRoundTrip::test_load_from_temp_config_dir`,
-   `test_user_config_overrides_defaults`,
-   `TestConfigLoaderDefaults::test_missing_user_config_uses_defaults` — all
-   `FileNotFoundError: Settings file not found: /private/var/folders/...`;
-   `TestConfigLoaderValidationError::test_invalid_config_raises_config_validation_error`
-   — `AttributeError: ... does not have the attribute '_load_sids'` (mock
-   patches a method that no longer exists on `ConfigLoader`). Likely stale
-   after a `ConfigLoader` refactor — tests weren't updated to match.
-2. **`packages/canvod-readers/tests/test_builder.py`** (13 failures, all
-   `TestDatasetBuilder`): every test raises `ValueError: Dataset validation
-   failed: ...` — looks like `DatasetBuilder`'s output stopped satisfying its
-   own validation step across the board, so likely one shared root cause
-   rather than 13 separate bugs.
-3. **`packages/canvod-store/tests/test_store_crud.py::TestStoreCreation::test_create_rinex_store`**
-   (1 failure): `AssertionError: assert 'gnss_store' == 'rinex_store'` — looks
-   like a store/group naming default changed without updating this test's
-   expectation.
+1. **`canvod-config/tests/test_config_loader.py`** (4 failures) — pure test
+   staleness, no code bug. Tests still wrote the old 3-file config format
+   (`processing.yaml`/`sites.yaml`/`sids.yaml`) and mocked a `_load_sids`
+   method that no longer exists — `ConfigLoader` was correctly redesigned
+   around the unified `canvod-settings.yaml`, tests just never got updated.
+   **Fixed**: rewrote all 4 to use the unified file; split
+   `test_missing_user_config_uses_defaults` into two accurate tests since
+   the old single-test premise ("missing files silently default") is now
+   two different real behaviors — `test_missing_settings_file_raises_file_not_found`
+   (the file itself must exist, by design) and
+   `test_omitted_sections_use_package_defaults` (individual *sections*
+   within an existing file still default correctly, but `metadata` must
+   always be supplied — the package defaults for author/email are
+   themselves rejected sentinel placeholders, by design).
 
-Not investigated further yet — just confirmed pre-existing and catalogued so
-they don't get mistaken for new regressions later.
+2. **`canvod-readers/tests/test_builder.py`** (13 failures) — **real bug**.
+   `REQUIRED_ATTRS` (`base.py`) requires `"Institution"`, but
+   `get_global_attrs()`'s fallback when `load_config()` fails was just
+   `{"Software": "canVODpy"}` — missing `Institution`, so dataset
+   construction always failed validation in any environment without a
+   working config (standalone installs — the exact scenario the earlier
+   §10 fix was supposed to enable — and, it turns out, this test suite too,
+   since `ConfigLoader` now requires `canvod-settings.yaml` to exist).
+   **Fixed**: fallback now includes `"Institution": "Unknown"` — a
+   recognizable placeholder, not a value that could be mistaken for real
+   FAIR/DataCite metadata downstream.
+
+3. **`canvod-store/tests/test_store_crud.py::test_create_rinex_store`**
+   (1 failure) — **real bug**, bigger than the test. `create_rinex_store()`
+   hardcoded `store_type="gnss_store"`, but the actual production code
+   (`processor.py`, `store_metadata/collectors.py`, `viewer.py`, `store.py`'s
+   own write-strategy check) all use `"rinex_store"`. Tracing the actual
+   impact: `chunk_strategies` config (see §19) was keyed `"gnss_store"` in
+   both the Pydantic default and every YAML template, so it silently never
+   resolved for `"rinex_store"`-typed stores — `self.chunk_strategy` was
+   always `{}`. This had already caused one real production incident:
+   `canvod-store/tests/test_rechunk.py`'s docstring documents a 2026-07-08
+   finding of exactly this misalignment on the Rosalia store, mitigated
+   with `rechunk_group()` at the time but never fixed at the root.
+   **Fixed**: renamed to `"rinex_store"` everywhere (the class docstring,
+   `__init__` default, `create_rinex_store()`, `canvodpy/cli/store.py`'s
+   local var, and the `chunk_strategies` config key in both
+   `compression.py`'s `default_factory` and all 3 YAML templates).
+
+   **While fixing this, found and fixed a second, unrelated bug in the same
+   area**: the default `epoch` chunk size was `34560`, justified by two
+   *contradicting* comments (my own §19 doc claimed "24h at 2.5s cadence";
+   the YAML template claimed "2 days of 5s data" — both explain the same
+   number, but assume different sampling rates and day-counts). Given
+   `append_to_group()` commits once per day, chunks must equal exactly one
+   day's epochs — the "2 days" framing was simply wrong. Rosalia (the
+   reference site this default is tuned around) samples at 5s, so the
+   correct 1-day value is `86400 ÷ 5 = 17280`, not `34560`. **Fixed
+   everywhere**: `ChunkStrategy`'s own field default, the `chunk_strategies`
+   `default_factory`, `manifest_splitting_epoch_range`'s default +
+   description, all 3 YAML templates + this repo's local
+   `canvod-settings.yaml`, `VodComputer`'s `_rechunk` default, `cli/run.py`'s
+   hardcoded VOD rechunk, `store.py`'s 2 read-path fallback literals, and
+   6 docs files (`icechunk.md`, `configuration.md`,
+   `packages/config/overview.md`, `packages/store/overview.md`) plus their
+   corresponding tests. Existing stores created with the old `34560` default
+   are unaffected (chunk shape is fixed at first write) — only new stores
+   pick up the corrected value.
+
+Full regression: `pytest -m "not integration"` — no new failures beyond a
+pre-existing, unrelated local issue (this repo's own `config/canvod-settings.yaml`
+has placeholder `author: Your Name` / `email: your.email@example.com`,
+confirmed via `git stash` to predate all of today's changes — not something
+to fix here, it's local dev-environment config, not shipped code).
 
 ## 21. `canvod-utils/diagnostics/` is a dead chain, superseded by OpenTelemetry — needs a GitHub issue
 
@@ -1749,3 +1797,62 @@ version bump. Needs:
 **Action:** no decision made yet on version scheme or exact release
 checklist — revisit as a deliberate milestone, not folded into the ongoing
 incremental work.
+
+---
+
+## 26. `canvod-streamviz` / `canvod-streamstats` — GitHub infrastructure + repo setup (2026-07-13)
+
+**Done.** Both are standalone private repos (not in canvodpy-extensions or
+this monorepo — confirmed to stay that way, see §8's resolution). Brought
+their GitHub-facing infrastructure in line with canvodpy, minus CI workflows
+(not requested).
+
+**`canvod-streamviz`** (`git@github.com:nfb2021/canvod-streamviz.git`):
+- Had no git repo at all — initialized, remote added, `main` branch.
+- `.gitignore`: replaced with canvodpy's full version.
+- `.pre-commit-config.yaml`: same hooks as canvodpy (local uv-managed ruff,
+  `uv-lock`, `pre-commit-hooks` trio, commitizen commit-msg), minus `ty-check`
+  and `update-submodules` (neither applies here). Hooks installed.
+- `pyproject.toml`'s `[tool.commitizen]`: added `tag_format`, changelog
+  settings, `annotated_tag`, and a `customize.scopes` list derived from its
+  own modules (mesh/rollup/ingest/catalog/pipeline/serve/ci/docs/deps).
+- `.github/CODEOWNERS`, `.github/dependabot.yml` (pip + pre-commit
+  ecosystems only, no `github-actions` ecosystem since no workflows exist).
+- Added `LICENSE` (Apache-2.0, copied from canvodpy) and `README.md`
+  (description, install incl. editable sibling installs for
+  canvod-grids/store/vod/streamstats, a verified usage example, testing,
+  license) — neither existed before.
+- Two commits: `45a7bc5` (LICENSE + README), and an earlier initial commit
+  with everything else plus Phase 1 fixes (see §8's resolution note).
+- Also bumped to Python 3.14 (matches canvod-grids/store/vod's `>=3.14`) —
+  covered under §8, not repeated here.
+
+**`canvod-streamstats`** (`git@github.com:nfb2021/canvod-streamstats.git`):
+- Already had a git repo + GitHub remote + a LICENSE, but the LICENSE still
+  had the **unfilled Apache-2.0 template placeholder**
+  (`Copyright [yyyy] [name of copyright owner]`) — fixed to a real copyright
+  line.
+- `.gitignore`, `.pre-commit-config.yaml`: brought in line with canvodpy's,
+  **except** kept the pre-existing `check-added-large-files: --maxkb=2000`
+  override (now commented) since `docs/streaming-statistics.pdf` is ~1MB,
+  over canvodpy's 500KB default.
+- `.github/CODEOWNERS`, `.github/dependabot.yml`: same as streamviz.
+- Added `README.md` (was missing entirely) — module table, install (incl.
+  `canvod-ops` note), usage, testing, license.
+- Committed as `ffe0bb2`, **scoped via `git commit -- <pathspec>`** rather
+  than a plain `git commit` — this repo had substantial pre-existing
+  uncommitted WIP (a reorg moving files from
+  `integration/canvod-ops-statistics/`+`integration/canvod-ops-tests/` into
+  `src/canvod/streamstats/ops/`+`tests/` directly, with `pyproject.toml`
+  already modified as part of it) already staged. A plain `git commit -m`
+  would have swept that WIP into the same commit — caught this because
+  pre-commit's ruff-check hook linted a WIP file and failed on an unrelated
+  unused-variable error. Pathspec-scoped commit fixed it cleanly.
+
+**Still open:** `pyproject.toml`'s `[tool.commitizen]` section needs the
+same `tag_format`/changelog/`customize.scopes` additions streamviz got —
+the edit is made but sits **unstaged**, on top of the pre-existing staged
+WIP in that same file. Can't be committed separately without either
+resolving the WIP first or accepting it gets folded into whatever commit
+that WIP eventually becomes. Not blocking; just needs the WIP sorted out
+first (on `canvod-streamstats`'s own timeline, not tracked further here).

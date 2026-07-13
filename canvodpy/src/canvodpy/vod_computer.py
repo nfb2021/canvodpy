@@ -59,7 +59,7 @@ class VodComputer:
         Future calculators register via ``VODFactory.register()``.
     rechunk : dict, optional
         Chunk specification for VOD output before writing.
-        Default: ``{"epoch": 34560, "sid": -1}``.
+        Default: ``{"epoch": 17280, "sid": -1}``.
     """
 
     def __init__(
@@ -70,7 +70,7 @@ class VodComputer:
     ) -> None:
         self._site = site
         self._calculator_name = calculator
-        self._rechunk = rechunk or {"epoch": 34560, "sid": -1}
+        self._rechunk = rechunk or {"epoch": 17280, "sid": -1}
         self.log = get_logger(__name__).bind(site=site.name, calculator=calculator)
 
     def compute_day(

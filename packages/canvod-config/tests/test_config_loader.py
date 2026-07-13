@@ -1,8 +1,8 @@
 """Tests for ConfigLoader round-trip and merge logic."""
 
 from pathlib import Path
-from unittest.mock import patch
 
+import pytest
 import yaml
 
 from canvod.config.loader import ConfigLoader, ConfigValidationError
@@ -60,25 +60,20 @@ class TestConfigLoaderRoundTrip:
             yaml.dump(data, f)
 
     def test_load_from_temp_config_dir(self, tmp_path):
-        """Config files in tmp_path should load into CanvodConfig."""
-        # Write processing.yaml
+        """A unified canvod-settings.yaml should load into CanvodConfig."""
         self._write_yaml(
-            tmp_path / "processing.yaml",
+            tmp_path / "canvod-settings.yaml",
             {
-                "metadata": {
-                    "author": "Test Author",
-                    "email": "test@example.com",
-                    "institution": "Test University",
+                "processing": {
+                    "metadata": {
+                        "author": "Test Author",
+                        "email": "test@example.com",
+                        "institution": "Test University",
+                    },
+                    "storage": {
+                        "stores_root_dir": str(tmp_path / "stores"),
+                    },
                 },
-                "storage": {
-                    "stores_root_dir": str(tmp_path / "stores"),
-                },
-            },
-        )
-        # Write sites.yaml
-        self._write_yaml(
-            tmp_path / "sites.yaml",
-            {
                 "sites": {
                     "TestSite": {
                         "gnss_site_data_root": str(tmp_path / "data"),
@@ -94,11 +89,10 @@ class TestConfigLoaderRoundTrip:
                             },
                         },
                     }
-                }
+                },
+                "sids": {"mode": "all"},
             },
         )
-        # Write sids.yaml
-        self._write_yaml(tmp_path / "sids.yaml", {"mode": "all"})
 
         loader = ConfigLoader(config_dir=tmp_path)
         config = loader.load()
@@ -109,23 +103,25 @@ class TestConfigLoaderRoundTrip:
         assert config.sids.mode == "all"
 
     def test_user_config_overrides_defaults(self, tmp_path):
-        """User processing.yaml should override default values."""
+        """User canvod-settings.yaml should override default values."""
         self._write_yaml(
-            tmp_path / "processing.yaml",
+            tmp_path / "canvod-settings.yaml",
             {
-                "metadata": {
-                    "author": "Custom Author",
-                    "email": "custom@example.com",
-                    "institution": "Custom Univ",
+                "processing": {
+                    "metadata": {
+                        "author": "Custom Author",
+                        "email": "custom@example.com",
+                        "institution": "Custom Univ",
+                    },
+                    "aux_data": {"agency": "GFZ"},
+                    "storage": {
+                        "stores_root_dir": str(tmp_path / "stores"),
+                    },
                 },
-                "aux_data": {"agency": "GFZ"},
-                "storage": {
-                    "stores_root_dir": str(tmp_path / "stores"),
-                },
+                "sites": {},
+                "sids": {"mode": "all"},
             },
         )
-        self._write_yaml(tmp_path / "sites.yaml", {"sites": {}})
-        self._write_yaml(tmp_path / "sids.yaml", {"mode": "all"})
 
         config = ConfigLoader(config_dir=tmp_path).load()
 
@@ -136,18 +132,41 @@ class TestConfigLoaderRoundTrip:
 
 
 class TestConfigLoaderDefaults:
-    """Test fallback to defaults when user files are missing."""
+    """Test the single-required-file design and fallback to package defaults
+    for sections a user's canvod-settings.yaml omits."""
 
-    def test_missing_user_config_uses_defaults(self, tmp_path):
-        """Missing user files should fall back to package defaults."""
-        # Don't create any files — loader should use defaults
+    def _write_yaml(self, path: Path, data: dict) -> None:
+        with open(path, "w") as f:
+            yaml.dump(data, f)
+
+    def test_missing_settings_file_raises_file_not_found(self, tmp_path):
+        """canvod-settings.yaml must exist — ConfigLoader no longer defaults
+        silently when the whole file is absent (see loader.py's load())."""
         loader = ConfigLoader(config_dir=tmp_path)
+        with pytest.raises(FileNotFoundError, match=r"canvod-settings\.yaml"):
+            loader.load()
 
-        # This should load defaults without crashing
-        # (sites.yaml missing → empty sites, processing.yaml missing → defaults)
+    def test_omitted_sections_use_package_defaults(self, tmp_path):
+        """Sections omitted from canvod-settings.yaml fall back to package
+        defaults (metadata must still be supplied — package defaults for
+        author/email are rejected sentinel placeholders by design)."""
+        self._write_yaml(
+            tmp_path / "canvod-settings.yaml",
+            {
+                "processing": {
+                    "metadata": {
+                        "author": "Test Author",
+                        "email": "test@example.com",
+                        "institution": "Test University",
+                    },
+                    "storage": {"stores_root_dir": str(tmp_path / "stores")},
+                },
+            },
+        )
+        loader = ConfigLoader(config_dir=tmp_path)
         config = loader.load()
 
-        # Default processing values from package defaults
+        # aux_data and sids weren't specified — package defaults apply
         assert config.processing.aux_data.agency == "COD"
         assert config.sids.mode == "preset"
         assert config.sids.preset == "default"
@@ -164,31 +183,28 @@ class TestConfigLoaderValidationError:
     def test_invalid_config_raises_config_validation_error(self, tmp_path):
         """Invalid config should raise ConfigValidationError (not sys.exit)."""
         self._write_yaml(
-            tmp_path / "processing.yaml",
+            tmp_path / "canvod-settings.yaml",
             {
-                "metadata": {
-                    "author": "Test",
-                    "email": "test@example.com",
-                    "institution": "Test",
+                "processing": {
+                    "metadata": {
+                        "author": "Test",
+                        "email": "test@example.com",
+                        "institution": "Test",
+                    },
+                    "storage": {
+                        "stores_root_dir": str(tmp_path),
+                    },
                 },
-                "storage": {
-                    "stores_root_dir": str(tmp_path),
-                },
+                "sites": {},
+                # "mode" only accepts "all"/"preset"/"custom" — this is a
+                # genuine Pydantic validation failure, not a mocked one.
+                "sids": {"mode": "not_a_valid_mode"},
             },
         )
-        self._write_yaml(tmp_path / "sites.yaml", {"sites": {}})
-        self._write_yaml(tmp_path / "sids.yaml", {"mode": "all"})
 
         loader = ConfigLoader(config_dir=tmp_path)
 
-        # Force CanvodConfig validation to fail by making _load_sids return
-        # an invalid type (string instead of SidsConfig)
-        import pytest
-
-        with (
-            patch.object(loader, "_load_sids", return_value="not_a_sids_config"),
-            pytest.raises(ConfigValidationError) as exc_info,
-        ):
+        with pytest.raises(ConfigValidationError) as exc_info:
             loader.load()
 
         assert exc_info.value.config_dir == tmp_path

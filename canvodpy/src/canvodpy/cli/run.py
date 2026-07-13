@@ -224,7 +224,7 @@ def _compute_vod_for_day(
             vod_ds = calculator.calculate_vod()
 
             # Rechunk + clear encoding for clean Icechunk writes
-            vod_ds = vod_ds.chunk({"epoch": 34560, "sid": -1})
+            vod_ds = vod_ds.chunk({"epoch": 17280, "sid": -1})
             for var in vod_ds.data_vars:
                 vod_ds[var].encoding = {}
 

@@ -48,7 +48,7 @@ def _make_dataset(slot: int, n_epochs: int = 20) -> xr.Dataset:
 def _write_synthetic_store(store_path, n_slots: int = 2) -> None:
     from canvod.store import MyIcechunkStore
 
-    icestore = MyIcechunkStore(store_path, store_type="gnss_store")
+    icestore = MyIcechunkStore(store_path, store_type="rinex_store")
     for slot in range(n_slots):
         icestore.write_or_append_group(
             _make_dataset(slot),

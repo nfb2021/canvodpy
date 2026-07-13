@@ -105,12 +105,12 @@ Icechunk is a cloud-native transactional storage format for multidimensional arr
     The default chunk shape is tuned for daily GNSS time series:
 
     ```python
-    chunk_strategy = {"epoch": 34560, "sid": -1}
+    chunk_strategy = {"epoch": 17280, "sid": -1}
     ```
 
     | Dimension | Value | Rationale |
     |-----------|-------|-----------|
-    | `epoch` | 34560 | ≈ 24 h at 2.5 s cadence — aligned to daily processing granularity |
+    | `epoch` | 17280 | ≈ 24 h at 5 s cadence — aligned to daily processing granularity |
     | `sid` | −1 (unlimited) | All signal IDs in one chunk — VOD computes across all signals simultaneously |
 
 === "Memory Estimate"
@@ -136,8 +136,8 @@ Icechunk is a cloud-native transactional storage format for multidimensional arr
     ```
 
 !!! warning "Match epoch chunk size to your site's sampling rate"
-    The default `epoch: 34560` is tuned for **2.5 s sampling** — one full day
-    is `86400 s ÷ 2.5 s = 34560` epochs. If a site samples at a different
+    The default `epoch: 17280` is tuned for **5 s sampling** — one full day
+    is `86400 s ÷ 5 s = 17280` epochs. If a site samples at a different
     rate, compute its chunk size the same way instead of using the default
     as-is:
 
@@ -146,10 +146,12 @@ Icechunk is a cloud-native transactional storage format for multidimensional arr
                       = 86400 seconds/day ÷ sampling_interval_seconds
     ```
 
-    For example, 5 s sampling (0.2 Hz) needs `epoch: 17280`, not `34560`.
-    Using the 2.5 s-tuned default there means every day is exactly half a
-    chunk, so every daily commit lands mid-chunk and forces a
-    read-modify-write of the whole chunk instead of a clean append.
+    For example, 2.5 s sampling (0.4 Hz) needs `epoch: 34560`, not `17280`.
+    Chunk shape must equal **exactly one day's worth of epochs** for your
+    site's actual sampling rate — `append_to_group()` commits once per day,
+    so anything else (a fraction of a day, or a multiple of it) means most
+    daily commits land mid-chunk and force a read-modify-write of the whole
+    chunk instead of a clean append.
 
     Set `chunk_strategies` in `canvod-settings.yaml` to match **before** a
     group's first-ever write — chunk shape is fixed at creation and does not
@@ -174,16 +176,16 @@ processing:
     max_concurrent_requests: null        # null = icechunk picks a platform default
 
     chunk_strategies:
-      gnss_store:
-        epoch: 34560   # ≈ 24 h at 2.5 s cadence
+      rinex_store:
+        epoch: 17280   # ≈ 24 h at 5 s cadence
         sid: -1        # no chunking along sid axis
       vod_store:
-        epoch: 34560
+        epoch: 17280
         sid: -1
 
     # Manifest splitting (enabled by default; keeps manifests bounded for long deployments)
     manifest_splitting_enabled: true
-    manifest_splitting_epoch_range: 34560   # match chunk_strategies epoch
+    manifest_splitting_epoch_range: 17280   # match chunk_strategies epoch
 
     # Manifest preloading (off by default; useful for S3 read-heavy workloads)
     # manifest_preload_enabled: false
@@ -203,10 +205,10 @@ processing:
 | `inline_chunk_threshold_bytes` | `512` | Chunks ≤ this are stored inline in the manifest (coordinate arrays only) |
 | `get_partial_values_concurrency` | `1` | Concurrent GET requests for partial array reads; increase for S3 |
 | `max_concurrent_requests` | `null` | Global cap on concurrent object-store connections; `null` = icechunk default |
-| `chunk_strategies.*.epoch` | `34560` | Epochs per chunk; `-1` = no chunking |
+| `chunk_strategies.*.epoch` | `17280` | Epochs per chunk; `-1` = no chunking |
 | `chunk_strategies.*.sid` | `-1` | No chunking along sid axis (all SIDs in one chunk) |
 | `manifest_splitting_enabled` | `true` | Split manifests every `manifest_splitting_epoch_range` indices |
-| `manifest_splitting_epoch_range` | `34560` | Should match `chunk_strategies.epoch` |
+| `manifest_splitting_epoch_range` | `17280` | Should match `chunk_strategies.epoch` |
 | `manifest_preload_enabled` | `false` | Eagerly fetch coordinate manifests at store-open time |
 | `manifest_preload_max_refs` | `10_000` | Cap on chunk refs preloaded |
 | `manifest_preload_max_arrays_to_scan` | `500` | Arrays scanned during preload |
@@ -229,7 +231,7 @@ Once the backend is wired up, tune these knobs in order of impact:
 | `manifest_preload_enabled` | `false` | `true` |
 | `manifest_preload_pattern` | `^(epoch\|sid)$` | `^(obs\|snr\|epoch\|sid)$` |
 | `manifest_preload_max_refs` | `10_000` | `50_000` |
-| `chunk_strategies.gnss_store.epoch` | `34560` | profile before changing |
+| `chunk_strategies.rinex_store.epoch` | `17280` | profile before changing |
 | `compression_level` | `3` | `3` (no change) |
 | `inline_chunk_threshold_bytes` | `512` | `512` (no change) |
 | `manifest_splitting_enabled` | `true` | `true` (no change) |

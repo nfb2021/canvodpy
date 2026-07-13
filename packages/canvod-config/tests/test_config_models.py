@@ -473,7 +473,7 @@ class TestCompressionConfig:
 class TestChunkStrategy:
     def test_defaults(self):
         cs = ChunkStrategy()
-        assert cs.epoch == 34560
+        assert cs.epoch == 17280
         assert cs.sid == -1
 
     def test_epoch_must_be_positive(self):

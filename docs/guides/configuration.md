@@ -252,11 +252,11 @@ processing:
     compression_algorithm: zstd
     inline_chunk_threshold_bytes: 512
     chunk_strategies:
-      gnss_store:
-        epoch: 34560
+      rinex_store:
+        epoch: 17280  # 24h at 5s sampling; override to match your site's rate
         sid: -1
       vod_store:
-        epoch: 34560
+        epoch: 17280
         sid: -1
 
   storage:

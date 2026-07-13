@@ -33,7 +33,7 @@ class ChunkStrategy(_StrictModel):
     """
 
     epoch: int = Field(
-        34560,
+        17280,
         ge=1,
         description="Chunk size for epoch dimension",
     )
@@ -73,8 +73,12 @@ class IcechunkConfig(_StrictModel):
     )
     chunk_strategies: dict[str, ChunkStrategy] = Field(
         default_factory=lambda: {
-            "gnss_store": ChunkStrategy(epoch=34560, sid=-1),
-            "vod_store": ChunkStrategy(epoch=34560, sid=-1),
+            # 34560 accidentally represented 2 days of epochs — append_to_group()
+            # commits once per day, so chunks should match one day exactly.
+            # 17280 = 86400 s/day / 5 s sampling interval (the reference site's
+            # actual cadence). Sites sampling at a different rate must override.
+            "rinex_store": ChunkStrategy(epoch=17280, sid=-1),
+            "vod_store": ChunkStrategy(epoch=17280, sid=-1),
         },
     )
     manifest_preload_enabled: bool = Field(
@@ -100,10 +104,10 @@ class IcechunkConfig(_StrictModel):
         description="Enable manifest splitting for stores with large arrays (recommended)",
     )
     manifest_splitting_epoch_range: int = Field(
-        34560,
+        17280,
         ge=1,
         description=(
             "Split arrays along the epoch dimension every N indices. "
-            "Set to match your epoch chunk size (e.g. 34560 for 24 h at 2.5 s)."
+            "Set to match your epoch chunk size (e.g. 17280 for 24 h at 5 s)."
         ),
     )

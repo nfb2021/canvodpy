@@ -50,7 +50,7 @@ def _make_analysis_cfg(canopy: str = "canopy_01", reference: str = "reference_01
 class TestVodComputerInit:
     def test_default_rechunk(self):
         vc = VodComputer(_make_site())
-        assert vc._rechunk == {"epoch": 34560, "sid": -1}
+        assert vc._rechunk == {"epoch": 17280, "sid": -1}
 
     def test_custom_rechunk(self):
         vc = VodComputer(_make_site(), rechunk={"epoch": 1000, "sid": -1})
