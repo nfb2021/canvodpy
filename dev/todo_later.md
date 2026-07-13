@@ -430,7 +430,47 @@ No implementation needed until object storage is a confirmed target.
 
 ---
 
-## 8. VOD hemisphere visualization — integration plan
+## 8. ~~VOD hemisphere visualization — integration plan~~ SUPERSEDED (2026-07-13)
+
+**Superseded, not executed as written.** The plan below (§8.1–§8.5) proposed
+promoting the prototype by splitting it across the monorepo: `mesh.py` into
+`canvod-grids`, `vodgrid.py` into `canvod-store`, rollup math into a new
+`canvod-streamstats`, and a new `canvod-serve` package for the FastAPI/xpublish
+layer. That's not what happened. Real work since June instead consolidated
+everything into one standalone package, **`canvod-streamviz`**
+(`/Users/work/Developer/GNSS/canvod-streamviz/`, private repo, not in this
+monorepo or in `canvodpy-extensions` — confirmed with the user 2026-07-13 it
+stays standalone for now) — `mesh.py`, `rollup.py`, `ingest.py`, `catalog.py`,
+`pipeline.py`, `serve/{app,router,cache,zarr_plugin}.py`. Its `serve/`
+subpackage fills the role §8.2 wanted a new `canvod-serve` package for — no
+separate package needed. `canvod-streamstats` also already exists as its own
+mature standalone repo (full accumulator library, ops layer, near-complete
+test coverage) — nothing to build there either, just an editable dependency.
+
+**Phase 1 of `canvod-streamviz`'s own `TODO.md` is now done (2026-07-13):**
+bumped it to Python 3.14 (canvod-grids/store/vod all require >=3.14, its venv
+was 3.13.2), installed canvod-grids/store/vod/streamstats editable, fixed 3
+pre-existing test bugs (missing `mode="r"` on a raw `zarr.open_group` call,
+`mesh_endpoint`'s ETag headers being dropped because it returned a fresh
+`Response` instead of reusing the injected one, a `ThreadPoolExecutor.map`
+arg-count bug in a test), and verified end-to-end (not just by reading code)
+that `ingest.py`'s `TauOmegaZerothOrder` usage and `catalog.py`'s Icechunk v2
+API usage both still match current canvod-vod/canvod-store — no drift found.
+Also found the zarr HTTP v3 plugin (`serve/zarr_plugin.py`), which its own
+TODO.md called "a skeleton" returning 404s, was in fact already a complete,
+working implementation — added 6 tests proving it (root/group/array
+`zarr.json`, chunk bytes, 404 cases) since it had zero test coverage before.
+41 → 47 tests, all passing. Remaining `canvod-streamviz` work (hour-level
+rollup wiring for Phase 4, Phase 2/3 object storage + portal work) tracked in
+that repo's own `TODO.md`, not here.
+
+**`prototypes/vod_serving/` in this repo (canvodpy-perf) is now a stale
+duplicate** — the original June prototype bundle (committed via `8f334938`),
+superseded by `canvod-streamviz`. Not deleted yet; a decision to remove it
+is still open.
+
+<details>
+<summary>Original plan (2026-07-04), kept for history — not executed as written</summary>
 
 **Status (2026-07-04):** Prototype validated end-to-end (204M obs, selftest + golden scan pass) but lives entirely in an untracked scratch directory outside the repo. Zero provenance. Promote before it rots. Fable architecture review commissioned and plan compiled below.
 
@@ -520,6 +560,8 @@ class RollupConfig(BaseModel):
 - Same icechunk repo as RINEX store, or separate per-site repo? Recommend **separate** (RINEX dedup guardrails assume (epoch, sid) dims, incompatible with (edge, cell) rollup groups).
 - Notebooks directory exact path — verify via `just notebooks` recipe.
 - Should `canvod-serve` selftest run in CI (needs fixture store) or as a manual `just` target?
+
+</details>
 
 ---
 
@@ -1653,3 +1695,57 @@ before it's lost. Two related but separate threads to look at together:
 
 **Action:** no decision made yet — revisit both together next time logging or
 perf instrumentation comes up, rather than as two separate one-off fixes.
+
+---
+
+## 24. Adapter to feed canvodpy data back into gnssvod (Humphrey et al.)
+
+**Flagged 2026-07-13** — not investigated yet, just capturing the intent.
+
+`canvod-audit` already has one side of this bridge: Tier 3
+(`audit_vs_gnssvod` in `canvod.audit.runners`) compares canvodpy's VOD output
+*against* gnssvod as ground truth, using `RinexTrimmer` to feed both tools the
+same trimmed RINEX file (one code per band, to avoid SID vs PRN ambiguity —
+canvodpy uses SID like `G01|L1|C`, gnssvod uses PRN like `G01`). See the
+`canvod-audit Package` memory entry for the full comparison pipeline and the
+fillna-merge-order finding (`gnssvod_merge_codes()`).
+
+What's not built: the reverse direction — an adapter that takes canvodpy's
+*own* processed data (Icechunk-stored observables/VOD, not just a trimmed raw
+RINEX file) and reshapes/exports it into whatever input format gnssvod's own
+processing functions expect, so gnssvod can be run directly on canvodpy-native
+data rather than only being fed the same raw RINEX file in parallel. Check
+what `canvod-audit`'s existing trimming/comparison scaffolding
+(`packages/canvod-audit/`) can be reused or extended for this before designing
+anything new.
+
+**Action:** no decision made yet on scope (one-off script vs. a real adapter
+module) or exact target format gnssvod expects — revisit when this becomes a
+real need.
+
+---
+
+## 25. Prepare the first real (non-alpha/beta) canvodpy release
+
+**Flagged 2026-07-13** (added from a side-response with no tool access — user
+asked for this to be captured for the main session, not investigated yet).
+
+Treat this as a deliberate "first stable" milestone, not another incremental
+version bump. Needs:
+
+- **Version scheme decision**: jump to `1.0.0`, or keep incrementing `0.x`?
+  No decision made yet.
+- **PyPI publishing checklist**: confirm requirements are actually met before
+  publishing. Directly ties into the already-known gap that PyPI's published
+  `canvodpy==0.3.0` predates the `[project.scripts]` CLI entry point (root
+  cause: `a88fc381` matches the PyPI upload date; `ea82a886`, dated later,
+  added the entry point) — a straight republish of the current `0.3.0` isn't
+  enough, this needs a real version bump.
+- **FAIR compliance loose ends**: the deferred PyPI-registry badge and
+  OpenSSF Best Practices registration from the FAIR compliance work (see
+  `memory/fair_compliance.md`) — both blocked on/relevant to an actual
+  release existing.
+
+**Action:** no decision made yet on version scheme or exact release
+checklist — revisit as a deliberate milestone, not folded into the ongoing
+incremental work.
