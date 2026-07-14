@@ -6,6 +6,7 @@ on the configuration models. No YAML files or filesystem config required.
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import pytest
@@ -492,8 +493,13 @@ class TestChunkStrategy:
 
 
 class TestSitesConfig:
-    def test_empty_sites_warns(self):
-        with pytest.warns(UserWarning, match="No research sites defined"):
+    def test_empty_sites_does_not_warn(self):
+        # Config loading is a foundation-layer concern used by every
+        # canvod-* package; most never touch sites at all, so an empty
+        # sites dict must not warn (see GnssResearchSite.__init__ for the
+        # actual actionable error, raised when a site is looked up by name).
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
             SitesConfig(sites={})
 
     def test_valid_site(self):

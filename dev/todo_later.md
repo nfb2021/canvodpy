@@ -1828,6 +1828,20 @@ one layer down the dependency graph.
 3. Translate into a GitHub issue alongside §21 — same "found while doing
    something else, needs its own decision" bucket.
 
+**Part 1 follow-up, RESOLVED (2026-07-14):** the `SitesConfig.validate_at_least_one_site`
+`UserWarning` mentioned above as "still exists in current code" was itself
+the wrong design, not just stale wording. Per owner direction: config
+loading is a foundation-layer concern used by *every* `canvod-*` package,
+most of which never touch `sites:` at all — warning about "no sites
+configured" at config-*load* time is noise for all of them, since the
+actionable error already exists exactly where it should: `GnssResearchSite.__init__`
+(`canvod-store/manager.py`) raises a `KeyError` listing available sites the
+moment someone actually looks up a site by name. Removed the validator
+entirely (`packages/canvod-config/src/canvod/config/models/sites.py`) — an
+empty `sites: {}` is now a silently valid `SitesConfig`. Updated
+`test_config_models.py`'s `test_empty_sites_warns` → `test_empty_sites_does_not_warn`
+(asserts via `warnings.simplefilter("error")` that construction is silent).
+
 ## 23. ~~Revisit logging + a simplified performance tracker~~ — RESOLVED (2026-07-14)
 
 **Flagged 2026-07-12**, implemented 2026-07-14. Reframed mid-design by the

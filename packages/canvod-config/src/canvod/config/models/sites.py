@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, model_validator
 
 from .base import _StrictModel
 
@@ -251,34 +251,15 @@ class SiteConfig(_StrictModel):
 
 
 class SitesConfig(_StrictModel):
-    """All research sites."""
+    """All research sites.
+
+    An empty ``sites: {}`` is a valid, unwarned state: config loading is a
+    foundation-layer concern used by every ``canvod-*`` package, most of
+    which never touch sites at all (see ``CLAUDE.md``'s "package-standalone
+    usage" goal). The actionable error for a *missing* site belongs at the
+    point where a site is actually looked up by name --
+    ``GnssResearchSite.__init__`` (canvod-store/manager.py) already raises
+    a ``KeyError`` listing available sites there.
+    """
 
     sites: dict[str, SiteConfig]
-
-    @field_validator("sites")
-    @classmethod
-    def validate_at_least_one_site(
-        cls,
-        v: dict[str, SiteConfig],
-    ) -> dict[str, SiteConfig]:
-        """Warn if no sites are defined.
-
-        Parameters
-        ----------
-        v : dict[str, SiteConfig]
-            Sites dictionary to validate.
-
-        Returns
-        -------
-        dict[str, SiteConfig]
-            Validated sites dictionary.
-        """
-        if not v:
-            import warnings
-
-            warnings.warn(
-                "No research sites defined in sites.yaml. Run: just config-init",
-                UserWarning,
-                stacklevel=2,
-            )
-        return v
