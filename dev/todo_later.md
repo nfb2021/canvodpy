@@ -2330,3 +2330,33 @@ exists, should we use it more" question.
 **Action:** not decided, not investigated. Revisit alongside or after the
 §(pending) canvod-audit → canvodpy-extensions migration, since both touch
 the same file (`vs_gnssvod.py`) and it's wasteful to refactor it twice.
+
+---
+
+## 31. Zenodo push for canvodpy-extensions' first release (2026-07-14)
+
+**Flagged 2026-07-14** — not started, just capturing the intent so it isn't
+forgotten once a release actually happens.
+
+canvodpy-extensions has now settled on staying **GitHub-only, no PyPI**
+(§ decided 2026-07-14 — `publish_pypi.yml`/`publish_testpypi.yml` deleted,
+all install docs point at git-subdirectory sources). That decision is
+independent of archival/citability: canvodpy itself already does a Zenodo
+deposit per release (`CITATION.cff`'s `doi: 10.5281/zenodo.18496233`,
+same pattern used for `canvodpy-test-data`) purely for a citable DOI and
+long-term archival — nothing to do with package distribution. The owner
+wants the same treatment for canvodpy-extensions once its first real
+release (`v*.*.*` tag via `just release`) happens.
+
+**Not fixed yet — nothing to build until a release exists:**
+1. Set up a Zenodo GitHub integration (or manual deposit) for
+   `nfb2021/canvodpy-extensions`, mirroring however canvodpy's own Zenodo
+   connection was configured.
+2. Add the resulting concept DOI to `CITATION.cff`'s `doi` field (file
+   already exists as of PR #4 — `docs/add-citation-cff` — just missing a
+   DOI since nothing's been archived yet).
+3. Consider whether the Zenodo badge should also go in `README.md`
+   (canvodpy has one) once a DOI exists.
+
+**Action:** fully deferred — no release has been cut yet, so there is
+nothing to archive. Revisit right after the first `v*.*.*` tag is pushed.
