@@ -346,7 +346,7 @@ def apply_rse_style() -> dict[str, Any]:
     import matplotlib.pyplot as plt
 
     params = _rse_rcparams()
-    plt.rcParams.update(params)
+    plt.rcParams.update(params)  # ty: ignore[no-matching-overload]
     return params
 
 
@@ -362,7 +362,7 @@ def rse_context():
     """
     import matplotlib.pyplot as plt
 
-    return plt.rc_context(_rse_rcparams())
+    return plt.rc_context(_rse_rcparams())  # ty: ignore[invalid-argument-type]
 
 
 def rse_style(func):
@@ -375,7 +375,7 @@ def rse_style(func):
     def wrapper(*args, **kwargs):
         import matplotlib.pyplot as plt
 
-        with plt.rc_context(_rse_rcparams()):
+        with plt.rc_context(_rse_rcparams()):  # ty: ignore[invalid-argument-type]
             fig, axes = func(*args, **kwargs)
             fix_figure_for_dark_mode(fig)
             return fig, axes

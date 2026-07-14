@@ -507,7 +507,7 @@ def run(
         ),
     ] = None,
     vod_calculator: Annotated[
-        VodCalculatorChoice,
+        VodCalculatorChoice,  # ty: ignore[invalid-type-form]
         typer.Option("--vod-calculator", help="VOD calculator to use."),
     ] = VodCalculatorChoice["tau_omega"],
 ) -> None:

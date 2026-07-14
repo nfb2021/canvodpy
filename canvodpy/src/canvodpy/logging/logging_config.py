@@ -284,8 +284,8 @@ def _install_excepthook(logger: structlog.BoundLogger) -> None:
                 pass
         default_hook(exc_type, exc_value, exc_tb)
 
-    _excepthook._is_canvodpy_excepthook = True
-    _excepthook._logger_holder = logger_holder
+    _excepthook._is_canvodpy_excepthook = True  # ty: ignore[unresolved-attribute]
+    _excepthook._logger_holder = logger_holder  # ty: ignore[unresolved-attribute]
     sys.excepthook = _excepthook
 
 

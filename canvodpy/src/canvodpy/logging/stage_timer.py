@@ -90,7 +90,7 @@ def timed_stage(stage: str, **context: Any) -> Callable[[_F], _F]:
             with stage_timer(stage, **context):
                 return func(*args, **kwargs)
 
-        return wrapper  # type: ignore[return-value]
+        return wrapper  # ty: ignore[invalid-return-type]
 
     return decorator
 
