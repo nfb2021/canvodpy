@@ -100,6 +100,27 @@ just check-format   # ruff formatting only
 | **ty** | Type checking (replaces mypy) |
 | **pytest** | Testing with coverage |
 
+### Type checking (ty)
+
+`ty check` must pass with zero diagnostics — it blocks `git push` (local
+pre-push hook) and runs again in CI (`type_consistency` job). There's no
+budget or ratchet; if you introduce a diagnostic, fix it before pushing.
+
+Most real diagnostics mean the annotation is actually wrong — fix the
+annotation, not the checker. Suppress with a targeted comment only when the
+code is correct and ty's limitation is the real issue (e.g. a runtime-built
+`enum.StrEnum`, a deliberately dynamic attribute set on a function object, a
+third-party stub that's too strict for a legitimately partial dict):
+
+```python
+_excepthook._logger_holder = logger_holder  # ty: ignore[unresolved-attribute]
+```
+
+Always include the specific rule name in brackets (`uv run ty check` prints
+it in the diagnostic, e.g. `error[invalid-return-type]`) — a bare `# type:
+ignore` (mypy syntax) does not suppress ty diagnostics, since ty matches on
+its own rule codes.
+
 ---
 
 ## Logging — add it generously

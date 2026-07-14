@@ -1,13 +1,4 @@
 repos:
-  # - repo: local
-  #   hooks:
-  #     - id: ty-check-budget
-  #       name: ty check budget
-  #       entry: just check-types-budget
-  #       language: system
-  #       pass_filenames: false
-  #       stages: [pre-push]
-
   - repo: local
     hooks:
       # Use uv-managed ruff so local hooks and CI always use the same version

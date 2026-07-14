@@ -197,19 +197,19 @@ just deps-cross                          # Cross-package dependency graph
 ### What's enforced (blocks commits & PRs)
 - **Linting** (ruff) — undefined names, unused imports, actual bugs
 - **Formatting** (ruff) — auto-fixes, no cognitive load
+- **Type checking** (ty) — blocks on `git push` (local hook) and in CI
+  (`type_consistency` job); currently zero diagnostics. No budget/ratchet —
+  either it's clean or it isn't. Two files (`canvod-store/store.py`,
+  `canvod-store/grid_adapters/grid_storage.py`) have a `[[tool.ty.overrides]]`
+  block in `pyproject.toml` suppressing specific rules where third-party
+  zarr/icechunk stubs are too weak to be worth fighting.
 - **Security** — no private keys, no large files in Git
 - **Commit messages** — conventional commits for automated changelog
 
-### What's informational (tracks progress, doesn't block)
-- **Type checking** (ty) — runs in CI with `continue-on-error: true`
-- Type hints are being added progressively
-- Run `just check-types` to track full diagnostics manually
-- Focus on correctness tests (audit suite) over type bureaucracy
-
-### ty rollout phases (active)
-- **Phase 2 (noise reduction):** file-level ignore on the two worst files while refactors are pending
-- **Phase 3 (enforcement):** `just check-types-budget` is enforced in CI via `TY_MAX_DIAGNOSTICS`
-- Ratchet policy: lower the budget by ~10 diagnostics per PR until target is reached, then remove file ignores
+Run `just check-types` to run ty locally before pushing. Real diagnostics get
+fixed or given a targeted `# ty: ignore[<rule>]` with a one-line reason — see
+`docs/guides/DEVELOPMENT.md` for the convention. Focus on correctness tests
+(audit suite) over type bureaucracy when the two are in tension.
 
 ### Test code exemptions
 Tests can use `assert`, magic numbers, and intentionally weird patterns
