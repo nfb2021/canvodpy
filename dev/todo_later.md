@@ -2360,3 +2360,42 @@ release (`v*.*.*` tag via `just release`) happens.
 
 **Action:** fully deferred — no release has been cut yet, so there is
 nothing to archive. Revisit right after the first `v*.*.*` tag is pushed.
+
+---
+
+## 32. canvodpy's own README needs a pass (2026-07-14)
+
+**Flagged 2026-07-14** — not started, just capturing scope while it's fresh
+from working on canvodpy-extensions' README/CI/release cleanup.
+
+Three things, found by grepping the root `README.md`:
+
+1. **Remove/reframe the Airflow mentions.** canvodpy itself no longer ships
+   or depends on Airflow — DAG definitions live entirely in
+   `canvod-airflow` over in `canvodpy-extensions`, which is (per §26-31 work)
+   a deliberately separate, optional, GitHub-only, unreleased-to-PyPI
+   package. The core README still carries: an "Apache Airflow" badge in the
+   tooling table (line ~32), an `Airflow["🌀 canvod-airflow<br/>Airflow
+   DAGs"]` node in the architecture mermaid diagram + a
+   `Canvodpy -.optional.-> Airflow` edge (lines ~78-96), the phrase
+   "Airflow-ready stateless functions" describing the L4 API (line ~204),
+   and a line noting `canvod-airflow` "are published separately" (line
+   ~347, itself now stale — nothing is "published" anywhere, extensions
+   are GitHub-only). All of this should either go or be reframed as "this
+   is what the *optional* canvod-airflow extension provides", not
+   presented as if it's part of canvodpy's own surface.
+2. **General update pass.** Given how much has changed this session alone
+   (canvod-config split, canvod-preflight rename, L1/L2 API deprecation,
+   the logging/stage_timer redesign, the CLI becoming the recommended
+   entry point over `Site.pipeline()`), the README is likely stale in
+   more places than just the Airflow bits — worth a full re-read against
+   current `CLAUDE.md`/`docs/architecture.md`, not just a targeted fix.
+3. **Add a plain "Related repositories" section.** Right now the only
+   related-repo signal is a passing mermaid subgraph label and a
+   `git clone --recurse-submodules` comment — there's no single place that
+   plainly lists and links `canvodpy-extensions`, `canvodpy-demo`, and
+   `canvodpy-test-data` with a one-line description of what each is and
+   why it's separate. Should mirror the clarity canvodpy-extensions' own
+   README now has for its three packages.
+
+**Action:** not started. Scope confirmed via grep, not yet fixed.
