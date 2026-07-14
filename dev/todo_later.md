@@ -2292,12 +2292,12 @@ when picked up.
    interpolation strategy + config_hash on both tables) — separate from this
    implementation, no code change needed to file it.
 
-**Action:** implemented (2026-07-14) — items 1-5 done: `write_or_append_vod_group()`
+**Action:** DONE (2026-07-14) — items 1-5 implemented: `write_or_append_vod_group()`
 dedup guardrail, `{calculator}/{analysis_name}` group hierarchy, rich
 DataCite/ACDD/STAC metadata wired via `ensure_vod_store_metadata()`, new
 per-write VOD metadata ledger table, `viewer.py` model-aware rendering, and
-the `canvodpy vod` CLI subcommand. Item 7 (file the deferred GitHub issue
-for `ephemeris_source`/`config_hash` on both metadata tables) still open.
+the `canvodpy vod` CLI subcommand. Item 7 filed as
+[nfb2021/canvodpy#120](https://github.com/nfb2021/canvodpy/issues/120).
 
 ---
 
@@ -2403,7 +2403,17 @@ Three things, found by grepping the root `README.md`:
    why it's separate. Should mirror the clarity canvodpy-extensions' own
    README now has for its three packages.
 
-**Action:** not started. Scope confirmed via grep, not yet fixed.
+**Action:** PARTIALLY DONE (2026-07-14) — items 1 and 3 fixed: removed the
+Apache Airflow badge and the `Airflow` mermaid node/edge, reframed the L4
+description and the "published separately" package-layout note to
+correctly describe `canvod-airflow` as a GitHub-only optional extension
+(nothing has actually been published anywhere), and added a "Related
+repositories" section listing `canvodpy-extensions`,
+`canvodpy-demo`, and `canvodpy-test-data` with their relationship to this
+repo. Item 2 (full re-read against current `CLAUDE.md`/architecture — the
+L1/L2 quickstart examples still show the now-deprecated `process_date()`/
+`calculate_vod()`/`FluentWorkflow` surface as if current) not started —
+deliberately out of scope for a quick pass, needs its own read-through.
 
 ---
 
@@ -2439,6 +2449,10 @@ the three candidates with its own `stage_timing` event (see
 `canvodpy.logging.stage_timer`, already used elsewhere) so a future run can
 show *which* warm-up step actually took the time instead of guessing.
 
-**Action:** not investigated in depth, no fix applied yet — noted from a
-live report, plausible causes listed above from a quick grep, not confirmed
-by profiling a real run.
+**Action:** DONE (2026-07-14) — added the one-line startup message via
+`reporter.log(...)` right after `print_header` in `cli/run.py`'s per-site
+loop (before worker-pool/satellite-catalog/store-opening happens). Root
+cause still not profiled/confirmed — the optional `stage_timing`
+instrumentation for each of the three candidates (to show *which* one is
+slow) remains unimplemented; revisit if the warm-up is reported as
+consistently long rather than a one-off.

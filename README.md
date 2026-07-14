@@ -29,7 +29,7 @@ An open Python ecosystem for GNSS-Transmissometry (GNSS-T) canopy VOD retrievals
 | Toolchain                                                                                                                                                                                                                                                                                                                                                                                                                            | Scientific Stack                                                                                                                                                                                                                                                                                                                                                | Standards                                                                                                                                                                                                                           | Notebooks                                                                                  | AI                                                                                                                                           |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff) [![ty](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json)](https://github.com/astral-sh/ty)[![Just](https://img.shields.io/badge/%F0%9F%A4%96-Just-2d6a4f?labelColor=6c757d)](https://github.com/casey/just) | [![xarray](https://img.shields.io/badge/xarray-N--D%20arrays-4c78a8)](https://xarray.dev/) [![Dask](https://img.shields.io/badge/Dask-Parallel-FDA061?logo=dask&logoColor=white)](https://www.dask.org/) [![Polars](https://img.shields.io/badge/Polars-Tabular-CD792C?logo=polars&logoColor=white)](https://pola.rs/)                                          | [![DataCite 4.5](https://img.shields.io/badge/DataCite-4.5-3F51B5)](https://schema.datacite.org/) [![ACDD 1.3](https://img.shields.io/badge/ACDD-1.3-4CAF50)](https://wiki.esipfed.org/Attribute_Convention_for_Data_Discovery_1-3) | [![marimo](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy) | [![Claude Code](https://img.shields.io/badge/Claude_Code-AI_Assisted-cc785c?logo=anthropic&logoColor=white)](https://claude.com/claude-code) |
-| [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://conventionalcommits.org)                                                                                                                                                                                                                                                             | [![Apache Airflow](https://img.shields.io/badge/Apache%20Airflow-017CEE?logo=apacheairflow&logoColor=white)](https://airflow.apache.org/) [![Pydantic v2](https://img.shields.io/badge/Pydantic-v2-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/) [![Icechunk](https://img.shields.io/badge/Icechunk-Storage-00A3E0)](https://icechunk.io/) | [![STAC 1.1](https://img.shields.io/badge/STAC-1.1-FF9800)](https://stacspec.org/) [![REUSE](https://img.shields.io/badge/REUSE-3.3-blue)](https://reuse.software/)                                                                 |                                                                                            |                                                                                                                                              |
+| [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://conventionalcommits.org)                                                                                                                                                                                                                                                             | [![Pydantic v2](https://img.shields.io/badge/Pydantic-v2-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/) [![Icechunk](https://img.shields.io/badge/Icechunk-Storage-00A3E0)](https://icechunk.io/) | [![STAC 1.1](https://img.shields.io/badge/STAC-1.1-FF9800)](https://stacspec.org/) [![REUSE](https://img.shields.io/badge/REUSE-3.3-blue)](https://reuse.software/)                                                                 |                                                                                            |                                                                                                                                              |
 
 ---
 
@@ -77,7 +77,6 @@ graph TB
 
     subgraph ExtPkg["Optional Extensions (canvodpy-extensions repo)"]
         Filemap["🏷️ canvod-filemap<br/>Non-canonical Filename Mapping"]
-        Airflow["🌀 canvod-airflow<br/>Airflow DAGs"]
     end
 
     Config --> Canvodpy
@@ -93,7 +92,6 @@ graph TB
     Canvodpy --> Preflight
     Canvodpy --> Audit
     Canvodpy -.optional.-> Filemap
-    Canvodpy -.optional.-> Airflow
 
     Aux --> Readers
     Store --> Grids
@@ -201,7 +199,8 @@ process_date("ExampleSite", "2025001")
 vod = calculate_vod("ExampleSite", "canopy_01", "reference_01", "2025001")
 ```
 
-Four API levels are available — from one-liners to Airflow-ready stateless functions:
+Four API levels are available — from one-liners to composable stateless functions
+(the latter is what the optional `canvod-airflow` extension builds its DAGs on):
 
 ```mermaid
 flowchart TD
@@ -344,11 +343,23 @@ canvodpy/                       # Monorepo root
 ```
 
 Two optional packages — `canvod-filemap` (non-canonical filename mapping)
-and `canvod-airflow` (Airflow DAG definitions) — are published separately in
+and `canvod-airflow` (Airflow DAG definitions) — are developed separately in
 [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions), not
-in this repo's `packages/`.
+in this repo's `packages/`. `canvod-filemap` installs as an extra
+(`uv sync --extra filemap`); `canvod-airflow` is GitHub-only today (not yet
+published to PyPI).
 
 </details>
+
+## Related repositories
+
+canvodpy spans a few separate repositories, each with a distinct purpose:
+
+| Repository | Purpose | Relationship to this repo |
+| --- | --- | --- |
+| [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions) | Optional, GitHub-only packages: `canvod-filemap` (non-canonical filename mapping) and `canvod-airflow` (Airflow DAG definitions) | Independent repo, installed as an optional extra when needed — not a submodule |
+| [canvodpy-demo](https://github.com/nfb2021/canvodpy-demo) | marimo notebook walkthroughs of the pipeline | Git submodule at `demo/` |
+| [canvodpy-test-data](https://github.com/nfb2021/canvodpy-test-data) | Real RINEX/SBF fixtures used by the test suite | Git submodule at `packages/canvod-readers/tests/test_data/` |
 
 ## AI-Assisted Development
 
