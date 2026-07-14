@@ -1809,29 +1809,83 @@ one layer down the dependency graph.
 3. Translate into a GitHub issue alongside §21 — same "found while doing
    something else, needs its own decision" bucket.
 
-## 23. Revisit logging + a simplified performance tracker
+## 23. ~~Revisit logging + a simplified performance tracker~~ — RESOLVED (2026-07-14)
 
-**Flagged 2026-07-12** — not investigated yet, just capturing the intent
-before it's lost. Two related but separate threads to look at together:
+**Flagged 2026-07-12**, implemented 2026-07-14. Reframed mid-design by the
+owner: this isn't just a performance-analysis convenience — canvodpy runs
+unattended on remote machines, so the logs written during a run are the
+*only* forensic evidence that will ever exist. That drove the final design
+past what was originally scoped.
 
-- **Logging.** §18 fixed the multi-process log-rotation race (per-process
-  filenames), but that was a structural fix for a specific race, not a full
-  review of the logging setup as it now stands — worth a fresh look at
-  `logging_config.py` as a whole (handler count/purpose, the `full*.json`
-  fragmentation-per-worker-PID trade-off accepted in §18, whether the
-  now-suffixed filenames need better run-level aggregation tooling).
-- **Performance tracker.** §21 found `canvod-utils/diagnostics/` (including
-  `timing.py`/`memory.py`) to be a fully dead chain with zero real callers,
-  superseded by the live OpenTelemetry-based `canvodpy/utils/telemetry.py`.
-  Before deleting that dead chain outright (§21's open decision), worth
-  deciding whether OpenTelemetry is actually the right weight for day-to-day
-  local perf checks, or whether a much simpler, purpose-built performance
-  tracker (closer to what the dead `timing.py`/`memory.py` were going for,
-  minus the unused Airflow/StatsD/SQLite machinery) is what's actually wanted
-  — rather than just re-wiring the old dead code back in as-is.
+**Shipped:**
+- **Two-track logging.** `machine/full.json` renamed to `machine/agent.json`
+  — always-on DEBUG, deliberately never gated behind a flag (can't
+  retroactively enable debug logging after a remote failure). A `run_id`
+  (`{site}-{YYYYMMDD-HHMMSS}`, one per site per CLI invocation) is now
+  auto-injected into every log record via a structlog processor
+  (`logging/run_context.py` + `_add_run_id` in `logging_config.py`), and
+  propagated into `ProcessPoolExecutor`/loky worker processes via
+  `_worker_init_with_run_id` (contextvars don't cross process boundaries).
+  Also appended to Icechunk commit messages (`store.py`'s new
+  `_with_run_id()` helper) so a run correlates across logs *and* the data
+  it wrote.
+- **Crash handling (the actual gap this closed).** Found there was
+  previously **no crash handler at all** — an uncaught exception in
+  `cli/run.py` just propagated to Python's default traceback, silently lost
+  on an unattended run if stderr wasn't redirected. Fixed with two layers:
+  a process-wide `sys.excepthook` (idempotent — installing it more than
+  once, e.g. in tests, no longer grows a chain that re-logs the same
+  exception per wrap) logging `uncaught_exception` with full traceback +
+  run_id; and a top-level try/except around each site's processing loop in
+  `cli/run.py` logging `run_crashed` with last-good-date/stage before
+  re-raising. Worker-process failures (`ProcessPoolExecutor`) now log
+  `worker_task_failed`/`worker_pool_broken` (the latter for
+  `BrokenProcessPool` — OOM/segfault, a distinct failure class) instead of
+  propagating silently.
+- **Performance tracker: `stage_timer()`** (`logging/stage_timer.py`) —
+  deliberately not full telemetry (no spans/collectors/exporters). One
+  canonical `stage_timing` event replaces the OpenTelemetry-based
+  `canvodpy/utils/telemetry.py` (deleted — confirmed `opentelemetry` was
+  never actually installed anywhere in the repo, so every span was a
+  silent no-op; only 2 of 6 tracer functions had real callers, one of which
+  — `store.py`'s `trace_icechunk_write` — was itself an upward
+  canvod-store→canvodpy layering violation, now fixed as a side effect).
+  `emit_run_summary()` rolls up accumulated stage timings into one
+  `run_summary` event, called both on success and from the crash path (so a
+  partial summary exists even for a run that later died). The per-file
+  RINEX pipeline additionally emits `reading`/`validating`/`augmenting`/
+  `writing` sub-stage timings tagged with `receiver`/`date_key`, purpose-built
+  for the dashboard below.
+  - **Correction made mid-implementation:** initially over-tightened
+    `PerformanceFilter` to match only the new `stage_timing` event name,
+    which would have silently dropped ~15 pre-existing, deliberately
+    detailed, well-named timing events already using the correct
+    `duration_seconds` field (e.g. `ephemeris_interpolation_complete` in
+    `processor.py`) — those were never actually "ragged", just not using
+    the new event name. Fixed by broadening the filter to match either
+    shape. Two truly ragged fields (`processing_time_min`,
+    `hampel_processing_time_s` in `canvod-grids`) turned out on inspection
+    to be **dataset attrs, not log fields at all** — false positives from
+    an earlier naive text grep; left untouched.
+- **Live performance dashboard**: `canvodpy dashboard` (`--edit`/`--logs-dir`)
+  launches a marimo notebook (`cli/dashboards/performance.py`) reading
+  `machine/performance*.json` directly (no new data format) — a per-stage
+  breakdown for the most recent iteration, and elapsed time per receiver ×
+  day, with a manual refresh button. Works during a live run or after.
+- **New test suite**: `canvodpy/tests/test_logging.py` (16 tests, all
+  passing) covering run_id injection, the excepthook safety net (including
+  the idempotency fix), `PerformanceFilter` matching both event shapes, and
+  `stage_timer`/`emit_run_summary`/`reset_run_stats`. Full regression:
+  1601 passed, 0 failed (`uv run pytest -m "not integration"`).
+- **Docs**: `docs/guides/diagnostics.md` fully rewritten (was describing the
+  deleted `canvod.utils.diagnostics` module from §21); new "Logging — add it
+  generously" section in `docs/guides/DEVELOPMENT.md` teaching the
+  `canvodpy.logging.get_logger` vs. bare `structlog.get_logger` distinction
+  and when to reach for `stage_timer()`.
 
-**Action:** no decision made yet — revisit both together next time logging or
-perf instrumentation comes up, rather than as two separate one-off fixes.
+**Explicitly out of scope, not solved**: shipping/collecting logs off the
+remote machine (no S3 sync, no systemd journal forwarding) — no such
+tooling exists anywhere in this monorepo; flagged as a known follow-up.
 
 ---
 
@@ -1957,13 +2011,21 @@ their GitHub-facing infrastructure in line with canvodpy, minus CI workflows
   pre-commit's ruff-check hook linted a WIP file and failed on an unrelated
   unused-variable error. Pathspec-scoped commit fixed it cleanly.
 
-**Still open:** `pyproject.toml`'s `[tool.commitizen]` section needs the
-same `tag_format`/changelog/`customize.scopes` additions streamviz got —
-the edit is made but sits **unstaged**, on top of the pre-existing staged
-WIP in that same file. Can't be committed separately without either
-resolving the WIP first or accepting it gets folded into whatever commit
-that WIP eventually becomes. Not blocking; just needs the WIP sorted out
-first (on `canvod-streamstats`'s own timeline, not tracked further here).
+**Resolved 2026-07-13:** the WIP (moving `integration/canvod-ops-statistics/` +
+`integration/canvod-ops-tests/` into `src/canvod/streamstats/ops/` + `tests/`
+directly, plus dag wiring updates and a new `welford_states.py` vectorized
+per-state accumulator module) was committed whole, together with the
+`[tool.commitizen]` additions, as `0b47f5d` on `canvod-streamstats` main.
+Pre-commit's ruff hook caught 3 real `F841` findings in the newly-added
+files, fixed before committing: a dead `sumsq` bincount in
+`welford_states.batch_states` (superseded by the deviations-from-mean `M2`
+pass), a dead `m` in `test_states_to_moments_skewness`, and a missing
+assertion in `test_batch_matches_sequential` (docstring claimed to check
+sequential-vs-batch GK-sketch quantile agreement but never actually asserted
+it — now does). Separately noted, not fixed: `tests/conftest.py`'s new ops
+fixtures import `pandas`/`xarray`, neither of which is a declared dependency
+anywhere in `pyproject.toml` — blocks running the test suite in a fresh env;
+out of scope for this commit, left as a follow-up.
 
 ---
 
