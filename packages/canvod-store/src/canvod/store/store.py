@@ -13,7 +13,8 @@ import polars as pl
 import xarray as xr
 import zarr
 from canvod.utils.tools import get_version_from_pyproject
-from canvodpy.logging import get_logger
+from canvodpy.logging import get_logger, stage_timer
+from canvodpy.logging.run_context import get_run_id
 from icechunk.xarray import to_icechunk
 from zarr.dtype import VariableLengthUTF8
 
@@ -25,6 +26,20 @@ icechunk.set_logs_filter("icechunk=error")
 
 if TYPE_CHECKING:
     from icechunk import AncestryGraph
+
+
+def _with_run_id(commit_message: str) -> str:
+    """Append the current run_id (if any) to a commit message.
+
+    Lets a human or an agent correlate an Icechunk commit with the run
+    that produced it, by grepping the same run_id across the commit log
+    and the agent-diagnostic log (see ``canvodpy.logging.run_context``).
+    Append-only: does not change caller-provided commit message content.
+    """
+    run_id = get_run_id()
+    if run_id is None:
+        return commit_message
+    return f"{commit_message} (run={run_id})"
 
 
 @add_rich_display_to_store
@@ -800,18 +815,16 @@ class MyIcechunkStore:
         dataset_size_mb = dataset.nbytes / 1024 / 1024
         num_variables = len(dataset.data_vars)
 
-        # Write to Icechunk with OpenTelemetry tracing
-        try:
-            from canvodpy.utils.telemetry import trace_icechunk_write
-
-            with trace_icechunk_write(
-                group_name=group_name,
-                dataset_size_mb=dataset_size_mb,
-                num_variables=num_variables,
-            ):
-                to_icechunk(dataset, session, group=group_name, mode=mode)
-        except ImportError:
-            # Fallback if telemetry not available
+        # Write to Icechunk, timed via the lightweight stage_timer (see
+        # canvodpy/logging/stage_timer.py) -- replaces the removed
+        # OpenTelemetry-based telemetry.py, which required an optional
+        # dependency that was never actually installed.
+        with stage_timer(
+            "icechunk.write",
+            group=group_name,
+            size_mb=round(dataset_size_mb, 2),
+            num_variables=num_variables,
+        ):
             to_icechunk(dataset, session, group=group_name, mode=mode)
 
         self._logger.info(f"Wrote dataset to group '{group_name}' (mode={mode})")
@@ -855,7 +868,7 @@ class MyIcechunkStore:
                 commit_msg=commit_message,
                 dataset_attrs=dataset.attrs,
             )
-            session.commit(commit_message)
+            session.commit(_with_run_id(commit_message))
 
         self._logger.info(
             f"Created group '{group_name}' with {len(dataset.epoch)} epochs, "
@@ -1055,7 +1068,7 @@ class MyIcechunkStore:
                 commit_msg=commit_message,
                 dataset_attrs=dataset.attrs,
             )
-            session.commit(commit_message)
+            session.commit(_with_run_id(commit_message))
 
     def get_group_info(self, group_name: str, branch: str = "main") -> dict[str, Any]:
         """
@@ -1150,7 +1163,9 @@ class MyIcechunkStore:
         ds = self._cleanse_dataset_attrs(ds)
         with self.writable_session(branch) as session:
             to_icechunk(ds, session, group=path, mode="w")
-            return session.commit(f"[v{version}] metadata/{name} for {group_name}")
+            return session.commit(
+                _with_run_id(f"[v{version}] metadata/{name} for {group_name}")
+            )
 
     def append_metadata_datasets(
         self,
@@ -1200,7 +1215,10 @@ class MyIcechunkStore:
                 total_epochs += ds.sizes.get("epoch", 0)
 
             return session.commit(
-                f"[v{version}] metadata/{name} for {group_name} ({total_epochs} epochs)"
+                _with_run_id(
+                    f"[v{version}] metadata/{name} for {group_name} "
+                    f"({total_epochs} epochs)"
+                )
             )
 
     def read_metadata_dataset(
@@ -1428,7 +1446,7 @@ class MyIcechunkStore:
                 commit_msg=commit_message,
                 dataset_attrs=dataset.attrs,
             )
-            session.commit(commit_message)
+            session.commit(_with_run_id(commit_message))
 
         if action == "append":
             self._logger.info(
@@ -1520,7 +1538,7 @@ class MyIcechunkStore:
                 to_icechunk(dataset, session, group=group_name, append_dim=append_dim)
                 if commit_message is None:
                     commit_message = f"Appended to group '{group_name}'"
-                session.commit(commit_message)
+                session.commit(_with_run_id(commit_message))
             self._logger.info(
                 f"Appended {len(dataset.epoch)} epochs to group '{group_name}'"
             )
@@ -1529,7 +1547,7 @@ class MyIcechunkStore:
                 to_icechunk(dataset, session, group=group_name, mode="w")
                 if commit_message is None:
                     commit_message = f"Created group '{group_name}'"
-                session.commit(commit_message)
+                session.commit(_with_run_id(commit_message))
             self._logger.info(
                 f"Created group '{group_name}' with {len(dataset.epoch)} epochs"
             )
@@ -1767,7 +1785,7 @@ class MyIcechunkStore:
         else:
             with self.writable_session() as sess:
                 _do_append(sess)
-                sess.commit(f"Bulk metadata append for {group_name}")
+                sess.commit(_with_run_id(f"Bulk metadata append for {group_name}"))
 
     def load_metadata(self, store: Any, group_name: str) -> pl.DataFrame:
         """Load metadata directly from Zarr into a Polars DataFrame.
@@ -2425,8 +2443,10 @@ class MyIcechunkStore:
                     )
 
             snapshot_id = session.commit(
-                f"Rechunked {group_name} with chunks={chunks} "
-                f"({subgroup_count} subgroups restored)"
+                _with_run_id(
+                    f"Rechunked {group_name} with chunks={chunks} "
+                    f"({subgroup_count} subgroups restored)"
+                )
             )
 
         self._logger.info(

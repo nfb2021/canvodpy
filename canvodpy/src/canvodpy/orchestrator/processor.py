@@ -7,6 +7,7 @@ import os
 import time
 from collections.abc import Generator
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 from datetime import UTC, datetime
 from datetime import time as dt_time
 from pathlib import Path
@@ -41,7 +42,8 @@ from canvod.config import load_config
 from canvod.readers import DataDirMatcher, MatchedDirs
 from canvod.store import GnssResearchSite
 from canvod.utils.tools import _worker_init, get_version_from_pyproject
-from canvodpy.logging import get_logger
+from canvodpy.logging import get_logger, stage_timer
+from canvodpy.logging.run_context import get_run_id, set_run_id
 from canvodpy.orchestrator.interpolator import (
     ClockConfig,
     ClockInterpolationStrategy,
@@ -52,6 +54,23 @@ from canvodpy.orchestrator.interpolator import (
 # ============================================================================
 # MODULE-LEVEL FUNCTIONS (Required for Dask / ProcessPoolExecutor serialization)
 # ============================================================================
+
+
+def _worker_init_with_run_id(
+    nice: int, affinity: list[int] | None, run_id: str | None
+) -> None:
+    """Initialize a worker process, then bind the current run_id.
+
+    Wraps ``canvod.utils.tools``'s ``_worker_init`` (which must stay free of
+    any canvodpy dependency) rather than modifying it directly. Contextvars
+    don't cross process boundaries, so a worker started under a
+    ``ProcessPoolExecutor``/loky pool needs ``run_id`` set explicitly at
+    startup for its log records to be correlated with the run that spawned
+    it -- see ``logging/run_context.py``.
+    """
+    _worker_init(nice, affinity)
+    if run_id is not None:
+        set_run_id(run_id)
 
 
 def _processing_progress(disable: bool = False) -> Progress:
@@ -122,22 +141,14 @@ def preprocess_with_hermite_aux(
         ``dropped_no_ephemeris``.
 
     """
+    import re
+
     _ = receiver_type
     log = get_logger(__name__).bind(
         file=str(rnx_file.name), receiver_type=receiver_type
     )
 
-    # Try to use OpenTelemetry tracing if available
-    try:
-        from canvodpy.utils.telemetry import trace_rinex_processing
-
-        tracer_context = trace_rinex_processing(file_name=rnx_file.name)
-    except ImportError:
-        from contextlib import nullcontext
-
-        tracer_context = nullcontext()
-
-    with tracer_context:
+    with stage_timer("rinex.process_file", file=str(rnx_file.name)):
         try:
             t0 = time.perf_counter()
             log.info("rinex_preprocessing_started")
@@ -305,6 +316,36 @@ def preprocess_with_hermite_aux(
                 sid_filter_seconds=round(t_sid - t_aux, 4),
                 coords_seconds=round(t_coords - t_sid, 2),
                 dataset_size=dict(ds_augmented.sizes),
+            )
+
+            # Additive stage_timing for the performance dashboard's
+            # per-iteration breakdown (reading/validating/augmenting/
+            # writing) -- reuses the checkpoints already computed above
+            # rather than restructuring this function into nested
+            # stage_timer() context managers.
+            _date_key_match = re.search(r"_R_(\d{7})\d{4}_", rnx_file.name)
+            _date_key = _date_key_match.group(1) if _date_key_match else None
+            _stage_ctx = {"receiver": receiver_type, "date_key": _date_key}
+            log.info(
+                "stage_timing",
+                stage="reading",
+                duration_seconds=round(t_rinex - t0, 2),
+                status="ok",
+                **_stage_ctx,
+            )
+            log.info(
+                "stage_timing",
+                stage="validating",
+                duration_seconds=round(t_sid - t_aux, 4),
+                status="ok",
+                **_stage_ctx,
+            )
+            log.info(
+                "stage_timing",
+                stage="augmenting",
+                duration_seconds=round((t_aux - t_rinex) + (t_coords - t_sid), 2),
+                status="ok",
+                **_stage_ctx,
             )
         except (OSError, RuntimeError, ValueError, ValidationError) as e:
             log.error(
@@ -1452,8 +1493,8 @@ class RinexDataProcessor:
         _res = self._config.processing.params.resolve_resources()
         with ProcessPoolExecutor(
             max_workers=workers,
-            initializer=_worker_init,
-            initargs=(_res["nice_priority"], _res["cpu_affinity"]),
+            initializer=_worker_init_with_run_id,
+            initargs=(_res["nice_priority"], _res["cpu_affinity"], get_run_id()),
         ) as executor:
             futures = {
                 executor.submit(
@@ -1505,6 +1546,16 @@ class RinexDataProcessor:
                                     100 * completed_count / len(futures), 1
                                 ),
                             )
+                    except BrokenProcessPool as e:
+                        failed_file = futures[fut].name
+                        failed_count += 1
+                        self._logger.error(
+                            "worker_pool_broken",
+                            file=failed_file,
+                            error=str(e),
+                            failed_count=failed_count,
+                            hint="worker process likely killed by OOM or segfault",
+                        )
                     except (OSError, RuntimeError, ValueError) as e:
                         failed_file = futures[fut].name
                         failed_count += 1
@@ -2233,6 +2284,19 @@ class RinexDataProcessor:
             finally:
                 with contextlib.suppress(Exception):
                     self.site.rinex_store.repo.delete_branch(temp_branch)
+
+        # Additive stage_timing for the performance dashboard's per-iteration
+        # breakdown (reading/validating/augmenting/writing) -- reuses the
+        # already-computed t_start rather than restructuring this function's
+        # control flow into a stage_timer() context manager.
+        log.info(
+            "stage_timing",
+            stage="writing",
+            duration_seconds=round(time.time() - t_start, 2),
+            status="ok",
+            receiver=receiver_name,
+            date_key=self.matched_data_dirs.yyyydoy.to_str(),
+        )
 
         return existing_hashes
 
@@ -3226,8 +3290,8 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
         _res2 = self._config.processing.params.resolve_resources()
         with ProcessPoolExecutor(
             max_workers=self.n_max_workers,
-            initializer=_worker_init,
-            initargs=(_res2["nice_priority"], _res2["cpu_affinity"]),
+            initializer=_worker_init_with_run_id,
+            initargs=(_res2["nice_priority"], _res2["cpu_affinity"], get_run_id()),
         ) as ex:
             futures = [
                 ex.submit(
@@ -3251,7 +3315,24 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
             with _processing_progress() as progress:
                 task = progress.add_task(desc, total=len(futures))
                 for fut in as_completed(futures):
-                    returned_fork = fut.result()
+                    try:
+                        returned_fork = fut.result()
+                    except BrokenProcessPool as e:
+                        self._logger.error(
+                            "worker_pool_broken",
+                            receiver=receiver_name,
+                            error=str(e),
+                            hint="worker process likely killed by OOM or segfault",
+                        )
+                        raise
+                    except Exception as e:
+                        self._logger.error(
+                            "worker_task_failed",
+                            receiver=receiver_name,
+                            error=str(e),
+                            exception=type(e).__name__,
+                        )
+                        raise
                     remote_sessions.append(returned_fork)
                     progress.advance(task)
 

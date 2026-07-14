@@ -1,16 +1,26 @@
 """Logging configuration for canvodpy with dual-output system.
 
 This module configures structured logging with multiple outputs:
-- Machine-readable JSON logs for analysis
-- Human-readable text logs for debugging
+- Agent-diagnostic JSON logs (machine/agent.json) -- a curated causal
+  narrative (run_id, stage transitions, degraded-path events, crashes)
+  meant to let a human or an AI agent reconstruct what happened on a
+  remote, unattended run from the log file alone.
+- Human-readable text logs for interactive debugging
 - Component-specific logs for isolation
 - Log rotation for manageable file sizes
+
+Every log record automatically carries the current ``run_id`` (see
+``run_context.py``), and any exception that would otherwise escape the
+process uncaught is captured here via ``sys.excepthook`` before the
+process dies -- since on a remote run, the log is the only evidence that
+will ever exist.
 """
 
 import logging
 import multiprocessing
 import os
 import sys
+import traceback
 from collections.abc import Callable
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
@@ -19,6 +29,7 @@ from typing import Any
 import structlog
 
 from canvod.config import load_config
+from canvodpy.logging.run_context import get_run_id
 
 
 def _process_log_suffix() -> str:
@@ -162,28 +173,26 @@ class ErrorFilter(logging.Filter):
 
 
 class PerformanceFilter(logging.Filter):
-    """Filter that only passes performance-related logs."""
+    """Filter that only passes performance-timing logs.
+
+    Matches the canonical event emitted by ``stage_timer()``
+    (``event="stage_timing"``), plus any event that carries a
+    ``duration_seconds`` field under its own specific event name -- many
+    call sites (e.g. ``ephemeris_interpolation_complete``,
+    ``aux_pipeline_create_standard_complete``) are deliberately detailed,
+    named events that already report timing alongside other business
+    context (shapes, dims, counts); they're not a "ragged" convention that
+    needs consolidating into a generic event name, just correctly-named
+    already. Only the genuinely inconsistent field names
+    (``processing_time_min``, ``hampel_processing_time_s``, etc.) needed
+    fixing, not these.
+    """
 
     def filter(self, record):
-        """Return True for logs with timing/performance data."""
-        # Check if log has performance indicators
-        if hasattr(record, "duration_sec") or hasattr(record, "duration"):
-            return True
+        """Return True for stage_timing events or any duration_seconds field."""
         if hasattr(record, "msg") and isinstance(record.msg, dict):
             msg = record.msg
-            return any(
-                key in msg
-                for key in [
-                    "duration_sec",
-                    "duration_seconds",
-                    "duration",
-                    "elapsed_time",
-                    "processing_time",
-                    "size_mb",
-                    "throughput",
-                    "throughput_files_per_sec",
-                ]
-            )
+            return msg.get("event") == "stage_timing" or "duration_seconds" in msg
         return False
 
 
@@ -219,11 +228,72 @@ class ComponentFilter(logging.Filter):
         return hasattr(record, "component") and record.component == self.component_name
 
 
+def _add_run_id(logger, name, event_dict):
+    """Inject the current run_id (if any) into every log event.
+
+    Lets every log record be correlated to a single pipeline invocation
+    (see ``run_context.py``) without any call site passing it explicitly.
+    """
+    run_id = get_run_id()
+    if run_id is not None:
+        event_dict["run_id"] = run_id
+    return event_dict
+
+
+def _install_excepthook(logger: structlog.BoundLogger) -> None:
+    """Install a process-wide safety net for uncaught exceptions.
+
+    On a remote, unattended run there is no re-run and no debugger --
+    the log file is the only forensic evidence that will ever exist. Any
+    exception that reaches here would otherwise propagate to Python's
+    default handler and be lost if stderr isn't captured, so this logs a
+    structured ``uncaught_exception`` event (with the current run_id and
+    full traceback) before chaining to the default hook, which still runs
+    so console behavior for attended sessions is unchanged.
+
+    Idempotent: ``configure_logging()`` runs once per process in normal
+    operation (module-level ``LOGGER = configure_logging()``), but can run
+    more than once (tests, or a hypothetical re-configuration). Without
+    this guard, each call would wrap the *previous* call's hook, growing an
+    ever-longer chain that re-logs the same exception once per wrap. The
+    marker lives on ``sys.excepthook`` itself (not separate module state),
+    so if something resets ``sys.excepthook`` externally between calls
+    (e.g. a test fixture), the next call correctly reinstalls rather than
+    silently no-op'ing against a hook that's no longer actually wired up.
+    """
+    if getattr(sys.excepthook, "_is_canvodpy_excepthook", False):
+        sys.excepthook._logger_holder[0] = logger  # ty: ignore[unresolved-attribute]
+        return
+
+    default_hook = sys.excepthook
+    logger_holder = [logger]
+
+    def _excepthook(exc_type, exc_value, exc_tb):
+        if not issubclass(exc_type, KeyboardInterrupt):
+            try:
+                logger_holder[0].error(
+                    "uncaught_exception",
+                    exc_type=exc_type.__name__,
+                    exc_message=str(exc_value),
+                    traceback="".join(
+                        traceback.format_exception(exc_type, exc_value, exc_tb)
+                    ),
+                )
+            except Exception:
+                # The crash handler must never itself crash the crash report.
+                pass
+        default_hook(exc_type, exc_value, exc_tb)
+
+    _excepthook._is_canvodpy_excepthook = True
+    _excepthook._logger_holder = logger_holder
+    sys.excepthook = _excepthook
+
+
 def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
     """Configure structlog with dual-output system.
 
     Creates organized logging structure:
-    - machine/full.json - Complete JSON logs for analysis
+    - machine/agent.json - Always-on agent-diagnostic causal narrative
     - human/main.log - Traditional readable logs
     - Console output for warnings/errors
 
@@ -260,6 +330,7 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
     shared_processors = [
         timestamper,
         structlog.processors.add_log_level,
+        _add_run_id,
         structlog.processors.StackInfoRenderer(),
         structlog.processors.UnicodeDecoder(),
     ]
@@ -289,24 +360,27 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
     console_handler.setFormatter(console_formatter)
 
     # ========================================================================
-    # HANDLER 2: Machine JSON - Complete structured logs with rotation
+    # HANDLER 2: Agent-diagnostic JSON - always-on DEBUG causal narrative
     # ========================================================================
-    machine_log = log_dirs["machine"] / f"full{suffix}.json"
-    machine_handler = RotatingFileHandler(
-        machine_log,
+    # Deliberately always-on (never gated behind a debug flag): on a remote
+    # unattended run there is no way to retroactively enable debug logging
+    # after a failure, so this must already be capturing everything.
+    agent_log = log_dirs["machine"] / f"agent{suffix}.json"
+    agent_handler = RotatingFileHandler(
+        agent_log,
         maxBytes=100 * 1024 * 1024,  # 100MB max per file
         backupCount=10,  # Keep 10 rotated files
         encoding="utf-8",
     )
-    machine_handler.setLevel(logging.DEBUG)  # Capture everything
-    machine_formatter = structlog.stdlib.ProcessorFormatter(
+    agent_handler.setLevel(logging.DEBUG)  # Capture everything
+    agent_formatter = structlog.stdlib.ProcessorFormatter(
         foreign_pre_chain=shared_processors,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             json_renderer,
         ],
     )
-    machine_handler.setFormatter(machine_formatter)
+    agent_handler.setFormatter(agent_formatter)
 
     # ========================================================================
     # HANDLER 3: Human-readable - Traditional logs with rotation
@@ -398,7 +472,7 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
 
     # Register all handlers
     root_logger.addHandler(console_handler)
-    root_logger.addHandler(machine_handler)
+    root_logger.addHandler(agent_handler)
     root_logger.addHandler(human_handler)
     root_logger.addHandler(error_handler)
     root_logger.addHandler(perf_handler)
@@ -419,6 +493,8 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
     logger = structlog.get_logger("gnssvodpy")
     # Ensure the underlying stdlib logger accepts all levels
     logging.getLogger("gnssvodpy").setLevel(logging.DEBUG)
+
+    _install_excepthook(logger)
 
     return logger
 

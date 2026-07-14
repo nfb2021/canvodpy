@@ -36,6 +36,10 @@ import structlog
 import typer
 import xarray as xr
 
+from canvodpy.logging import emit_run_summary
+from canvodpy.logging.run_context import reset_run_id, set_run_id
+from canvodpy.logging.stage_timer import reset_run_stats
+
 log = structlog.get_logger(__name__)
 
 
@@ -322,64 +326,106 @@ def _main_impl(args: SimpleNamespace) -> int:
 
     with make_reporter(rows) as reporter:
         for site_name, site, start, end in site_infos:
-            reporter.set_current_site(site_name, start, end)
-            reporter.print_header(site_name, start, end, config, args)
+            # One run_id per site: failures are site-scoped, and this keeps
+            # correlation with Icechunk commits (also per-site-store) clean.
+            run_id = f"{site_name}-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
+            run_id_token = set_run_id(run_id)
+            last_good_date_key: str | None = None
+            stage = "site_init"
+            site_days = 0
+            site_vod = 0
 
-            # Resolve VOD analysis pairs for this site
-            vod_analyses = site.vod_analyses if not args.no_vod else {}
+            try:
+                reporter.set_current_site(site_name, start, end)
+                reporter.print_header(site_name, start, end, config, args)
 
-            if vod_analyses:
-                reporter.log(f"  VOD analyses: {list(vod_analyses.keys())}")
+                # Resolve VOD analysis pairs for this site
+                vod_analyses = site.vod_analyses if not args.no_vod else {}
 
-            # Access the underlying GnssResearchSite for VOD store writes
-            research_site = site._site
+                if vod_analyses:
+                    reporter.log(f"  VOD analyses: {list(vod_analyses.keys())}")
 
-            def _on_group_written(group_name: str, _site_name: str = site_name) -> None:
-                reporter.advance(_site_name, group_name)
+                # Access the underlying GnssResearchSite for VOD store writes
+                research_site = site._site
 
-            with site.pipeline(
-                n_workers=args.workers,
-                days_per_batch=args.days_per_batch,
-                dry_run=False,
-                on_group_written=_on_group_written,
-            ) as pipeline:
-                gen = pipeline.process_range(start=start, end=end)
-                while True:
-                    t_pipeline = time.perf_counter()
-                    try:
-                        date_key, datasets = next(gen)
-                    except StopIteration:
-                        break
-                    dt_pipeline = time.perf_counter() - t_pipeline
+                def _on_group_written(
+                    group_name: str, _site_name: str = site_name
+                ) -> None:
+                    reporter.advance(_site_name, group_name)
 
-                    total_days += 1
-                    reporter.on_day_start(date_key)
-                    reporter.on_datasets(datasets)
+                stage = "pipeline_process"
+                with site.pipeline(
+                    n_workers=args.workers,
+                    days_per_batch=args.days_per_batch,
+                    dry_run=False,
+                    on_group_written=_on_group_written,
+                ) as pipeline:
+                    gen = pipeline.process_range(start=start, end=end)
+                    while True:
+                        t_pipeline = time.perf_counter()
+                        try:
+                            date_key, datasets = next(gen)
+                        except StopIteration:
+                            break
+                        dt_pipeline = time.perf_counter() - t_pipeline
 
-                    dt_vod = 0.0
-                    dt_vod_store = 0.0
-                    if vod_analyses:
-                        t_vod = time.perf_counter()
-                        vod_results = _compute_vod_for_day(
-                            datasets,
-                            vod_analyses,
-                            date_key,
-                            reporter,
-                            calculator_name=args.vod_calculator,
-                        )
-                        dt_vod = time.perf_counter() - t_vod
+                        total_days += 1
+                        site_days += 1
+                        reporter.on_day_start(date_key)
+                        reporter.on_datasets(datasets)
 
-                        t_vod_store = time.perf_counter()
-                        for analysis_name, vod_ds in vod_results.items():
-                            research_site.store_vod_analysis(
-                                vod_dataset=vod_ds,
-                                analysis_name=analysis_name,
-                                commit_message=f"VOD {analysis_name} {date_key}",
+                        dt_vod = 0.0
+                        dt_vod_store = 0.0
+                        if vod_analyses:
+                            stage = "vod_calc"
+                            t_vod = time.perf_counter()
+                            vod_results = _compute_vod_for_day(
+                                datasets,
+                                vod_analyses,
+                                date_key,
+                                reporter,
+                                calculator_name=args.vod_calculator,
                             )
-                        dt_vod_store = time.perf_counter() - t_vod_store
-                        total_vod += len(vod_results)
+                            dt_vod = time.perf_counter() - t_vod
 
-                    reporter.on_timing(dt_pipeline, dt_vod, dt_vod_store)
+                            stage = "vod_store"
+                            t_vod_store = time.perf_counter()
+                            for analysis_name, vod_ds in vod_results.items():
+                                research_site.store_vod_analysis(
+                                    vod_dataset=vod_ds,
+                                    analysis_name=analysis_name,
+                                    commit_message=f"VOD {analysis_name} {date_key}",
+                                )
+                            dt_vod_store = time.perf_counter() - t_vod_store
+                            total_vod += len(vod_results)
+                            site_vod += len(vod_results)
+
+                        reporter.on_timing(dt_pipeline, dt_vod, dt_vod_store)
+                        last_good_date_key = date_key
+                        stage = "pipeline_process"
+
+                emit_run_summary(site=site_name, days=site_days, vod_results=site_vod)
+            except Exception:
+                # See module docstring / logging/run_context.py: this runs
+                # unattended on remote machines, so the log at the moment of
+                # failure is the only forensic evidence that will exist.
+                log.error(
+                    "run_crashed",
+                    site=site_name,
+                    stage=stage,
+                    last_good_date_key=last_good_date_key,
+                    exc_info=True,
+                )
+                emit_run_summary(
+                    site=site_name,
+                    days=site_days,
+                    vod_results=site_vod,
+                    crashed=True,
+                )
+                raise
+            finally:
+                reset_run_stats(run_id)
+                reset_run_id(run_id_token)
 
         dt_total = time.perf_counter() - t_total
         reporter.on_done(total_days, total_vod, dt_total)

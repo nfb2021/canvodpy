@@ -47,6 +47,7 @@ dependencies = [
     "icechunk>=2.0.1",
     "typer>=0.9",
     "rich>=13.0",
+    "marimo>=0.23.13",
 ]
 
 # Optional slot-in extensions (github.com/nfb2021/canvodpy-extensions).

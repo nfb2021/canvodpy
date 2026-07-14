@@ -20,6 +20,7 @@ main_app = typer.Typer(
 
 from canvodpy.cli.config import config_app  # noqa: E402
 from canvodpy.cli.doctor import doctor as doctor_command  # noqa: E402
+from canvodpy.cli.perf_dashboard import dashboard as dashboard_command  # noqa: E402
 from canvodpy.cli.run import run as run_command  # noqa: E402
 from canvodpy.cli.stats import stats_app  # noqa: E402
 from canvodpy.cli.store import store_app  # noqa: E402
@@ -31,6 +32,9 @@ main_app.command("run")(run_command)
 main_app.command(
     "doctor", help="Report canvodpy's version, environment, and config resolution."
 )(doctor_command)
+main_app.command(
+    "dashboard", help="Launch the marimo performance dashboard for the pipeline's logs."
+)(dashboard_command)
 
 
 def _version_callback(value: bool) -> None:

@@ -102,6 +102,72 @@ just check-format   # ruff formatting only
 
 ---
 
+## Logging — add it generously
+
+canvodpy runs unattended on remote machines. When something goes wrong
+there, whatever you logged is the *only* evidence that will ever exist —
+there's no attaching a debugger to a cron job after the fact. Log more than
+feels necessary, especially around: file I/O, external calls (downloads,
+Icechunk writes), anything with a fallback/degraded path, and any place a
+silent skip could hide data loss. See `docs/guides/diagnostics.md` for the
+full picture (two-track logging, `run_id`, crash handling, `stage_timer`,
+the performance dashboard) — this section is the short "how do I add a log
+line" version.
+
+**Which logger to use:**
+
+```python
+# Inside the canvodpy package itself:
+from canvodpy.logging import get_logger
+log = get_logger(__name__)
+
+# Inside a lower-level package that must not depend on canvodpy
+# (canvod-vod, canvod-grids, canvod-ops, ...):
+import structlog
+log = structlog.get_logger(__name__)
+```
+
+Both are equivalent at runtime — `canvodpy.logging.get_logger` is a
+one-line passthrough to `structlog.get_logger`, kept only as the documented
+entry point for canvodpy's own code. `configure_logging()` installs
+structlog's processor chain *globally*, so **any** `structlog.get_logger()`
+call anywhere in the process — regardless of which package it's in —
+automatically gets routed through the two-track logging setup (human/agent
+files) with `run_id` injected, with zero per-call-site wiring. Never
+reach for `print()` or stdlib `logging` directly.
+
+**Event style:** first positional arg is a short `snake_case` event name,
+everything else is a structured keyword, not string interpolation:
+
+```python
+# Good
+log.info("rinex_preprocessing_started", file=str(rnx_file.name), site=site_name)
+log.warning("sids_dropped_no_ephemeris", count=len(dropped), sids=sorted(dropped))
+
+# Avoid — loses structure, can't be grepped/filtered on a field
+log.info(f"Started preprocessing {rnx_file.name} for {site_name}")
+```
+
+**Timing:** use `stage_timer()`/`timed_stage()` from `canvodpy.logging`
+rather than hand-rolling `t0 = time.perf_counter(); ...; duration = ...` —
+it emits the canonical `stage_timing` event the performance dashboard
+reads, and still emits (with `status="error"`) if the block raises.
+
+```python
+from canvodpy.logging import stage_timer
+
+with stage_timer("icechunk.write", group=group_name, size_mb=size_mb):
+    to_icechunk(dataset, session, group=group_name)
+```
+
+Only reach for a manual timing pattern when a block already has several
+distinct sequential checkpoints worth logging individually with their own
+rich context (see `_preprocess_aux_data_with_hermite` in `processor.py` for
+an example) — those specific, well-named events are more useful than
+forcing everything through one generic name.
+
+---
+
 ## Keeping Your Fork in Sync
 
 If you are working from a fork (rather than a direct clone), periodically pull updates from the upstream repository:

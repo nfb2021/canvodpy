@@ -7,6 +7,7 @@ import time as _time
 from collections import defaultdict
 from collections.abc import Callable, Generator
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 from datetime import datetime
 from pathlib import Path
 
@@ -17,7 +18,7 @@ from canvod.config import load_config
 from canvod.readers import MatchedDirs, PairDataDirMatcher
 from canvod.readers.gnss_specs.constants import UREG
 from canvod.store import GnssResearchSite
-from canvod.utils.tools import YYYYDOY, _worker_init
+from canvod.utils.tools import YYYYDOY
 
 try:
     from loky import get_reusable_executor as _loky_reusable
@@ -28,9 +29,11 @@ except ImportError:
     _loky_reusable = None  # ty: ignore[invalid-assignment]
 
 from canvodpy.logging import get_logger
+from canvodpy.logging.run_context import get_run_id
 from canvodpy.orchestrator.processor import (
     RinexDataProcessor,
     _processing_progress,
+    _worker_init_with_run_id,
     preprocess_with_hermite_aux,
 )
 from canvodpy.orchestrator.resources import MemoryMonitor
@@ -792,8 +795,8 @@ class PipelineOrchestrator:
             _res = load_config().processing.params.resolve_resources()
             _pool = _loky_reusable(
                 max_workers=n_wrk,
-                initializer=_worker_init,
-                initargs=(_res["nice_priority"], _res["cpu_affinity"]),
+                initializer=_worker_init_with_run_id,
+                initargs=(_res["nice_priority"], _res["cpu_affinity"], get_run_id()),
             )
             for date_key, task_args in all_tasks:
                 fut = _pool.submit(preprocess_with_hermite_aux, *task_args)
@@ -850,6 +853,15 @@ class PipelineOrchestrator:
                         if aux:
                             pending_aux[group_key][fname] = aux
                         tasks_succeeded += 1
+                    except BrokenProcessPool:
+                        tasks_failed += 1
+                        self._logger.exception(
+                            "worker_pool_broken",
+                            date=date_key,
+                            receiver=receiver_name,
+                            batch_index=batch_idx + 1,
+                            hint="worker process likely killed by OOM or segfault",
+                        )
                     except Exception:
                         tasks_failed += 1
                         self._logger.exception(
