@@ -1322,7 +1322,7 @@ def calculate_vod(site: str, yyyydoy: str) -> dict:
     time_range = (start_time, end_time)
 
     analyses_result: dict[str, dict] = {}
-    for analysis_name in research_site.active_vod_analyses:
+    for analysis_name, analysis_cfg in research_site.active_vod_analyses.items():
         logger.info("calculate_vod: running %s for %s", analysis_name, site)
 
         vod_ds = research_site.calculate_vod(
@@ -1330,9 +1330,24 @@ def calculate_vod(site: str, yyyydoy: str) -> dict:
             time_range=time_range,
         )
 
+        calculator_name = vod_ds.attrs.get("calculator", "unknown")
+        rinex_store_path = str(research_site.rinex_store.store_path)
         research_site.store_vod_analysis(
             vod_dataset=vod_ds,
             analysis_name=analysis_name,
+            calculator_name=calculator_name,
+            source_file_hashes={
+                analysis_cfg.canopy_receiver: vod_ds.attrs.get(
+                    "canopy_hash", "unknown"
+                ),
+                analysis_cfg.reference_receiver: vod_ds.attrs.get(
+                    "reference_hash", "unknown"
+                ),
+            },
+            source_gnss_stores={
+                analysis_cfg.canopy_receiver: rinex_store_path,
+                analysis_cfg.reference_receiver: rinex_store_path,
+            },
             commit_message=f"Airflow VOD {analysis_name} {date_obj.to_str()}",
         )
 

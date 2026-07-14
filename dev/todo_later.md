@@ -2292,7 +2292,12 @@ when picked up.
    interpolation strategy + config_hash on both tables) — separate from this
    implementation, no code change needed to file it.
 
-**Action:** fully specified, not implemented. Revisit when ready to build.
+**Action:** implemented (2026-07-14) — items 1-5 done: `write_or_append_vod_group()`
+dedup guardrail, `{calculator}/{analysis_name}` group hierarchy, rich
+DataCite/ACDD/STAC metadata wired via `ensure_vod_store_metadata()`, new
+per-write VOD metadata ledger table, `viewer.py` model-aware rendering, and
+the `canvodpy vod` CLI subcommand. Item 7 (file the deferred GitHub issue
+for `ephemeris_source`/`config_hash` on both metadata tables) still open.
 
 ---
 
@@ -2399,3 +2404,41 @@ Three things, found by grepping the root `README.md`:
    README now has for its three packages.
 
 **Action:** not started. Scope confirmed via grep, not yet fixed.
+
+---
+
+## 33. `canvodpy run` needs a visible "warming up" note before per-day progress (2026-07-14)
+
+**Reported live** during a remote-machine test run: after invoking
+`canvodpy run --site ... --start ...`, there is a real, silent delay before
+the first per-day progress line appears — looks hung, not "not processing
+right away" as the owner put it.
+
+**Plausible causes found while spot-checking** (not fully root-caused, just
+enough to make the note useful):
+- `orchestrator/pipeline.py` uses `loky.get_reusable_executor()` (line ~796)
+  for its persistent worker pool — the *first* call pays full worker-process
+  startup cost (each worker re-imports xarray/dask/icechunk/etc.), which can
+  be several seconds to tens of seconds depending on disk/import speed, with
+  zero progress output during that window today.
+- `SatelliteCatalog.fetch()` (`canvod-readers/.../satellite_catalog.py`) can
+  fall through to downloading `igs_satellite_metadata.snx` from
+  `files.igs.org` on a cold cache (`~/.cache/canvod/`) — on a remote machine
+  with slow/restricted outbound network, this could stall silently for a
+  while before falling back to the bundled snapshot.
+- Store opening (`GnssResearchSite.__init__` → `create_rinex_store`/
+  `create_vod_store`) and initial config/site resolution also happen before
+  `reporter.set_current_site(...)` prints anything.
+
+**Fix, when picked up:** add a one-line startup message (e.g. via the
+`reporter`/`log` before the main site loop in `_main_impl`) explaining that
+canvodpy is initializing (worker pool, satellite catalog, store opening) —
+doesn't need to pinpoint which one is slow, just needs to exist so a
+first-time or remote run doesn't look hung. Optionally instrument each of
+the three candidates with its own `stage_timing` event (see
+`canvodpy.logging.stage_timer`, already used elsewhere) so a future run can
+show *which* warm-up step actually took the time instead of guessing.
+
+**Action:** not investigated in depth, no fix applied yet — noted from a
+live report, plausible causes listed above from a quick grep, not confirmed
+by profiling a real run.

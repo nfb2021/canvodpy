@@ -1787,6 +1787,318 @@ class MyIcechunkStore:
                 _do_append(sess)
                 sess.commit(_with_run_id(f"Bulk metadata append for {group_name}"))
 
+    # ------------------------------------------------------------------
+    # VOD store: {model}/{analysis_name} group hierarchy + dedicated ledger
+    # ------------------------------------------------------------------
+    #
+    # A VOD computation reads from *two* receivers, so there is no single
+    # "File Hash" to dedup on (unlike RINEX ingest). The methods below are
+    # a parallel, VOD-shaped equivalent of should_skip_file()/
+    # metadata_row_exists()/append_to_group() — same hash+temporal-overlap
+    # guardrail pattern, but keyed on a combined per-receiver hash dict
+    # instead of one flat rinex_hash column, and with a ledger schema that
+    # also records calculator_name and per-receiver provenance
+    # (source_gnss_stores). See dev/todo_later.md §29.
+
+    def _append_vod_metadata_row(
+        self,
+        zroot: zarr.Group,
+        group_name: str,
+        source_file_hashes: dict[str, str],
+        source_gnss_stores: dict[str, str],
+        start: np.datetime64,
+        end: np.datetime64,
+        snapshot_id: str,
+        action: str,
+        commit_msg: str,
+        calculator_name: str,
+        dataset_attrs: dict,
+    ) -> None:
+        """Write one VOD metadata row into an already-open zarr group.
+
+        Must be called inside an active writable session so the caller
+        controls the commit boundary (mirrors ``_append_metadata_row``).
+
+        Schema:
+            index               int64
+            source_file_hashes  str (UTF-8, JSON dict {receiver_name: hash},
+                                 sorted keys — doubles as the dedup key)
+            source_gnss_stores  str (UTF-8, JSON dict {receiver_name: store_path})
+            start               datetime64[ns]
+            end                 datetime64[ns]
+            snapshot_id         str (UTF-8)
+            action              str (UTF-8, "write"|"append"|"overwrite")
+            commit_msg          str (UTF-8)
+            written_at          str (UTF-8, ISO8601 with timezone)
+            write_strategy      str (UTF-8)
+            calculator_name     str (UTF-8)
+            attrs               str (UTF-8, JSON dump of dataset attrs)
+        """
+        written_at = datetime.now().astimezone().isoformat()
+        row = {
+            "source_file_hashes": json.dumps(source_file_hashes, sort_keys=True),
+            "source_gnss_stores": json.dumps(source_gnss_stores, sort_keys=True),
+            "start": np.datetime64(start, "ns"),
+            "end": np.datetime64(end, "ns"),
+            "snapshot_id": str(snapshot_id),
+            "action": str(action),
+            "commit_msg": str(commit_msg),
+            "written_at": written_at,
+            "write_strategy": str(self._vod_store_strategy),
+            "calculator_name": str(calculator_name),
+            "attrs": json.dumps(dataset_attrs, default=str),
+        }
+        df_row = pl.DataFrame([row])
+        meta_group_path = f"{group_name}/metadata/table"
+
+        if (
+            "metadata" not in zroot[group_name]
+            or "table" not in zroot[group_name]["metadata"]
+        ):
+            zmeta = zroot.require_group(meta_group_path)
+            zmeta.create_array(
+                name="index", shape=(0,), dtype="i8", chunks=(1024,), overwrite=True
+            )
+            zmeta["index"].append([0])
+            for col in df_row.columns:
+                if col in ("start", "end"):
+                    dtype = "M8[ns]"
+                    arr = np.array(df_row[col].to_numpy(), dtype=dtype)
+                else:
+                    dtype = VariableLengthUTF8()
+                    arr = df_row[col].to_list()
+                zmeta.create_array(
+                    name=col, shape=(0,), dtype=dtype, chunks=(1024,), overwrite=True
+                )
+                zmeta[col].append(arr)
+        else:
+            zmeta = zroot[meta_group_path]
+            current_len = zmeta["index"].shape[0]
+            zmeta["index"].append([current_len])
+            for col in df_row.columns:
+                if col in ("start", "end"):
+                    arr = np.array(df_row[col].to_numpy(), dtype="M8[ns]")
+                else:
+                    arr = df_row[col].to_list()
+                zmeta[col].append(arr)
+
+    def _vod_metadata_row_exists(
+        self,
+        group_name: str,
+        source_hash_key: str,
+        start: np.datetime64,
+        end: np.datetime64,
+        branch: str = "main",
+    ) -> tuple[bool, pl.DataFrame]:
+        """Check whether a VOD computation already exists or overlaps temporally.
+
+        Analogous to :meth:`metadata_row_exists`, but compares against the
+        ``source_file_hashes`` column (a canonical, sorted-keys JSON string)
+        instead of a single flat hash column.
+
+        Parameters
+        ----------
+        group_name : str
+            ``{model}/{analysis_name}`` group path.
+        source_hash_key : str
+            ``json.dumps(source_file_hashes, sort_keys=True)`` for the
+            incoming computation.
+        start, end : np.datetime64
+            Epoch range of the incoming VOD dataset.
+        branch : str, default "main"
+
+        Returns
+        -------
+        tuple[bool, pl.DataFrame]
+            ``(True, matching_rows)`` when this should be skipped,
+            ``(False, empty_df)`` when it is safe to write.
+        """
+        with self.readonly_session(branch) as session:
+            try:
+                zmeta = zarr.open_group(session.store, mode="r")[
+                    f"{group_name}/metadata/table"
+                ]
+            except Exception:
+                return False, pl.DataFrame()
+
+            data = {col: zmeta[col][:] for col in zmeta.array_keys()}
+            df = pl.DataFrame(data)
+            df = df.with_columns(
+                [
+                    pl.col("start").cast(pl.Datetime("ns")),
+                    pl.col("end").cast(pl.Datetime("ns")),
+                ]
+            )
+
+            hash_matches = df.filter(pl.col("source_file_hashes") == source_hash_key)
+            if not hash_matches.is_empty():
+                return True, hash_matches
+
+            start_ns = np.datetime64(start, "ns")
+            end_ns = np.datetime64(end, "ns")
+            overlaps = df.filter(
+                (pl.col("start") <= end_ns) & (pl.col("end") >= start_ns)
+            )
+            if not overlaps.is_empty():
+                self._logger.warning(
+                    "vod_temporal_overlap_detected",
+                    group=group_name,
+                    incoming_range=f"{start} → {end}",
+                    existing_range=(
+                        f"{overlaps['start'].min()} → {overlaps['end'].max()}"
+                    ),
+                    overlapping_rows=overlaps.height,
+                )
+                return True, overlaps
+
+            return False, pl.DataFrame()
+
+    def should_skip_vod_write(
+        self,
+        group_name: str,
+        source_file_hashes: dict[str, str],
+        time_start: np.datetime64,
+        time_end: np.datetime64,
+        branch: str = "main",
+    ) -> tuple[bool, str]:
+        """Check whether a VOD write should be skipped as a duplicate.
+
+        Parameters
+        ----------
+        group_name : str
+            ``{model}/{analysis_name}`` group path.
+        source_file_hashes : dict[str, str]
+            ``{receiver_name: "File Hash"}`` for every receiver the
+            computation read from.
+        time_start, time_end : np.datetime64
+            Epoch range of the incoming VOD dataset.
+        branch : str, default "main"
+
+        Returns
+        -------
+        tuple[bool, str]
+            ``(True, "hash_match")``, ``(True, "temporal_overlap")``, or
+            ``(False, "")``.
+        """
+        source_hash_key = json.dumps(source_file_hashes, sort_keys=True)
+        exists, matches = self._vod_metadata_row_exists(
+            group_name, source_hash_key, time_start, time_end, branch
+        )
+        if not exists:
+            return False, ""
+        if (
+            not matches.is_empty()
+            and (matches["source_file_hashes"] == source_hash_key).any()
+        ):
+            return True, "hash_match"
+        return True, "temporal_overlap"
+
+    def write_or_append_vod_group(
+        self,
+        dataset: xr.Dataset,
+        group_name: str,
+        source_file_hashes: dict[str, str],
+        source_gnss_stores: dict[str, str],
+        calculator_name: str,
+        append_dim: str = "epoch",
+        branch: str = "main",
+        commit_message: str | None = None,
+        dedup: bool = True,
+    ) -> bool:
+        """Write or append a VOD analysis dataset, with its own metadata ledger.
+
+        ``group_name`` is expected to be ``{model}/{analysis_name}`` (e.g.
+        ``"tau_omega_zeroth_order/canopy_01_vs_reference_01"``) — the model
+        layer disambiguates results from different VOD calculators sharing
+        the same analysis pair. Data write and metadata-row write happen in
+        one Icechunk commit, mirroring :meth:`append_to_group`.
+
+        Parameters
+        ----------
+        dataset : xr.Dataset
+            Computed VOD dataset to write or append.
+        group_name : str
+            Target ``{model}/{analysis_name}`` group.
+        source_file_hashes : dict[str, str]
+            ``{receiver_name: "File Hash"}`` for every receiver the
+            computation read from — the dedup key (no single hash exists
+            for a two-receiver computation).
+        source_gnss_stores : dict[str, str]
+            ``{receiver_name: rinex_store_path}`` — provenance back to the
+            GNSS store(s) the inputs came from.
+        calculator_name : str
+            Registered ``VODFactory`` name (e.g. ``"tau_omega"``).
+        append_dim : str, default "epoch"
+        branch : str, default "main"
+        commit_message : str or None
+            Auto-generated if ``None``.
+        dedup : bool, default True
+            When ``True``, skip the write if this exact source-hash
+            combination was already written, or if the incoming epoch
+            range temporally overlaps an existing row. Set ``False`` to
+            force a write regardless (e.g. explicit overwrite/reprocessing).
+
+        Returns
+        -------
+        bool
+            ``True`` if written, ``False`` if skipped as a duplicate.
+        """
+        start = dataset.epoch.min().values
+        end = dataset.epoch.max().values
+
+        if dedup:
+            skip, reason = self.should_skip_vod_write(
+                group_name=group_name,
+                source_file_hashes=source_file_hashes,
+                time_start=start,
+                time_end=end,
+                branch=branch,
+            )
+            if skip:
+                self._logger.warning(
+                    "write_or_append_vod_group_skipped_duplicate",
+                    group=group_name,
+                    reason=reason,
+                    calculator=calculator_name,
+                )
+                return False
+
+        dataset = self._normalize_encodings(dataset)
+        action = "append" if self.group_exists(group_name, branch) else "write"
+        if commit_message is None:
+            version = get_version_from_pyproject()
+            commit_message = (
+                f"[v{version}] {action.capitalize()}d VOD group '{group_name}' "
+                f"(calculator={calculator_name})"
+            )
+
+        with self.writable_session(branch) as session:
+            if action == "append":
+                to_icechunk(dataset, session, group=group_name, append_dim=append_dim)
+            else:
+                to_icechunk(dataset, session, group=group_name, mode="w")
+            zroot = zarr.open_group(session.store, mode="a")
+            self._append_vod_metadata_row(
+                zroot=zroot,
+                group_name=group_name,
+                source_file_hashes=source_file_hashes,
+                source_gnss_stores=source_gnss_stores,
+                start=start,
+                end=end,
+                snapshot_id="",
+                action=action,
+                commit_msg=commit_message,
+                calculator_name=calculator_name,
+                dataset_attrs=dict(dataset.attrs),
+            )
+            session.commit(_with_run_id(commit_message))
+
+        self._logger.info(
+            f"{action.capitalize()}d VOD group '{group_name}' "
+            f"({len(dataset.epoch)} epochs, calculator={calculator_name})"
+        )
+        return True
+
     def load_metadata(self, store: Any, group_name: str) -> pl.DataFrame:
         """Load metadata directly from Zarr into a Polars DataFrame.
 

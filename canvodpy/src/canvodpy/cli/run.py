@@ -218,7 +218,8 @@ def _compute_vod_for_day(
     date_key: str,
     reporter=None,
     calculator_name: str = "tau_omega",
-) -> dict[str, xr.Dataset]:
+    rinex_store_path: str = "",
+) -> dict[str, dict]:
     """Compute VOD for all configured analysis pairs.
 
     Parameters
@@ -234,14 +235,19 @@ def _compute_vod_for_day(
         YYYYDOY string for logging.
     calculator_name
         Name registered in ``VODFactory`` (e.g. ``"tau_omega"``).
+    rinex_store_path
+        Path to the site's RINEX store, for VOD provenance (both receivers
+        of a site live in the same store).
 
     Returns
     -------
-    dict mapping analysis name to VOD dataset.
+    dict mapping analysis name to a dict with keys ``vod_ds``,
+    ``source_file_hashes``, ``source_gnss_stores`` (see
+    ``write_or_append_vod_group`` / dev/todo_later.md §29).
     """
     from canvodpy.factories import VODFactory
 
-    results: dict[str, xr.Dataset] = {}
+    results: dict[str, dict] = {}
 
     for analysis_name, analysis_cfg in vod_analyses.items():
         canopy_name = analysis_cfg.canopy_receiver
@@ -294,7 +300,17 @@ def _compute_vod_for_day(
                 print(
                     f"  VOD {analysis_name}: {n_valid}/{n_total} valid ({pct:.0f}%)  {dt:.1f}s"
                 )
-            results[analysis_name] = vod_ds
+            results[analysis_name] = {
+                "vod_ds": vod_ds,
+                "source_file_hashes": {
+                    canopy_name: canopy_ds.attrs.get("File Hash", "unknown"),
+                    ref_name: ref_ds.attrs.get("File Hash", "unknown"),
+                },
+                "source_gnss_stores": {
+                    canopy_name: rinex_store_path,
+                    ref_name: rinex_store_path,
+                },
+            }
 
         except Exception as e:
             log.error(
@@ -340,6 +356,7 @@ def _main_impl(args: SimpleNamespace) -> int:
         config.processing.params.ephemeris_source = args.ephemeris_source
 
     from canvodpy.api import Site
+    from canvodpy.vod_computer import ensure_vod_store_metadata
 
     site_names: list[str] = args.site
 
@@ -443,16 +460,49 @@ def _main_impl(args: SimpleNamespace) -> int:
                                 date_key,
                                 reporter,
                                 calculator_name=args.vod_calculator,
+                                rinex_store_path=str(
+                                    research_site.rinex_store.store_path
+                                ),
                             )
                             dt_vod = time.perf_counter() - t_vod
+                            # Additive stage_timing so the performance dashboard
+                            # can distinguish VOD models/analyses (see the
+                            # reading/validating/augmenting/writing events
+                            # emitted in processor.py for the same pattern).
+                            log.info(
+                                "stage_timing",
+                                stage="vod_calc",
+                                duration_seconds=round(dt_vod, 3),
+                                status="ok",
+                                date_key=date_key,
+                                calculator=args.vod_calculator,
+                                n_analyses=len(vod_results),
+                            )
 
                             stage = "vod_store"
+                            if vod_results:
+                                ensure_vod_store_metadata(site, args.vod_calculator)
                             t_vod_store = time.perf_counter()
-                            for analysis_name, vod_ds in vod_results.items():
+                            for analysis_name, result in vod_results.items():
+                                t_analysis_store = time.perf_counter()
                                 research_site.store_vod_analysis(
-                                    vod_dataset=vod_ds,
+                                    vod_dataset=result["vod_ds"],
                                     analysis_name=analysis_name,
+                                    calculator_name=args.vod_calculator,
+                                    source_file_hashes=result["source_file_hashes"],
+                                    source_gnss_stores=result["source_gnss_stores"],
                                     commit_message=f"VOD {analysis_name} {date_key}",
+                                )
+                                log.info(
+                                    "stage_timing",
+                                    stage="vod_store",
+                                    duration_seconds=round(
+                                        time.perf_counter() - t_analysis_store, 3
+                                    ),
+                                    status="ok",
+                                    date_key=date_key,
+                                    calculator=args.vod_calculator,
+                                    analysis=analysis_name,
                                 )
                             dt_vod_store = time.perf_counter() - t_vod_store
                             total_vod += len(vod_results)

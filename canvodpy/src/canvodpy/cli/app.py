@@ -24,11 +24,16 @@ from canvodpy.cli.perf_dashboard import dashboard as dashboard_command  # noqa: 
 from canvodpy.cli.run import run as run_command  # noqa: E402
 from canvodpy.cli.stats import stats_app  # noqa: E402
 from canvodpy.cli.store import store_app  # noqa: E402
+from canvodpy.cli.vod import vod as vod_command  # noqa: E402
 
 main_app.add_typer(config_app, name="config")
 main_app.add_typer(stats_app, name="stats")
 main_app.add_typer(store_app, name="store")
 main_app.command("run")(run_command)
+main_app.command(
+    "vod",
+    help="Compute VOD in bulk from an existing RINEX store (backfill/reprocessing).",
+)(vod_command)
 main_app.command(
     "doctor", help="Report canvodpy's version, environment, and config resolution."
 )(doctor_command)
