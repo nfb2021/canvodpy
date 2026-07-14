@@ -19,15 +19,23 @@ Usage
 
     # Preview what would be processed
     uv run canvodpy run --site ExampleSite --dry-run
+
+    # Launch the performance dashboard alongside the run (reachable at
+    # http://<host>:<port>; its own marimo startup output is redirected to
+    # <log_dir>/machine/dashboard.log so it doesn't clutter run's progress)
+    uv run canvodpy run --site ExampleSite --dashboard --dashboard-host 0.0.0.0
 """
 
 from __future__ import annotations
 
 import enum
 import os
+import socket
+import subprocess
 import sys
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Annotated
 
@@ -41,6 +49,49 @@ from canvodpy.logging.run_context import reset_run_id, set_run_id
 from canvodpy.logging.stage_timer import reset_run_stats
 
 log = structlog.get_logger(__name__)
+
+
+def _pick_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
+
+def _start_dashboard(log_dir: Path, host: str, port: int) -> None:
+    """Spawn the marimo performance dashboard as a detached subprocess.
+
+    Its stdout/stderr go to a log file, not the terminal — the whole point
+    is that ``canvodpy run``'s own progress output stays the only thing
+    visible in the foreground. The subprocess outlives this command (no
+    wait/terminate), so the dashboard stays up for reviewing the finished
+    run.
+    """
+    from canvodpy.cli.perf_dashboard import _NOTEBOOK_PATH
+
+    env = os.environ.copy()
+    env["CANVODPY_PERF_LOG_DIR"] = str(log_dir)
+    machine_dir = log_dir / "machine"
+    machine_dir.mkdir(parents=True, exist_ok=True)
+    dash_log = machine_dir / "dashboard.log"
+
+    subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "marimo",
+            "run",
+            str(_NOTEBOOK_PATH),
+            "--host",
+            host,
+            "--port",
+            str(port),
+            "--headless",
+        ],
+        env=env,
+        stdout=open(dash_log, "w"),
+        stderr=subprocess.STDOUT,
+    )
+    print(f"Dashboard: http://{host}:{port}  (output: {dash_log})")
 
 
 def _build_vod_calculator_choice() -> type[enum.StrEnum]:
@@ -306,6 +357,13 @@ def _main_impl(args: SimpleNamespace) -> int:
                     print(f"  {k}: {v}")
         return 0
 
+    if args.dashboard:
+        _start_dashboard(
+            config.processing.logging.get_log_dir(),
+            args.dashboard_host,
+            args.dashboard_port or _pick_free_port(),
+        )
+
     from canvodpy.cli.dashboard import day_count, make_reporter
 
     # Resolve every site upfront: date range + receiver-group rows, so a
@@ -510,6 +568,28 @@ def run(
         VodCalculatorChoice,  # ty: ignore[invalid-type-form]
         typer.Option("--vod-calculator", help="VOD calculator to use."),
     ] = VodCalculatorChoice["tau_omega"],
+    dashboard: Annotated[
+        bool,
+        typer.Option(
+            "--dashboard",
+            help=(
+                "Launch the marimo performance dashboard alongside this run, "
+                "as a detached subprocess (its startup banner is redirected "
+                "to a log file, not printed here)."
+            ),
+        ),
+    ] = False,
+    dashboard_host: Annotated[
+        str,
+        typer.Option("--dashboard-host", help="Host for --dashboard to bind to."),
+    ] = "127.0.0.1",
+    dashboard_port: Annotated[
+        int | None,
+        typer.Option(
+            "--dashboard-port",
+            help="Port for --dashboard to bind to (default: an OS-assigned free port).",
+        ),
+    ] = None,
 ) -> None:
     """Process GNSS observations into Icechunk stores and compute VOD."""
     args = SimpleNamespace(
@@ -523,6 +603,9 @@ def run(
         config=config,
         ephemeris_source=ephemeris_source.value if ephemeris_source else None,
         vod_calculator=vod_calculator.value,
+        dashboard=dashboard,
+        dashboard_host=dashboard_host,
+        dashboard_port=dashboard_port,
     )
     raise typer.Exit(code=_main_impl(args))
 

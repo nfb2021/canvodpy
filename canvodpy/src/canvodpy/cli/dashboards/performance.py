@@ -1,7 +1,11 @@
 import marimo
 
 __generated_with = "0.23.13"
-app = marimo.App(width="medium", app_title="canvodpy — Performance Dashboard")
+app = marimo.App(
+    width="medium",
+    app_title="canvodpy — Performance Dashboard",
+    css_file="canvod_nordic.css",
+)
 
 
 @app.cell
