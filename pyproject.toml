@@ -143,7 +143,9 @@ exclude = [
 testpaths = [
     "canvodpy/tests",
     "packages/canvod-auxiliary/tests",
+    "packages/canvod-config/tests",
     "packages/canvod-grids/tests",
+    "packages/canvod-preflight/tests",
     "packages/canvod-readers/tests",
     "packages/canvod-store/tests",
     "packages/canvod-store-metadata/tests",
@@ -163,7 +165,9 @@ relative_files = true
 source = [
     "canvodpy/src",
     "packages/canvod-auxiliary/src",
+    "packages/canvod-config/src",
     "packages/canvod-grids/src",
+    "packages/canvod-preflight/src",
     "packages/canvod-readers/src",
     "packages/canvod-store/src",
     "packages/canvod-store-metadata/src",
@@ -185,7 +189,9 @@ version_files = [
     "canvodpy/pyproject.toml:version",
     "packages/canvod-readers/pyproject.toml:version",
     "packages/canvod-auxiliary/pyproject.toml:version",
+    "packages/canvod-config/pyproject.toml:version",
     "packages/canvod-grids/pyproject.toml:version",
+    "packages/canvod-preflight/pyproject.toml:version",
     "packages/canvod-vod/pyproject.toml:version",
     "packages/canvod-store/pyproject.toml:version",
     "packages/canvod-store-metadata/pyproject.toml:version",
@@ -204,6 +210,7 @@ annotated_tag = true
 scopes = [
     "readers",
     "aux",
+    "config",
     "grids",
     "vod",
     "store",

@@ -47,6 +47,7 @@ jobs:
           for pkg in \
             packages/canvod-readers \
             packages/canvod-auxiliary \
+            packages/canvod-config \
             packages/canvod-grids \
             packages/canvod-store \
             packages/canvod-store-metadata \
