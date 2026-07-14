@@ -2280,3 +2280,40 @@ when picked up.
    implementation, no code change needed to file it.
 
 **Action:** fully specified, not implemented. Revisit when ready to build.
+
+---
+
+## 30. New `canvod-audit` tier enabled by `canvod-adapters` (deferred, 2026-07-14)
+
+**Flagged 2026-07-14** — not investigated, no decision made, explicitly
+deferred by the owner ("lets solve that later, add a todo item").
+
+Since §24 built `canvod-adapters` (bidirectional gnssvod ↔ canvodpy
+conversion: `to_gnssvod_dataset()` / `from_gnssvod_dataset()`), the owner
+raised whether this opens up a new verification tier in `canvod-audit`
+beyond the existing Tier 3 (`audit_vs_gnssvod`, which already compares
+canvodpy's VOD output against gnssvod as ground truth via `RinexTrimmer`).
+Two framings were floated when this came up, neither chosen yet:
+
+1. **Round-trip fidelity tier** — test `canvod-adapters`' conversion itself,
+   not canvodpy's science: `to_gnssvod_dataset()` then
+   `from_gnssvod_dataset()` back, compare to the original canvodpy VOD
+   dataset. `from_gnssvod_dataset()` is already flagged lossy for per-code
+   identity (`attrs["vod_reconstructed_code_ambiguous"] = True`, gnssvod
+   fillna-merges codes before export) — this tier would quantify exactly
+   what's lost and confirm it's *only* that, nothing else drifting.
+2. **Refactor Tier 3 to route through `canvod-adapters`** — `vs_gnssvod.py`
+   has its own ad hoc conversion logic predating the adapter package; now
+   that `to_gnssvod_dataset()` is the canonical single source of truth
+   (canvod-audit already depends on canvod-adapters per §24), Tier 3 could
+   call it directly instead of maintaining a parallel implementation that
+   could silently drift from the adapter's behavior.
+
+Also relevant context surfaced while looking into this: the owner ran audit
+against the latest PyPI release recently and it was clean — no known
+regression motivating this, purely an opportunistic "now that the bridge
+exists, should we use it more" question.
+
+**Action:** not decided, not investigated. Revisit alongside or after the
+§(pending) canvod-audit → canvodpy-extensions migration, since both touch
+the same file (`vs_gnssvod.py`) and it's wasteful to refactor it twice.
