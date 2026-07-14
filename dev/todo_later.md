@@ -2579,3 +2579,75 @@ Re-check this entry once tomorrow's run produces data — that's what
 actually tells us whether the O(rows) dedup theory and the
 days_per_batch/network-contention theory hold up, and whether Tier 2 is
 worth doing.
+
+---
+
+## 35. `IcechunkConfig.chunk_strategies` is a single global default — breaks with >1 site/receiver/sampling-rate (found live, 2026-07-15)
+
+**Reported live** during the overnight-run investigation in §34: a
+`UserWarning` from `xr.open_zarr` ("specified chunks separate the stored
+chunks... starting at index 17280") appeared for the first time. Traced
+to two *distinct* mismatches that share one root cause:
+
+1. **RINEX store**: `_append_to_icechunk`'s per-file loop (`processor.py`)
+   calls `to_icechunk(ds_clean, ..., append_dim="epoch")` once per RINEX
+   file (96x/receiver-day), and nothing rechunks each file to a
+   17280-epoch boundary before writing (`_normalize_encodings`/
+   `_cleanse_dataset_attrs` only touch dtypes/attrs). The physical Zarr
+   chunks on disk end up being whatever small size each individual file
+   naturally has — not the one-chunk-per-day the design intends (see the
+   comment in `compression.py`: "append_to_group() commits once per
+   day, so chunks should match one day exactly"). `read_group()` then
+   requests a 17280-epoch dask chunk that straddles many small misaligned
+   physical chunks.
+2. **VOD store**: `calculator.py:142` does
+   `xr.align(canopy_ds, sky_ds, join="inner")` — VOD's epoch count is the
+   *intersection* of canopy and reference timestamps, essentially never
+   exactly 17280 (independent receivers rarely have identical epoch
+   grids: clock drift, dropped fixes, gaps). `IcechunkConfig.chunk_strategies`
+   applies the *same* `ChunkStrategy(epoch=17280, sid=-1)` to `vod_store`
+   as `rinex_store`, silently assuming VOD's cadence matches raw RINEX's.
+
+**The general problem, per the owner (2026-07-15)**: this is one global
+`dict[str, ChunkStrategy]` keyed only by `store_type` — one chunk size
+per store *type*, applied identically to every site and every receiver.
+Already provably wrong within a single site (RINEX vs VOD, as above).
+With the stated target of 100+ sites, each potentially with receivers
+logging at different intervals, a single global default (or even a
+config entry per site/receiver — which would need a human to correctly
+guess every combination up front) cannot scale.
+
+**Proposed direction (not implemented, needs proper design time — this
+was found at 1am mid-backfill, not a place to improvise a fix)**: stop
+treating chunk size as a value declared up front in config. Instead,
+derive it from the actual data, once, the first time a group is created
+— measure that receiver's (or VOD analysis's) real epoch cadence from
+its first batch, choose an appropriate chunk size from that measurement,
+and persist the decision in the group's own metadata (both the GNSS and
+VOD stores already have a per-group metadata ledger table — this is
+exactly the kind of provenance it exists for). Every group then carries
+its own correct, self-describing chunk size, locked in at creation so it
+can't drift mid-store. The existing `rechunk_group()` utility
+(`store.py:2699`) becomes the deliberate, explicit escape hatch for
+revisiting a bad decision later, rather than something to run reactively
+once a mismatch is noticed. `IcechunkConfig.chunk_strategies`'s current
+global values become a fallback only, used when there's no data yet to
+measure (first-ever write to a brand new group).
+
+**Scope, when picked up**: `canvod-config`'s `IcechunkConfig` model
+(`compression.py`) — decide what "fallback only" means for the schema;
+`canvod-store`'s group-creation path (`store.py`) — where to measure
+cadence and where to persist the chosen chunk size; `canvod-store-metadata`
+— whether chunk-size provenance belongs in the existing schema or needs a
+new field; interaction with `rechunk_group()` and with manifest splitting
+(`manifest_splitting_epoch_range` has the exact same "one global number"
+problem — should probably derive from the same per-group measurement).
+
+**Action:** not started, design-only for now. Does not affect correctness
+of the run in progress (the warning is a read-efficiency note, not a
+data-integrity issue) — safe to leave the current overnight backfill
+running unmodified. Revisit alongside or after §34's Tier 2 (both are
+fundamentally about the same over-fragmented-chunk problem: §34's RINEX
+per-file writes and this entry's VOD epoch mismatch are two symptoms of
+one write path that never rechunks to the intended boundary before
+writing).
