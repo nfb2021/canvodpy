@@ -116,7 +116,7 @@ name. ~1,765 LOC, 9 test modules.
 
 ---
 
-## 4. CLI and configuration — package-standalone usage and human ergonomics (Task D)
+## 4. ~~CLI and configuration — package-standalone usage and human ergonomics (Task D)~~ — RESOLVED (2026-07-14)
 
 **User notes:**
 1. Using individual `canvod-*` packages standalone currently errors about config not
@@ -205,12 +205,14 @@ name. ~1,765 LOC, 9 test modules.
   `canvod-auxiliary`, `canvod-ops`, `canvod-store`, `canvod-store-metadata`.
   The other 6 packages (`canvod-audit`, `canvod-grids`, `canvod-preflight`,
   `canvod-utils`, `canvod-viz`, `canvod-vod`) don't touch config at all, so
-  left untouched. Side finding, not fixed: `canvod-config/README.md` itself
-  is quite stale beyond this (documents the old 3-file `processing.yaml`/
+  left untouched. Side finding: `canvod-config/README.md` itself was quite
+  stale beyond this (documented the old 3-file `processing.yaml`/
   `sites.yaml`/`sids.yaml` format and pre-unified-config `just config-edit
-  processing` commands, superseded by `canvod-settings.yaml` +
-  `canvodpy config init/edit`) — flagging, not fixing, since it's a bigger,
-  separate rewrite.
+  processing` commands). **RESOLVED (2026-07-14):** rewritten against the
+  actual unified `canvod-settings.yaml` + `canvodpy config
+  init/edit/show/validate` CLI, verified against `Justfile`,
+  `cli/config.py`, and the real template
+  (`packages/canvod-config/src/canvod/config/templates/canvod-settings.yaml.example`).
 - ~~`defaults/sites.yaml` never read by `_load_sites()`.~~ **RESOLVED (moot):** With the unified `canvod-settings.yaml`, sites are always user-defined — `defaults/sites.yaml` contains `sites: {}` and there is nothing to merge. Dead file; delete or leave as a stub.
 
 **Open questions:**
@@ -268,6 +270,10 @@ name. ~1,765 LOC, 9 test modules.
   now both exported from `canvod.store_metadata`'s top level. Tests:
   `test_config_drift.py` (3, mirrors the exact processor.py logic since a
   full orchestrator-level test would need a real pipeline run).
+
+**Action:** effectively DONE (confirmed 2026-07-14) — every sub-item above is
+resolved; the only remaining loose end (`canvod-config/README.md` staleness)
+was fixed in the same pass. No open code/doc work left under Task D.
 
 ---
 
@@ -2363,8 +2369,10 @@ release (`v*.*.*` tag via `just release`) happens.
 3. Consider whether the Zenodo badge should also go in `README.md`
    (canvodpy has one) once a DOI exists.
 
-**Action:** fully deferred — no release has been cut yet, so there is
-nothing to archive. Revisit right after the first `v*.*.*` tag is pushed.
+**Action:** DONE (2026-07-14) — `v0.1.0` released, Zenodo DOI
+`10.5281/zenodo.21359005` obtained and set in `CITATION.cff`, and the DOI
+badge added to `canvodpy-extensions/README.md` (same pattern as canvodpy's
+own `10.5281/zenodo.18496233`). All three sub-items closed.
 
 ---
 
