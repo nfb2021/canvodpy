@@ -37,6 +37,16 @@ def dashboard(
             help="Open in marimo's editor instead of the read-only app view.",
         ),
     ] = False,
+    host: Annotated[
+        str | None,
+        typer.Option("--host", help="Host to attach to (default: marimo's 127.0.0.1)."),
+    ] = None,
+    port: Annotated[
+        int | None,
+        typer.Option(
+            "--port", "-p", help="Port to attach to (default: marimo picks one)."
+        ),
+    ] = None,
 ) -> None:
     """Launch the marimo performance dashboard for the pipeline's logs."""
     env = os.environ.copy()
@@ -44,9 +54,10 @@ def dashboard(
         env["CANVODPY_PERF_LOG_DIR"] = str(Path(logs_dir).expanduser())
 
     marimo_subcommand = "edit" if edit else "run"
-    result = subprocess.run(
-        [sys.executable, "-m", "marimo", marimo_subcommand, str(_NOTEBOOK_PATH)],
-        env=env,
-        check=False,
-    )
+    cmd = [sys.executable, "-m", "marimo", marimo_subcommand, str(_NOTEBOOK_PATH)]
+    if host is not None:
+        cmd += ["--host", host]
+    if port is not None:
+        cmd += ["--port", str(port)]
+    result = subprocess.run(cmd, env=env, check=False)
     raise typer.Exit(code=result.returncode)
