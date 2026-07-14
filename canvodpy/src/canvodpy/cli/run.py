@@ -47,6 +47,7 @@ import xarray as xr
 from canvodpy.logging import emit_run_summary
 from canvodpy.logging.run_context import reset_run_id, set_run_id
 from canvodpy.logging.stage_timer import reset_run_stats
+from canvodpy.orchestrator.resources import ResourceSampler
 
 log = structlog.get_logger(__name__)
 
@@ -410,6 +411,13 @@ def _main_impl(args: SimpleNamespace) -> int:
             site_days = 0
             site_vod = 0
 
+            # Continuous memory/CPU/disk-I/O visibility for the whole
+            # site run (perf-degradation investigation, 2026-07-14) --
+            # complements the once-per-batch MemoryMonitor snapshot with
+            # samples covering time spent outside batch boundaries too.
+            resource_sampler = ResourceSampler()
+            resource_sampler.start()
+
             try:
                 reporter.set_current_site(site_name, start, end)
                 reporter.print_header(site_name, start, end, config, args)
@@ -540,6 +548,7 @@ def _main_impl(args: SimpleNamespace) -> int:
                 )
                 raise
             finally:
+                resource_sampler.stop()
                 reset_run_stats(run_id)
                 reset_run_id(run_id_token)
 

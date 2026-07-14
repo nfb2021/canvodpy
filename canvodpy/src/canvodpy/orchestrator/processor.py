@@ -143,12 +143,13 @@ def preprocess_with_hermite_aux(
     """
     import re
 
-    _ = receiver_type
     log = get_logger(__name__).bind(
         file=str(rnx_file.name), receiver_type=receiver_type
     )
 
-    with stage_timer("rinex.process_file", file=str(rnx_file.name)):
+    with stage_timer(
+        "rinex.process_file", file=str(rnx_file.name), receiver=receiver_type
+    ):
         try:
             t0 = time.perf_counter()
             log.info("rinex_preprocessing_started")
@@ -1863,6 +1864,11 @@ class RinexDataProcessor:
             duration_seconds=round(t2 - t1, 2),
             existing=len(existing_hashes),
             total=len(augmented_datasets),
+            # Metadata-table row count at check time -- lets a future run
+            # correlate batch_check duration against store growth directly
+            # instead of assuming O(rows) scaling (dev/todo_later.md
+            # perf-degradation investigation, 2026-07-14).
+            metadata_rows=self.site.rinex_store.metadata_row_count(receiver_name),
         )
         log.info(
             "Batch check complete in %.2fs: %s/%s existing",
@@ -1934,6 +1940,9 @@ class RinexDataProcessor:
                     len(augmented_datasets),
                 )
                 t5 = time.time()
+                file_append_seconds: list[float] = []
+                total_epochs = 0
+                total_nbytes = 0
 
                 for idx, (fname, ds) in enumerate(augmented_datasets):
                     # Progress logging
@@ -1988,12 +1997,15 @@ class RinexDataProcessor:
                         )
 
                         # Handle data writes using ONLY to_icechunk() with our session
+                        t_file = time.perf_counter()
+                        action = "skipped"
                         match (exists, self._rinex_store_strategy):
                             case (False, _) if receiver_name not in groups:
                                 # Initial group creation (first non-skipped file)
                                 to_icechunk(ds_clean, session, group=receiver_name)
                                 groups.append(receiver_name)
                                 actions["initial"] += 1
+                                action = "initial"
                                 log.debug("Initial: %s", rel_path)
 
                             case (True, "skip"):
@@ -2010,6 +2022,7 @@ class RinexDataProcessor:
                                     append_dim="epoch",
                                 )
                                 actions["appended"] += 1
+                                action = "appended"
                                 log.debug("Appended: %s", rel_path)
 
                             case (False, _):
@@ -2021,6 +2034,7 @@ class RinexDataProcessor:
                                     append_dim="epoch",
                                 )
                                 actions["written"] += 1
+                                action = "written"
                                 log.debug("Wrote: %s", rel_path)
 
                             case (True, "overwrite"):
@@ -2032,6 +2046,7 @@ class RinexDataProcessor:
                                     append_dim="epoch",
                                 )
                                 actions["overwritten"] += 1
+                                action = "overwritten"
                                 log.debug("Overwrote: %s", rel_path)
 
                             case _:
@@ -2041,6 +2056,29 @@ class RinexDataProcessor:
                                     self._rinex_store_strategy,
                                     rel_path,
                                 )
+                                action = "unhandled"
+
+                        # Per-file append timing (dev/todo_later.md perf-degradation
+                        # investigation, 2026-07-14): breaks open the "process_data"
+                        # aggregate below into per-file numbers so a future run can
+                        # tell whether cost grows uniformly within a batch (session/
+                        # manifest state) or is concentrated in specific files.
+                        dt_file = time.perf_counter() - t_file
+                        file_append_seconds.append(dt_file)
+                        n_epochs = int(ds_clean.sizes.get("epoch", 0))
+                        total_epochs += n_epochs
+                        total_nbytes += int(ds_clean.nbytes)
+                        self._icechunk_log.info(
+                            "icechunk.file_append",
+                            duration_seconds=round(dt_file, 4),
+                            receiver=receiver_name,
+                            date=str(self.matched_data_dirs.yyyydoy),
+                            file=fname.name,
+                            file_index=idx,
+                            action=action,
+                            n_epochs=n_epochs,
+                            n_sids=int(ds_clean.sizes.get("sid", 0)),
+                        )
 
                     except (OSError, RuntimeError, ValueError):  # fmt: skip
                         log.exception("Failed to process %s", fname.name)
@@ -2101,6 +2139,22 @@ class RinexDataProcessor:
                     snapshot_id[:8],
                 )
 
+                # Cheap on-disk store-internal stats (manifest/snapshot/
+                # transaction directory entry counts) sampled once per
+                # batch -- a directional proxy for Icechunk-internal growth,
+                # to test whether the write-side slowdown tracks manifest
+                # count (dev/todo_later.md perf-degradation investigation,
+                # 2026-07-14). Deliberately skips chunks/ (unbounded).
+                t_stats = time.perf_counter()
+                dir_counts = self.site.rinex_store.dir_entry_counts()
+                self._icechunk_log.info(
+                    "store_stats",
+                    duration_seconds=round(time.perf_counter() - t_stats, 4),
+                    receiver=receiver_name,
+                    date=str(self.matched_data_dirs.yyyydoy),
+                    **dir_counts,
+                )
+
                 # GC is intentionally skipped here. Running garbage_collect() after
                 # every commit performs a full reachability scan over all snapshots,
                 # manifests, and chunk objects — cost grows O(n) per batch → O(n²)
@@ -2110,10 +2164,29 @@ class RinexDataProcessor:
                 # Timing summary
                 t_end = time.time()
 
+                if file_append_seconds:
+                    _sorted = sorted(file_append_seconds)
+                    _n = len(_sorted)
+                    process_data_per_file = {
+                        "n": _n,
+                        "mean": round(sum(_sorted) / _n, 4),
+                        "p50": round(_sorted[_n // 2], 4),
+                        "p95": round(_sorted[min(_n - 1, int(_n * 0.95))], 4),
+                        "max": round(_sorted[-1], 4),
+                        "first": round(file_append_seconds[0], 4),
+                        "last": round(file_append_seconds[-1], 4),
+                    }
+                else:
+                    process_data_per_file = {}
+
                 self._icechunk_log.info(
                     "batch_write_complete",
                     receiver=receiver_name,
+                    date=str(self.matched_data_dirs.yyyydoy),
+                    snapshot_id=snapshot_id[:12],
                     total_files=len(augmented_datasets),
+                    total_epochs=total_epochs,
+                    total_nbytes=total_nbytes,
                     duration_seconds=round(t_end - t_start, 2),
                     timings={
                         "batch_check": round(t2 - t1, 2),
@@ -2122,6 +2195,7 @@ class RinexDataProcessor:
                         "commit": round(t8 - t7, 2),
                         "metadata": round(t10 - t9, 2),
                     },
+                    process_data_per_file=process_data_per_file,
                     actions=actions,
                     throughput_files_per_sec=round(
                         len(augmented_datasets) / (t_end - t_start), 2

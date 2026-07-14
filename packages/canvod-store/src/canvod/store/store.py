@@ -1,7 +1,9 @@
 import contextlib
 import io
 import json
+import os
 import sys
+import time
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -2313,12 +2315,56 @@ class MyIcechunkStore:
             return True, "hash_match"
         return True, "temporal_overlap"
 
+    def dir_entry_counts(self) -> dict[str, int]:
+        """Cheap on-disk entry counts for ``manifests``/``snapshots``/``transactions``.
+
+        A directional proxy for Icechunk-internal growth (manifest count,
+        snapshot count) without walking the full store. Deliberately
+        excludes ``chunks/`` (can reach millions of entries -- not cheap)
+        and only applies to local-filesystem-backed stores; returns ``{}``
+        for anything else (e.g. S3/GCS) since ``os.scandir`` doesn't apply.
+        """
+        counts: dict[str, int] = {}
+        for name in ("manifests", "snapshots", "transactions"):
+            d = self.store_path / name
+            try:
+                with os.scandir(d) as it:
+                    counts[name] = sum(1 for _ in it)
+            except OSError:
+                continue
+        return counts
+
+    def metadata_row_count(self, group_name: str, branch: str = "main") -> int:
+        """Row count of ``{group_name}/metadata/table``, or 0 if absent.
+
+        Reads only the ``index`` array's shape (no full table load) -- cheap
+        enough to log alongside every dedup check, so growth in
+        ``batch_check``/``check_temporal_overlaps`` duration can be directly
+        correlated against store size instead of assumed.
+        """
+        try:
+            with self.readonly_session(branch) as session:
+                zmeta = zarr.open_group(session.store, mode="r")[
+                    f"{group_name}/metadata/table"
+                ]
+                return int(zmeta["index"].shape[0])
+        except Exception:
+            return 0
+
     def batch_check_existing(self, group_name: str, file_hashes: list[str]) -> set[str]:
         """Check which file hashes already exist in metadata."""
 
         try:
             with self.readonly_session("main") as session:
+                t0 = time.perf_counter()
                 df = self.load_metadata(session.store, group_name)
+                self._logger.info(
+                    "metadata_table_loaded",
+                    duration_seconds=round(time.perf_counter() - t0, 4),
+                    group=group_name,
+                    rows=df.height,
+                    caller="batch_check_existing",
+                )
 
                 # Filter to matching hashes
                 existing = df.filter(pl.col("rinex_hash").is_in(file_hashes))
@@ -2357,7 +2403,15 @@ class MyIcechunkStore:
 
         try:
             with self.readonly_session(branch) as session:
+                t0 = time.perf_counter()
                 df = self.load_metadata(session.store, group_name)
+                self._logger.info(
+                    "metadata_table_loaded",
+                    duration_seconds=round(time.perf_counter() - t0, 4),
+                    group=group_name,
+                    rows=df.height,
+                    caller="check_temporal_overlaps",
+                )
         except Exception:
             return set()
 
@@ -2371,6 +2425,7 @@ class MyIcechunkStore:
             ]
         )
 
+        t_loop = time.perf_counter()
         overlapping: set[str] = set()
         for rinex_hash, start, end in file_intervals:
             start_ns = np.datetime64(start, "ns")
@@ -2387,6 +2442,16 @@ class MyIcechunkStore:
                 )
                 overlapping.add(rinex_hash)
 
+        # One filter() call per incoming interval, each scanning the full
+        # (growing) table -- O(intervals x rows). Timed separately from the
+        # table load above so the two costs aren't conflated.
+        self._logger.info(
+            "temporal_overlap_scan_complete",
+            duration_seconds=round(time.perf_counter() - t_loop, 4),
+            group=group_name,
+            intervals=len(file_intervals),
+            rows=df.height,
+        )
         return overlapping
 
     def expire_old_snapshots(

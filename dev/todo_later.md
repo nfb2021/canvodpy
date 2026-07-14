@@ -2478,3 +2478,104 @@ cause still not profiled/confirmed — the optional `stage_timing`
 instrumentation for each of the three candidates (to show *which* one is
 slow) remains unimplemented; revisit if the warm-up is reported as
 consistently long rather than a one-off.
+
+---
+
+## 34. Per-day write performance degradation over a long backfill (~185 days, 15s → 23s) — Tier 0 instrumentation shipped, 2026-07-14/15
+
+**Reported live**: a real ~185-day, 4-receiver backfill on the remote
+machine (`rosalia`) showed per-(site, receiver, 24h) Icechunk write time
+degrading from ~15s early in the backfill to ~23s late. Full analysis of
+the rsynced logs (`~/Downloads/canvod-logs/`, 958MB) and the resulting
+plan are in this session's transcript, not reproduced here in full — key
+findings:
+
+- `batch_write_complete`'s `timings.process_data` (96 individual
+  `to_icechunk(..., append_dim="epoch")` calls per receiver-day) dominates
+  absolutely (13-22s of 15-26s) but is noisy, not cleanly monotonic.
+- `timings.batch_check` (the 3-layer dedup guardrail) is small in absolute
+  terms but grows ~2-4x relatively — traced to `_check_existing_with_temporal_overlap`
+  doing **two independent full-table reads** of the metadata ledger
+  (`batch_check_existing` + `check_temporal_overlaps`, each calling
+  `load_metadata()` fresh) plus a per-interval Python loop inside
+  `check_temporal_overlaps` (`O(files × rows)`) — all over a
+  network-mounted store, per the owner's confirmation that infra
+  (mount/bandwidth) was stable but bandwidth-limited.
+- Periodic huge spikes (73-94s vs ~14s median) recur roughly every 13-15
+  days, matching `days_per_batch=14` — aux/ephemeris data for a new
+  14-day chunk gets fetched right as the previous chunk's write is
+  finishing, contending for the same limited network bandwidth. Owner's
+  hypothesis on both points, confirmed by the data.
+- Decision (via a Fable-model planning pass, given the target of 100+
+  sites/years of data): **keep the existing lightweight `stage_timer`/
+  structlog approach, do not adopt OpenTelemetry** — the gap was missing
+  events + a missing query/join layer, not the transport. OTel would need
+  an operated collector backend that doesn't exist (same reason the
+  earlier `telemetry.py` OTel integration was deleted, see §21).
+
+**Tier 0 (additive-only instrumentation) — DONE (2026-07-15):**
+1. `icechunk.file_append` event per file (breaks `process_data` open) +
+   `process_data_per_file` summary (mean/p50/p95/max/first/last) and
+   `date`/`snapshot_id`/`total_epochs`/`total_nbytes` added to
+   `batch_write_complete` — `processor.py`'s per-file write loop.
+2. `MyIcechunkStore.metadata_row_count()` (new, cheap shape-only read) +
+   `metadata_table_loaded`/`temporal_overlap_scan_complete` events inside
+   `batch_check_existing`/`check_temporal_overlaps` — tests the O(rows)
+   dedup-scan theory directly. `batch_check_complete` now carries
+   `metadata_rows` too. Touches `store.py` (guarded: dedup logic) —
+   additive logging only, no semantics changed; audit suite re-run clean.
+3. New `ResourceSampler` daemon thread (`orchestrator/resources.py`,
+   beside `MemoryMonitor`) emitting `resource_sample` every 30s (memory,
+   RSS main+children, CPU%, disk read/write deltas) for the whole run, not
+   just once per batch — wired into `cli/run.py`'s per-site loop.
+4. `MyIcechunkStore.dir_entry_counts()` (new) — manifests/snapshots/
+   transactions directory entry counts, emitted as `store_stats` after
+   each commit. Deliberately skips `chunks/` (confirmed unbounded via a
+   throwaway local Icechunk repo).
+5. Worker `rinex.process_file` `stage_timer` now carries `receiver=`
+   context, closing the join gap between per-file (worker, per-PID log)
+   and per-batch (main process) events.
+6. Not yet done (needs the remote machine, not code): confirm
+   `store.maintenance()`/`expire_old_snapshots()` was never run mid-backfill,
+   capture the remote `canvod-settings.yaml`'s `processing.icechunk`
+   section (manifest splitting is `True`/17280 epochs by default, but the
+   remote's actual effective value hasn't been confirmed) and the
+   receivers' actual epochs-per-day, into the run notes.
+
+Verified: `just check` (ruff+ty) clean on all 4 touched files, full audit
+suite (60) + fast suite (1788) unchanged, plus direct smoke tests of the
+two genuinely new pieces (`ResourceSampler` start/stop cycle;
+`metadata_row_count`/`dir_entry_counts` against both an empty and a
+populated throwaway Icechunk store).
+
+**Also recommended, not code**: run `py-spy` (external sampling
+profiler, zero instrumentation) against the live remote process tree
+during tonight's run — two short (~5 min) captures, one early and one
+after degradation should have reappeared, to catch anything the targeted
+events above don't explain. `uv tool install py-spy` on the remote
+machine; needs sudo/ptrace.
+
+**Tier 1 (this week, not started)**: a `canvodpy perf export` CLI
+compacting all `machine/performance*.json` (every PID, every run) into one
+Parquet with canonical join keys, so future bottleneck hunts are a
+Polars/DuckDB query instead of manual JSON archaeology (what had to be
+done this time); a rolling-median regression flagger for the "100+ sites"
+proactive-detection goal; threading `date_key` into worker task args
+natively (removes filename-parsing from the export tool); dashboard
+additions (per-file append distribution, `batch_check` vs `metadata_rows`
+scatter, resource_sample overlay).
+
+**Tier 2 (after tonight's data confirms mechanisms — guarded, needs full
+audit suite, not started)**: the actual fixes, not just instrumentation —
+single-load cached dedup check (currently 2 full reads per batch); batched
+day write (concatenate + one `to_icechunk` call instead of 96); split hot
+dedup columns from cold `dataset_attrs` in the metadata table; an
+OTel bridge only if a real collector backend is ever deployed for the
+100-site fleet.
+
+**Action:** Tier 0 shipped and verified 2026-07-15, pending commit/push +
+deploy to the remote machine before the owner's overnight restart.
+Re-check this entry once tomorrow's run produces data — that's what
+actually tells us whether the O(rows) dedup theory and the
+days_per_batch/network-contention theory hold up, and whether Tier 2 is
+worth doing.
