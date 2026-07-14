@@ -49,6 +49,9 @@ canvod-filemap = { path = "../canvodpy-extensions/packages/canvod-filemap" }
     so committing a local path breaks `uv run`/`uv sync` for everyone else.
     Keep the git source in version control; only override it locally.
 
+See [canvod-filemap's overview](https://nfb2021.github.io/canvodpy-extensions/packages/filemap/overview/)
+for the recipe format and mapping API.
+
 `canvod-airflow` is installed directly rather than via a canvodpy extra
 (it depends on `canvodpy`, not the other way around — wiring it as a
 `canvodpy` extra would create a circular reference):

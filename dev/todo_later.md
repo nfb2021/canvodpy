@@ -1747,6 +1747,19 @@ PyPI yet.** Re-verify once a new version publishes — if the warning still
 appears in a real `uv add canvod-readers` after that release, this needs a
 second look.
 
+**Re-confirmed live, 2026-07-14 (canvodpy-extensions repo):** ran
+`from canvod.store import MyIcechunkStore` in canvodpy-extensions' own dev
+env (`canvod-adapters[store]` pulls in `canvod-store>=0.2.3` from PyPI) —
+same exact warning text fired again. Traced it: the installed PyPI package
+has **no `canvod.config` module at all** (`ModuleNotFoundError` on direct
+import), confirming it predates the config unification entirely. More
+precisely than "not released yet": `uv pip show canvod-store` reports
+`Version: 0.2.3`, and the **local monorepo's `canvod-store/pyproject.toml`
+is also still at `0.2.3`** — the fix landed in source but the version was
+never bumped, so there's nothing new to even publish yet. Needs an actual
+`cz bump` + PyPI release of canvod-store (and canvod-config itself, which
+doesn't exist on PyPI at all) before this stops surfacing for real installs.
+
 **Part 2 — a real, separate bug: missing dependencies + a genuine circular
 dependency.** After installing `pymap3d` and `canvod-auxiliary` manually to
 get past two `ModuleNotFoundError`s, the read succeeded. Confirmed in source:
