@@ -413,6 +413,14 @@ def _main_impl(args: SimpleNamespace) -> int:
             try:
                 reporter.set_current_site(site_name, start, end)
                 reporter.print_header(site_name, start, end, config, args)
+                # First-run/remote-machine visibility: worker-pool startup,
+                # the satellite catalog, and store opening all happen here,
+                # silently, before the first per-day progress line -- without
+                # this it looks hung (see dev/todo_later.md §33).
+                reporter.log(
+                    "  Initializing (worker pool, satellite catalog, store) "
+                    "-- may take a while on a cold cache or first run..."
+                )
 
                 # Resolve VOD analysis pairs for this site
                 vod_analyses = site.vod_analyses if not args.no_vod else {}
