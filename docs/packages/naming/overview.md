@@ -100,7 +100,7 @@ Install it separately from the [canvodpy-extensions](https://github.com/nfb2021/
 repo (see [Optional Extensions](../../guides/extensions.md) for details and alternatives):
 
 ```bash
-uv add "canvod-filemap @ git+https://github.com/nfb2021/canvodpy-extensions.git#subdirectory=packages/canvod-filemap"
+uv add "canvod-filemap @ git+https://github.com/nfb2021/canvodpy-extensions.git@v0.1.0#subdirectory=packages/canvod-filemap"
 ```
 
 Then reference a recipe from `canvod-settings.yaml`:

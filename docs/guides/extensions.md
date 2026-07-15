@@ -57,7 +57,7 @@ for the recipe format and mapping API.
 `canvodpy` extra would create a circular reference):
 
 ```bash
-uv add "canvod-airflow[airflow] @ git+https://github.com/nfb2021/canvodpy-extensions.git#subdirectory=packages/canvod-airflow"
+uv add "canvod-airflow[airflow] @ git+https://github.com/nfb2021/canvodpy-extensions.git@v0.1.0#subdirectory=packages/canvod-airflow"
 ```
 
 See [canvod-airflow's overview](https://nfb2021.github.io/canvodpy-extensions/packages/airflow/overview/)
@@ -67,7 +67,7 @@ for DAG structure, deployment, and configuration.
 gated by a canvodpy config flag or extra on the `canvodpy` package itself):
 
 ```bash
-uv add "canvod-adapters[store] @ git+https://github.com/nfb2021/canvodpy-extensions.git#subdirectory=packages/canvod-adapters"
+uv add "canvod-adapters[store] @ git+https://github.com/nfb2021/canvodpy-extensions.git@v0.1.0#subdirectory=packages/canvod-adapters"
 ```
 
 `canvod-audit`'s Tier-3 comparison against gnssvod already depends on it

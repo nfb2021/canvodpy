@@ -431,7 +431,7 @@ Install separately from the [canvodpy-extensions](https://github.com/nfb2021/can
 repository (see [Optional Extensions](extensions.md) for details and alternatives):
 
 ```bash
-uv add "canvod-filemap @ git+https://github.com/nfb2021/canvodpy-extensions.git#subdirectory=packages/canvod-filemap"
+uv add "canvod-filemap @ git+https://github.com/nfb2021/canvodpy-extensions.git@v0.1.0#subdirectory=packages/canvod-filemap"
 ```
 
 Reference a recipe from `canvod-settings.yaml` on the receiver whose files use non-canonical names:

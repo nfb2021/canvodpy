@@ -13,8 +13,8 @@ exclude = ["packages/canvod-streamstats", "packages/canvod-filemap"]
 # that repo cloned alongside canvodpy, since uv resolves optional-dependency-
 # group sources even when the extra isn't requested.
 [tool.uv.sources]
-canvod-filemap = { git = "https://github.com/nfb2021/canvodpy-extensions.git", subdirectory = "packages/canvod-filemap" }
-canvod-adapters = { git = "https://github.com/nfb2021/canvodpy-extensions.git", subdirectory = "packages/canvod-adapters" }
+canvod-filemap = { git = "https://github.com/nfb2021/canvodpy-extensions.git", subdirectory = "packages/canvod-filemap", tag = "v0.1.0" }
+canvod-adapters = { git = "https://github.com/nfb2021/canvodpy-extensions.git", subdirectory = "packages/canvod-adapters", tag = "v0.1.0" }
 
 # ============================================================================
 # Development Dependencies (Workspace-wide)

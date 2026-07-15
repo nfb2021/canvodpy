@@ -210,7 +210,7 @@ wheels = [
 [[package]]
 name = "canvod-adapters"
 version = "0.1.0"
-source = { git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-adapters#3c2cf1ab86fcc3cba80b3d933e65d7e028e2d9b4" }
+source = { git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-adapters&tag=v0.1.0#2e914ba8706cfc63fb0b7ab254a69323fee4f7f5" }
 dependencies = [
     { name = "h5netcdf" },
     { name = "h5py" },
@@ -243,7 +243,7 @@ external = [
 
 [package.metadata]
 requires-dist = [
-    { name = "canvod-adapters", git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-adapters" },
+    { name = "canvod-adapters", git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-adapters&tag=v0.1.0" },
     { name = "canvod-readers", editable = "packages/canvod-readers" },
     { name = "canvod-store", editable = "packages/canvod-store" },
     { name = "canvod-utils", editable = "packages/canvod-utils" },
@@ -336,7 +336,7 @@ requires-dist = [
 [[package]]
 name = "canvod-filemap"
 version = "0.3.0"
-source = { git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap#3c2cf1ab86fcc3cba80b3d933e65d7e028e2d9b4" }
+source = { git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap&tag=v0.1.0#2e914ba8706cfc63fb0b7ab254a69323fee4f7f5" }
 dependencies = [
     { name = "natsort" },
     { name = "pydantic" },
@@ -712,7 +712,7 @@ requires-dist = [
     { name = "altair", specifier = ">=6.0.0" },
     { name = "canvod-auxiliary", editable = "packages/canvod-auxiliary" },
     { name = "canvod-config", editable = "packages/canvod-config" },
-    { name = "canvod-filemap", marker = "extra == 'filemap'", git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap" },
+    { name = "canvod-filemap", marker = "extra == 'filemap'", git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap&tag=v0.1.0" },
     { name = "canvod-grids", editable = "packages/canvod-grids" },
     { name = "canvod-ops", editable = "packages/canvod-ops" },
     { name = "canvod-readers", editable = "packages/canvod-readers" },
