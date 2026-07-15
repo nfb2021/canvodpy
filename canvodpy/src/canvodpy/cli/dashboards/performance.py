@@ -66,8 +66,13 @@ def _(mo):
     # Auto-refreshing timer: re-runs every cell that references `refresh`
     # on the chosen interval, so the dashboard tracks a live run without
     # a manual click. The widget also exposes a manual refresh action.
+    # Long options (30m-24h) matter for the "runs may take days or run
+    # forever" case (dev/todo_later.md §37) -- a dashboard left open
+    # against an unattended multi-day backfill shouldn't have to poll
+    # every few seconds to eventually catch up.
     refresh = mo.ui.refresh(
-        options=["2s", "5s", "10s", "30s", "1m"], default_interval="10s"
+        options=["2s", "5s", "10s", "30s", "1m", "5m", "30m", "1h", "2h", "6h", "24h"],
+        default_interval="10s",
     )
     refresh
     return (refresh,)
@@ -125,7 +130,19 @@ def _(machine_dir, mo, refresh):
             return pl.DataFrame(schema=_STAGE_SCHEMA)
         return pl.DataFrame(rows, schema=_STAGE_SCHEMA)
 
-    perf_files = sorted(machine_dir.glob("performance*.json"))
+    # `performance*.json*` (trailing `*`), not `performance*.json`: the perf
+    # log uses a size-triggered RotatingFileHandler (50MB, backupCount now
+    # 60 -- was 10; see logging_config.py), so a run of any real length
+    # rotates the main process's file to `performance.json.1`, `.2`, ...
+    # -- names that don't end in `.json` and were silently invisible to the
+    # old pattern. On a ~15h overnight run, `performance.json.1` alone held
+    # 82% of the main process's *total* logged lines (150,842/184,763) but
+    # only ~0.4% of the `stage_timing` events this cell reads specifically
+    # (most `stage_timing` events come from per-PID worker files, which
+    # never rotated this run) -- still a real bug, just smaller in this
+    # dimension than the raw file sizes suggest (confirmed against a real
+    # backfill's logs, 2026-07-15).
+    perf_files = sorted(machine_dir.glob("performance*.json*"))
     events = _read_stage_events(perf_files)
 
     # `site` is not logged directly -- it's the prefix of run_id

@@ -369,7 +369,17 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
     agent_handler = RotatingFileHandler(
         agent_log,
         maxBytes=100 * 1024 * 1024,  # 100MB max per file
-        backupCount=10,  # Keep 10 rotated files
+        # backupCount=10 (1GB) only reached ~1h back on a 15h overnight run
+        # (~2.2GB/day observed, 2026-07-15) -- found by hitting it directly,
+        # while investigating that same run's write-side degradation:
+        # agent.json.10 (the oldest kept backup) started at 23:14 UTC, but
+        # the run began at 22:15, so the first hour of debug detail for that
+        # run was already gone. 150 (~15GB, ~7 days at this rate) is a
+        # stopgap sized for "don't lose crash forensics within about a
+        # week," not a durable fix -- same caveat as performance.json's
+        # backupCount bump (see dev/todo_later.md §37): the real answer is
+        # exporting before rotation can touch it.
+        backupCount=150,
         encoding="utf-8",
     )
     agent_handler.setLevel(logging.DEBUG)  # Capture everything
@@ -431,7 +441,14 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
     perf_handler = RotatingFileHandler(
         perf_log,
         maxBytes=50 * 1024 * 1024,  # 50MB max per file
-        backupCount=10,  # Keep 10 rotated files
+        # backupCount=10 (500MB) silently deleted history after ~5 days on a
+        # real overnight backfill (~96MB/day observed, 2026-07-15) -- too
+        # short for the "runs may take days, or are triggered daily and run
+        # forever" case. 60 (~3GB/~31 days) is a stopgap, not a fix: the
+        # durable answer is exporting machine/performance*.json into a
+        # persistent store before rotation can touch it (dev/todo_later.md
+        # §34 Tier 1, not yet built).
+        backupCount=60,
         encoding="utf-8",
     )
     perf_handler.setLevel(logging.DEBUG)
