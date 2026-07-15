@@ -2651,3 +2651,48 @@ fundamentally about the same over-fragmented-chunk problem: §34's RINEX
 per-file writes and this entry's VOD epoch mismatch are two symptoms of
 one write path that never rechunks to the intended boundary before
 writing).
+
+---
+
+## 36. Optional `canvod-*` extension dependencies float on `main`, not a pinned release (2026-07-15)
+
+**Found**: `pyproject.toml`'s `[tool.uv.sources]` (root of the monorepo)
+points `canvod-filemap` and `canvod-adapters` at
+`{ git = "https://github.com/nfb2021/canvodpy-extensions.git", subdirectory = "..." }`
+with **no `rev`/`tag` pin** — `uv sync --extra filemap` (or any other
+optional extra sourced this way) always resolves whatever is on the
+default branch at sync time, not a fixed version. Same pattern in
+`canvodpy-extensions`' own `README.md` install snippet:
+```
+uv add "canvod-filemap @ git+https://github.com/nfb2021/canvodpy-extensions.git#subdirectory=packages/canvod-filemap"
+```
+— no `@<tag>` suffix either. canvodpy-extensions already cuts real
+versioned releases (`v0.1.0` exists, with a Zenodo DOI per §31), so a
+pinned reference is available, just not used.
+
+**Why this matters**: a `main`-tracking dependency is not reproducible —
+two people running `uv sync --extra filemap` on different days (or a CI
+run vs. a later local install) can silently get different code, with no
+way to tell without diffing commits. This is exactly the kind of
+un-pinned-dependency problem the rest of the project (uv lockfiles,
+pinned versions everywhere else) otherwise avoids.
+
+**Fix, when picked up**:
+1. Change both `[tool.uv.sources]` entries in the root `pyproject.toml`
+   to include `rev = "v0.1.0"` (or `tag =`, check which `uv` supports for
+   git sources — verify current syntax) instead of floating on the
+   default branch.
+2. Update `canvodpy-extensions/README.md`'s `uv add "... @ git+...#subdirectory=..."`
+   snippet to append the matching `@v0.1.0` (or equivalent pinned ref
+   syntax for `uv add`'s git URL form).
+3. **Process going forward**: every time a new `canvodpy-extensions` tag/
+   release is cut, both of the above references need bumping to the new
+   tag as part of that release's checklist — otherwise this just
+   regresses back to "pinned to whatever the last person happened to set
+   it to," not actually tracking releases. Worth adding a line to
+   whatever release checklist/`just release` process canvodpy-extensions
+   already has (see §26/§31 for where that lives) rather than relying on
+   memory.
+
+**Action:** not started, found while doing something else (documented
+here per owner request during the demo-notebook restructuring pass).

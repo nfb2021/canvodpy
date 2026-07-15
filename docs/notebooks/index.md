@@ -19,7 +19,7 @@ Each notebook can be previewed read-only in [molab](https://molab.marimo.io/gith
 
 | # | Notebook | Topic | Preview |
 |---|---|---|---|
-| 00 | Speedrun — Full Pipeline | Raw GNSS files → VOD in five cells | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/00_convenience_speedrun.py) |
+| 00 | CLI Quickstart | Raw GNSS files to a versioned VOD store with one `canvodpy` command | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/00_cli_quickstart.py) |
 | 01 | Naming Convention & Validation | IGS/RINEX filename parsing and validation | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/01_naming_convention.py) |
 | 02 | RINEX v3 Observation Reading | RINEX v3.04 → `xarray.Dataset` | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/02_rinex_reading.py) |
 | 03 | Satellite Catalog | IGS SatelliteCatalog — PRN metadata | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/03_satellite_catalog.py) |
@@ -30,33 +30,24 @@ Each notebook can be previewed read-only in [molab](https://molab.marimo.io/gith
 | 08 | Icechunk Store | Versioned Icechunk/Zarr storage | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/08_icechunk_store.py) |
 | 09 | Store Metadata & FAIR Compliance | DataCite/ACDD/STAC provenance | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/09_store_metadata.py) |
 | 10 | Visualization | 2D/3D hemispheric plots | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/10_visualization.py) |
-| 11 | Configuration & Utilities | Pydantic configuration models | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/11_configuration.py) |
+| 11 | Configuration & Diagnostics | Pydantic configuration models, two-track logging, `stage_timer` diagnostics | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/11_configuration.py) |
 
 ### API notebooks
 
-!!! note "Demo repo update pending push"
-
-    The deprecated L1/L2 notebooks have been removed and the remaining
-    notebooks renumbered in the local `canvodpy-demo` checkout, but that
-    commit hasn't been pushed to `origin/main` yet — the molab preview
-    links below will 404 until it is. The table already reflects the
-    post-reorg state.
-
 | # | Notebook | Topic | Preview |
 |---|---|---|---|
-| 12 | API Overview | CLI, `Site.pipeline()`, and the functional API side by side | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/12_api_overview.py) |
-| 13 | Running the Pipeline (CLI) | `canvodpy run` — flags, auto-resume, multi-site | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/13_cli_pipeline.py) |
-| 14 | Site Pipeline | `Site().pipeline().process_range()` — same path the CLI wraps | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/14_site_pipeline.py) |
-| 15 | Functional API | Pure functions for custom pipelines and analysis | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/15_functional_api.py) |
+| 12 | API Overview | The CLI, `Site.pipeline()`, and the functional API side by side | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/12_api_overview.py) |
+| 13 | Site Pipeline | `Site().pipeline().process_range()` — the path the CLI wraps | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/13_site_pipeline.py) |
+| 14 | Functional API | L4 — pure functions in `canvodpy.functional` for custom pipelines | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/14_functional_api.py) |
 
 ### Workflow notebooks
 
 | # | Notebook | Topic | Preview |
 |---|---|---|---|
-| 16 | Single-Day Workflow | End-to-end single-day processing | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/16_workflow_single_day.py) |
-| 17 | Batch Processing | Multi-day processing with Dask | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/17_workflow_batch_processing.py) |
-| 18 | Store Operations | Store read/write/branch operations | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/18_workflow_store_operations.py) |
-| 19 | Grid Exploration | Interactive hemispheric grid explorer | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/19_grid_exploration.py) |
+| 15 | Single-Day Workflow | End-to-end single-day processing: read, augment, grid, retrieve VOD | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/15_single_day_python.py) |
+| 16 | Batch Processing | Multi-day processing — the CLI's primary use case, plus the equivalent L3 API | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/16_batch_processing.py) |
+| 17 | Store Operations | Store read/write/branch operations, temporal aggregation, metadata queries | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/17_store_operations.py) |
+| 18 | Grid Exploration | Interactive hemispheric grid explorer | [![molab](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/18_grid_exploration.py) |
 
 ---
 
