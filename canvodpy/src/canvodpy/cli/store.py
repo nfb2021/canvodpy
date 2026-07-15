@@ -197,3 +197,109 @@ def log(
         icestore.print_ops_log(limit=limit)
     else:
         print(icestore.plot_commit_graph(branch=branch))
+
+
+@store_app.command()
+def maintain(
+    site: Annotated[str, typer.Argument(help="Site name, as defined in sites.yaml")],
+    store: Annotated[
+        str, typer.Option("--store", help="Which store: gnss or vod")
+    ] = "gnss",
+    expire_days: Annotated[
+        int,
+        typer.Option(
+            "--expire-days",
+            help="Snapshot retention window in days (weeks-to-months, not hours)",
+        ),
+    ] = 90,
+    gc: Annotated[
+        bool, typer.Option("--gc/--no-gc", help="Run garbage collection")
+    ] = True,
+    execute: Annotated[
+        bool,
+        typer.Option(
+            "--execute",
+            help=(
+                "Actually run expiration/GC. Without this flag, only a "
+                "dry-run garbage-collect report is shown -- nothing is "
+                "deleted or expired."
+            ),
+        ),
+    ] = False,
+) -> None:
+    """Run store maintenance (expiration + garbage collection).
+
+    Defaults to a **dry run**: reports what garbage collection would delete
+    and how many ancestry entries are older than the cutoff, without
+    touching anything. Pass --execute to actually expire snapshots and
+    (optionally) run garbage collection for real.
+
+    This is an administrative operation -- never safe to run casually
+    alongside an active pipeline run on the same store. See
+    dev/perf_degradation_findings_2026_07_15.md for the full rationale
+    (expiration/GC concurrency caveats, why the default cadence is weeks-
+    to-months, and the retention-scheme design this command supports).
+    """
+    if store not in _STORE_KINDS:
+        console.print(
+            f"[red]❌ --store must be one of: {', '.join(_STORE_KINDS)}[/red]"
+        )
+        raise typer.Exit(1)
+
+    from datetime import UTC, datetime, timedelta
+
+    icestore = _open_store(site, store)
+    cutoff = datetime.now(UTC) - timedelta(days=expire_days)
+
+    if not execute:
+        console.print(
+            f"\n[bold]{site}[/bold] — {store} store — [yellow]DRY RUN[/yellow] "
+            f"(cutoff: {cutoff.isoformat()})\n"
+        )
+
+        if gc:
+            gc_result = icestore.garbage_collect(days=expire_days, dry_run=True)
+            console.print("[bold]Would garbage-collect:[/bold]")
+            for key in (
+                "bytes_deleted",
+                "chunks_deleted",
+                "manifests_deleted",
+                "snapshots_deleted",
+                "attributes_deleted",
+                "transaction_logs_deleted",
+            ):
+                console.print(f"  {key}: {gc_result[key]}")
+        else:
+            console.print("[dim]--no-gc: skipping garbage-collect dry run.[/dim]")
+
+        stale = sum(
+            1
+            for snap in icestore.repo.ancestry(branch="main")
+            if snap.written_at < cutoff
+        )
+        console.print(f"\n[bold]Ancestry entries older than cutoff:[/bold] {stale}")
+        console.print(
+            "\n[dim]Nothing was deleted or expired. Re-run with --execute "
+            "to actually run maintenance (after confirming).[/dim]"
+        )
+        return
+
+    console.print(
+        f"\n[bold red]About to run maintenance on {site} ({store} store)[/bold red]"
+    )
+    console.print(f"  Cutoff: {cutoff.isoformat()} ({expire_days} days)")
+    console.print(f"  Garbage collection: {'yes' if gc else 'no'}")
+    console.print(
+        "\n[yellow]This is an administrative operation. Do not run it while "
+        "a pipeline run is active against this store.[/yellow]"
+    )
+    if not typer.confirm("Proceed?"):
+        console.print("Aborted.")
+        raise typer.Exit(0)
+
+    results = icestore.maintenance(expire_days=expire_days, run_gc=gc)
+    console.print("\n[bold green]Maintenance complete:[/bold green]")
+    console.print(f"  Expired snapshots: {results['expired_snapshots']}")
+    console.print(f"  Deleted branches:  {results['deleted_branches']}")
+    if results["gc_summary"] is not None:
+        console.print(f"  GC summary:        {results['gc_summary']}")

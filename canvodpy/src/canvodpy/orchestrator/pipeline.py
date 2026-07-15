@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import gc
 import os
 import time as _time
 from collections import defaultdict
-from collections.abc import Callable, Generator
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Callable, Generator, Sequence
+from concurrent.futures import (
+    FIRST_COMPLETED,
+    Future,
+    ThreadPoolExecutor,
+    as_completed,
+    wait,
+)
 from concurrent.futures.process import BrokenProcessPool
 from datetime import datetime
 from pathlib import Path
@@ -60,6 +67,66 @@ def _check_recipe_receivers_have_filemap(receivers: dict[str, dict]) -> None:
             f"canvod-filemap, but it is not installed. Install with: "
             f"uv sync --extra filemap"
         ) from exc
+
+
+def _windowed_completions[T](
+    submit: Callable[[T], Future], tasks: Sequence[T], window: int
+) -> Generator[tuple[T, Future]]:
+    """Submit ``tasks`` keeping at most ``window`` futures in flight.
+
+    Seeds ``window`` tasks, then on each completion submits one more from
+    the backlog before yielding ``(task, future)``. Unlike submitting the
+    whole batch upfront and draining via ``as_completed()``, this bounds
+    how many workers can be concurrently active while a caller is busy
+    handling a completed result (e.g. writing to Icechunk) -- a full-batch
+    submission let the write path race a still-fully-loaded worker pool
+    (dev/perf_degradation_findings_2026_07_15.md, Problem A).
+
+    Never calls ``future.result()`` itself -- the caller owns exception
+    handling. Each future is popped from the in-flight mapping before being
+    yielded, so a consumed future's retained result isn't held here
+    (dev/perf_degradation_findings_2026_07_15.md, Problem C).
+
+    If ``submit`` itself raises ``BrokenProcessPool`` (e.g. a worker was
+    OOM-killed), that used to only ever surface via a pre-submitted
+    future's ``.result()`` -- submission all happened upfront, before any
+    worker had a chance to die. Submitting mid-stream here means a
+    ``submit()`` call can now hit an already-broken pool directly. Once
+    that happens, stop calling ``submit`` (it would just keep failing) and
+    synthesize an already-failed future for every remaining task instead,
+    so the caller's existing per-task ``except BrokenProcessPool`` handling
+    (`_process_multi_day_batches`) still sees one exception per task, not
+    one uncaught exception that kills the whole generator.
+    """
+    in_flight: dict[Future, T] = {}
+    idx = 0
+    pool_broken: BrokenProcessPool | None = None
+
+    def _submit(task: T) -> Future:
+        nonlocal pool_broken
+        if pool_broken is not None:
+            fut: Future = Future()
+            fut.set_exception(pool_broken)
+            return fut
+        try:
+            return submit(task)
+        except BrokenProcessPool as exc:
+            pool_broken = exc
+            fut = Future()
+            fut.set_exception(exc)
+            return fut
+
+    while idx < min(window, len(tasks)):
+        in_flight[_submit(tasks[idx])] = tasks[idx]
+        idx += 1
+    while in_flight:
+        done, _ = wait(list(in_flight), return_when=FIRST_COMPLETED)
+        for fut in done:
+            task = in_flight.pop(fut)
+            if idx < len(tasks):
+                in_flight[_submit(tasks[idx])] = tasks[idx]
+                idx += 1
+            yield task, fut
 
 
 class PipelineOrchestrator:
@@ -790,7 +857,6 @@ class PipelineOrchestrator:
 
             assert _loky_reusable is not None
             t_submit_start = _time.monotonic()
-            future_to_meta: dict = {}
             n_wrk = self.n_max_workers or os.cpu_count() or 4
             _res = load_config().processing.params.resolve_resources()
             _pool = _loky_reusable(
@@ -798,19 +864,31 @@ class PipelineOrchestrator:
                 initializer=_worker_init_with_run_id,
                 initargs=(_res["nice_priority"], _res["cpu_affinity"], get_run_id()),
             )
-            for date_key, task_args in all_tasks:
-                fut = _pool.submit(preprocess_with_hermite_aux, *task_args)
-                receiver_name = task_args[4]
-                future_to_meta[fut] = (date_key, receiver_name)
-            t_submit_end = _time.monotonic()
+
+            def _submit_task(task: tuple[str, tuple], *, _pool=_pool) -> Future:
+                return _pool.submit(preprocess_with_hermite_aux, *task[1])
+
+            # Windowed submission (~2x worker count in flight), not the whole
+            # batch upfront: submitting all ~n_days*n_receivers*n_files tasks
+            # before draining left the write path racing a fully-loaded pool
+            # for the earliest-completing groups (dev/perf_degradation_
+            # findings_2026_07_15.md, Problem A). Streaming-write behavior
+            # (write the moment a group completes) is unchanged.
+            window = max(1, 2 * n_wrk)
+            t_setup_end = _time.monotonic()
             self._logger.info(
-                "phase2_loky_submitted",
+                "phase2_windowed_scheduling_started",
                 batch_index=batch_idx + 1,
-                tasks_submitted=len(future_to_meta),
+                # Submission is now lazy -- spread across the batch by
+                # _windowed_completions, not done upfront -- so this is the
+                # total that *will* be submitted, not a completed count, and
+                # setup_seconds times pool/window setup only, not submission.
+                tasks_to_submit=len(all_tasks),
                 n_workers=n_wrk,
-                submit_seconds=round(t_submit_end - t_submit_start, 4),
+                window=window,
+                setup_seconds=round(t_setup_end - t_submit_start, 4),
             )
-            fut_iter = as_completed(future_to_meta)
+            completion_iter = _windowed_completions(_submit_task, all_tasks, window)
 
             # Streaming collection: write as groups complete
             pending_results: dict[tuple[str, str], list[tuple[Path, xr.Dataset]]] = (
@@ -839,12 +917,13 @@ class PipelineOrchestrator:
                 # Stub tasks on the disabled inner progress (no-ops for rendering)
                 _progress_inner.add_task(
                     f"[bold]batch {batch_idx + 1}",
-                    total=len(future_to_meta),
+                    total=len(all_tasks),
                 )
 
                 batch_t0 = _time.monotonic()
-                for fut in fut_iter:
-                    date_key, receiver_name = future_to_meta[fut]
+                for task, fut in completion_iter:
+                    date_key, task_args = task
+                    receiver_name = task_args[4]
                     group_key = (date_key, receiver_name)
 
                     try:
@@ -987,6 +1066,7 @@ class PipelineOrchestrator:
                     doys_failed=len(batch),
                     batch_seconds=round(batch_elapsed, 2),
                 )
+                gc.collect()
                 continue
 
             # Yield per date in batch order (deterministic output)
@@ -1013,6 +1093,26 @@ class PipelineOrchestrator:
                 doys_failed=doys_failed,
                 batch_seconds=round(batch_elapsed, 2),
             )
+
+            # Belt-and-suspenders: these should already be empty (pending_
+            # results/aux are .pop()'d as groups complete, and the windowed
+            # completion iterator above pops each future before yielding
+            # it), but this whole method is one generator whose frame spans
+            # the entire multi-batch run via `yield from` -- clearing plus
+            # an explicit gc.collect() bounds any reference-cycle garbage
+            # (xarray/Dask objects are known to form cycles refcounting
+            # alone can't clear) that would otherwise accumulate for the
+            # rest of the run (dev/perf_degradation_findings_2026_07_15.md,
+            # Problem C).
+            pending_results.clear()
+            pending_aux.clear()
+            completed_counts.clear()
+            date_datasets.clear()
+            date_timings.clear()
+            doy_contexts.clear()
+            receiver_files_lookup.clear()
+            expected_counts.clear()
+            gc.collect()
 
     def process_by_date(
         self,

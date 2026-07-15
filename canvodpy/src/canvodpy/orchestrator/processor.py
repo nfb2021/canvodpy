@@ -639,6 +639,7 @@ class RinexDataProcessor:
         t_config_start = time.perf_counter()
         config = load_config()
         self._config = config  # cache to avoid re-reading YAML in methods
+        self._keeper_tags_enabled: bool = config.processing.storage.keeper_tags
         self.keep_sids = config.sids.get_sids()
 
         # Resolve ephemeris source: explicit param > config > default (final)
@@ -1738,29 +1739,39 @@ class RinexDataProcessor:
         them as ``exists=True``.
         """
         valid_hashes = [h for h in file_hash_map.values() if h]
-        existing_hashes = self.site.rinex_store.batch_check_existing(
-            receiver_name, valid_hashes
-        )
 
-        # Check 2: temporal overlap against store metadata
-        new_hashes = [h for h in valid_hashes if h not in existing_hashes]
-        if new_hashes:
-            file_intervals = []
-            for fname, ds in augmented_datasets:
-                h = file_hash_map[fname]
-                if h and h not in existing_hashes:
-                    file_intervals.append(
-                        (
-                            h,
-                            np.datetime64(ds.epoch.min().values),
-                            np.datetime64(ds.epoch.max().values),
+        # Load the metadata table once and share it with both checks below
+        # instead of each doing its own full-table read (dev/todo_later.md
+        # §34 -- confirmed 2026-07-15 that batch_check duration tracks
+        # metadata_rows almost exactly, so halving the reads halves that
+        # cost directly). `None` means fresh store / no metadata yet.
+        metadata_df = self.site.rinex_store.load_metadata_for_dedup(receiver_name)
+        if metadata_df is None:
+            existing_hashes: set[str] = set()
+        else:
+            existing_hashes = self.site.rinex_store.batch_check_existing(
+                receiver_name, valid_hashes, metadata_df=metadata_df
+            )
+
+            # Check 2: temporal overlap against store metadata
+            new_hashes = [h for h in valid_hashes if h not in existing_hashes]
+            if new_hashes:
+                file_intervals = []
+                for fname, ds in augmented_datasets:
+                    h = file_hash_map[fname]
+                    if h and h not in existing_hashes:
+                        file_intervals.append(
+                            (
+                                h,
+                                np.datetime64(ds.epoch.min().values),
+                                np.datetime64(ds.epoch.max().values),
+                            )
                         )
+                if file_intervals:
+                    temporal_overlaps = self.site.rinex_store.check_temporal_overlaps(
+                        receiver_name, file_intervals, metadata_df=metadata_df
                     )
-            if file_intervals:
-                temporal_overlaps = self.site.rinex_store.check_temporal_overlaps(
-                    receiver_name, file_intervals
-                )
-                existing_hashes |= temporal_overlaps
+                    existing_hashes |= temporal_overlaps
 
         # Check 3: intra-batch overlap detection
         # If a file's time range fully contains other files' ranges,
@@ -2138,6 +2149,17 @@ class RinexDataProcessor:
                     t8 - t7,
                     snapshot_id[:8],
                 )
+
+                # Retention keeper tag (dev/perf_degradation_findings_2026_
+                # 07_15.md, Problem B) -- additive, inert, off by default.
+                # Never fails the write: create_keeper_tag() swallows tag
+                # name collisions itself.
+                if self._keeper_tags_enabled:
+                    self.site.rinex_store.create_keeper_tag(
+                        receiver_name,
+                        str(self.matched_data_dirs.yyyydoy),
+                        snapshot_id,
+                    )
 
                 # Cheap on-disk store-internal stats (manifest/snapshot/
                 # transaction directory entry counts) sampled once per

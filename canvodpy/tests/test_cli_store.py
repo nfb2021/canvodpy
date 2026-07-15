@@ -210,3 +210,68 @@ class TestStoreLog:
 
         assert result.exit_code == 0, result.output
         assert "NewCommit" in result.output
+
+
+class TestStoreMaintain:
+    """dev/perf_degradation_findings_2026_07_15.md, Problem B: maintain
+    defaults to a dry run that deletes nothing; --execute requires
+    interactive confirmation before touching anything."""
+
+    def test_default_is_dry_run_and_deletes_nothing(self, tmp_path):
+        config_dir = tmp_path / "config"
+        stores_root = tmp_path / "stores"
+        _write_config(config_dir, stores_root)
+        _write_synthetic_store(stores_root / "TestSite" / "rinex", n_slots=2)
+
+        result = runner.invoke(
+            main_app, ["store", "maintain", "TestSite"], env=_env(config_dir)
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "DRY RUN" in result.output
+        assert "Would garbage-collect" in result.output
+        assert "Nothing was deleted or expired" in result.output
+
+        # commits from _write_synthetic_store must all still be present
+        from canvod.store import MyIcechunkStore
+
+        icestore = MyIcechunkStore(
+            stores_root / "TestSite" / "rinex", store_type="rinex_store"
+        )
+        history = icestore.get_history()
+        assert len(history) >= 2
+
+    def test_execute_without_confirmation_aborts(self, tmp_path):
+        config_dir = tmp_path / "config"
+        stores_root = tmp_path / "stores"
+        _write_config(config_dir, stores_root)
+        _write_synthetic_store(stores_root / "TestSite" / "rinex", n_slots=2)
+
+        result = runner.invoke(
+            main_app,
+            ["store", "maintain", "TestSite", "--execute"],
+            input="n\n",
+            env=_env(config_dir),
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "Aborted" in result.output
+        assert "Maintenance complete" not in result.output
+
+    def test_execute_with_confirmation_runs_maintenance(self, tmp_path):
+        config_dir = tmp_path / "config"
+        stores_root = tmp_path / "stores"
+        _write_config(config_dir, stores_root)
+        _write_synthetic_store(stores_root / "TestSite" / "rinex", n_slots=2)
+
+        result = runner.invoke(
+            main_app,
+            ["store", "maintain", "TestSite", "--execute"],
+            input="y\n",
+            env=_env(config_dir),
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "Maintenance complete" in result.output
+        # 90-day default cutoff means nothing this fresh actually expires
+        assert "Expired snapshots: 0" in result.output

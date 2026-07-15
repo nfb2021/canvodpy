@@ -2351,11 +2351,24 @@ class MyIcechunkStore:
         except Exception:
             return 0
 
-    def batch_check_existing(self, group_name: str, file_hashes: list[str]) -> set[str]:
-        """Check which file hashes already exist in metadata."""
+    def load_metadata_for_dedup(
+        self, group_name: str, branch: str = "main"
+    ) -> pl.DataFrame | None:
+        """Load ``{group_name}``'s metadata table once, for reuse across dedup checks.
 
+        ``batch_check_existing``/``check_temporal_overlaps`` each used to call
+        ``load_metadata()`` independently -- two full-table reads per batch,
+        growing with store size (dev/todo_later.md §34; confirmed 2026-07-15
+        against a real backfill: ``batch_check`` duration tracked
+        ``metadata_rows`` almost exactly, ~5x over 41,597 rows). Callers
+        needing both checks should load once here and pass the result to
+        both via their ``metadata_df`` parameter. Returns ``None`` (not an
+        empty DataFrame) when the group/metadata doesn't exist yet, so
+        callers can distinguish "nothing to check against" from "failed to
+        load" without re-attempting the load.
+        """
         try:
-            with self.readonly_session("main") as session:
+            with self.readonly_session(branch) as session:
                 t0 = time.perf_counter()
                 df = self.load_metadata(session.store, group_name)
                 self._logger.info(
@@ -2363,12 +2376,44 @@ class MyIcechunkStore:
                     duration_seconds=round(time.perf_counter() - t0, 4),
                     group=group_name,
                     rows=df.height,
-                    caller="batch_check_existing",
+                    caller="load_metadata_for_dedup",
                 )
+                return df
+        except Exception:
+            return None
 
-                # Filter to matching hashes
-                existing = df.filter(pl.col("rinex_hash").is_in(file_hashes))
-                return set(existing["rinex_hash"].to_list())
+    def batch_check_existing(
+        self,
+        group_name: str,
+        file_hashes: list[str],
+        metadata_df: pl.DataFrame | None = None,
+    ) -> set[str]:
+        """Check which file hashes already exist in metadata.
+
+        Parameters
+        ----------
+        metadata_df : pl.DataFrame, optional
+            Pre-loaded metadata table (see ``load_metadata_for_dedup``) to
+            skip this call's own full-table read. Loads internally (original
+            behavior) when not provided.
+        """
+        try:
+            if metadata_df is None:
+                with self.readonly_session("main") as session:
+                    t0 = time.perf_counter()
+                    df = self.load_metadata(session.store, group_name)
+                    self._logger.info(
+                        "metadata_table_loaded",
+                        duration_seconds=round(time.perf_counter() - t0, 4),
+                        group=group_name,
+                        rows=df.height,
+                        caller="batch_check_existing",
+                    )
+            else:
+                df = metadata_df
+
+            existing = df.filter(pl.col("rinex_hash").is_in(file_hashes))
+            return set(existing["rinex_hash"].to_list())
 
         except Exception:
             # Branch/group/metadata doesn't exist yet (fresh store)
@@ -2379,6 +2424,7 @@ class MyIcechunkStore:
         group_name: str,
         file_intervals: list[tuple[str, np.datetime64, np.datetime64]],
         branch: str = "main",
+        metadata_df: pl.DataFrame | None = None,
     ) -> set[str]:
         """Check which files temporally overlap existing metadata intervals.
 
@@ -2390,6 +2436,10 @@ class MyIcechunkStore:
             List of ``(rinex_hash, start, end)`` tuples for incoming files.
         branch : str, default "main"
             Branch name in the Icechunk repository.
+        metadata_df : pl.DataFrame, optional
+            Pre-loaded metadata table (see ``load_metadata_for_dedup``) to
+            skip this call's own full-table read. Loads internally (original
+            behavior) when not provided.
 
         Returns
         -------
@@ -2401,19 +2451,22 @@ class MyIcechunkStore:
         if not file_intervals:
             return set()
 
-        try:
-            with self.readonly_session(branch) as session:
-                t0 = time.perf_counter()
-                df = self.load_metadata(session.store, group_name)
-                self._logger.info(
-                    "metadata_table_loaded",
-                    duration_seconds=round(time.perf_counter() - t0, 4),
-                    group=group_name,
-                    rows=df.height,
-                    caller="check_temporal_overlaps",
-                )
-        except Exception:
-            return set()
+        if metadata_df is None:
+            try:
+                with self.readonly_session(branch) as session:
+                    t0 = time.perf_counter()
+                    df = self.load_metadata(session.store, group_name)
+                    self._logger.info(
+                        "metadata_table_loaded",
+                        duration_seconds=round(time.perf_counter() - t0, 4),
+                        group=group_name,
+                        rows=df.height,
+                        caller="check_temporal_overlaps",
+                    )
+            except Exception:
+                return set()
+        else:
+            df = metadata_df
 
         if df.is_empty():
             return set()
@@ -2425,26 +2478,48 @@ class MyIcechunkStore:
             ]
         )
 
-        t_loop = time.perf_counter()
-        overlapping: set[str] = set()
-        for rinex_hash, start, end in file_intervals:
-            start_ns = np.datetime64(start, "ns")
-            end_ns = np.datetime64(end, "ns")
+        # Build from proper numpy datetime64[ns] *arrays*, not boxed scalars:
+        # polars' dict-of-scalars inference silently reinterprets the
+        # underlying int64 as microseconds regardless of the numpy dtype's
+        # declared unit (produces garbage timestamps), where array dtype
+        # metadata is read correctly.
+        incoming = pl.DataFrame(
+            {
+                "incoming_hash": [h for h, _, _ in file_intervals],
+                "incoming_start": np.array(
+                    [s for _, s, _ in file_intervals], dtype="datetime64[ns]"
+                ),
+                "incoming_end": np.array(
+                    [e for _, _, e in file_intervals], dtype="datetime64[ns]"
+                ),
+            }
+        )
 
-            hits = df.filter((pl.col("start") <= end_ns) & (pl.col("end") >= start_ns))
-            if not hits.is_empty():
+        t_loop = time.perf_counter()
+        # Vectorized interval-overlap join replaces one .filter() scan per
+        # incoming interval (O(intervals x rows) Python loop) with a single
+        # sort-merge join (dev/todo_later.md §34).
+        hits = incoming.join_where(
+            df.select(["rinex_hash", "start", "end"]),
+            pl.col("incoming_start") <= pl.col("end"),
+            pl.col("incoming_end") >= pl.col("start"),
+        )
+
+        overlapping: set[str] = set()
+        if not hits.is_empty():
+            summary = hits.group_by(
+                ["incoming_hash", "incoming_start", "incoming_end"]
+            ).agg(pl.len().alias("existing_files"))
+            for row in summary.iter_rows(named=True):
+                overlapping.add(row["incoming_hash"])
                 self._logger.warning(
                     "temporal_overlap_detected",
                     group=group_name,
-                    incoming_hash=rinex_hash[:16],
-                    incoming_range=f"{start} → {end}",
-                    existing_files=hits.height,
+                    incoming_hash=row["incoming_hash"][:16],
+                    incoming_range=f"{row['incoming_start']} → {row['incoming_end']}",
+                    existing_files=row["existing_files"],
                 )
-                overlapping.add(rinex_hash)
 
-        # One filter() call per incoming interval, each scanning the full
-        # (growing) table -- O(intervals x rows). Timed separately from the
-        # table load above so the two costs aren't conflated.
         self._logger.info(
             "temporal_overlap_scan_complete",
             duration_seconds=round(time.perf_counter() - t_loop, 4),
@@ -2458,22 +2533,42 @@ class MyIcechunkStore:
         self,
         days: int | None = None,
         branch: str = "main",
-        delete_expired_branches: bool = True,
-        delete_expired_tags: bool = True,
+        delete_expired_branches: bool = False,
+        delete_expired_tags: bool = False,
     ) -> set[str]:
         """
-        Expire and garbage-collect snapshots older than the given retention period.
+        Expire snapshots older than the given retention period.
+
+        Metadata-only "soft delete": rewrites ancestry so expired snapshots
+        become unreachable from any surviving branch/tag. No objects
+        (manifests, chunks, snapshot files) are deleted at this stage —
+        call ``garbage_collect()`` separately to reclaim storage
+        (dev/perf_degradation_findings_2026_07_15.md, Problem B). Keeping
+        this expire-only (previously it also ran GC internally) is what
+        lets a caller run GC exactly once via ``maintenance()`` instead of
+        twice per call.
+
+        Never invoke this automatically inside the pipeline's write path —
+        it's an administrative operation, not safe to run casually
+        alongside active writes. Use a generous ``days`` margin (weeks to
+        months, not hours) so it can never touch anything from an
+        in-flight write session.
 
         Parameters
         ----------
         days : int | None, optional
-            Number of days to retain snapshots. Defaults to config value.
+            Number of days to retain snapshots. Defaults to 90 (weeks-to-
+            months cadence; see dev/perf_degradation_findings_2026_07_15.md
+            for the operational guidance behind this default).
         branch : str, default "main"
             Branch to apply expiration on.
-        delete_expired_branches : bool, default True
+        delete_expired_branches : bool, default False
             Whether to delete branches pointing to expired snapshots.
-        delete_expired_tags : bool, default True
+            Matches Icechunk's own safe default — flip only deliberately.
+        delete_expired_tags : bool, default False
             Whether to delete tags pointing to expired snapshots.
+            **Do not set True** if using keeper tags (``create_keeper_tag``)
+            — it would delete them along with any other expired-tip tag.
 
         Returns
         -------
@@ -2481,10 +2576,9 @@ class MyIcechunkStore:
             Expired snapshot IDs.
         """
         if days is None:
-            days = 30
+            days = 90
         cutoff = datetime.now(UTC) - timedelta(days=days)
 
-        # cutoff = datetime(2025, 10, 3, 16, 44, 1, tzinfo=timezone.utc)
         self._logger.info(
             f"Running expiration on store '{self.store_type}' "
             f"(branch '{branch}') with cutoff {cutoff.isoformat()}"
@@ -2504,19 +2598,66 @@ class MyIcechunkStore:
         else:
             self._logger.info("No snapshots to expire.")
 
-        # Garbage-collect expired objects to reclaim storage
-        summary = self.repo.garbage_collect(delete_object_older_than=cutoff)
-        self._logger.info(
-            f"Garbage collection summary: "
-            f"deleted_bytes={summary.bytes_deleted}, "
-            f"deleted_chunks={summary.chunks_deleted}, "
-            f"deleted_manifests={summary.manifests_deleted}, "
-            f"deleted_snapshots={summary.snapshots_deleted}, "
-            f"deleted_attributes={summary.attributes_deleted}, "
-            f"deleted_transaction_logs={summary.transaction_logs_deleted}"
-        )
-
         return expired_ids
+
+    def garbage_collect(self, days: int = 90, *, dry_run: bool = False) -> dict:
+        """
+        Physically delete objects no longer reachable from any branch/tag.
+
+        Only removes what a prior ``expire_old_snapshots()`` (or manual ref
+        deletion) already made unreachable — this does not itself expire
+        anything. Always run with ``dry_run=True`` first on a store that
+        hasn't been GC'd before, especially one with a large accumulated
+        backlog: there's no documented cost model for GC time/memory at
+        scale, so a first-ever run's duration is unknown until measured
+        (dev/perf_degradation_findings_2026_07_15.md, open question 4).
+
+        **Not safe to run casually alongside active writes** — the cutoff
+        must predate the start of any concurrently-running write session,
+        and only one expire/GC operation should run at a time. Icechunk
+        does have self-protection against races with *new* commits arriving
+        mid-run (it restarts, bounded retries, rather than deleting
+        something a concurrent writer needs), but that's not a substitute
+        for a generous cutoff margin.
+
+        Parameters
+        ----------
+        days : int, default 90
+            Objects older than this (by the same write-time semantics as
+            ``expire_old_snapshots``) are eligible for deletion.
+        dry_run : bool, default False
+            Report what would be deleted without deleting anything.
+
+        Returns
+        -------
+        dict
+            Summary of (would-be-)deleted objects.
+        """
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        summary = self.repo.garbage_collect(
+            delete_object_older_than=cutoff, dry_run=dry_run
+        )
+        self._logger.info(
+            "garbage_collect_complete",
+            dry_run=dry_run,
+            cutoff=cutoff.isoformat(),
+            bytes_deleted=summary.bytes_deleted,
+            chunks_deleted=summary.chunks_deleted,
+            manifests_deleted=summary.manifests_deleted,
+            snapshots_deleted=summary.snapshots_deleted,
+            attributes_deleted=summary.attributes_deleted,
+            transaction_logs_deleted=summary.transaction_logs_deleted,
+        )
+        return {
+            "dry_run": dry_run,
+            "cutoff": cutoff.isoformat(),
+            "bytes_deleted": summary.bytes_deleted,
+            "chunks_deleted": summary.chunks_deleted,
+            "manifests_deleted": summary.manifests_deleted,
+            "snapshots_deleted": summary.snapshots_deleted,
+            "attributes_deleted": summary.attributes_deleted,
+            "transaction_logs_deleted": summary.transaction_logs_deleted,
+        }
 
     def get_history(self, branch: str = "main", limit: int | None = None) -> list[dict]:
         """
@@ -2873,6 +3014,46 @@ class MyIcechunkStore:
         self.repo.delete_tag(tag_name)
         self._logger.warning(f"Deleted tag '{tag_name}'")
 
+    def create_keeper_tag(self, receiver: str, yyyydoy: str, snapshot_id: str) -> bool:
+        """
+        Tag a per-(receiver, date) commit as a permanent retention keeper.
+
+        Part of the tag-based retention scheme in
+        dev/perf_degradation_findings_2026_07_15.md (Problem B): tagging
+        ``keep/{receiver}/{yyyydoy}`` after each commit means a later
+        ``expire_old_snapshots(delete_expired_tags=False)`` run can safely
+        prune everything else while these specific snapshots stay
+        time-travelable forever. Additive and inert on its own — creating a
+        tag doesn't expire or delete anything.
+
+        Never raises: a tag name collision (already exists, or was
+        previously deleted — Icechunk tag names are never reusable) is
+        logged and skipped rather than failing the pipeline write that
+        called this.
+
+        Parameters
+        ----------
+        receiver : str
+            Receiver/group name (e.g. ``"canopy_01"``).
+        yyyydoy : str
+            Date key (e.g. ``"2025001"``).
+        snapshot_id : str
+            Snapshot to tag — typically the just-committed snapshot.
+
+        Returns
+        -------
+        bool
+            True if the tag was created, False if skipped.
+        """
+        tag_name = f"keep/{receiver}/{yyyydoy}"
+        try:
+            self.repo.create_tag(tag_name, snapshot_id)
+        except icechunk.IcechunkError as exc:
+            self._logger.warning("keeper_tag_skipped", tag=tag_name, error=str(exc))
+            return False
+        self._logger.info("keeper_tag_created", tag=tag_name, snapshot=snapshot_id[:8])
+        return True
+
     def plot_commit_graph(
         self,
         branch: str | None = None,
@@ -3015,31 +3196,60 @@ class MyIcechunkStore:
         }
 
     def maintenance(
-        self, expire_days: int = 7, cleanup_branches: bool = True, run_gc: bool = True
+        self,
+        expire_days: int = 90,
+        cleanup_branches: bool = True,
+        run_gc: bool = True,
+        *,
+        dry_run_gc: bool = False,
+        delete_expired_branches: bool = False,
+        delete_expired_tags: bool = False,
     ) -> dict:
         """
-        Run full maintenance on the store.
+        Run full maintenance on the store: expire, then (optionally) GC.
+
+        Must be invoked manually or from a separately scheduled maintenance
+        job — never from the pipeline's own run path, and never on an
+        automatic schedule until ``garbage_collect(dry_run=True)`` has been
+        checked against the real store and, if using keeper tags,
+        ``create_tag()`` cost at scale has been confirmed
+        (dev/perf_degradation_findings_2026_07_15.md, open questions 4, 8).
+        Not safe during active writes — see ``expire_old_snapshots``/
+        ``garbage_collect`` docstrings for the concurrency caveats.
 
         Parameters
         ----------
         expire_days : int
-            Days of snapshot history to keep
+            Days of snapshot history to keep. Default 90 (weeks-to-months
+            cadence, not the previous 7-day default — 7 days is far too
+            aggressive for a store under sustained daily writes).
         cleanup_branches : bool
-            Remove stale temporary branches
+            Remove stale temporary branches.
         run_gc : bool
-            Run garbage collection after expiration
+            Run garbage collection after expiration.
+        dry_run_gc : bool, default False
+            Pass through to ``garbage_collect`` — report without deleting.
+        delete_expired_branches : bool, default False
+            Pass through to ``expire_old_snapshots``.
+        delete_expired_tags : bool, default False
+            Pass through to ``expire_old_snapshots``. **Do not set True**
+            if using keeper tags — see ``create_keeper_tag``.
 
         Returns
         -------
         dict
-            Summary of maintenance actions
+            Summary of maintenance actions.
         """
         self._logger.info(f"Starting maintenance on {self.store_type}")
 
         results = {"expired_snapshots": 0, "deleted_branches": [], "gc_summary": None}
 
-        # Expire old snapshots
-        expired_ids = self.expire_old_snapshots(days=expire_days)
+        # Expire old snapshots (metadata-only; no objects deleted here)
+        expired_ids = self.expire_old_snapshots(
+            days=expire_days,
+            delete_expired_branches=delete_expired_branches,
+            delete_expired_tags=delete_expired_tags,
+        )
         results["expired_snapshots"] = len(expired_ids)
 
         # Cleanup stale branches
@@ -3047,17 +3257,13 @@ class MyIcechunkStore:
             deleted_branches = self.cleanup_stale_branches()
             results["deleted_branches"] = deleted_branches
 
-        # Garbage collection
+        # Garbage collection — runs exactly once here (previously ran once
+        # inside expire_old_snapshots() too, a double-GC-per-call bug; see
+        # dev/perf_degradation_findings_2026_07_15.md, Problem B).
         if run_gc:
-            from datetime import datetime, timedelta
-
-            cutoff = datetime.now(UTC) - timedelta(days=expire_days)
-            gc_summary = self.repo.garbage_collect(delete_object_older_than=cutoff)
-            results["gc_summary"] = {
-                "bytes_deleted": gc_summary.bytes_deleted,
-                "chunks_deleted": gc_summary.chunks_deleted,
-                "manifests_deleted": gc_summary.manifests_deleted,
-            }
+            results["gc_summary"] = self.garbage_collect(
+                days=expire_days, dry_run=dry_run_gc
+            )
 
         self._logger.info(f"Maintenance complete: {results}")
         return results

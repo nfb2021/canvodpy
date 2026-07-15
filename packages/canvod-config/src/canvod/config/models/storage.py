@@ -52,6 +52,16 @@ class StorageConfig(_StrictModel):
     )
     gnss_store_strategy: Literal["skip", "overwrite", "append"] = "skip"
     vod_store_strategy: Literal["skip", "overwrite", "append"] = "overwrite"
+    keeper_tags: bool = Field(
+        False,
+        description=(
+            "Tag every (receiver, date) Icechunk commit as "
+            "keep/{receiver}/{yyyydoy} so a future retention job can expire "
+            "everything else. Default off until create_tag() cost at scale "
+            "is confirmed (dev/perf_degradation_findings_2026_07_15.md, "
+            "open question 8)."
+        ),
+    )
 
     @field_validator("stores_root_dir", mode="before")
     @classmethod
