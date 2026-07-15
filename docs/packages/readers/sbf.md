@@ -562,3 +562,9 @@ the file, before the receiver has broadcast the ChannelStatus block.
 - CF Conventions v1.11 — `flag_masks`, `flag_meanings`, `flag_values`
 - RINEX 3.04 signal nomenclature (used verbatim for SID strings)
 - [:octicons-arrow-right-24: SBF Field Decoding Reference](sbf-decoding.md) — all formulas with firmware page citations
+
+---
+
+!!! example "Try it"
+    [04 — SBF Reading](../../notebooks/_build/04_sbf_reading.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/04_sbf_reading.py)

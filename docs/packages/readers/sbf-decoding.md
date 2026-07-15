@@ -358,3 +358,9 @@ Page references: DOP block p.349, PVTGeodetic pp.337–339, ReceiverStatus pp.39
 - Septentrio AsteRx SB3 ProBase Firmware v4.15.1 Reference Guide
 - IS-GPS-200 Rev. N §20.3.3.5.2.4 — GPS time and leap seconds
 - RINEX 3.04 signal nomenclature — used verbatim for SID code strings
+
+---
+
+!!! example "Try it"
+    [04 — SBF Reading](../../notebooks/_build/04_sbf_reading.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/04_sbf_reading.py)

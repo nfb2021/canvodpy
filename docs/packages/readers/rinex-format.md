@@ -277,3 +277,9 @@ except IncompleteEpochError:
     All reader-specific exceptions inherit from `RinexError`, allowing
     broad `except RinexError` handling when needed alongside specific
     sub-class recovery.
+
+---
+
+!!! example "Try it"
+    [02 — RINEX v3 Observation Reading](../../notebooks/_build/02_rinex_reading.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/02_rinex_reading.py)

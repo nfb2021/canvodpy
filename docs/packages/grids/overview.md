@@ -241,3 +241,11 @@ flowchart TD
     D --> E["`**Hemispherical Map**
     canvod-viz`"]
 ```
+
+---
+
+!!! example "Try it"
+    [06 — Hemispheric Grids](../../notebooks/_build/06_hemispheric_grids.html){target=_blank}
+    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/06_hemispheric_grids.py))
+    · [18 — Grid Exploration](../../notebooks/_build/18_grid_exploration.html){target=_blank}
+    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/18_grid_exploration.py))

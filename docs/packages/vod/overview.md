@@ -143,3 +143,9 @@ flowchart TD
 ## References
 
 Humphrey, V. and Frankenberg, C. (2022). GNSS-transmissometry: A new approach for vegetation optical depth estimation. *Remote Sensing of Environment*.
+
+---
+
+!!! example "Try it"
+    [07 — VOD Retrieval](../../notebooks/_build/07_vod_retrieval.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/07_vod_retrieval.py)

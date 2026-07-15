@@ -123,3 +123,10 @@ The write strategy controls how `MyIcechunkStore` handles the time range already
     Overwritten chunks remain in the Icechunk object store until you run
     GC. The old versions are still accessible via snapshot IDs — useful for
     auditing before cleaning up.
+
+---
+
+!!! example "Try it"
+    [17 — Store Operations](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/17_store_operations.py)
+    (source link only for now — rendered snapshot pending a test-data
+    fixture fix, see `dev/notebook_docs_integration_plan.md`)

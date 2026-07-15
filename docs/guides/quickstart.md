@@ -215,3 +215,9 @@ vod = calculate_vod(canopy_ds, reference_ds)
 ---
 
 **Next steps:** [Configuration Guide](configuration.md) · [API Levels](api-levels.md)
+
+---
+
+!!! example "Try it"
+    [00 — CLI Quickstart](../notebooks/_build/00_cli_quickstart.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/00_cli_quickstart.py)

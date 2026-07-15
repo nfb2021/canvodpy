@@ -154,3 +154,9 @@ fields:
 alongside `canvod-settings.yaml`. See the
 [canvod-filemap documentation](https://github.com/nfb2021/canvodpy-extensions)
 for the full API (`FilenameMapper`, `VirtualFile`, `FilenameCatalog`).
+
+---
+
+!!! example "Try it"
+    [01 — Naming Convention](../../notebooks/_build/01_naming_convention.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/01_naming_convention.py)

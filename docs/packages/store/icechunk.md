@@ -370,3 +370,10 @@ return snapshot
     The `"File Hash"` attribute is set by the reader (`SbfReader.file_hash` /
     `Rnxv3Obs.file_hash`) — a 16-character SHA-256 prefix of the raw file.
     Duplicate ingestion is impossible even if the same file is submitted twice.
+
+---
+
+!!! example "Try it"
+    [08 — Icechunk Store](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/08_icechunk_store.py)
+    (source link only for now — rendered snapshot pending a test-data
+    fixture fix, see `dev/notebook_docs_integration_plan.md`)

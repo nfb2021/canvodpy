@@ -114,3 +114,9 @@ augmented_ds = add_spherical_coords_to_dataset(rinex_ds, r, theta, phi)
 # augmented_ds["phi"]     → geographic azimuth [rad]
 # augmented_ds["r"]       → slant range [m]
 ```
+
+---
+
+!!! example "Try it"
+    [05 — Ephemeris & Coordinates](../../notebooks/_build/05_ephemeris_coordinates.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/05_ephemeris_coordinates.py)

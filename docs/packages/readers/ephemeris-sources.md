@@ -253,3 +253,9 @@ target epoch — not simply the first record found.
     `ephemeris_source: "auto"` (planned) will prefer broadcast if available,
     falling back to agency final products. This is the recommended default
     for production pipelines that may run on both fresh and aged data.
+
+---
+
+!!! example "Try it"
+    [05 — Ephemeris & Coordinates](../../notebooks/_build/05_ephemeris_coordinates.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/05_ephemeris_coordinates.py)

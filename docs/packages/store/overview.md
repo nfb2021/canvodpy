@@ -218,3 +218,11 @@ Zarr attribute (`canvod_metadata`) and managed by the companion package.
 [:octicons-arrow-right-24: canvod-store-metadata — provenance and FAIR compliance](../store-metadata/overview.md)
 
 [:octicons-arrow-right-24: Icechunk storage details](icechunk.md)
+
+---
+
+!!! example "Try it"
+    [08 — Icechunk Store](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/08_icechunk_store.py)
+    · [17 — Store Operations](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/17_store_operations.py)
+    (source links only for now — rendered snapshot pending a test-data
+    fixture fix, see `dev/notebook_docs_integration_plan.md`)

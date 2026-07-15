@@ -113,3 +113,9 @@ The strategy is injected into the auxiliary pipeline — no other changes requir
 | SP3 ultra-rapid | Hermite | few cm | Predicted half |
 | CLK final | Linear | < 0.1 ns | Sub-centimetre equivalent |
 | CLK rapid | Linear | ~0.5 ns | Typically available within 17 h |
+
+---
+
+!!! example "Try it"
+    [05 — Ephemeris & Coordinates](../../notebooks/_build/05_ephemeris_coordinates.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/05_ephemeris_coordinates.py)

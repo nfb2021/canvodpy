@@ -480,6 +480,11 @@ docs:
 docs-build:
     uv run zensical build
 
+# export demo notebooks for embedding in the docs site (live WASM + static HTML)
+docs-export-notebooks:
+    @echo "{{ GREEN }}{{ BOLD }}Exporting demo notebooks into docs/notebooks/_build...{{ NORMAL }}"
+    @bash scripts/export_demo_notebooks.sh
+
 # deploy the documentation via GitHub Actions
 docs-deploy:
     gh workflow run "Deploy Docs"

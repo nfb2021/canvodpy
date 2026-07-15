@@ -447,3 +447,9 @@ sites:
 `just config-init` copies recipe templates into `config/recipes/` alongside
 `canvod-settings.yaml`. The full recipe format and API are documented in the
 [canvod-filemap repository](https://github.com/nfb2021/canvodpy-extensions).
+
+---
+
+!!! example "Try it"
+    [11 — Configuration](../notebooks/_build/11_configuration.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/11_configuration.py)

@@ -140,3 +140,9 @@ deduplication guard built into `canvod-store`:
 These checks run before every write, regardless of parallelism settings. A failed
 write leaves the store unchanged — Icechunk's snapshot model means partial writes
 are never committed.
+
+---
+
+!!! example "Try it"
+    [16 — Batch Processing](../notebooks/_build/16_batch_processing.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/16_batch_processing.py)
