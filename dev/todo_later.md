@@ -2599,12 +2599,112 @@ dedup columns from cold `dataset_attrs` in the metadata table; an
 OTel bridge only if a real collector backend is ever deployed for the
 100-site fleet.
 
-**Action:** Tier 0 shipped and verified 2026-07-15, pending commit/push +
-deploy to the remote machine before the owner's overnight restart.
-Re-check this entry once tomorrow's run produces data — that's what
-actually tells us whether the O(rows) dedup theory and the
-days_per_batch/network-contention theory hold up, and whether Tier 2 is
-worth doing.
+**Confirmed against real data, then independently vetted (2026-07-15)**:
+analyzed the overnight 15.1h run (`rosalia`, 2026-07-14 22:15 →
+2026-07-15 13:23, 1741 `batch_write_complete` events across 422 distinct
+`date_key`s, all 4 receivers) after merging `performance.json` with the
+rotated `performance.json.1` backup (see §37 — the dashboard doesn't do
+this merge itself yet). Initial pass overstated some of these as
+"confirmed" from correlation alone; a Fable-model vetting pass plus one
+more discriminating query corrected two of the four findings below.
+Final, corrected state:
+
+- **`process_data` growth (real, mechanism narrowed)**: decile-bucketed
+  mean rose from 11.1s (first 10%) to 20.5s (last 10%) — 1.85x, matching
+  the originally-reported 15s→23s, monotonic across all 10 deciles. The
+  Icechunk docs (icechunk.io/en/stable/guides/performance/) say an append
+  spanning multiple manifest split ranges forces a rewrite of all of them
+  — the obvious candidate mechanism was "each of the 96 files in a batch
+  progressively rewrites a growing same-day manifest" (a within-batch
+  sawtooth). Checked directly via `process_data_per_file.first` vs
+  `.last`: **no sawtooth** — the ratio stays ~0.7-1.0 across every decile,
+  and *both* first-file and last-file cost climb together across the
+  whole run (0.124s→0.225s and 0.109s→0.221s). So the growth is a
+  **global, cross-run cost uniform across batch position**, not a
+  within-batch manifest-rewrite escalation. Still not fully isolated from
+  other monotonic confounders in the same run (RSS growth below;
+  network-mounted-FS directory-entry overhead) — `dir_entry_counts()`
+  correlation remains suggestive, not proven causal.
+- **`batch_check` vs `metadata_rows` (real, correctly fixed, but a minor
+  contributor)**: `metadata_rows` grew 0 → 41,597 over the run;
+  `batch_check`'s mean duration grew 0.16s → 0.85s alongside it. The
+  causal case rests on the *code* (two independent `load_metadata()`
+  calls + a per-interval Python `.filter()` loop, confirmed by reading
+  `store.py` directly), not on the correlation itself — rows and elapsed
+  time are collinear within one run, so "in lockstep" is not by itself
+  evidence of anything. Fixed 2026-07-15: `load_metadata_for_dedup()`
+  loads once and is shared via a new `metadata_df` param on both
+  `batch_check_existing`/`check_temporal_overlaps`; the O(intervals x
+  rows) Python loop replaced with a vectorized `pl.DataFrame.join_where()`
+  interval join. Verified: 30/30 guardrail+overlap tests, 60/60 audit
+  suite, 1788/1788 fast suite. At ~4% of a 20s batch this was never the
+  dominant cost — justified prospectively (`metadata_rows` grows
+  unbounded across runs, unlike file count per batch) rather than as a
+  current bottleneck. `load_metadata_for_dedup()` still reads the full
+  metadata table including the heavy `dataset_attrs` column even though
+  neither check needs it — a real, cheap follow-up (column projection),
+  not done here.
+- **Periodic spikes / REFUTED as network contention, real mechanism found
+  in code**: 50 batch writes exceeded 4x the run's median duration
+  (79-106s vs ~19.5s median), recurring every 12-22 days (mean 14.5,
+  matching `days_per_batch=14`). Original pass concluded "network
+  contention" from a single `disk_read_mb` coincidence, then walked that
+  back to "genuinely unexplained" after finding zero
+  `file_download_complete` events fired all run and no aux/ephemeris
+  event showed an outlier duration anywhere. Both conclusions were wrong.
+  `orchestrator/pipeline.py::_process_multi_day_batches` (~line 606)
+  submits the **entire** `days_per_batch=14` batch (14 days x 4 receivers
+  x 96 files ≈ 5,376 tasks) to a fresh loky pool at once (line 796-812),
+  then calls `processor._append_to_icechunk()` (line 900) **inside** the
+  `as_completed` loop (line 846) the moment each (date, receiver) group
+  finishes — i.e. writes for the earliest-completing groups happen while
+  the pool is still fully loaded draining the rest of the 14-day batch.
+  This exactly explains every symptom: the ~5GB `children_rss_gb` hold
+  (other workers' decoded RINEX+aux data), the disk-read burst (concurrent
+  RINEX reads), the uniform-not-concentrated per-file slowdown (CPU/IO
+  contention with the pool, not a slow write path), and the precise
+  `days_per_batch` periodicity (worst right after each batch's pool is
+  freshly saturated). Not yet fixed — this is a real design tension in
+  the "streaming collection: write as groups complete" pattern
+  (`pipeline.py` line 815, intentional, to avoid waiting for the whole
+  batch before writing anything), not a one-line bug.
+- **`main_rss_gb` growth (0.3GB → ~15GB, no drops) — `_run_stats`
+  hypothesis REFUTED**: `stage_timer.py`'s `_run_stats` accumulator holds
+  exactly 3 floats per stage name per run_id (kilobytes, not gigabytes),
+  and `reset_run_stats()` **is** called (`cli/run.py:552`) — checked
+  directly, this was never a plausible mechanism. Better candidates,
+  visible in the same `pipeline.py` code that explains the spikes above:
+  `future_to_meta`/`pending_results` holding all ~5,376 futures/results
+  reachable until each batch fully drains, or `date_datasets`/
+  `doy_contexts` per-batch accumulation. Still untriaged — needs someone
+  to actually look, not another guess.
+
+**Action:** Tier 2's dedup fix is done and verified. The spike mechanism
+is now understood well enough to design a real fix (likely: bound how far
+ahead of a still-draining pool a write is allowed to run, or stop
+submitting a full 14-day batch to the pool at once) rather than more
+profiling — but that fix isn't written yet and needs its own design pass,
+not a quick patch to guarded write-path code. Batched-day-write (concat
+96 files → 1 `to_icechunk()` call) is reconsidered, not abandoned: given
+`process_data` growth is confirmed cross-run/global rather than
+within-batch, batching mainly helps by slowing the *rate* the store's
+total manifest count grows (fewer manifest-creating calls per day),
+which is the same lever periodic snapshot expiry/GC pulls more directly
+— and `xr.concat` is confirmed slow at this scale in the wild (GitHub:
+pydata/xarray#5657, #7833 — single-threaded, hours for tens of thousands
+of datasets).
+
+Full fix plan (write-races-pool mechanism found and designed around,
+tag-based retention scheme, RSS `future_to_meta` leak + `gc.collect()`,
+`rewrite_manifests()` candidate, open Icechunk questions):
+`dev/perf_degradation_findings_2026_07_15.md`. **Update, same day**:
+Problems A (windowed pool submission), B (retention capability + 2
+store.py bugs fixed), and C (RSS `future_to_meta` fix + `gc.collect()`)
+are now implemented and fully verified (ruff/ty clean, fast suite
+1807/1807, audit suite 60/60) — see the findings doc's Status section for
+the full list of changed files and what's deliberately still gated (no
+automatic expiration/GC/tagging in production). Not yet committed or
+vetted by a final review pass.
 
 ---
 
@@ -2722,3 +2822,140 @@ pinned versions everywhere else) otherwise avoids.
 
 **Action:** not started, found while doing something else (documented
 here per owner request during the demo-notebook restructuring pass).
+
+---
+
+## 37. Performance dashboard silently drops rotated log data — FIXED (2026-07-15)
+
+**Reported live**: after the §34 overnight run, the marimo performance
+dashboard was only showing recent data, not the whole run — worse than
+that, the owner's framing ("runs may take days or even be triggered once
+a day only and then run forever") pointed at a structural problem, not a
+one-off glitch.
+
+**Root cause, confirmed against the real ~958MB `~/Downloads/canvod-logs/`
+dump**: two independent bugs stacked on top of each other.
+
+1. **Dashboard glob blindness.** `machine/performance.json` uses a
+   size-triggered `RotatingFileHandler` (`logging_config.py`,
+   `maxBytes=50MB`, `backupCount=10`) — when it rotates, the old file
+   becomes `performance.json.1`, `.2`, etc. The dashboard notebook
+   (`cli/dashboards/performance.py`) read `machine_dir.glob("performance*.json")`
+   — a pattern that matches `performance.json` and `performance.<pid>.json`
+   but **not** `performance.json.1` (doesn't end in `.json`). On this run,
+   `performance.json.1` (52.4MB, 2026-07-14 22:15 → 2026-07-15 09:39,
+   150,842 events) was invisible to the dashboard; only the live
+   `performance.json` (11.7MB, 09:39 → 13:23, 33,921 events) showed —
+   about 18% of the run. Fixed: glob changed to `"performance*.json*"`.
+2. **Retention window too short for the stated use case.** Separately,
+   `backupCount=10` × 50MB = 500MB retained. At this run's observed rate
+   (~4MB/hour main-process → ~96MB/day), that's only ~5 days before
+   `RotatingFileHandler` **permanently deletes** the oldest backup — not a
+   visibility bug, actual data loss. For "runs may take days... or run
+   forever," 5 days is not enough headroom. Bumped `backupCount` to 60
+   (~3GB, ~31 days) as a stopgap in `logging_config.py`. This is
+   explicitly not the durable fix — a size/count-bounded local log file is
+   the wrong storage substrate for "keep this forever," which is exactly
+   what §34 Tier 1's planned `canvodpy perf export` (compact
+   `machine/performance*.json` into persistent Parquet before rotation can
+   touch it) is for.
+
+**Fixed** (2026-07-15, both changes additive/config-only, verified with
+`ruff`/`ty`/`pytest canvodpy/tests/test_logging.py` clean, plus an
+end-to-end smoke test of the corrected glob against the real downloaded
+logs — 450 files matched vs. 449 before, 677,990 `stage_timing` events
+readable vs. 675,580 before):
+- `canvodpy/src/canvodpy/cli/dashboards/performance.py` — glob pattern
+  `"performance*.json"` → `"performance*.json*"`.
+- `canvodpy/src/canvodpy/logging/logging_config.py` — `perf_handler`
+  `backupCount` 10 → 60.
+
+**Action:** Done for the immediate bug. §34 Tier 1's export tool remains
+the real long-term fix and is still not started — this entry's stopgap
+buys time, it doesn't replace that work.
+
+---
+
+## 38. Graphify semantic extraction on the Icechunk source checkout blocked — no API key (2026-07-15)
+
+**Found**: `graphify extract . --mode deep` against `~/Downloads/icechunk/`
+(the real Icechunk source, checked out for the §34 investigation — see
+`dev/perf_degradation_findings_2026_07_15.md`) scans fine (235 code, 133
+docs, 12 images) but refuses to run: "error: no LLM API key found (145
+doc/paper/image file(s) need semantic extraction)." Per the owner's hard
+rule (never set an API token, any tool, any backend — see
+`memory/feedback_no_api_tokens.md` in the assistant's persistent memory),
+this was not worked around by setting a key.
+
+**Options, not yet chosen**:
+1. `--backend ollama` with a local model — no cloud key needed, quality/
+   speed depends on the model.
+2. AST-only `graphify update .`/`graphify extract . ` without `--mode
+   deep` — no key required, but only indexes code structure, not the
+   design docs' actual content (the design docs were the valuable part
+   for the §34 investigation, and were read manually instead this time).
+3. Leave as manual-reading-only going forward, same as this session.
+
+**Action:** not started. This session read the highest-value design docs
+directly (see `dev/perf_degradation_findings_2026_07_15.md`'s "How this
+was produced" section) as a workaround, but a properly graphified
+semantic index would make future Icechunk-source deep-dives faster.
+
+---
+
+## 39. `ty check` false-positive on zarr's `Array | Group` union type in isolated single-file checks (found 2026-07-15)
+
+**Found** while writing `packages/canvod-store/tests/
+test_store_maintenance.py` (§34/Problem B work): running `uv run ty check
+<path/to/test_file.py>` directly reports real-looking errors —
+`invalid-assignment` on `group["data"][:] = [...]` and
+`unresolved-attribute` on `root.create_group(...)` — because zarr's
+`zarr.open(...)` return type is inferred as the union `Array[Any] |
+Group`, and `ty` can't narrow it from the `mode="w"` argument the way a
+human reader (or a smarter type-narrowing pass) would.
+
+**Not a new problem, and not actually blocking**: the exact same pattern
+already exists in `packages/canvod-store/tests/test_store_crud.py`
+(pre-existing, presumably-passing test file) — checking it in isolation
+shows the identical errors. Crucially, running `uv run ty check` at full
+**project** scope (no path argument, what `just check-types` and CI
+actually run) shows **zero** diagnostics, on both the pre-existing file
+and the new one — confirmed directly, not assumed. Likely a difference
+in inference context/config resolution between single-file and
+whole-project invocation.
+
+**Action:** not started. Not urgent (CI-equivalent full-project check is
+clean), but worth understanding *why* single-file checks diverge from
+project-wide ones — could bite someone using `ty check <file>` as a
+quick sanity check during development and getting spurious failures.
+Possibly relates to `pyproject.toml`'s `[[tool.ty.overrides]]` blocks
+(currently scoped to `canvod-store/store.py` and
+`canvod-store/grid_adapters/grid_storage.py` — check whether they should
+also cover `canvod-store/tests/` given the same underlying zarr-stub
+weakness, or whether that's the wrong fix and the real issue is
+elsewhere).
+
+---
+
+## 40. Make the icechunk Claude Code skill file installable via `npx skills add` (or similar), like the other skills (2026-07-15)
+
+**Found**: `.claude/skills/icechunk/SKILL.md` is currently bundled
+directly in the canvodpy repo (per `CLAUDE.md`'s skills table: "install:
+`just install-skills` (bundled at `.claude/skills/icechunk/`)") — unlike
+every other skill in that table, which installs via `npx skills add
+<owner>/<repo>@<skill> -g -y` from an external skills registry/repo.
+This was substantially rewritten today (see
+`dev/perf_degradation_findings_2026_07_15.md`'s Status section: full
+Maintenance/expiration/GC section, `rewrite_manifests()`, Write Cost
+Model section, 6 factual-error fixes against installed 2.1.1) and is now
+generically useful — not canvodpy-specific — making it a good candidate
+to publish the same way the other skills are distributed.
+
+**Action:** not started. Would need: a target skills repo/registry
+(publish under the owner's own GitHub, or contribute upstream to an
+existing skills collection), packaging it to match whatever format `npx
+skills add` expects, and updating `CLAUDE.md`'s skills table + the
+`just install-skills` recipe to install from the new location instead of
+(or in addition to) the bundled copy — decide whether the bundled
+`.claude/skills/icechunk/` copy stays as a fallback or gets removed once
+the installable version exists.
