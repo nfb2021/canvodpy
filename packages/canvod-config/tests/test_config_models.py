@@ -125,7 +125,7 @@ class TestProcessingParams:
 
     def test_nice_priority_bounds(self):
         with pytest.raises(ValidationError):
-            ProcessingParams(nice_priority=-1)  # ge=0
+            ProcessingParams(nice_priority=-21)  # ge=-20
         with pytest.raises(ValidationError):
             ProcessingParams(nice_priority=20)  # le=19
 
@@ -136,7 +136,7 @@ class TestProcessingParams:
         r = p.resolve_resources()
         assert r["n_workers"] == max(1, (os.cpu_count() or 2) - 2)
         assert r["max_memory_gb"] is None
-        assert r["nice_priority"] == 3
+        assert r["nice_priority"] == -5
 
     def test_resolve_resources_auto_uncapped(self):
         p = ProcessingParams(resource_mode="auto", auto_uncapped=True)

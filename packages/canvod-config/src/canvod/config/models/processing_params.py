@@ -107,10 +107,15 @@ class ProcessingParams(_StrictModel):
         description="Pin workers to specific CPU core IDs (None = no restriction)",
     )
     nice_priority: int = Field(
-        0,
-        ge=0,
+        -5,
+        ge=-20,
         le=19,
-        description="Process nice value (0=normal, 10=low, 19=lowest)",
+        description=(
+            "Process nice value (-20=highest priority, 0=normal, 19=lowest). "
+            "Negative values raise worker priority above normal but require "
+            "root/CAP_SYS_NICE on Linux -- silently has no effect otherwise "
+            "(canvod.utils.tools.worker._worker_init swallows PermissionError)."
+        ),
     )
     # TODO: investigate whether threads_per_worker is still needed after the loky /
     # ProcessPoolExecutor parallelisation refactor replaced Dask. If neither loky nor
@@ -192,7 +197,7 @@ class ProcessingParams(_StrictModel):
                 "n_workers": n_workers,
                 "max_memory_gb": None,
                 "cpu_affinity": None,
-                "nice_priority": 3,
+                "nice_priority": -5,
                 "threads_per_worker": self.threads_per_worker,
             }
         # manual mode

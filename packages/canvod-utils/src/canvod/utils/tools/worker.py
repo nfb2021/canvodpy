@@ -9,10 +9,12 @@ def _worker_init(nice: int, affinity: list[int] | None) -> None:
     Called as the ``initializer`` argument of ``ProcessPoolExecutor`` or loky.
     Silently ignores OS errors so pool creation never fails due to missing
     permissions (e.g. nice clamping on macOS, affinity unavailable on BSD).
+    ``nice`` may be negative to request higher-than-normal priority; on Linux
+    that requires root/CAP_SYS_NICE and just no-ops (caught below) otherwise.
     """
     import os
 
-    if nice > 0:
+    if nice != 0:
         try:
             os.nice(nice)
         except AttributeError, PermissionError:
