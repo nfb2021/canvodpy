@@ -189,52 +189,45 @@ uv add canvod-readers canvod-grids
 
 ## Quick Start
 
-```python
-from canvodpy import process_date, calculate_vod
-
-# Process one day: read + augment + write to Icechunk store
-process_date("ExampleSite", "2025001")
-
-# Compute VOD from stored data
-vod = calculate_vod("ExampleSite", "canopy_01", "reference_01", "2025001")
+```bash
+# Run the pipeline — resumes from the last processed date when --start is omitted
+uv run canvodpy run --site ExampleSite --start 2025001 --end 2025007
 ```
 
-Four API levels are available — from one-liners to composable stateless functions
-(the latter is what the optional `canvod-airflow` extension builds its DAGs on):
+Or from Python, when you need to script a run (looping over sites, embedding
+in a notebook):
+
+```python
+from canvodpy import Site
+
+site = Site("ExampleSite")
+
+with site.pipeline(n_workers=8) as pipeline:
+    for date_key, datasets in pipeline.process_range("2025001", "2025007"):
+        site.vod.compute_day(datasets, "canopy_01_vs_reference_01")
+```
+
+Two supported Python surfaces, plus the CLI on top of one of them:
 
 ```mermaid
 flowchart TD
-    subgraph L1["Level 1: Convenience"]
-        L1A["process_date('ExampleSite', '2025001')"]
-        L1A --> L1B["Pipeline (internal)"]
-        L1B --> L1C["PipelineOrchestrator"]
-        L1C --> L1D["Dask Workers"]
+    subgraph CLI_["CLI — recommended"]
+        CLI["canvodpy run --site ... --start ... --end ..."]
     end
 
-    subgraph L2["Level 2: Fluent"]
-        L2A[".workflow('ExampleSite')"]
-        L2A --> L2B[".read('2025001')"]
-        L2B --> L2C[".augment(source='final')"]
-        L2C --> L2E[".grid(grid_type='equal_area')"]
-        L2E --> L2F[".vod(canopy, ref)"]
-        L2F --> L2D[".result()"]
-    end
-
-    subgraph L3["Level 3: Site + Pipeline"]
+    subgraph L3["Site.pipeline() — Python-native scripting"]
         L3A["Site('ExampleSite')"]
         L3A --> L3B[".pipeline(n_workers=8)"]
-        L3B --> L3C[".process_range(...)"]
-        L3C --> L3D["Reusable Dask Cluster"]
-        L3A --> L3E["site.vod.compute_bulk(date_range)"]
+        L3B --> L3C[".process_range(start, end)"]
+        L3A --> L3E["site.vod.compute_bulk(...)"]
     end
 
-    subgraph L4["Level 4: Functional"]
+    subgraph L4["canvodpy.functional — stateless components"]
         L4A["read_rinex('file.rnx')"]
         L4A --> L4B["augment_with_ephemeris(ds)"]
         L4B --> L4G["assign_grid_cells(ds)"]
         L4G --> L4C["calculate_vod(canopy, ref)"]
         L4C --> L4H["write_to_store(ds, group)"]
-        L4H --> L4D["XCom / NetCDF path"]
     end
 
     subgraph Shared["Shared Components"]
@@ -245,16 +238,7 @@ flowchart TD
         VOD["VodComputer"]
     end
 
-    L1C --> FM
-    L1C --> EP
-    L1C --> READER
-    L1C --> STORE
-
-    L2B --> FM
-    L2B --> READER
-    L2C --> EP
-    L2F --> VOD
-    L2D --> STORE
+    CLI -.wraps.-> L3A
 
     L3C --> FM
     L3C --> EP
@@ -267,7 +251,13 @@ flowchart TD
     L4H --> STORE
 ```
 
-See the [API Levels guide](https://nfb2021.github.io/canvodpy/guides/api-levels/) for details.
+`canvodpy.functional` is also what the optional `canvod-airflow` extension
+builds its DAGs on. `FluentWorkflow`, the flat `process_date()` /
+`calculate_vod()` / `preview_processing()` functions, and `VODWorkflow` are
+deprecated (`DeprecationWarning` on use) — kept working, no longer taught;
+`VODWorkflow` additionally has a broken augmentation step and shouldn't be
+used regardless. See the
+[API Levels guide](https://nfb2021.github.io/canvodpy/guides/api-levels/) for details.
 
 ## Development Setup
 
