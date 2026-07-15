@@ -2062,49 +2062,75 @@ out of scope for this commit, left as a follow-up.
 
 ---
 
-## 27. Airflow DAGs forked — `canvod-streamstats` vs. `canvod-airflow`, needs a decision (2026-07-13)
+## 27. ~~Airflow DAGs forked — `canvod-streamstats` vs. `canvod-airflow`~~ — RESOLVED (2026-07-15)
 
-**Flagged 2026-07-13** — found while checking on canvod-streamstats, not
-investigated further, no decision made.
+**Flagged 2026-07-13**, investigated and resolved 2026-07-15. The original
+framing ("2-DAG vs. 3-DAG design, which is canonical") was wrong — both
+generate the same three DAG types per site (`_sbf`, `_rinex`,
+`_sbf_agency`) plus `canvod_backfill`. The real difference was task-step
+content, and the two versions weren't parallel proposals — one was current,
+one was a stale fork:
 
-There isn't duplication to clean up here — there's a genuine fork with two
-different DAG designs for the same jobs:
+- **Timeline reconstruction**: `canvodpy-perf/dags/` was deleted in
+  `54db8617` at 2026-07-10 14:12:19. `canvod-airflow` was added to
+  `canvodpy-extensions` in `b66aae2` at 2026-07-10 14:12:43 — 24 seconds
+  later, same coordinated extraction, not a stale snapshot. It's already
+  merged to `canvodpy-extensions` main (the "not yet merged" note above was
+  itself stale) and covered by the `v0.1.0` tag (2026-07-14).
+- **`canvod-streamstats/dags/`** was a **one-time import dated
+  2026-03-20** ("initial import of streaming statistics and Airflow
+  pipeline"), touched only once since by an unrelated refactor. Traced to
+  a separate `streaming-statistics` feature branch that was **never
+  merged into mainline** — checked both the original DAG commit
+  (`dc8079cc`, March) and the pre-deletion mainline version (July):
+  neither ever had the stats steps. `canvod-airflow` is the continuously
+  maintained lineage; `canvod-streamstats`'s copy was the 4-months-stale
+  orphan, importing from an `integration.workflows.tasks` module that no
+  longer exists (superseded by `canvod.streamstats.ops.*`, which has a
+  materially different, dataset/registry-level API — not a straight port).
+- **Phase D gating**: deletion happened 4 days before `v0.1.0` was tagged,
+  technically ahead of the plan's literal "gate on a tagged release"
+  wording — but the code was live on `canvod-airflow`'s main from the same
+  moment, so there was no real availability gap.
 
-- **`canvod-airflow`** (`canvodpy-extensions`, committed `b66aae2` on branch
-  `chore/remove-dead-filecatalog`, **not yet merged to main**) — the
-  "official" extraction destination per the earlier migration plan
-  (`airflow_extraction_plan.md`). Simpler 2-DAG design (`daily_processing`,
-  `backfill`): `validate_dirs → check_sbf/process_rinex → validate_ingest →
-  calculate_vod → cleanup`. Uses `structlog`. No streaming-statistics
-  integration.
-- **`canvod-streamstats/dags/`** (committed in that repo's own single
-  "initial import" commit) — a **more elaborate 3-DAG design** covering the
-  same two DAGs plus a third (SBF+agency hybrid), each extended with
-  `run_preprocessing_pipeline → update_statistics → update_climatology →
-  detect_anomalies/detect_changepoints → snapshot_statistics` steps.
-  Explicitly requires `canvod-streamstats` installed on the Airflow worker
-  per its own docstring. Uses stdlib `logging`.
-- **`canvodpy-perf/dags/`** (the presumed original source both were derived
-  from) — **no longer exists in this repo.** The extraction plan explicitly
-  said not to delete it until `canvod-airflow` had a tagged release (Phase D
-  was supposed to be last, gated on Phase C) — worth checking whether that
-  release already happened, or whether this deletion happened out of order.
+**Decision (user, 2026-07-15):** clean separation of concerns —
+`canvod-airflow` (public) owns **all** Airflow/orchestration code;
+`canvod-streamstats` (private, staying private for now) provides **only**
+streaming-statistics primitives, nothing about orchestration. Rationale
+given: a future n8n workflow framework will need the same statistics
+primitives without any Airflow-specific coupling, so streamstats must stay
+orchestrator-agnostic. Because `canvod-airflow` is public and
+`canvod-streamstats` is private, `canvod-airflow` must never depend on it
+even optionally — public users can't install a private package.
 
-**Open questions, none decided:**
-1. Should `canvod-airflow` absorb the statistics-pipeline steps from
-   `canvod-streamstats`'s version, making it the one canonical DAG design?
-2. Should `canvod-streamstats` depend on `canvod-airflow` and contribute
-   just the statistics-pipeline task functions to be composed there, rather
-   than vendoring its own full DAG copies?
-3. Is the simpler `canvod-airflow` 2-DAG version an intentional first cut
-   (ship the core pipeline, add stats integration later), or was it
-   extracted from a stale/pre-stats-integration snapshot of the original
-   `canvodpy-perf/dags/`?
-4. Why/when did `canvodpy-perf/dags/` get deleted, and was that consistent
-   with the extraction plan's Phase D gating?
+**Also found along the way, explicitly deferred (not this pass):**
+`canvodpy`'s own `cli/stats.py` (`canvodpy stats compute/show/reset`)
+imports `canvod.ops.statistics.store.StatisticsStore`, which doesn't
+exist — `canvod-ops` has no statistics code at all. `stats_compute` is an
+explicit "not yet implemented" stub; `stats_show`/`stats_reset` reference
+the dead import path. The real implementation is
+`canvod.streamstats.ops.store.StatisticsStore`. Fixing this is real
+engineering (needs a design decision on how a canvodpy CLI command in the
+public monorepo should call into a private package) — out of scope for
+the separation-of-concerns cleanup; flagged here so it isn't lost.
 
-**Action:** no decision made yet — revisit when ready to consolidate on one
-canonical DAG design.
+**Implemented (2026-07-15):**
+1. `canvod-airflow`'s `daily_processing.py` docstring fixed — said "Two
+   DAGs per configured site," always generated three (the docstring
+   predated the `sbf_agency` DAG). Confirmed zero streamstats coupling
+   anywhere in `canvod-airflow` — already enforced by its own
+   `test_no_streaming_references` regression test, which was already
+   passing before this pass (the separation was already the intent, just
+   not fully cleaned up on the streamstats side).
+2. `canvod-streamstats/dags/` (`gnss_backfill.py`, `gnss_daily_processing.py`)
+   deleted — DAG-owning code doesn't belong there regardless of who
+   maintains the package day to day. The stale `integration/` directory
+   was left untouched per user direction (their private repo, their call
+   on further cleanup there).
+
+**Action:** done — decision made and both repos' code brought in line
+with it. The `cli/stats.py` dead-import bug is a known follow-up, not
+tracked as a numbered item yet.
 
 ---
 
