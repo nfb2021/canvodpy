@@ -863,6 +863,13 @@ class PipelineOrchestrator:
             _res = load_config().processing.params.resolve_resources()
             _pool = _loky_reusable(
                 max_workers=n_wrk,
+                # loky's own default idle timeout is 10s -- Phase 1 date-prep
+                # (position computation, aux data) routinely takes 90-165s+,
+                # so every worker idles out and gets respawned at every batch
+                # boundary with the default. 900s comfortably outlasts a
+                # single batch's prep gap while still letting the pool wind
+                # down between separate cron invocations.
+                timeout=900,
                 initializer=_worker_init_with_run_id,
                 initargs=(_res["nice_priority"], _res["cpu_affinity"], get_run_id()),
             )

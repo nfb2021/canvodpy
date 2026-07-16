@@ -596,6 +596,24 @@ class RollupConfig(BaseModel):
   ingest step). No conflict exists because the orchestrator-side path isn't
   wired in at all; revisit if/when it is.
 
+  **Re-confirmed still dead, 2026-07-16** (full call-chain traced, not just
+  grepped): `temporal_aggregation`/`grid_assignment` are read in exactly one
+  place, `canvod-ops/registry.py`'s `build_default_pipeline()`; that function
+  is called in exactly one place, `canvod-store/reader.py:382` (inside
+  `IcechunkDataReader`); and `IcechunkDataReader` has zero importers anywhere
+  in `canvodpy`'s own orchestrator/CLI. So the config→effect chain is fully
+  disconnected from `canvodpy run`/`Site.pipeline()` — not "dormant, revisit
+  later" so much as **actively misleading**: a user editing
+  `canvod-settings.yaml`'s `preprocessing:` section has no way to know it
+  does nothing for their actual pipeline run. Since this has now sat
+  unwired for 2+ weeks with no work started on wiring it in, worth
+  downgrading from "revisit if/when wired in" to an actual choice: either
+  (a) wire `build_default_pipeline()`/`IcechunkDataReader` into the live
+  ingest path, or (b) remove/comment out the `preprocessing:` section from
+  the shipped template and mark `PreprocessingConfig` clearly experimental/
+  unused in its own docstring, so the config surface stops implying live
+  behavior it doesn't have.
+
 ---
 
 ## Combined implementation order (when ready)
@@ -3058,6 +3076,48 @@ groups.
 how the pipeline actually performs before deciding whether this is
 worth fixing.
 
+**Addendum (2026-07-16, owner observation): dates within a batch can
+process out of chronological order too, not just receivers.** Owner
+noticed a run progress e.g. 2025090, then 2025089, then 2025088 —
+descending, not ascending from `--start`. Separate mechanism from the
+receiver-ordering issue above, one layer up in the same function:
+Phase 1 date-prep (`pipeline.py:803-838`) preps up to
+`min(len(batch), 4)` dates *concurrently* via `ThreadPoolExecutor`, then
+does `for fut in as_completed(futures):` — completion order, not
+submission order. Whichever date's prep (position computation, aux
+data) happens to finish first becomes the first key inserted into
+`doy_contexts` (a plain dict), which directly drives the insertion
+order of `all_tasks` (`for date_key in doy_contexts: ...`), which
+drives the order groups get written and show up in logs/dashboard. Any
+date whose prep work is I/O-bound and happens to finish quickest can
+jump ahead of chronologically-earlier dates.
+
+Note this does *not* affect the final VOD-processing order handed back
+to `run.py` — the per-batch yield at `pipeline.py:1091`
+(`for date_key, _receivers in batch:`) iterates the original sorted
+`batch` list, not `doy_contexts`, so VOD still gets computed in
+ascending date order regardless of what order RINEX writes happened
+in. Only the RINEX-write/progress-display order is affected.
+
+**Why this is more than cosmetic (owner, 2026-07-16)**: the performance
+dashboard (`canvod-ops`'s dashboard, `machine/performance.json`-backed)
+is meant to let you visually spot trends over the run — throughput
+drifting, a receiver slowing down, memory climbing. That reading
+depends on the x-axis (processing order) actually corresponding to
+chronological date order. If dates render out of sequence, a real
+trend (e.g. write time genuinely increasing as the store accumulates
+history — see §"why slower than before the icechunk refactor" analysis
+this session) becomes visually indistinguishable from noise, because
+you can't tell if a jump is "date N is slower than date N-1" or just
+"date N happened to be prepped out of turn." This isn't just about
+watching progress feel smooth — it actively degrades the dashboard's
+one real diagnostic job.
+
+**Action:** not started, same as above — worth addressing together if
+the round-robin interleaving fix goes ahead, since both stem from "task/
+date list insertion order isn't chronological/interleaved by
+construction."
+
 ---
 
 ## 43. Automatic backfill for RINEX-ingested-but-VOD-missing dates
@@ -3109,3 +3169,124 @@ scale (~450+ days × 2+ analysis pairs), and whether this belongs in
 subcommand.
 
 **Action:** not started, formalized as its own entry per owner request.
+
+---
+
+## 44. Aux (SP3/CLK) preprocessing: no cache reuse, no settings verification, per-day Zarr layout, directory asymmetry
+
+**Owner's observation (2026-07-16)**: if an SP3 file already exists, we
+should check whether the corresponding *augmented* aux file already
+exists too and just read that instead of reprocessing — but we need a
+way to verify it was actually augmented with the same settings the
+current run is using. Also questioned whether one Zarr per day is the
+most performant layout, and noted SP3/CLK live in their own
+subdirectories while the augmented files don't.
+
+**Confirmed against current code, both findings real:**
+
+1. **No cache reuse at all, by design** — `_ensure_aux_data_preprocessed()`
+   (`canvodpy/src/canvodpy/orchestrator/processor.py:1312-1389`, and a
+   near-duplicate at `processor.py:2484-2494`) unconditionally
+   `shutil.rmtree()`s `aux_{date_str}.zarr` if it exists, then always
+   re-runs the full Hermite interpolation from raw SP3/CLK — even if a
+   perfectly valid, matching-settings cache is sitting right there. The
+   comment above it is explicit about why: *"Always reprocess from raw
+   SP3/CLK files — the Hermite interpolation is cheap and this avoids
+   stale caches when SIDs change."* I.e. a deliberate simplification
+   that trades "redo the interpolation every single time" for "never
+   have to detect whether a cache is stale." This means re-running the
+   same date range twice (or overlapping batches across separate runs)
+   always fully redoes Hermite interpolation for every day, with no way
+   to skip already-correctly-cached days.
+
+2. **No settings fingerprint exists to verify** — since the cache is
+   never trusted, there's currently nothing recording what config
+   (`keep_sids`/SID universe, `keep_gnss_observables`, `ephemeris_source`,
+   sampling rate, whatever else feeds the Hermite interpolation) produced
+   a given `aux_{date_str}.zarr`. Making the cache reusable would require
+   adding that first — e.g. a config-hash written as a zarr attr
+   (`canvod-store-metadata` already has exactly this pattern for the main
+   stores' `ConfigSnapshot`/`config_hash`, see §4's "Should `CanvodConfig`
+   snapshots be persisted..." resolution — reuse that approach rather
+   than inventing a new one) — and checked before deciding to reuse vs.
+   rebuild.
+
+3. **One Zarr store per day** (`aux_base_dir / f"aux_{date_str}.zarr"`)
+   — plausibly not the most efficient layout at scale (a 450-day backfill
+   creates 450 separate small Zarr stores' worth of metadata/chunk
+   files each). Whether this actually matters depends on where
+   `aux_base_dir` (`storage.get_aux_data_dir()`) lives — if it's local
+   scratch disk this is much less of a concern than if it's ever pointed
+   at network storage (see [[canvodpy_cifs_share_root_cause]] for why
+   many-small-files-over-network is a real, separate risk category).
+   Not measured yet; needs profiling before deciding whether to
+   consolidate (e.g. one Icechunk-style store with day-partitioned
+   groups instead of N flat Zarr directories).
+
+4. **Directory layout is inconsistent** — raw SP3/CLK downloads go into
+   their own subdirectories (`canvod-auxiliary/src/canvod/auxiliary/
+   pipeline.py:423-424`, `_SP3_SUBDIR`/`_CLK_SUBDIR` under
+   `aux_file_path`), but the augmented output (`aux_{date_str}.zarr`)
+   sits directly in `aux_base_dir` — the same root, not organized into a
+   sibling subdir of its own. Minor on its own, but worth fixing
+   alongside item 3 if the layout gets reworked anyway.
+
+**Action:** not started. Needs, in order: (a) decide whether to reuse
+the `ConfigSnapshot`/`config_hash` pattern from `canvod-store-metadata`
+for aux-cache fingerprinting rather than a bespoke mechanism, (b) add
+the fingerprint + reuse-if-matching logic to
+`_ensure_aux_data_preprocessed()`, (c) profile whether per-day Zarr
+count is actually a measured bottleneck before redesigning the layout,
+(d) fix the SP3/CLK-vs-augmented subdirectory asymmetry, likely as part
+of (c) rather than a standalone change.
+
+---
+
+## 45. Windowing/write-side tuning was all done against 96-files/day; the recommended (single 24h file) case is unverified
+
+**Owner's observation (2026-07-16)**: rosalia's real receivers deliver
+96×15-min files per day (confirmed: every `batch_write_complete` this
+session shows `total_files=96` per receiver-day) — but canvodpy's own
+prescribed, recommended workflow is a **single 24h file per
+receiver-day** (`canvod-preflight` enforces one canonical naming
+convention; `CLAUDE.md`: "users with non-conforming receiver output
+rename files on disk (`gfzrnx`, one-time per site)"). §42's
+receiver-major-file-minor/windowing issue, the write-side degradation
+investigation (`dev/perf_degradation_findings_2026_07_15.md`), and the
+windowed-completions rewrite (`9ba3f8a0`) were all reasoned about,
+observed, and tuned **entirely against the 96-files/day shape** — that
+overnight backfill and this session's crashed runs are both real
+rosalia data, all 15-min files. The window size (`2 × n_workers`), the
+streaming-write-per-completed-group design, and the whole rationale for
+§42's problem (window smaller than one receiver's daily file count)
+only make sense/matter in a many-small-files world. None of this
+tuning has been verified against the single-24h-file case canvodpy
+actually recommends to users.
+
+**Why this matters**: at 1 file per receiver-day, a 14-day×4-receiver
+batch is 56 tasks total, not ~5,376 — completely different task-count/
+granularity regime. Per-task duration also inverts: `performance_
+investigation` memory's own measurements put a single 24h RINEX parse
+at ~25-37s (vs. 0.39s for one 15-min file) — few large slow tasks
+instead of many small quick ones. Whether the windowed in-flight cap,
+the streaming-write-on-group-complete design, and Phase 1's
+`ThreadPoolExecutor(max_workers=min(len(batch),4))` prep concurrency
+still behave well (or even meaningfully help) at that granularity is
+untested. It's plausible the recommended path is *already* fine
+(fewer, more self-contained tasks sidesteps §42 entirely since window
+≫ 1), but that's an assumption, not a measurement — and it's equally
+plausible new issues appear (e.g. bursty/lumpy writes if same-sized
+24h tasks tend to finish in tight clusters rather than staggered, or
+the phase1-concurrency cap of 4 mattering more/less at this scale).
+
+**Action:** not started. Needs a benchmark run against real (or
+synthetic) single-24h-file-per-receiver data, same `days_per_batch`
+range as the 96-file backfills already measured, to get a real
+comparison rather than inference from the many-small-files numbers.
+Test data doesn't need a separate real 24h-cadence receiver: splice
+rosalia's existing 96×15-min files per day into single 24h files with
+`gfzrnx` (already a project dependency — `CLAUDE.md`: "IGS RINEX
+toolkit (obs type filtering, splicing) — used by `RinexTrimmer`"),
+same tool already used elsewhere in the repo for RINEX manipulation.
+Gives realistic content/volume at the recommended file granularity
+without needing new field data.
