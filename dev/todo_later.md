@@ -2378,8 +2378,8 @@ against the latest PyPI release recently and it was clean — no known
 regression motivating this, purely an opportunistic "now that the bridge
 exists, should we use it more" question.
 
-**Action:** not decided, not investigated. Revisit alongside or after the
-§(pending) canvod-audit → canvodpy-extensions migration, since both touch
+**Action:** not decided, not investigated. Revisit alongside or after
+§41's `canvod-audit` → `canvodpy-extensions` migration, since both touch
 the same file (`vs_gnssvod.py`) and it's wasteful to refactor it twice.
 
 ---
@@ -2959,3 +2959,153 @@ skills add` expects, and updating `CLAUDE.md`'s skills table + the
 (or in addition to) the bundled copy — decide whether the bundled
 `.claude/skills/icechunk/` copy stays as a fallback or gets removed once
 the installable version exists.
+
+---
+
+## 41. Move `canvod-audit` into `canvodpy-extensions` (formalized 2026-07-15)
+
+**Owner's rationale**: `canvod-audit` (internal verification/regression
+suite — Tier 0-3, `RinexTrimmer`, comparisons against gnssvodpy and
+gnssvod/Humphrey et al.) is not needed for the average user to run the
+pipeline. It belongs alongside `canvod-filemap`/`canvod-airflow`/
+`canvod-adapters` in `canvodpy-extensions` (optional, GitHub-only,
+already home to 3 packages) rather than as a required workspace member
+of the core `canvodpy` monorepo.
+
+This was previously only referenced as "§(pending) canvod-audit →
+canvodpy-extensions migration" inside §30's Action line (which itself
+depends on this migration happening first, since both touch
+`vs_gnssvod.py` and refactoring it twice would be wasteful) — never
+formalized as its own entry until now. §30 should be revisited alongside
+or after this one.
+
+**Known complexity, not yet investigated in depth**:
+- `canvod-audit` currently depends on `canvod-adapters`
+  (`packages/canvod-audit/pyproject.toml:17`) — `canvod-adapters` is
+  *already* in `canvodpy-extensions`, so this dependency direction gets
+  simpler once both live in the same repo (workspace-local instead of a
+  cross-repo git dependency), not harder.
+- Referenced in the root `pyproject.toml` in at least 3 places (test
+  paths, src paths, commitizen version-bump config) — all need updating,
+  not just a directory move.
+- The audit suite is this repo's own guardrail-verification tool (see
+  `CLAUDE.md`'s "Guardrails" section: "run `uv run pytest packages/
+  canvod-audit/tests/`" after touching VOD formula/coordinate transforms/
+  store dedup/naming parser/ephemeris interpolation/SID construction) —
+  moving it out of the core workspace means that verification step
+  becomes an optional-extra install rather than always-present, which
+  needs its own decision (keep it mandatory for contributors even though
+  optional for end users? document a `just` recipe that pulls it in?).
+- `canvod-audit`'s own test suite (60 tests) and its role as CI's
+  guarded-code gate need to keep working through the move — this is
+  exactly the kind of thing the canvod-filemap/canvod-config splits
+  (see `memory/canvodpy_extensions_repo.md`, `memory/
+  canvod_config_package_split.md`) already have working precedent for.
+- Audit output dir (`/Volumes/ExtremePro/canvod_audit_output/`) and its
+  `gnssvodpy_based/`/`canvodpy_l1/` etc. subdirs are referential paths
+  used by the suite regardless of which repo owns the code — shouldn't
+  be affected, but worth confirming.
+
+**Action:** not started, not planned in detail — formalized per owner
+request as its own entry so §30 has something concrete to point to. See
+this session's transcript (2026-07-15) for the scoping conversation:
+owner chose to formalize-only, not start planning or execution this
+session.
+
+---
+
+## 42. Multi-day batch task ordering defeats cross-receiver/day interleaving
+
+**Observation (2026-07-15, owner)**: on a `days_per_batch: 14` run, the
+progress display advances receiver-after-receiver, day-by-day, instead
+of showing multiple receivers/days completing in parallel.
+
+**Root cause**: `RinexDataProcessor.prepare_batch_tasks()`
+(`canvodpy/src/canvodpy/orchestrator/processor.py:2694-2769`) builds
+`task_descriptors` receiver-major, file-minor for one date
+(`for receiver_name in receiver_configs: for rnx_file in rinex_files:
+append(...)`). `_process_multi_day_batches`
+(`canvodpy/src/canvodpy/orchestrator/pipeline.py:867-876`) then
+concatenates those per-date lists in date order, so the flat task list
+looks like `[day1-recvA-file1..N, day1-recvB-file1..N, day2-recvA-...]`.
+
+`_windowed_completions` (`pipeline.py:74-131`, added for Problem A,
+`dev/perf_degradation_findings_2026_07_15.md`) keeps only
+`window = 2 * n_workers` tasks in flight and always refills from the
+*next* task in that list. Since one receiver's daily file count (e.g.
+96 files at 15-min cadence) is typically much larger than the window,
+all workers stay saturated on receiver A's files until that group is
+nearly drained before receiver B's files enter the window at all — and
+a group only gets written to Icechunk (ticking the progress display)
+once fully drained. Net effect: groups complete in close to strict
+submission order, largely defeating the point of pooling multiple days
+into one flat loky wave.
+
+Likely benign for total wall-clock time (workers are always busy on
+*something*, n_workers is the real throughput cap either way) but does
+mean `days_per_batch > 1` isn't buying the intended cross-day/receiver
+interleaving (shorter tail latency, writes spread out instead of
+bursty) — worth confirming against real timing data, not just
+inference.
+
+**Possible fix (not implemented, needs perf data first)**: interleave
+`all_tasks` round-robin across receiver-day groups (instead of
+contiguous per-group blocks) before handing it to
+`_windowed_completions`, so the in-flight window always spans multiple
+groups.
+
+**Action:** not started. Owner will provide fresh run logs later to see
+how the pipeline actually performs before deciding whether this is
+worth fixing.
+
+---
+
+## 43. Automatic backfill for RINEX-ingested-but-VOD-missing dates
+
+**Incident that motivated this (2026-07-15/16, `run_id=rosalia-20260715-191259`)**:
+a `canvodpy run --site rosalia --start 2025087` (no `--end`, resolves to
+~450 days) completed RINEX ingestion for its entire first 14-day batch
+perfectly — `flat_loky_complete [groups_written=56, tasks_succeeded=5313,
+tasks_failed=0]`, i.e. 14 days × 4 receivers, zero failures — then
+crashed 5 seconds into the very first VOD-store write of the very first
+date (`stage=vod_store`, `IcechunkError`/os error 103, a transient CIFS
+share connection drop — see `store_retry.py`, added same session).
+Net result: **14 days of RINEX data safely committed, 0 days of VOD**,
+and the remaining ~436 days of the intended range were never attempted.
+
+**The gap**: `_last_processed_date()` (`cli/run.py:121`) only queries
+`site.rinex_store` to decide where to resume. On the next plain
+`canvodpy run` invocation (no explicit `--start`), it will correctly
+skip re-ingesting 2025087–2025100 (already in the RINEX store) but will
+**also** never revisit VOD for those dates, since the per-date VOD
+compute+store block only runs on dates freshly yielded by the RINEX
+pipeline generator (`_process_multi_day_batches`) — dates already in
+the RINEX store are never yielded again. VOD for a RINEX-complete date
+is silently, permanently skipped unless someone notices and manually
+backfills via `canvodpy vod --site <site> --analysis <name> --start
+<yyyydoy> --end <yyyydoy>` (which exists — `cli/vod.py` — but requires a
+human to notice the gap and run it once per analysis pair).
+
+**Owner's explicit direction (2026-07-16)**: no "skip the failing date
+and keep going" masking — a real, unrecovered failure should still stop
+the run loudly. This item is about the *separate* problem of
+automatically reconciling/backfilling the RINEX-complete/VOD-missing
+gap left behind after a crash like this, not about suppressing the
+crash itself.
+
+**Proposed shape (not designed in detail yet)**: before/alongside the
+normal date-range walk, reconcile per analysis pair — for each date
+present in the RINEX store's metadata table, check whether a
+corresponding VOD-store commit exists; if RINEX-complete but
+VOD-missing, queue that date for a VOD-only backfill pass (reusing
+`VodComputer.compute_bulk()`, the same mechanism `canvodpy vod` already
+uses) before or after the main run, so a crash like this one
+self-heals on the next invocation instead of needing a human to notice
+and run the equivalent of the commands above by hand. Open questions:
+where the reconciliation check should live (start-of-run vs. a separate
+scheduled job), how to make an incomplete-VOD-for-a-date check cheap at
+scale (~450+ days × 2+ analysis pairs), and whether this belongs in
+`canvodpy run` itself or as a separate `canvodpy vod reconcile`-style
+subcommand.
+
+**Action:** not started, formalized as its own entry per owner request.

@@ -35,6 +35,7 @@ import subprocess
 import sys
 import time
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Annotated
@@ -48,6 +49,7 @@ from canvodpy.logging import emit_run_summary
 from canvodpy.logging.run_context import reset_run_id, set_run_id
 from canvodpy.logging.stage_timer import reset_run_stats
 from canvodpy.orchestrator.resources import ResourceSampler
+from canvodpy.orchestrator.store_retry import call_with_store_retries
 
 log = structlog.get_logger(__name__)
 
@@ -497,17 +499,33 @@ def _main_impl(args: SimpleNamespace) -> int:
 
                             stage = "vod_store"
                             if vod_results:
-                                ensure_vod_store_metadata(site, args.vod_calculator)
+                                call_with_store_retries(
+                                    partial(
+                                        ensure_vod_store_metadata,
+                                        site,
+                                        args.vod_calculator,
+                                    ),
+                                    logger=log,
+                                    date=date_key,
+                                    op="vod_metadata_write",
+                                )
                             t_vod_store = time.perf_counter()
                             for analysis_name, result in vod_results.items():
                                 t_analysis_store = time.perf_counter()
-                                research_site.store_vod_analysis(
-                                    vod_dataset=result["vod_ds"],
-                                    analysis_name=analysis_name,
-                                    calculator_name=args.vod_calculator,
-                                    source_file_hashes=result["source_file_hashes"],
-                                    source_gnss_stores=result["source_gnss_stores"],
-                                    commit_message=f"VOD {analysis_name} {date_key}",
+                                call_with_store_retries(
+                                    partial(
+                                        research_site.store_vod_analysis,
+                                        vod_dataset=result["vod_ds"],
+                                        analysis_name=analysis_name,
+                                        calculator_name=args.vod_calculator,
+                                        source_file_hashes=result["source_file_hashes"],
+                                        source_gnss_stores=result["source_gnss_stores"],
+                                        commit_message=f"VOD {analysis_name} {date_key}",
+                                    ),
+                                    logger=log,
+                                    date=date_key,
+                                    analysis=analysis_name,
+                                    op="vod_write",
                                 )
                                 log.info(
                                     "stage_timing",

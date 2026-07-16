@@ -19,7 +19,6 @@ from datetime import datetime
 from functools import partial
 from pathlib import Path
 
-import icechunk
 import pint
 import xarray as xr
 
@@ -46,6 +45,7 @@ from canvodpy.orchestrator.processor import (
     preprocess_with_hermite_aux,
 )
 from canvodpy.orchestrator.resources import MemoryMonitor
+from canvodpy.orchestrator.store_retry import STORE_ERROR_TYPES, call_with_store_retries
 
 
 def _check_recipe_receivers_have_filemap(receivers: dict[str, dict]) -> None:
@@ -129,39 +129,6 @@ def _windowed_completions[T](
                 in_flight[_submit(tasks[idx])] = tasks[idx]
                 idx += 1
             yield task, fut
-
-
-# icechunk.IcechunkError wraps object-store I/O errors -- including transient
-# network drops on shared/mounted storage (os error 103 ECONNABORTED, seen in
-# production against an NFS-style share; dev/perf_degradation_findings_2026_
-# 07_15.md) -- but is not a subclass of OSError/RuntimeError/ValueError, so it
-# used to escape every except clause in the write/read-back path uncaught and
-# crash the whole multi-day run on one dropped connection.
-_STORE_ERROR_TYPES = (OSError, RuntimeError, ValueError, icechunk.IcechunkError)
-_STORE_RETRY_BACKOFF_SECONDS = (2.0, 8.0, 30.0)
-
-
-def _call_with_store_retries[T](fn: Callable[[], T], *, logger, **log_ctx: object) -> T:
-    """Retry a store read/write with backoff before giving up.
-
-    The final attempt is unguarded -- its exception propagates to the
-    caller's own ``except``/``log.exception`` so existing log event names
-    and give-up behavior (skip this date/receiver, continue the run) are
-    unchanged; this only adds retries in front of that.
-    """
-    for attempt, backoff in enumerate(_STORE_RETRY_BACKOFF_SECONDS):
-        try:
-            return fn()
-        except _STORE_ERROR_TYPES as exc:
-            logger.warning(
-                "store_op_retry",
-                attempt=attempt + 1,
-                backoff_seconds=backoff,
-                error=str(exc),
-                **log_ctx,
-            )
-            _time.sleep(backoff)
-    return fn()
 
 
 class PipelineOrchestrator:
@@ -1011,7 +978,7 @@ class PipelineOrchestrator:
 
                     t_write_start = _time.monotonic()
                     try:
-                        skipped = _call_with_store_retries(
+                        skipped = call_with_store_retries(
                             partial(
                                 processor._append_to_icechunk,
                                 augmented,
@@ -1025,7 +992,7 @@ class PipelineOrchestrator:
                             receiver=receiver_name,
                             op="write",
                         )
-                    except _STORE_ERROR_TYPES:
+                    except STORE_ERROR_TYPES:
                         self._logger.exception(
                             "icechunk_write_failed",
                             date=date_key,
@@ -1052,7 +1019,7 @@ class PipelineOrchestrator:
                         assembly_source = "memory"
                     else:
                         try:
-                            daily_ds = _call_with_store_retries(
+                            daily_ds = call_with_store_retries(
                                 partial(
                                     self.site.read_receiver_data,
                                     receiver_name=receiver_name,
@@ -1063,7 +1030,7 @@ class PipelineOrchestrator:
                                 receiver=receiver_name,
                                 op="read_back",
                             )
-                        except _STORE_ERROR_TYPES:
+                        except STORE_ERROR_TYPES:
                             self._logger.exception(
                                 "read_back_failed",
                                 date=date_key,
