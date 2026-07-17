@@ -43,6 +43,7 @@ from canvodpy.orchestrator.processor import (
     RinexDataProcessor,
     _processing_progress,
     _worker_init_with_run_id,
+    preprocess_reference_with_hermite_aux_fanout,
     preprocess_with_hermite_aux,
 )
 from canvodpy.orchestrator.resources import MemoryMonitor
@@ -934,7 +935,16 @@ class PipelineOrchestrator:
             )
 
             def _submit_task(task: tuple[str, tuple], *, _pool=_pool) -> Future:
-                return _pool.submit(preprocess_with_hermite_aux, *task[1])
+                task_args = task[1]
+                # Trailing element marks a §47 reference fan-out task (dict
+                # result, one canopy_positions arg instead of a single
+                # receiver_position/receiver_name pair) vs. the normal
+                # one-file-one-receiver shape -- see prepare_batch_tasks.
+                if task_args[-1]:
+                    return _pool.submit(
+                        preprocess_reference_with_hermite_aux_fanout, *task_args[:-1]
+                    )
+                return _pool.submit(preprocess_with_hermite_aux, *task_args[:-1])
 
             # Windowed submission (~2x worker count in flight), not the whole
             # batch upfront: submitting all ~n_days*n_receivers*n_files tasks
@@ -991,21 +1001,40 @@ class PipelineOrchestrator:
                 batch_t0 = _time.monotonic()
                 for task, fut in completion_iter:
                     date_key, task_args = task
-                    receiver_name = task_args[4]
-                    group_key = (date_key, receiver_name)
+                    is_fanout = bool(task_args[-1])
+                    lane_key = task_args[4]
+                    # A §47 fan-out task's pairing names are known from its
+                    # submitted args (canopy_positions' keys), independent of
+                    # whether the call below succeeds or fails.
+                    pairing_names = (
+                        list(task_args[3].keys()) if is_fanout else [lane_key]
+                    )
+                    group_keys = [(date_key, p) for p in pairing_names]
 
                     try:
-                        fname, ds, aux, _sids = fut.result()
-                        pending_results[group_key].append((fname, ds))
-                        if aux:
-                            pending_aux[group_key][fname] = aux
+                        if is_fanout:
+                            fname, ds_by_pairing, aux, _sids = fut.result()
+                            for pairing_name in pairing_names:
+                                ds = ds_by_pairing.get(pairing_name)
+                                if ds is None:
+                                    continue
+                                pk = (date_key, pairing_name)
+                                pending_results[pk].append((fname, ds))
+                                if aux:
+                                    pending_aux[pk][fname] = aux
+                        else:
+                            fname, ds, aux, _sids = fut.result()
+                            pk = group_keys[0]
+                            pending_results[pk].append((fname, ds))
+                            if aux:
+                                pending_aux[pk][fname] = aux
                         tasks_succeeded += 1
                     except BrokenProcessPool:
                         tasks_failed += 1
                         self._logger.exception(
                             "worker_pool_broken",
                             date=date_key,
-                            receiver=receiver_name,
+                            receiver=lane_key,
                             batch_index=batch_idx + 1,
                             hint="worker process likely killed by OOM or segfault",
                         )
@@ -1014,113 +1043,125 @@ class PipelineOrchestrator:
                         self._logger.exception(
                             "task_failed",
                             date=date_key,
-                            receiver=receiver_name,
+                            receiver=lane_key,
                             batch_index=batch_idx + 1,
                         )
 
-                    # Count both successes and failures toward completion
-                    completed_counts[group_key] += 1
+                    # A fan-out task can complete multiple pairing groups at
+                    # once (one per canopy sharing this reference file) --
+                    # count/check/write independently for each.
+                    for group_key in group_keys:
+                        receiver_name = group_key[1]
 
-                    # Check if this group is fully complete
-                    if completed_counts[group_key] < expected_counts.get(group_key, 0):
-                        continue
+                        # Count both successes and failures toward completion
+                        completed_counts[group_key] += 1
 
-                    # ── Group complete: write to Icechunk immediately ──
-                    group_results = pending_results.pop(group_key, [])
-                    if not group_results:
-                        self._logger.warning(
-                            "receiver_all_tasks_failed",
-                            date=date_key,
-                            receiver=receiver_name,
-                            batch_index=batch_idx + 1,
-                        )
-                        continue
+                        # Check if this group is fully complete
+                        if completed_counts[group_key] < expected_counts.get(
+                            group_key, 0
+                        ):
+                            continue
 
-                    augmented = sorted(group_results, key=lambda x: x[0].name)
-                    processor = doy_contexts[date_key][0]
-                    rinex_files = receiver_files_lookup[group_key]
-                    group_aux = pending_aux.pop(group_key, None)
-                    group_fmt = reader_format_lookup.get(group_key)
+                        # ── Group complete: write to Icechunk immediately ──
+                        group_results = pending_results.pop(group_key, [])
+                        if not group_results:
+                            self._logger.warning(
+                                "receiver_all_tasks_failed",
+                                date=date_key,
+                                receiver=receiver_name,
+                                batch_index=batch_idx + 1,
+                            )
+                            continue
 
-                    t_write_start = _time.monotonic()
-                    try:
-                        skipped = call_with_store_retries(
-                            partial(
-                                processor._append_to_icechunk,
-                                augmented,
-                                receiver_name,
-                                rinex_files,
-                                aux_datasets=group_aux or None,
-                                reader_format=group_fmt,
-                            ),
-                            logger=self._logger,
-                            date=date_key,
-                            receiver=receiver_name,
-                            op="write",
-                        )
-                    except STORE_ERROR_TYPES:
-                        self._logger.exception(
-                            "icechunk_write_failed",
-                            date=date_key,
-                            receiver=receiver_name,
-                        )
-                        continue
-                    t_write_end = _time.monotonic()
+                        augmented = sorted(group_results, key=lambda x: x[0].name)
+                        processor = doy_contexts[date_key][0]
+                        rinex_files = receiver_files_lookup[group_key]
+                        group_aux = pending_aux.pop(group_key, None)
+                        group_fmt = reader_format_lookup.get(group_key)
 
-                    # Build the daily dataset: from in-memory parts when nothing
-                    # was skipped by dedup (avoids a full store round-trip), or
-                    # fall back to a store read on resume / overlap runs.
-                    date_obj = processor.matched_data_dirs.yyyydoy.date
-                    assert date_obj is not None, "yyyydoy.date must not be None"
-                    time_range = (
-                        datetime.combine(date_obj, datetime.min.time()),
-                        datetime.combine(date_obj, datetime.max.time()),
-                    )
-                    if len(augmented) == 1:
-                        # Single-file day: use the processed dataset directly.
-                        # The hash railguard guarantees in-memory data == store
-                        # content whether the file was just written or already
-                        # existed (re-run). No store round-trip needed.
-                        daily_ds = augmented[0][1]
-                        assembly_source = "memory"
-                    else:
+                        t_write_start = _time.monotonic()
                         try:
-                            daily_ds = call_with_store_retries(
+                            skipped = call_with_store_retries(
                                 partial(
-                                    self.site.read_receiver_data,
-                                    receiver_name=receiver_name,
-                                    time_range=time_range,
+                                    processor._append_to_icechunk,
+                                    augmented,
+                                    receiver_name,
+                                    rinex_files,
+                                    aux_datasets=group_aux or None,
+                                    reader_format=group_fmt,
                                 ),
                                 logger=self._logger,
                                 date=date_key,
                                 receiver=receiver_name,
-                                op="read_back",
+                                op="write",
                             )
                         except STORE_ERROR_TYPES:
                             self._logger.exception(
-                                "read_back_failed",
+                                "icechunk_write_failed",
                                 date=date_key,
                                 receiver=receiver_name,
                             )
                             continue
-                        assembly_source = "store"
-                    t_read_end = _time.monotonic()
+                        t_write_end = _time.monotonic()
 
-                    self._logger.info(
-                        "group_write_complete",
-                        date=date_key,
-                        receiver=receiver_name,
-                        write_seconds=round(t_write_end - t_write_start, 2),
-                        assembly_seconds=round(t_read_end - t_write_end, 2),
-                        assembly_source=assembly_source,
-                        total_seconds=round(t_read_end - t_write_start, 2),
-                    )
+                        # Build the daily dataset: from in-memory parts when
+                        # nothing was skipped by dedup (avoids a full store
+                        # round-trip), or fall back to a store read on
+                        # resume / overlap runs.
+                        date_obj = processor.matched_data_dirs.yyyydoy.date
+                        assert date_obj is not None, "yyyydoy.date must not be None"
+                        time_range = (
+                            datetime.combine(date_obj, datetime.min.time()),
+                            datetime.combine(date_obj, datetime.max.time()),
+                        )
+                        if len(augmented) == 1:
+                            # Single-file day: use the processed dataset
+                            # directly. The hash railguard guarantees
+                            # in-memory data == store content whether the
+                            # file was just written or already existed
+                            # (re-run). No store round-trip needed.
+                            daily_ds = augmented[0][1]
+                            assembly_source = "memory"
+                        else:
+                            try:
+                                daily_ds = call_with_store_retries(
+                                    partial(
+                                        self.site.read_receiver_data,
+                                        receiver_name=receiver_name,
+                                        time_range=time_range,
+                                    ),
+                                    logger=self._logger,
+                                    date=date_key,
+                                    receiver=receiver_name,
+                                    op="read_back",
+                                )
+                            except STORE_ERROR_TYPES:
+                                self._logger.exception(
+                                    "read_back_failed",
+                                    date=date_key,
+                                    receiver=receiver_name,
+                                )
+                                continue
+                            assembly_source = "store"
+                        t_read_end = _time.monotonic()
 
-                    if self._on_group_written is not None:
-                        self._on_group_written(receiver_name)
-                    date_datasets[date_key][receiver_name] = daily_ds
-                    date_timings[date_key][receiver_name] = t_read_end - t_write_start
-                    groups_written.add(group_key)
+                        self._logger.info(
+                            "group_write_complete",
+                            date=date_key,
+                            receiver=receiver_name,
+                            write_seconds=round(t_write_end - t_write_start, 2),
+                            assembly_seconds=round(t_read_end - t_write_end, 2),
+                            assembly_source=assembly_source,
+                            total_seconds=round(t_read_end - t_write_start, 2),
+                        )
+
+                        if self._on_group_written is not None:
+                            self._on_group_written(receiver_name)
+                        date_datasets[date_key][receiver_name] = daily_ds
+                        date_timings[date_key][receiver_name] = (
+                            t_read_end - t_write_start
+                        )
+                        groups_written.add(group_key)
 
             self._logger.info(
                 "flat_loky_complete",

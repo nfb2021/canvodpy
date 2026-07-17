@@ -3290,3 +3290,131 @@ toolkit (obs type filtering, splicing) — used by `RinexTrimmer`"),
 same tool already used elsewhere in the repo for RINEX manipulation.
 Gives realistic content/volume at the recommended file granularity
 without needing new field data.
+
+---
+
+## 46. Extension package: batch-concat sub-24h files into properly-named 24h files via gfzrnx
+
+**Owner's idea (first raised, deferred, this session)**: rosalia's real
+receivers deliver 96×15-min files per day (§45) — not the single 24h
+file canvodpy actually recommends and is built/tested for. Rather than
+changing the pipeline to handle both granularities well, an optional
+extension package could sit *in front of* ingestion: batch-concatenate
+each day's sub-24h files into one properly-named 24h file via `gfzrnx`
+(splicing — already a project dependency, `RinexTrimmer` uses it the
+same way for a different purpose), before canvodpy ever sees the data.
+
+**Why an extension, not core**: matches the existing pattern for
+non-conforming-input handling — `canvod-filemap` (virtual renaming) and
+`canvod-preflight`'s "rename with `gfzrnx`, one-time per site" guidance
+already establish that adapting non-canonical input shape is an
+optional, quarantined concern, not something the core pipeline should
+grow special-case handling for. This would live alongside `canvod-
+filemap`/`canvod-airflow` in `canvodpy-extensions`
+(`/Users/work/Developer/GNSS/canvodpy-extensions/`), not in the core
+monorepo.
+
+**Relationship to §45**: if this ships and rosalia switches to using
+it, §45's "recommended single-24h-file path is unverified" question
+becomes directly testable against rosalia's own real data instead of
+needing synthetic/gfzrnx-spliced test files — this package and that
+benchmark would use the same splicing mechanism for different purposes
+(this: real ingest pre-step; §45: one-off test-data generation).
+
+**Action:** not started, formalized as its own entry per owner request
+(previously only mentioned once, in conversation, as "worth thinking
+about," and set aside). Needs, before design: (a) confirm `gfzrnx`
+splicing preserves everything the RINEX v3 long-name convention and
+`canvod-preflight` validation require (header fields, obs type
+consistency across the 96 source files, correct start/end timestamps
+for the spliced 24h file's filename), (b) decide where in the pipeline
+this runs (a pre-flight step invoked before `canvodpy run`, vs. a
+`canvod-filemap`-style transparent hook), (c) decide whether it's a new
+package or folds into `canvod-filemap`.
+
+---
+
+## 47. Reference receiver's raw files get fully re-parsed once per paired canopy
+
+**Owner's observation (2026-07-16)**: a reference receiver's `(epoch,
+sid, snr)` observations get the below-canopy receiver's coordinates
+substituted onto them for geometry — but if a reference is paired with
+multiple canopies, does that mean its raw files are read multiple
+times? Confirmed: yes, and it's more wasteful than it needs to be.
+
+**Confirmed mechanism, traced end to end:**
+- `PipelineOrchestrator._process_single_date` (`pipeline.py:505-513`)
+  builds `receiver_configs` from a `receivers` dict keyed by **store
+  group** (`{ref}_{canopy}`, per the "Reference receivers write to
+  `{ref}_{canopy}` store groups" comment nearby), not by physical
+  receiver. So `reference_01` paired with `canopy_01` and `canopy_02`
+  produces two separate entries — `reference_01_canopy_01` and
+  `reference_01_canopy_02` — each carrying the *same* `data_dir` (the
+  physical `reference_01` raw-file directory) but a *different*
+  `position_data_dir` (whichever canopy that entry is paired against).
+- `preprocess_with_hermite_aux` (`processor.py:90-104`) is the module-
+  level worker function run per file, per task. It does the entire job
+  in one call: read the RINEX file, parse SNR/epoch/sid, augment with
+  Hermite-interpolated ephemeris, **and** compute θ/φ/r from whatever
+  `receiver_position` was passed in — all as one inseparable unit.
+- Net effect: for a reference paired with N canopies, its raw files get
+  fully re-read and re-parsed N times per day — confirmed directly in
+  this session's crash logs, where `reference_01_canopy_01` and
+  `reference_01_canopy_02` show up as two entirely independent
+  `group_write_complete`/`batch_write_complete` events with the same
+  96-file count each, not one shared parse reused twice. Only the final
+  coordinate-transform step actually depends on which canopy the
+  reference is paired against; the raw parse and ephemeris augmentation
+  are position-independent and produce byte-identical intermediate
+  results regardless of pairing.
+
+**Proposed redesign direction** (not implemented, needs design + a
+pipeline restructuring, not a quick fix):
+1. **Parse + augment once per physical receiver per day** — produces a
+   position-independent intermediate: epoch, sid, snr, plus satellite
+   ECEF positions from the aux/ephemeris data (no θ/φ/r yet).
+2. **Apply geometry projection separately, once per pairing** — cheap
+   vector math (ECEF receiver position → spherical θ/φ/r), reusing the
+   same parsed intermediate for every canopy the receiver is paired
+   against, instead of re-deriving it from scratch.
+
+This turns an `O(N pairs × full parse+ephemeris cost)` operation into
+`O(1 × full parse+ephemeris cost + N × cheap geometry cost)` — for
+rosalia's `reference_01` (2 pairings) this would roughly halve that
+receiver's total daily processing cost; scales further for any site
+where one reference serves more than 2 canopy stations.
+
+**Action:** not started. Needs, before implementation: (a) split
+`preprocess_with_hermite_aux` into a parse+augment phase and a separate
+geometry-projection phase with a clean interface between them, (b)
+rework how `receiver_configs`/`task_descriptors` get built so a
+reference receiver's raw-parse work is scheduled once, with N cheap
+follow-on geometry tasks instead of N full re-parses, (c) verify this
+doesn't change any output values (byte-identical θ/φ/r per pairing,
+just computed more cheaply) — needs an audit-suite regression pass
+given this touches coordinate-transform code (a guarded area per
+`CLAUDE.md`).
+
+**Status: built 2026-07-17, deviates from the proposed redesign above.**
+Instead of splitting into a separate parse-task + N follow-on geometry-
+tasks submitted to the pool independently (proposal (a)/(b) above —
+found to require serializing the parsed intermediate `xr.Dataset` back
+across the process-pool boundary, real IPC cost that would erode much
+of the savings), shipped as a single new function,
+`preprocess_reference_with_hermite_aux_fanout()`
+(`canvodpy/orchestrator/processor.py`), that does parse+augment once
+and geometry N times *inside one worker call*, returning
+`{pairing_name: ds_augmented}` for all N pairings at once. `prepare_batch_tasks`
+groups reference receiver_configs sharing the same physical
+`data_dir` and emits one fan-out task per file instead of N;
+`pipeline.py`'s task submission/result-unpacking branches on a trailing
+tuple marker to dispatch to the fan-out function and fan a dict result
+back into N independent per-pairing write groups. Verified
+bit-identical against the old per-pairing calls via
+`canvodpy/tests/test_reference_fanout.py` (mocked I/O, `xr.testing.assert_identical`)
+plus a source-level mutation-safety check (`add_spherical_coords_to_dataset`
+uses `.assign()`, confirmed non-mutating, so the fan-out loop can't
+alias-corrupt one pairing's output with another's). Full fast suite
+(1846 tests) and the audit suite (60 tests) pass; not yet verified
+against real multi-canopy production data (no local fixture) — pending
+the next live rosalia run.
