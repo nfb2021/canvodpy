@@ -17,6 +17,7 @@ from concurrent.futures import (
 from concurrent.futures.process import BrokenProcessPool
 from datetime import datetime
 from functools import partial
+from itertools import zip_longest
 from pathlib import Path
 
 import pint
@@ -129,6 +130,60 @@ def _windowed_completions[T](
                 in_flight[_submit(tasks[idx])] = tasks[idx]
                 idx += 1
             yield task, fut
+
+
+def _interleave_by_receiver(task_descriptors: list[tuple]) -> list[tuple]:
+    """Reorder one date's task descriptors round-robin across receivers.
+
+    ``prepare_batch_tasks`` builds descriptors receiver-major, file-minor
+    (all of receiver A's files, then all of receiver B's). Handed straight
+    to ``_windowed_completions``, a receiver's daily file count (e.g. 96 at
+    15-min cadence) typically exceeds ``window``, so the window stays
+    saturated on one receiver until its group nearly drains before the next
+    receiver's tasks even enter it -- groups then complete in near-strict
+    submission order instead of interleaved (dev/todo_later.md §42).
+    Round-robining here means the window always spans multiple receivers'
+    groups regardless of group size; uneven group sizes just mean the
+    shorter receiver's tail drops out of rotation first, not an error.
+    """
+    by_receiver: dict[str, list[tuple]] = {}
+    for task_args in task_descriptors:
+        by_receiver.setdefault(task_args[4], []).append(task_args)
+    return [
+        task_args
+        for row in zip_longest(*by_receiver.values())
+        for task_args in row
+        if task_args is not None
+    ]
+
+
+def _build_ordered_tasks(
+    ordered_date_keys: Sequence[str],
+    task_descriptors_by_date: dict[str, list[tuple]],
+) -> list[tuple[str, tuple]]:
+    """Flatten per-date task descriptors in ``ordered_date_keys`` order.
+
+    Phase 1 prepares dates concurrently and collects results via
+    ``as_completed()``, whose order is completion order, not submission
+    order -- inserting straight into the flat task list from there let
+    whichever date's prep happened to finish first jump ahead of
+    chronologically-earlier dates, scrambling the write/dashboard order
+    (dev/todo_later.md §42 addendum). Iterating ``ordered_date_keys``
+    (the original, already-chronological batch list) instead restores
+    that order regardless of prep completion order. Each date's own
+    tasks are further round-robined across receivers via
+    ``_interleave_by_receiver``. A date missing from
+    ``task_descriptors_by_date`` (failed/skipped Phase 1 prep) is
+    silently omitted, matching the previous behavior.
+    """
+    all_tasks: list[tuple[str, tuple]] = []
+    for date_key in ordered_date_keys:
+        task_descriptors = task_descriptors_by_date.get(date_key)
+        if task_descriptors is None:
+            continue
+        for task_args in _interleave_by_receiver(task_descriptors):
+            all_tasks.append((date_key, task_args))
+    return all_tasks
 
 
 class PipelineOrchestrator:
@@ -765,7 +820,7 @@ class PipelineOrchestrator:
                 str,
                 tuple[RinexDataProcessor, list[tuple[str, list[Path]]]],
             ] = {}
-            all_tasks: list[tuple[str, tuple]] = []
+            task_descriptors_by_date: dict[str, list[tuple]] = {}
 
             phase1_workers = min(len(batch), 4)
             with ThreadPoolExecutor(max_workers=phase1_workers) as tp:
@@ -801,8 +856,12 @@ class PipelineOrchestrator:
 
                     processor, task_descriptors, receiver_file_map = result
                     doy_contexts[date_key] = (processor, receiver_file_map)
-                    for task_args in task_descriptors:
-                        all_tasks.append((date_key, task_args))
+                    task_descriptors_by_date[date_key] = task_descriptors
+
+            all_tasks = _build_ordered_tasks(
+                [date_key for date_key, _receivers in batch],
+                task_descriptors_by_date,
+            )
 
             t_phase1_end = _time.monotonic()
             self._logger.info(
