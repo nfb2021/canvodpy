@@ -254,7 +254,14 @@ class MyIcechunkStore:
                 "throttle=True requires IcechunkConfig.zarr_async_concurrency to be "
                 "set; got None. Configure a cap (e.g. 2-4) or pass throttle=False/None."
             )
-        with zarr.config.set({"async": {"concurrency": self._zarr_async_concurrency}}):
+        # zarr.config.set() replaces the whole "async" subdict rather than
+        # merging into it -- passing only {"concurrency": ...} silently drops
+        # sibling keys (e.g. "timeout") for the scope of the block, which
+        # crashed a production run with KeyError: 'timeout'. Merge onto the
+        # current value instead of overwriting it.
+        scoped_async_cfg = dict(zarr.config.get("async"))
+        scoped_async_cfg["concurrency"] = self._zarr_async_concurrency
+        with zarr.config.set({"async": scoped_async_cfg}):
             to_icechunk(dataset, session, **kwargs)
 
     def _clean_ds_store(self) -> None:

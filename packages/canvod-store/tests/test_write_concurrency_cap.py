@@ -65,6 +65,29 @@ def test_configured_concurrency_scopes_the_write(tmp_path: Path) -> None:
     assert observed["during"] == 2
 
 
+def test_scoping_preserves_sibling_async_config_keys(tmp_path: Path) -> None:
+    # zarr.config.set({"async": {"concurrency": N}}) replaces the whole
+    # "async" subdict rather than merging -- a naive implementation drops
+    # sibling keys (e.g. "timeout") for the scope of the block, which
+    # crashed a production run with KeyError: 'timeout' when zarr-internal
+    # code read it back mid-write.
+    store = create_vod_store(tmp_path / "site" / "vod_store")
+    store._zarr_async_concurrency = 2
+    before_async_cfg = dict(zarr.config.get("async"))
+    assert "timeout" in before_async_cfg  # sanity: this key must exist to matter
+    observed: dict[str, dict] = {}
+
+    def fake_to_icechunk(dataset, session, **kwargs) -> None:
+        observed["during"] = dict(zarr.config.get("async"))
+
+    with mock.patch("canvod.store.store.to_icechunk", fake_to_icechunk):
+        with store.writable_session() as session:
+            store._to_icechunk_throttled(xr.Dataset(), session, group="x", mode="w")
+
+    assert observed["during"]["concurrency"] == 2
+    assert observed["during"]["timeout"] == before_async_cfg["timeout"]
+
+
 def test_concurrency_cap_reverts_after_the_call(tmp_path: Path) -> None:
     store = create_vod_store(tmp_path / "site" / "vod_store")
     before = zarr.config.get("async.concurrency")
