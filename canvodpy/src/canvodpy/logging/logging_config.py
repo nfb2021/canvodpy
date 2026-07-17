@@ -333,6 +333,7 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
         _add_run_id,
         structlog.processors.StackInfoRenderer(),
         structlog.processors.UnicodeDecoder(),
+        structlog.processors.format_exc_info,
     ]
 
     # Renderers
