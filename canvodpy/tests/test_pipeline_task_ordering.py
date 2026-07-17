@@ -97,12 +97,16 @@ class TestBuildOrderedTasks:
 
 
 class TestCompositionWithWindowedCompletions:
-    def test_multi_receiver_groups_interleave_under_a_bounded_window(self):
-        """End-to-end model of what the dashboard/on_group_written would
-        see: two dates, two receivers each with more tasks than the
-        window, fed through the real ordering + windowing pipeline.
-        Asserts groups from different receivers/dates complete interleaved
-        rather than one group fully draining before the next starts.
+    def test_ordered_tasks_stay_interleaved_once_fed_through_windowing(self):
+        """_build_ordered_tasks/_interleave_by_receiver already produce an
+        A,B,A,B,... interleaved sequence before windowing ever runs -- this
+        is a regression lock on *that* (revert either function back to
+        contiguous per-group blocks and this fails), not a test of
+        _windowed_completions's own concurrency bounding (see
+        test_pipeline_windowed.py for that -- even window=1, fully
+        sequential, would pass this specific assertion). Models what
+        on_group_written/reporter.advance() would observe end-to-end:
+        two dates, two receivers each with more tasks than the window.
         """
         task_descriptors_by_date = {
             "d1": [_task("A", i) for i in range(6)] + [_task("B", i) for i in range(6)],

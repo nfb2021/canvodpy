@@ -438,6 +438,42 @@ def _main_impl(args: SimpleNamespace) -> int:
                 if vod_analyses:
                     reporter.log(f"  VOD analyses: {list(vod_analyses.keys())}")
 
+                    # Loud, read-only, non-blocking gap check (dev/todo_
+                    # later.md §43): a prior run's RINEX ingestion can
+                    # complete cleanly while its VOD-store write fails
+                    # afterward, and resume logic only looks at the RINEX
+                    # store, so that gap is otherwise silently permanent.
+                    # Reports here so a human notices; does NOT
+                    # auto-backfill -- auto-retrying inside every future
+                    # run would silently re-absorb a persistent failure
+                    # instead of stopping loudly. Run `canvodpy
+                    # vod-reconcile --execute` explicitly to backfill.
+                    from canvodpy.orchestrator.vod_reconcile import (
+                        find_vod_backfill_gaps,
+                    )
+
+                    for analysis_name in vod_analyses:
+                        try:
+                            gaps = find_vod_backfill_gaps(
+                                site, analysis_name, args.vod_calculator
+                            )
+                        except Exception:
+                            log.warning(
+                                "vod_gap_check_failed",
+                                site=site_name,
+                                analysis=analysis_name,
+                                exc_info=True,
+                            )
+                            continue
+                        if gaps:
+                            reporter.log(
+                                f"  ⚠ {len(gaps)} date(s) have RINEX data "
+                                f"but no VOD for '{analysis_name}' "
+                                f"({gaps[0]}..{gaps[-1]}) -- run 'canvodpy "
+                                f"vod-reconcile --site {site_name} --analysis "
+                                f"{analysis_name} --execute' to backfill"
+                            )
+
                 # Access the underlying GnssResearchSite for VOD store writes
                 research_site = site._site
 
