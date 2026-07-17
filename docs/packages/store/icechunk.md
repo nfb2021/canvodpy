@@ -174,6 +174,9 @@ processing:
     inline_chunk_threshold_bytes: 512    # chunks ≤ this are inlined into the manifest
     get_partial_values_concurrency: 1    # concurrent range-request parallelism
     max_concurrent_requests: null        # null = icechunk picks a platform default
+    zarr_async_concurrency: null         # null = zarr's own default (10); cap on
+                                          # network-mounted stores (CIFS/NFS) that trip
+                                          # connection-abort errors under a write burst
 
     chunk_strategies:
       rinex_store:
@@ -205,6 +208,7 @@ processing:
 | `inline_chunk_threshold_bytes` | `512` | Chunks ≤ this are stored inline in the manifest (coordinate arrays only) |
 | `get_partial_values_concurrency` | `1` | Concurrent GET requests for partial array reads; increase for S3 |
 | `max_concurrent_requests` | `null` | Global cap on concurrent object-store connections; `null` = icechunk default |
+| `zarr_async_concurrency` | `null` | Cap on zarr's own async chunk write/read burst per array; `null` = zarr's default (10). Set on network-mounted stores (CIFS/NFS) hitting connection-abort errors — costs write throughput, so opt-in only |
 | `chunk_strategies.*.epoch` | `17280` | Epochs per chunk; `-1` = no chunking |
 | `chunk_strategies.*.sid` | `-1` | No chunking along sid axis (all SIDs in one chunk) |
 | `manifest_splitting_enabled` | `true` | Split manifests every `manifest_splitting_epoch_range` indices |

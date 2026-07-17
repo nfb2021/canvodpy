@@ -155,6 +155,7 @@ class MyIcechunkStore:
         self._rinex_store_strategy = _rinex_store_strategy
         self._vod_store_strategy = _vod_store_strategy
         self._log_path_depth = _log_path_depth
+        self._zarr_async_concurrency = ic_cfg.zarr_async_concurrency
 
         # Configure repository
         self.config = icechunk.RepositoryConfig.default()
@@ -226,6 +227,35 @@ class MyIcechunkStore:
         # Remove .DS_Store files that corrupt icechunk ref listing on macOS
         self._clean_ds_store()
         self._ensure_store_exists()
+
+    def _to_icechunk_throttled(
+        self, dataset: xr.Dataset, session, *, throttle: bool | None = None, **kwargs
+    ) -> None:
+        """Write via ``to_icechunk``, optionally capping zarr's async concurrency.
+
+        Zarr v3 issues chunk writes for a single array as a concurrent
+        ``asyncio.gather`` burst, sized by ``zarr.config``'s
+        ``async.concurrency`` (default 10). On network-mounted (CIFS/NFS)
+        stores that burst can trip connection-abort errors under load — but
+        capping it costs throughput, so it's opt-in via
+        ``IcechunkConfig.zarr_async_concurrency`` (None = untouched).
+
+        ``throttle`` overrides the config-derived default when explicitly
+        passed; leave it ``None`` to defer to config.
+        """
+        should_throttle = (
+            self._zarr_async_concurrency is not None if throttle is None else throttle
+        )
+        if not should_throttle:
+            to_icechunk(dataset, session, **kwargs)
+            return
+        if self._zarr_async_concurrency is None:
+            raise ValueError(
+                "throttle=True requires IcechunkConfig.zarr_async_concurrency to be "
+                "set; got None. Configure a cap (e.g. 2-4) or pass throttle=False/None."
+            )
+        with zarr.config.set({"async": {"concurrency": self._zarr_async_concurrency}}):
+            to_icechunk(dataset, session, **kwargs)
 
     def _clean_ds_store(self) -> None:
         """Remove .DS_Store files from the store directory tree.
@@ -827,7 +857,7 @@ class MyIcechunkStore:
             size_mb=round(dataset_size_mb, 2),
             num_variables=num_variables,
         ):
-            to_icechunk(dataset, session, group=group_name, mode=mode)
+            self._to_icechunk_throttled(dataset, session, group=group_name, mode=mode)
 
         self._logger.info(f"Wrote dataset to group '{group_name}' (mode={mode})")
 
@@ -857,7 +887,7 @@ class MyIcechunkStore:
             commit_message = f"[v{version}] Initial commit to group '{group_name}'"
 
         with self.writable_session(branch) as session:
-            to_icechunk(dataset, session, group=group_name, mode="w")
+            self._to_icechunk_throttled(dataset, session, group=group_name, mode="w")
             zroot = zarr.open_group(session.store, mode="a")
             self._append_metadata_row(
                 zroot=zroot,
@@ -1041,16 +1071,22 @@ class MyIcechunkStore:
 
             # Check if any epochs remain after cleansing, then write leftovers.
             if ds_from_store_cleansed.sizes.get("epoch", 0) > 0:
-                to_icechunk(ds_from_store_cleansed, session, group=group_name, mode="w")
+                self._to_icechunk_throttled(
+                    ds_from_store_cleansed, session, group=group_name, mode="w"
+                )
             # no epochs left, reset group to empty
             else:
-                to_icechunk(dataset.isel(epoch=[]), session, group=group_name, mode="w")
+                self._to_icechunk_throttled(
+                    dataset.isel(epoch=[]), session, group=group_name, mode="w"
+                )
 
             # write back the backed up metadata table
             self.restore_metadata_table(group_name, metadata_backup, session)
 
             # Append the new dataset
-            to_icechunk(dataset, session, group=group_name, append_dim="epoch")
+            self._to_icechunk_throttled(
+                dataset, session, group=group_name, append_dim="epoch"
+            )
 
             if commit_message is None:
                 version = get_version_from_pyproject()
@@ -1164,7 +1200,7 @@ class MyIcechunkStore:
         ds = self._normalize_encodings(meta_ds)
         ds = self._cleanse_dataset_attrs(ds)
         with self.writable_session(branch) as session:
-            to_icechunk(ds, session, group=path, mode="w")
+            self._to_icechunk_throttled(ds, session, group=path, mode="w")
             return session.commit(
                 _with_run_id(f"[v{version}] metadata/{name} for {group_name}")
             )
@@ -1211,9 +1247,11 @@ class MyIcechunkStore:
                 ds = self._normalize_encodings(part)
                 ds = self._cleanse_dataset_attrs(ds)
                 if i == 0:
-                    to_icechunk(ds, session, group=path, mode="w")
+                    self._to_icechunk_throttled(ds, session, group=path, mode="w")
                 else:
-                    to_icechunk(ds, session, group=path, append_dim="epoch")
+                    self._to_icechunk_throttled(
+                        ds, session, group=path, append_dim="epoch"
+                    )
                 total_epochs += ds.sizes.get("epoch", 0)
 
             return session.commit(
@@ -1435,7 +1473,9 @@ class MyIcechunkStore:
             commit_message = f"[v{version}] {action} to group '{group_name}'"
 
         with self.writable_session(branch) as session:
-            to_icechunk(dataset, session, group=group_name, append_dim=append_dim)
+            self._to_icechunk_throttled(
+                dataset, session, group=group_name, append_dim=append_dim
+            )
             zroot = zarr.open_group(session.store, mode="a")
             self._append_metadata_row(
                 zroot=zroot,
@@ -1537,7 +1577,9 @@ class MyIcechunkStore:
 
         if self.group_exists(group_name, branch):
             with self.writable_session(branch) as session:
-                to_icechunk(dataset, session, group=group_name, append_dim=append_dim)
+                self._to_icechunk_throttled(
+                    dataset, session, group=group_name, append_dim=append_dim
+                )
                 if commit_message is None:
                     commit_message = f"Appended to group '{group_name}'"
                 session.commit(_with_run_id(commit_message))
@@ -1546,7 +1588,9 @@ class MyIcechunkStore:
             )
         else:
             with self.writable_session(branch) as session:
-                to_icechunk(dataset, session, group=group_name, mode="w")
+                self._to_icechunk_throttled(
+                    dataset, session, group=group_name, mode="w"
+                )
                 if commit_message is None:
                     commit_message = f"Created group '{group_name}'"
                 session.commit(_with_run_id(commit_message))
@@ -2076,9 +2120,13 @@ class MyIcechunkStore:
 
         with self.writable_session(branch) as session:
             if action == "append":
-                to_icechunk(dataset, session, group=group_name, append_dim=append_dim)
+                self._to_icechunk_throttled(
+                    dataset, session, group=group_name, append_dim=append_dim
+                )
             else:
-                to_icechunk(dataset, session, group=group_name, mode="w")
+                self._to_icechunk_throttled(
+                    dataset, session, group=group_name, mode="w"
+                )
             zroot = zarr.open_group(session.store, mode="a")
             self._append_vod_metadata_row(
                 zroot=zroot,
@@ -2939,7 +2987,9 @@ class MyIcechunkStore:
         # session, same commit, so the temp branch never has a subgroup-less
         # state that could be read by anything else.
         with self.writable_session(temp_branch) as session:
-            to_icechunk(ds_rechunked, session, group=group_name, mode="w")
+            self._to_icechunk_throttled(
+                ds_rechunked, session, group=group_name, mode="w"
+            )
 
             subgroup_count = 0
             if subgroup_names:

@@ -156,6 +156,11 @@ processing:
     compression_algorithm: zstd  # currently only zstd is supported
     inline_chunk_threshold_bytes: 512   # Bytes; chunks ≤ this are inlined into the manifest
     get_partial_values_concurrency: 1   # Concurrent partial-value reads (increase for S3/GCS)
+    # zarr_async_concurrency: 2         # Cap zarr's concurrent chunk write/read bursts.
+    #                                    # Unset by default (no cap, zarr's own default of
+    #                                    # 10 applies). Set this on network-mounted stores
+    #                                    # (CIFS/NFS) that trip connection-abort errors
+    #                                    # under a concurrent write burst.
 
     chunk_strategies:
       rinex_store:

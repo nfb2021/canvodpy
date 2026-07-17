@@ -61,6 +61,19 @@ class IcechunkConfig(_StrictModel):
         ge=1,
         description="Maximum number of concurrent object-store requests (None = icechunk default)",
     )
+    zarr_async_concurrency: int | None = Field(
+        None,
+        ge=1,
+        description=(
+            "Opt-in cap on zarr's own async chunk write/read concurrency "
+            "(zarr.config 'async.concurrency') for Icechunk-backed store I/O. "
+            "None (default) = untouched, zarr's own default (10 concurrent "
+            "store.set()/get() calls per array write) applies -- no overhead "
+            "for local/fast storage. Set this (e.g. 2-4) for stores on "
+            "network mounts (CIFS/NFS) where a concurrent write burst can "
+            "trip connection-abort errors under load."
+        ),
+    )
     cache_num_chunk_refs: int | None = Field(
         None,
         ge=0,
