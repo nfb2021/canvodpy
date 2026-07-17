@@ -35,6 +35,19 @@ class AuxDataConfig(_StrictModel):
             "parsing, and interpolation."
         ),
     )
+    zarr_async_concurrency: int | None = Field(
+        None,
+        ge=1,
+        description=(
+            "Cap on zarr's own async chunk write/read burst for aux cache "
+            "writes; None (default) = zarr's own default (10) applies, no "
+            "cost for local/fast storage. Set on network-mounted "
+            "(CIFS/NFS) shared_aux_cache_dir deployments hitting "
+            "connection-abort errors — separate from "
+            "IcechunkConfig.zarr_async_concurrency since this is a "
+            "different store with its own write-frequency profile."
+        ),
+    )
 
     def get_ftp_servers(
         self,

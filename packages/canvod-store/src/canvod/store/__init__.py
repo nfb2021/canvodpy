@@ -11,6 +11,7 @@ from canvod.store.store import (
     create_rinex_store,
     create_vod_store,
 )
+from canvod.store.zarr_concurrency import scoped_zarr_concurrency
 
 __version__ = "0.1.0"
 
@@ -20,4 +21,5 @@ __all__ = [
     "MyIcechunkStore",
     "create_rinex_store",
     "create_vod_store",
+    "scoped_zarr_concurrency",
 ]

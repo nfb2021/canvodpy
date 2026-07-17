@@ -3240,6 +3240,58 @@ count is actually a measured bottleneck before redesigning the layout,
 (d) fix the SP3/CLK-vs-augmented subdirectory asymmetry, likely as part
 of (c) rather than a standalone change.
 
+**Status: built 2026-07-17, network-wide (not just cache reuse).** The
+owner's own domain insight during scoping — ephemeris products are
+satellite-based, not site-based — upgraded this from per-site cache
+reuse to a cache shared across an entire network of sites. Ships (a):
+`compute_aux_cache_fingerprint()` (new module,
+`canvod-auxiliary/src/canvod/auxiliary/cache_fingerprint.py`) — a
+bespoke, narrower fingerprint than `ConfigSnapshot`/`config_hash`
+(deliberately excludes `keep_sids`/`keep_gnss_observables`/sampling
+rate/site identity, since the consumer already filters the cache down
+to its own needs at read time; includes source SP3/CLK file mtimes so
+a silent upstream reprocessing produces a new fingerprint). Ships (b):
+`_ensure_aux_data_preprocessed()` now checks
+`StorageConfig.shared_aux_cache_dir` (new, opt-in, `None` default) and
+delegates to a new `_ensure_shared_aux_cache()` when set — cache hit
+skips the Hermite rebuild entirely; cache miss builds to a per-attempt
+temp Zarr group and atomically `Path.rename()`s it into place, so a
+network-wide cache (now with a genuinely new multi-writer risk, not
+just single-process concurrency) can't be poisoned by a torn write.
+Item 3 (many small per-day stores) resolved as a side effect: the
+shared cache is one consolidated `aux_cache.zarr` with
+`{fingerprint}/{date}` groups, not N flat per-day stores. Item 4
+(directory asymmetry) not addressed — out of scope, the shared cache
+has its own root entirely, doesn't touch the per-site `aux_data_dir`
+layout. New cross-cutting finding during the build: the aux write path
+shared the exact same zarr `async.concurrency` burst vulnerability that
+caused this week's CIFS write crashes (`a9144ef8`/`86b9ce17`) — the
+scoping mechanism was extracted into
+`canvod-store/src/canvod/store/zarr_concurrency.scoped_zarr_concurrency()`
+so both `MyIcechunkStore` and the aux cache write path share one
+implementation, each with its own opt-in config knob
+(`IcechunkConfig.zarr_async_concurrency`,
+`AuxDataConfig.zarr_async_concurrency`). A third, previously-unfixed
+call site (`parsed_rinex_data_gen_2_receivers`) that duplicated the
+rmtree+rebuild logic inline (bypassing the cache lookup entirely) was
+also routed through the shared helper; two further legacy/dead call
+sites (`parsed_rinex_data_gen`, `parsed_rinex_data_gen_parallel` — not
+reachable from the CLI/`prepare_batch_tasks` path) were left with their
+own bespoke rebuild logic, out of scope, but `parsed_rinex_data_gen`'s
+own already-existing call to `_ensure_aux_data_preprocessed()` needed a
+one-line unpacking fix since this work changed that function's return
+type from `Path` to `tuple[Path, str | None]`. Verified: full fast
+suite (1863 tests) + audit suite (60 tests) pass; dedicated tests for
+the fingerprint (`packages/canvod-auxiliary/tests/test_cache_fingerprint.py`),
+the shared concurrency helper
+(`packages/canvod-store/tests/test_zarr_concurrency.py`), and the
+cache hit/miss/atomic-promotion/failure logic
+(`canvodpy/tests/test_shared_aux_cache.py`). Not yet verified against a
+real multi-site deployment (no local fixture for that) — pending the
+next live rosalia run, and pending a second site actually being pointed
+at the same `shared_aux_cache_dir` to exercise the network-sharing case
+for real.
+
 ---
 
 ## 45. Windowing/write-side tuning was all done against 96-files/day; the recommended (single 24h file) case is unverified

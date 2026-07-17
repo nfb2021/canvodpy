@@ -253,6 +253,15 @@ class AuxDataPipeline:
         """Convenience method to get clock dataset."""
         return self.get("clock")
 
+    def source_file_paths(self) -> dict[str, Path | None]:
+        """On-disk source path for every registered aux file handler.
+
+        ``{name: handler.fpath}`` -- lets callers (e.g. a cache
+        fingerprint) key off which raw SP3/CLK files fed this pipeline
+        without reaching into the private ``_registry``.
+        """
+        return {name: entry["handler"].fpath for name, entry in self._registry.items()}
+
     def get_for_time_range(
         self,
         name: str,

@@ -5,6 +5,12 @@ Handles downloading, parsing, and interpolating SP3 ephemerides and
 clock corrections for GNSS satellite data processing.
 """
 
+# Aux cache fingerprinting (dev/todo_later.md §44)
+from canvod.auxiliary.cache_fingerprint import (
+    CANONICAL_AUX_GRID_SECONDS,
+    compute_aux_cache_fingerprint,
+)
+
 # Core abstractions
 from canvod.auxiliary.clock import ClkFile
 
@@ -66,6 +72,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "AuxFile",
+    "CANONICAL_AUX_GRID_SECONDS",
     "ClkFile",
     "ClockConfig",
     "ClockInterpolationStrategy",
@@ -91,6 +98,7 @@ __all__ = [
     "Sp3InterpolationStrategy",
     "add_future_datavars",
     "add_spherical_coords_to_dataset",
+    "compute_aux_cache_fingerprint",
     "compute_spherical_coordinates",
     "create_interpolator_from_attrs",
     "create_sv_to_sid_mapping",

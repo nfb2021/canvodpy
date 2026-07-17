@@ -21,6 +21,7 @@ from icechunk.xarray import to_icechunk
 from zarr.dtype import VariableLengthUTF8
 
 from canvod.store.viewer import add_rich_display_to_store
+from canvod.store.zarr_concurrency import scoped_zarr_concurrency
 
 # Suppress the "local filesystem not safe for concurrent commits" Rust/tracing
 # warning — we are aware and it is noise for single-writer local workflows.
@@ -254,14 +255,7 @@ class MyIcechunkStore:
                 "throttle=True requires IcechunkConfig.zarr_async_concurrency to be "
                 "set; got None. Configure a cap (e.g. 2-4) or pass throttle=False/None."
             )
-        # zarr.config.set() replaces the whole "async" subdict rather than
-        # merging into it -- passing only {"concurrency": ...} silently drops
-        # sibling keys (e.g. "timeout") for the scope of the block, which
-        # crashed a production run with KeyError: 'timeout'. Merge onto the
-        # current value instead of overwriting it.
-        scoped_async_cfg = dict(zarr.config.get("async"))
-        scoped_async_cfg["concurrency"] = self._zarr_async_concurrency
-        with zarr.config.set({"async": scoped_async_cfg}):
+        with scoped_zarr_concurrency(self._zarr_async_concurrency):
             to_icechunk(dataset, session, **kwargs)
 
     def _clean_ds_store(self) -> None:

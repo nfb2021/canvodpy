@@ -32,6 +32,10 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
+from canvod.auxiliary.cache_fingerprint import (
+    CANONICAL_AUX_GRID_SECONDS,
+    compute_aux_cache_fingerprint,
+)
 from canvod.auxiliary.pipeline import AuxDataPipeline
 from canvod.auxiliary.position import (
     ECEFPosition,
@@ -40,7 +44,7 @@ from canvod.auxiliary.position import (
 )
 from canvod.config import load_config
 from canvod.readers import DataDirMatcher, MatchedDirs
-from canvod.store import GnssResearchSite
+from canvod.store import GnssResearchSite, scoped_zarr_concurrency
 from canvod.utils.tools import _worker_init, get_version_from_pyproject
 from canvodpy.logging import get_logger, stage_timer
 from canvodpy.logging.run_context import get_run_id, set_run_id
@@ -101,6 +105,7 @@ def preprocess_with_hermite_aux(
     broadcast_canopy_file: Path | None = None,
     broadcast_canopy_fmt: str | None = None,
     pad_global_sid: bool = True,
+    aux_group: str | None = None,
 ) -> tuple[Path, xr.Dataset, dict[str, xr.Dataset], dict[str, list[str]]]:
     """Read RINEX and compute coordinates using Hermite-interpolated aux data from Zarr.
 
@@ -132,6 +137,10 @@ def preprocess_with_hermite_aux(
         the reference file's own geometry.
     broadcast_canopy_fmt : str | None, default None
         Reader format for the canopy file (e.g. "sbf").
+    aux_group : str | None, default None
+        Zarr group within ``aux_zarr_path`` to read this day's aux data
+        from (§44 shared-cache mode). ``None`` reads the store root,
+        matching legacy per-site aux Zarr layout.
 
     Returns
     -------
@@ -245,7 +254,10 @@ def preprocess_with_hermite_aux(
 
             # 2. Open preprocessed aux data and select matching epochs
             aux_store = xr.open_zarr(
-                aux_zarr_path, decode_timedelta=True, consolidated=False
+                aux_zarr_path,
+                group=aux_group,
+                decode_timedelta=True,
+                consolidated=False,
             )
             aux_slice = aux_store.sel(epoch=ds.epoch, method="nearest")
 
@@ -376,6 +388,7 @@ def preprocess_reference_with_hermite_aux_fanout(
     store_radial_distance: bool = False,
     store_sbf_raw_observables: bool = True,
     pad_global_sid: bool = True,
+    aux_group: str | None = None,
 ) -> tuple[Path, dict[str, xr.Dataset], dict[str, xr.Dataset], dict[str, list[str]]]:
     """Read a shared reference file once, then compute geometry per canopy pairing.
 
@@ -398,6 +411,9 @@ def preprocess_reference_with_hermite_aux_fanout(
         ``{pairing_name: canopy_receiver_position}`` for every canopy this
         reference file is paired against (e.g. ``{"reference_01_canopy_01":
         ECEFPosition(...), "reference_01_canopy_02": ECEFPosition(...)}``).
+    aux_group : str | None, default None
+        Zarr group within ``aux_zarr_path`` to read this day's aux data
+        from (§44 shared-cache mode). ``None`` reads the store root.
 
     Returns
     -------
@@ -440,7 +456,10 @@ def preprocess_reference_with_hermite_aux_fanout(
 
             # 2. Open preprocessed aux data and select matching epochs
             aux_store = xr.open_zarr(
-                aux_zarr_path, decode_timedelta=True, consolidated=False
+                aux_zarr_path,
+                group=aux_group,
+                decode_timedelta=True,
+                consolidated=False,
             )
             aux_slice = aux_store.sel(epoch=ds.epoch, method="nearest")
             aux_slice = aux_slice.load()
@@ -998,8 +1017,25 @@ class RinexDataProcessor:
         rinex_files: list[Path],
         output_path: Path,
         reader_format: str | None = None,
+        group: str | None = None,
+        grid_seconds: float | None = None,
     ) -> float:
-        """Preprocess auxiliary data using proper interpolation strategies."""
+        """Preprocess auxiliary data using proper interpolation strategies.
+
+        Parameters
+        ----------
+        group : str | None
+            Zarr group to write under (e.g. a §44 shared-cache fingerprint
+            path). ``None`` (default) writes to the store root, unchanged
+            legacy behavior.
+        grid_seconds : float | None
+            When set (§44 shared-cache mode), build the target epoch grid
+            from this fixed interval instead of the detected
+            ``sampling_interval`` -- a site-independent grid is required
+            for the cache entry to be safely shared across sites with
+            different sampling rates. ``sampling_interval`` is still
+            detected and returned either way.
+        """
         t0 = time.perf_counter()
         self._logger.info(
             "aux_preprocessing_started",
@@ -1054,9 +1090,12 @@ class RinexDataProcessor:
             sampling_interval=sampling_interval,
         )
 
-        n_epochs = int(24 * 3600 / sampling_interval)
+        effective_grid_seconds = (
+            grid_seconds if grid_seconds is not None else sampling_interval
+        )
+        n_epochs = int(24 * 3600 / effective_grid_seconds)
         target_epochs = day_start + np.arange(n_epochs) * np.timedelta64(
-            int(sampling_interval), "s"
+            int(effective_grid_seconds), "s"
         )
 
         self._logger.info(
@@ -1156,9 +1195,15 @@ class RinexDataProcessor:
         self._logger.info(
             "aux_zarr_write_started",
             output_path=str(output_path),
+            group=group,
             data_size=dict(aux_processed.sizes),
         )
-        aux_processed.to_zarr(output_path, mode="w", consolidated=False)
+        with scoped_zarr_concurrency(
+            self._config.processing.aux_data.zarr_async_concurrency
+        ):
+            aux_processed.to_zarr(
+                output_path, group=group, mode="w", consolidated=False
+            )
         t9 = time.perf_counter()
 
         self._logger.info(
@@ -1504,8 +1549,15 @@ class RinexDataProcessor:
         canopy_files: list[Path],
         date_str: str,
         reader_format: str | None = None,
-    ) -> Path:
+    ) -> tuple[Path, str | None]:
         """Ensure auxiliary data is preprocessed and available.
+
+        When ``StorageConfig.shared_aux_cache_dir`` is set (dev/todo_later.md
+        §44), checks a network-wide, fingerprint-keyed cache before
+        rebuilding -- ephemeris products are satellite-based, not
+        site-based, so multiple sites sharing the same agency/product/date
+        can reuse one cache entry instead of each rebuilding it. Falls back
+        to the legacy per-site behavior (always rebuild) when unset.
 
         Parameters
         ----------
@@ -1518,14 +1570,22 @@ class RinexDataProcessor:
 
         Returns
         -------
-        Path
-            Path to the preprocessed aux zarr file
+        tuple[Path, str | None]
+            ``(store_path, group)`` -- the Zarr store to open and the group
+            within it holding this day's aux data. ``group`` is ``None`` in
+            legacy (non-shared-cache) mode, meaning the store root.
 
         Raises
         ------
         RuntimeError
-            If preprocessing fails or file doesn't exist after preprocessing
+            If preprocessing fails or the data isn't present after it
         """
+        shared_cache_dir = self._config.processing.storage.get_shared_aux_cache_dir()
+        if shared_cache_dir is not None:
+            return self._ensure_shared_aux_cache(
+                canopy_files, date_str, shared_cache_dir, reader_format=reader_format
+            )
+
         import shutil
 
         t0 = time.perf_counter()
@@ -1576,7 +1636,87 @@ class RinexDataProcessor:
             )
             raise
 
-        return aux_zarr_path
+        return aux_zarr_path, None
+
+    def _ensure_shared_aux_cache(
+        self,
+        canopy_files: list[Path],
+        date_str: str,
+        shared_cache_dir: Path,
+        reader_format: str | None = None,
+    ) -> tuple[Path, str]:
+        """§44 shared-cache lookup/populate, called when the cache is enabled.
+
+        On a miss, writes to a per-attempt temp group and renames it into
+        place only on success, rather than writing directly to the final
+        path -- a network-wide cache has a wider blast radius than a
+        per-site one if a torn/partial write is ever read by a different
+        site's concurrent run. NOTE: ``Path.rename()`` is one syscall from
+        Python's side, but a zarr group is a directory tree (many chunk
+        files + zarr.json) -- whether the underlying filesystem honors a
+        directory rename as a single atomic operation is server/protocol
+        dependent, not a hard guarantee the way a single-file rename
+        typically is. This is strictly better than a direct write, not a
+        fully closed risk -- verifiable only on the actual (CIFS) mount
+        this is meant to protect, which has already dropped mid-operation
+        three times this week for unrelated reasons.
+        """
+        import shutil
+        import uuid
+
+        cache_root = shared_cache_dir / "aux_cache.zarr"
+        assert self.aux_pipeline is not None, "aux_pipeline must be initialized"
+        fingerprint = compute_aux_cache_fingerprint(
+            agency=self._config.processing.aux_data.agency,
+            product_type=self._config.processing.aux_data.product_type,
+            ephemeris_source=self._config.processing.params.ephemeris_source,
+            canonical_grid_seconds=CANONICAL_AUX_GRID_SECONDS,
+            source_file_paths=self.aux_pipeline.source_file_paths(),
+        )
+        group = f"{fingerprint}/{date_str}"
+
+        if (cache_root / group).exists():
+            self._logger.info("aux_cache_hit", fingerprint=fingerprint, date=date_str)
+            return cache_root, group
+
+        self._logger.info("aux_cache_miss", fingerprint=fingerprint, date=date_str)
+        tmp_group = f"{fingerprint}/.tmp-{date_str}-{uuid.uuid4().hex[:8]}"
+        try:
+            self._preprocess_aux_data_with_hermite(
+                canopy_files,
+                cache_root,
+                reader_format=reader_format,
+                group=tmp_group,
+                grid_seconds=CANONICAL_AUX_GRID_SECONDS,
+            )
+            if not (cache_root / tmp_group).exists():
+                raise RuntimeError(
+                    f"Aux preprocessing completed but group not found: "
+                    f"{cache_root}/{tmp_group}"
+                )
+            # Promotion, not a second write to the final path. If two sites
+            # race the same miss, the loser's rename just overwrites the
+            # winner's with an equally-valid result (both did legitimate,
+            # correct work) -- what this avoids is a *torn* write at the
+            # final path from concurrent writers, not the (benign)
+            # redundant computation itself.
+            (cache_root / tmp_group).rename(cache_root / group)
+        except Exception as e:
+            self._logger.error(
+                "aux_cache_populate_failed",
+                error=str(e),
+                exception=type(e).__name__,
+                fingerprint=fingerprint,
+                date=date_str,
+            )
+            # Best-effort cleanup -- a failed attempt (e.g. a CIFS hiccup
+            # mid-write) shouldn't leave a permanent orphaned .tmp- dir in
+            # a shared, multi-site cache store with no GC mechanism.
+            shutil.rmtree(cache_root / tmp_group, ignore_errors=True)
+            raise
+
+        self._logger.info("aux_cache_populated", fingerprint=fingerprint, date=date_str)
+        return cache_root, group
 
     def _parallel_process_rinex(
         self,
@@ -1588,6 +1728,7 @@ class RinexDataProcessor:
         reader_format: str | None = None,
         show_progress: bool = True,
         pool_workers: int | None = None,
+        aux_group: str | None = None,
     ) -> tuple[
         list[tuple[Path, xr.Dataset]],
         dict[Path, dict[str, xr.Dataset]],
@@ -1616,6 +1757,9 @@ class RinexDataProcessor:
             Whether to show the Rich progress bar (default True).
         pool_workers : int | None
             Override for worker count. When None, uses ``self.n_max_workers``.
+        aux_group : str | None
+            Zarr group within ``aux_zarr_path`` to read aux data from (§44
+            shared-cache mode). None reads the store root.
 
         Returns
         -------
@@ -1638,6 +1782,7 @@ class RinexDataProcessor:
             store_raw,
             show_progress=show_progress,
             pool_workers=pool_workers,
+            aux_group=aux_group,
         )
 
     def _parallel_process_rinex_pool(
@@ -1652,6 +1797,7 @@ class RinexDataProcessor:
         store_sbf_raw_observables: bool = True,
         show_progress: bool = True,
         pool_workers: int | None = None,
+        aux_group: str | None = None,
     ) -> tuple[
         list[tuple[Path, xr.Dataset]],
         dict[Path, dict[str, xr.Dataset]],
@@ -1701,6 +1847,7 @@ class RinexDataProcessor:
                     self.use_sbf_geometry,
                     store_radial_distance,
                     store_sbf_raw_observables,
+                    aux_group=aux_group,
                 ): rinex_file
                 for rinex_file in rinex_files
             }
@@ -2667,21 +2814,13 @@ class RinexDataProcessor:
 
         # ====================================================================
         # STEP 1: Preprocess aux data ONCE per day with Hermite splines
+        # (routes through _ensure_aux_data_preprocessed, dev/todo_later.md
+        # §44 -- this call site used to duplicate the rmtree+rebuild logic
+        # inline, bypassing the shared-cache lookup entirely)
         # ====================================================================
-        import shutil as _shutil
-
-        _aux_base_dir = load_config().processing.storage.get_aux_data_dir()
-        aux_zarr_path = _aux_base_dir / (
-            f"aux_{self.matched_data_dirs.yyyydoy.to_str()}.zarr"
-        )
-
-        # Always reprocess from raw SP3/CLK files to avoid stale SID caches
-        if aux_zarr_path.exists():
-            _shutil.rmtree(aux_zarr_path)
-
         self._logger.info("Preprocessing aux data with Hermite splines (once per day)")
-        _sampling_interval = self._preprocess_aux_data_with_hermite(
-            canopy_files, aux_zarr_path
+        aux_zarr_path, aux_group = self._ensure_aux_data_preprocessed(
+            canopy_files, self.matched_data_dirs.yyyydoy.to_str()
         )
 
         # ====================================================================
@@ -2755,6 +2894,7 @@ class RinexDataProcessor:
                 aux_zarr_path=aux_zarr_path,
                 receiver_position=receiver_position,
                 receiver_type=receiver_name,
+                aux_group=aux_group,
             )
 
             # 3d. Sequential append to Icechunk store
@@ -2849,12 +2989,13 @@ class RinexDataProcessor:
         date_str = self.matched_data_dirs.yyyydoy.to_str()
         if self.use_sbf_geometry:
             aux_zarr_path = None
+            aux_group = None
             self._logger.info(
                 "aux_preprocessing_skipped",
                 reason="ephemeris_source=broadcast",
             )
         else:
-            aux_zarr_path = self._ensure_aux_data_preprocessed(
+            aux_zarr_path, aux_group = self._ensure_aux_data_preprocessed(
                 first_files, date_str, reader_format=first_fmt
             )
         t_aux_done = time.perf_counter()
@@ -2992,6 +3133,22 @@ class RinexDataProcessor:
                         False,  # store_radial_distance
                         broadcast_canopy_file,
                         canopy_reader_fmt,
+                        # NOTE: broadcast_canopy_file/canopy_reader_fmt above
+                        # are already positionally misaligned against
+                        # preprocess_with_hermite_aux's store_sbf_raw_
+                        # observables/broadcast_canopy_file params (a
+                        # pre-existing, dormant bug outside use_sbf_geometry=
+                        # True + shared-position-mode -- confirmed, not
+                        # fixed here). The two explicit values below exist
+                        # only to preserve that exact pre-existing (buggy)
+                        # positional mapping unchanged while correctly
+                        # placing aux_group in ITS real parameter slot --
+                        # without them aux_group silently lands on
+                        # broadcast_canopy_fmt's slot instead and never
+                        # reaches the function at all.
+                        None,  # broadcast_canopy_fmt (preserves prior default)
+                        True,  # pad_global_sid (preserves prior default)
+                        aux_group,
                         False,  # is_reference_fanout
                     )
                 )
@@ -3058,6 +3215,7 @@ class RinexDataProcessor:
                         False,  # store_radial_distance (matches non-fanout path)
                         True,  # store_sbf_raw_observables
                         True,  # pad_global_sid
+                        aux_group,
                         True,  # is_reference_fanout
                     )
                 )
@@ -3158,8 +3316,9 @@ class RinexDataProcessor:
         date_str = self.matched_data_dirs.yyyydoy.to_str()
         if self.use_sbf_geometry:
             aux_zarr_path = None
+            aux_group = None
         else:
-            aux_zarr_path = self._ensure_aux_data_preprocessed(
+            aux_zarr_path, aux_group = self._ensure_aux_data_preprocessed(
                 first_files, date_str, reader_format=first_fmt
             )
 
@@ -3229,6 +3388,7 @@ class RinexDataProcessor:
                 reader_format=fmt,
                 show_progress=(len(wave_a) == 1),
                 pool_workers=inner_workers if len(wave_a) > 1 else None,
+                aux_group=aux_group,
             )
             return result, time.perf_counter() - t
 

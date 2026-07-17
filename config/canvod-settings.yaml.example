@@ -60,6 +60,11 @@ processing:
     product_type: final      # final, rapid, ultra-rapid
     # ftp_timeout_s: 30      # FTP connection timeout in seconds
     # fetch_clock: true      # Set false to skip CLK downloads/interpolation — VOD doesn't use clock corrections
+    # zarr_async_concurrency: 2   # Cap zarr's concurrent chunk write/read burst
+    #                              # for the aux cache's own writes. Unset by
+    #                              # default (zarr's default of 10 applies).
+    #                              # Separate from processing.icechunk's own
+    #                              # knob — different store, different profile.
 
   # ---------------------------------------------------------------------------
   # Processing Parameters
@@ -186,6 +191,14 @@ processing:
     # Directory for downloaded SP3/CLK files and transient Zarr caches.
     # If not set, uses system temp directory.
     # aux_data_dir: /path/to/aux_data
+
+    # Network-wide, fingerprint-keyed aux (SP3/CLK Hermite) cache root.
+    # Unset by default — falls back to per-site aux_data_dir, rebuilt every
+    # run. Point every site in a network at the SAME path here to share one
+    # cache entry per (agency, product, date) instead of each site rebuilding
+    # it independently — ephemeris products are satellite-based, not
+    # site-based, so this is safe across sites with different sampling rates.
+    # shared_aux_cache_dir: /path/to/shared/aux_cache
 
     gnss_store_strategy: skip      # skip, overwrite, append
     vod_store_strategy: overwrite

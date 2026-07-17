@@ -50,6 +50,18 @@ class StorageConfig(_StrictModel):
             "each run. Defaults to system temp directory if not set."
         ),
     )
+    shared_aux_cache_dir: Path | None = Field(
+        None,
+        description=(
+            "Network-wide, fingerprint-keyed aux (SP3/CLK Hermite) cache "
+            "root (dev/todo_later.md §44). None (default) = disabled, falls "
+            "back to per-site aux_data_dir/aux_{date}.zarr, rebuilt every "
+            "run. Ephemeris products are satellite-based, not site-based, "
+            "so pointing multiple sites at the same path lets them share "
+            "one cache entry per (agency, product, date) instead of each "
+            "rebuilding it independently."
+        ),
+    )
     gnss_store_strategy: Literal["skip", "overwrite", "append"] = "skip"
     vod_store_strategy: Literal["skip", "overwrite", "append"] = "overwrite"
     keeper_tags: bool = Field(
@@ -161,3 +173,17 @@ class StorageConfig(_StrictModel):
         from tempfile import gettempdir
 
         return Path(gettempdir())
+
+    def get_shared_aux_cache_dir(self) -> Path | None:
+        """Get the network-wide shared aux cache directory, if configured.
+
+        Returns
+        -------
+        Path | None
+            The configured shared cache root, created if missing, or
+            ``None`` when the feature is disabled (default).
+        """
+        if self.shared_aux_cache_dir is None:
+            return None
+        self.shared_aux_cache_dir.mkdir(parents=True, exist_ok=True)
+        return self.shared_aux_cache_dir
