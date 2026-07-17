@@ -18,7 +18,16 @@ from collections.abc import Callable
 import icechunk
 
 STORE_ERROR_TYPES = (OSError, RuntimeError, ValueError, icechunk.IcechunkError)
-STORE_RETRY_BACKOFF_SECONDS = (2.0, 8.0, 30.0)
+# CIFS's default dead-connection-detection interval (echo_interval) is 60s --
+# a (2, 8, 30) schedule (40s total) can exhaust every retry before the OS-level
+# driver has even noticed the connection dropped, so every attempt would hit
+# the same still-broken connection. This is general CIFS behavior, not a
+# confirmed incident: no captured production log corroborates a specific
+# "N consecutive os error 103" sequence for this exact schedule as of
+# 2026-07-17. Widened as a precautionary default so the total window
+# comfortably outlasts CIFS's reconnect timescale; revisit if real
+# store_op_retry log data becomes available.
+STORE_RETRY_BACKOFF_SECONDS = (5.0, 15.0, 45.0, 90.0)
 
 
 def call_with_store_retries[T](fn: Callable[[], T], *, logger, **log_ctx: object) -> T:
