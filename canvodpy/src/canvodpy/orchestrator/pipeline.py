@@ -714,7 +714,7 @@ class PipelineOrchestrator:
         receivers: dict[str, tuple[Path, str, Path | None, str]],
         keep_vars: list[str] | None,
     ) -> tuple[RinexDataProcessor, list[tuple], list[tuple[str, list[Path]]]] | None:
-        """Prepare one DOY for flat Dask submission (Phase 1 helper).
+        """Prepare one DOY for flat loky submission (Phase 1 helper).
 
         Thread-safe: each date downloads different SP3/CLK files,
         aux Zarr paths are date-specific, and position computation reads
@@ -748,14 +748,14 @@ class PipelineOrchestrator:
     ) -> Generator[tuple[str, dict[str, xr.Dataset], dict[str, float]]]:
         """Process dates in multi-day batches (days_per_batch > 1).
 
-        When ``days_per_batch > 1`` and a Dask cluster is available, RINEX
-        files from ALL DOYs in a batch are submitted to Dask as one flat
-        pool (Phase 2). Auxiliary data and receiver positions are prepared
-        sequentially per DOY first (Phase 1), and Icechunk writes happen
-        sequentially afterwards (Phase 3).
+        When ``days_per_batch > 1`` and loky is available, RINEX files from
+        ALL DOYs in a batch are submitted to loky's reusable executor as
+        one flat pool (Phase 2). Auxiliary data and receiver positions are
+        prepared sequentially per DOY first (Phase 1), and Icechunk writes
+        happen sequentially afterwards (Phase 3).
 
-        When ``days_per_batch == 1`` or no Dask cluster is available, falls
-        back to sequential ``_process_single_date()`` calls.
+        When ``days_per_batch == 1`` or loky is not installed, falls back
+        to sequential ``_process_single_date()`` calls.
 
         Parameters
         ----------
@@ -894,9 +894,9 @@ class PipelineOrchestrator:
                 )
                 continue
 
-            # ── Phase 2+3: Pipelined Dask processing + streaming writes ─
+            # ── Phase 2+3: Pipelined loky processing + streaming writes ─
             #
-            # Submit all tasks to Dask, then write to Icechunk as soon as
+            # Submit all tasks to loky, then write to Icechunk as soon as
             # all tasks for a (date, receiver) group complete. This frees
             # raw results immediately instead of buffering everything.
 
