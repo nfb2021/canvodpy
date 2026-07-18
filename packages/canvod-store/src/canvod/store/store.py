@@ -258,6 +258,49 @@ class MyIcechunkStore:
         with scoped_zarr_concurrency(self._zarr_async_concurrency):
             to_icechunk(dataset, session, **kwargs)
 
+    def chunk_encoding_for(
+        self, ds: xr.Dataset
+    ) -> dict[str, dict[str, tuple[int, ...]]]:
+        """Build ``{var: {"chunks": (...)}}`` matching ``self.chunk_strategy``.
+
+        Only meaningful at group creation -- Zarr fixes an array's chunk
+        shape the moment it's first written, so this must be passed as
+        ``encoding=`` on the ``mode="w"`` call, never on an append (which
+        must match whatever shape creation already fixed).
+
+        Without this, ``chunk_strategies`` config only ever affected
+        *read*-side chunking (the ``chunks=`` hint passed to
+        ``xr.open_zarr`` elsewhere in this class) -- nothing applied it at
+        write time, so the physical on-disk chunk shape was left to Zarr's
+        own default, silently disconnected from config. Confirmed by
+        grepping this file and processor.py for any ``encoding["chunks"]``
+        assignment: there wasn't one anywhere (2026-07-18).
+
+        A dim with a configured chunk size (e.g. ``epoch: 17280``) gets
+        exactly that size regardless of how much data is in *this*
+        particular write -- Zarr supports writing less than one full chunk
+        in the first call and filling the rest on later appends, which is
+        the whole point of fixing chunk shape once at creation. A dim
+        configured ``-1`` (or unconfigured) gets one chunk spanning
+        whatever this write's current size is (e.g. ``sid: -1`` -> the
+        full SID universe already present at creation).
+        """
+        if not self.chunk_strategy:
+            return {}
+        encoding: dict[str, dict[str, tuple[int, ...]]] = {}
+        for var in (*ds.data_vars, *ds.coords):
+            dims = ds[var].dims
+            if not dims:
+                continue
+            chunk_shape = tuple(
+                ds.sizes[dim]
+                if self.chunk_strategy.get(dim, -1) == -1
+                else self.chunk_strategy[dim]
+                for dim in dims
+            )
+            encoding[str(var)] = {"chunks": chunk_shape}
+        return encoding
+
     def _clean_ds_store(self) -> None:
         """Remove .DS_Store files from the store directory tree.
 
@@ -2138,7 +2181,11 @@ class MyIcechunkStore:
                     )
                 else:
                     self._to_icechunk_throttled(
-                        dataset, session, group=group_name, mode="w"
+                        dataset,
+                        session,
+                        group=group_name,
+                        mode="w",
+                        encoding=self.chunk_encoding_for(dataset),
                     )
             except Exception:
                 self._logger.error(

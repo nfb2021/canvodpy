@@ -2349,8 +2349,22 @@ class RinexDataProcessor:
                         action = "skipped"
                         match (exists, self._rinex_store_strategy):
                             case (False, _) if receiver_name not in groups:
-                                # Initial group creation (first non-skipped file)
-                                to_icechunk(ds_clean, session, group=receiver_name)
+                                # Initial group creation (first non-skipped file).
+                                # encoding= fixes physical chunk shape to match
+                                # chunk_strategies config (2026-07-18) -- Zarr
+                                # fixes chunk shape at creation, and nothing
+                                # previously applied config here, leaving it
+                                # to Zarr's own default (see store.py's
+                                # chunk_encoding_for docstring for the full
+                                # investigation).
+                                to_icechunk(
+                                    ds_clean,
+                                    session,
+                                    group=receiver_name,
+                                    encoding=self.site.rinex_store.chunk_encoding_for(
+                                        ds_clean
+                                    ),
+                                )
                                 groups.append(receiver_name)
                                 actions["initial"] += 1
                                 action = "initial"
