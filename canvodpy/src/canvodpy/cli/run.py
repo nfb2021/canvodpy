@@ -34,12 +34,11 @@ import socket
 import subprocess
 import sys
 import time
-from concurrent.futures import ProcessPoolExecutor
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
 import numpy as np
 import structlog
@@ -47,13 +46,10 @@ import typer
 import xarray as xr
 
 from canvodpy.logging import emit_run_summary
-from canvodpy.logging.run_context import get_run_id, reset_run_id, set_run_id
+from canvodpy.logging.run_context import reset_run_id, set_run_id
 from canvodpy.logging.stage_timer import reset_run_stats
 from canvodpy.orchestrator.resources import ResourceSampler
 from canvodpy.orchestrator.store_retry import call_with_store_retries
-
-if TYPE_CHECKING:
-    from canvodpy.api import Site
 
 log = structlog.get_logger(__name__)
 
@@ -334,88 +330,6 @@ def _compute_vod_for_day(
     return results
 
 
-# ============================================================================
-# Dedicated VOD-writer subprocess (2026-07-18 VOD-write-crash investigation)
-#
-# icechunk routes every async operation through one Tokio runtime, lazily
-# created once per Python process and shared by every Repository/Store
-# object in that process -- not one runtime per object (confirmed by
-# reading icechunk-python's Rust source, pyo3_async_runtimes::tokio::
-# get_runtime()). A Site opens both rinex_store and vod_store eagerly at
-# construction and holds both alive for the run's whole lifetime, so the
-# VOD store's Repository was never "freshly opened" before its first write
-# -- it sat in the same process, sharing the same runtime and I/O thread
-# pool, through the RINEX store's entire multi-day, multi-process ingest
-# burst. Every fix targeting time (a settle delay) or per-call concurrency
-# (zarr_async_concurrency) left the crash unchanged; both are Python/zarr-
-# level knobs that can't reach Rust-side runtime/thread-pool state anyway.
-#
-# Isolating VOD writes in their own dedicated, persistent subprocess gives
-# them a genuinely fresh Tokio runtime that never carries any RINEX-ingest
-# load -- this subprocess never does RINEX ingest itself, so even though it
-# also happens to open rinex_store (Site's constructor always does), that
-# Repository sits idle. Kept alive for the whole run (not respawned per
-# date) since store_vod_analysis's own dedup/append logic already assumes
-# a warm store.
-# ============================================================================
-
-_vod_writer_site: Site | None = None  # process-local; set once by the initializer
-
-
-def _init_vod_writer_process(site_name: str, run_id: str | None) -> None:
-    """``ProcessPoolExecutor`` initializer for the dedicated VOD-writer process.
-
-    Runs once per worker process. Deliberately does nothing but open the
-    site -- this process must never be handed RINEX ingest work, or it
-    stops being an isolated, clean Tokio runtime.
-    """
-    global _vod_writer_site
-    from canvodpy.api import Site
-
-    if run_id is not None:
-        set_run_id(run_id)
-    _vod_writer_site = Site(site_name)
-
-
-def _ensure_vod_metadata_in_subprocess(calculator_name: str) -> None:
-    """Runs inside the VOD-writer subprocess -- see _init_vod_writer_process."""
-    from canvodpy.vod_computer import ensure_vod_store_metadata
-
-    assert _vod_writer_site is not None, "_init_vod_writer_process must run first"
-    ensure_vod_store_metadata(_vod_writer_site, calculator_name)
-
-
-def _write_vod_result_in_subprocess(
-    analysis_name: str,
-    calculator_name: str,
-    vod_dataset: xr.Dataset,
-    source_file_hashes: dict[str, str],
-    source_gnss_stores: dict[str, str],
-    commit_message: str | None,
-) -> bool:
-    """Runs inside the VOD-writer subprocess -- see _init_vod_writer_process."""
-    assert _vod_writer_site is not None, "_init_vod_writer_process must run first"
-    return _vod_writer_site._site.store_vod_analysis(
-        vod_dataset=vod_dataset,
-        analysis_name=analysis_name,
-        calculator_name=calculator_name,
-        source_file_hashes=source_file_hashes,
-        source_gnss_stores=source_gnss_stores,
-        commit_message=commit_message,
-    )
-
-
-def _submit_and_wait(pool: ProcessPoolExecutor, fn, /, *args, **kwargs):
-    """Submit to the VOD-writer pool and block for the result.
-
-    A thin synchronous wrapper so ``call_with_store_retries`` (which calls
-    a plain zero-arg callable and retries on exception) can drive the
-    subprocess exactly like it drove the inline call it replaces --
-    ``Future.result()`` re-raises the worker's exception in this process.
-    """
-    return pool.submit(fn, *args, **kwargs).result()
-
-
 def _main_impl(args: SimpleNamespace) -> int:
     from pathlib import Path
 
@@ -430,11 +344,6 @@ def _main_impl(args: SimpleNamespace) -> int:
                 f"Error: overlay config file not found: {config_file}", file=sys.stderr
             )
             return 1
-        # Must happen before any multiprocessing pool is touched (loky's RINEX
-        # pool or the VOD-writer ProcessPoolExecutor below): Python 3.14 defaults
-        # to 'forkserver' on Linux, which forks workers from a lazily-bootstrapped
-        # server process rather than the live parent, so env vars set after that
-        # server first starts would not reliably reach later-created pools.
         os.environ["CANVOD_CONFIG_FILE"] = str(config_file.expanduser().resolve())
 
     try:
@@ -450,6 +359,7 @@ def _main_impl(args: SimpleNamespace) -> int:
         config.processing.params.ephemeris_source = args.ephemeris_source
 
     from canvodpy.api import Site
+    from canvodpy.vod_computer import ensure_vod_store_metadata
 
     site_names: list[str] = args.site
 
@@ -502,7 +412,6 @@ def _main_impl(args: SimpleNamespace) -> int:
             stage = "site_init"
             site_days = 0
             site_vod = 0
-            vod_writer_pool: ProcessPoolExecutor | None = None
 
             # Continuous memory/CPU/disk-I/O visibility for the whole
             # site run (perf-degradation investigation, 2026-07-14) --
@@ -568,13 +477,6 @@ def _main_impl(args: SimpleNamespace) -> int:
                 # Access the underlying GnssResearchSite for VOD store writes
                 research_site = site._site
 
-                if vod_analyses:
-                    vod_writer_pool = ProcessPoolExecutor(
-                        max_workers=1,
-                        initializer=_init_vod_writer_process,
-                        initargs=(site_name, get_run_id()),
-                    )
-
                 def _on_group_written(
                     group_name: str, _site_name: str = site_name
                 ) -> None:
@@ -632,13 +534,11 @@ def _main_impl(args: SimpleNamespace) -> int:
                             )
 
                             stage = "vod_store"
-                            assert vod_writer_pool is not None
                             if vod_results:
                                 call_with_store_retries(
                                     partial(
-                                        _submit_and_wait,
-                                        vod_writer_pool,
-                                        _ensure_vod_metadata_in_subprocess,
+                                        ensure_vod_store_metadata,
+                                        site,
                                         args.vod_calculator,
                                     ),
                                     logger=log,
@@ -650,12 +550,10 @@ def _main_impl(args: SimpleNamespace) -> int:
                                 t_analysis_store = time.perf_counter()
                                 call_with_store_retries(
                                     partial(
-                                        _submit_and_wait,
-                                        vod_writer_pool,
-                                        _write_vod_result_in_subprocess,
+                                        research_site.store_vod_analysis,
+                                        vod_dataset=result["vod_ds"],
                                         analysis_name=analysis_name,
                                         calculator_name=args.vod_calculator,
-                                        vod_dataset=result["vod_ds"],
                                         source_file_hashes=result["source_file_hashes"],
                                         source_gnss_stores=result["source_gnss_stores"],
                                         commit_message=f"VOD {analysis_name} {date_key}",
@@ -704,8 +602,6 @@ def _main_impl(args: SimpleNamespace) -> int:
                 )
                 raise
             finally:
-                if vod_writer_pool is not None:
-                    vod_writer_pool.shutdown(wait=True)
                 resource_sampler.stop()
                 reset_run_stats(run_id)
                 reset_run_id(run_id_token)
