@@ -107,6 +107,15 @@ processing:
     # How many calendar days to pool per loky wave (ge=1, le=30)
     days_per_batch: 1
 
+    # Pause after a batch's loky pool fully drains, before the first VOD-
+    # store write of that batch. Unset by default (no pause). The VOD write
+    # is the first thing to touch a network-mounted (CIFS/NFS) store right
+    # after a batch's sustained multi-process RINEX I/O -- OS/SMB connection
+    # state from that burst may not have settled yet even though no worker
+    # process is still running. Set on affected deployments (try 10-30s);
+    # costs nothing on local/fast storage, leave unset there.
+    # batch_drain_settle_seconds: 15
+
     # 'auto'   — auto-detects available cores and memory (personal machines)
     # 'manual' — hard caps below are enforced (shared servers)
     resource_mode: auto

@@ -153,6 +153,23 @@ deprecated (`DeprecationWarning` on use) — kept working, no longer taught.
 ### Common commands
 
 ```bash
+# Pipeline execution (CLI, recommended — see "Running-the-pipeline rule" below)
+uv run canvodpy run --site rosalia --start 2025087 --end 2025100   # Full RINEX ingest + inline VOD
+uv run canvodpy vod --site rosalia --analysis VOD_lower_antenna --start 2025087 --end 2025087
+                                          # VOD ONLY, straight from an existing RINEX store —
+                                          # skips RINEX ingest entirely. Use this to isolate/
+                                          # reproduce a VOD-store write issue without re-running
+                                          # ingest. --analysis is a site.vod_analyses key (list
+                                          # them: `python -c "from canvodpy.api import Site;
+                                          # print(list(Site('rosalia').vod_analyses))"`).
+                                          # Omit --start/--end for the full available range.
+uv run canvodpy vod-reconcile --site rosalia --analysis VOD_lower_antenna
+                                          # Dry-run report of RINEX-ingested-but-VOD-missing
+                                          # dates (a run that crashed after RINEX succeeded but
+                                          # before VOD wrote never gets silently revisited by
+                                          # `canvodpy run`, which only resumes from the RINEX
+                                          # store's latest date). Add --execute to backfill.
+
 # Quality & testing
 uv sync                                  # Install all workspace deps
 just check                               # Lint + format (all packages) — fast, always passes

@@ -158,6 +158,19 @@ def _interleave_by_receiver(task_descriptors: list[tuple]) -> list[tuple]:
     ]
 
 
+def _should_settle_after_batch_drain(
+    settle_seconds: float | None, tasks_succeeded: int
+) -> bool:
+    """Whether to pause before the batch's first VOD write, after pool drain.
+
+    ``settle_seconds`` is opt-in (``None`` default, matching every other
+    knob added during this investigation) -- only pause when explicitly
+    configured, and only when there's actually a VOD write coming (a batch
+    where every task failed never reaches one).
+    """
+    return bool(settle_seconds) and tasks_succeeded > 0
+
+
 def _build_ordered_tasks(
     ordered_date_keys: Sequence[str],
     task_descriptors_by_date: dict[str, list[tuple]],
@@ -1170,6 +1183,22 @@ class PipelineOrchestrator:
                 tasks_failed=tasks_failed,
                 groups_written=len(groups_written),
             )
+
+            # A batch's loky pool has just finished a sustained multi-process
+            # I/O burst against (possibly) a network-mounted store -- the
+            # first VOD write of this batch is the next thing to touch that
+            # same mount, within milliseconds by default. Opt-in settle gap
+            # (dev/todo_later.md, 2026-07-18 VOD-write-crash investigation);
+            # None = no pause, unchanged behavior.
+            settle_seconds = load_config().processing.params.batch_drain_settle_seconds
+            if _should_settle_after_batch_drain(settle_seconds, tasks_succeeded):
+                assert settle_seconds is not None
+                self._logger.info(
+                    "batch_drain_settle_sleep",
+                    batch_index=batch_idx + 1,
+                    seconds=settle_seconds,
+                )
+                _time.sleep(settle_seconds)
 
             # Guard: skip yield if all tasks failed
             if tasks_succeeded == 0:

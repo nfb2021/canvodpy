@@ -2120,14 +2120,40 @@ class MyIcechunkStore:
             )
 
         with self.writable_session(branch) as session:
-            if action == "append":
-                self._to_icechunk_throttled(
-                    dataset, session, group=group_name, append_dim=append_dim
+            self._logger.info(
+                "icechunk_write_data_started",
+                group=group_name,
+                action=action,
+                n_data_vars=len(dataset.data_vars),
+                data_vars=list(dataset.data_vars.keys()),
+                n_epochs=int(dataset.sizes.get("epoch", 0)),
+                approx_size_mb=round(dataset.nbytes / 1e6, 2),
+                zarr_async_concurrency=self._zarr_async_concurrency,
+            )
+            t_write_start = time.perf_counter()
+            try:
+                if action == "append":
+                    self._to_icechunk_throttled(
+                        dataset, session, group=group_name, append_dim=append_dim
+                    )
+                else:
+                    self._to_icechunk_throttled(
+                        dataset, session, group=group_name, mode="w"
+                    )
+            except Exception:
+                self._logger.error(
+                    "icechunk_write_data_error",
+                    group=group_name,
+                    action=action,
+                    elapsed_seconds=round(time.perf_counter() - t_write_start, 2),
                 )
-            else:
-                self._to_icechunk_throttled(
-                    dataset, session, group=group_name, mode="w"
-                )
+                raise
+            self._logger.info(
+                "icechunk_write_data_succeeded",
+                group=group_name,
+                action=action,
+                elapsed_seconds=round(time.perf_counter() - t_write_start, 2),
+            )
             zroot = zarr.open_group(session.store, mode="a")
             self._append_vod_metadata_row(
                 zroot=zroot,
