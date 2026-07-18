@@ -2229,7 +2229,17 @@ class RinexDataProcessor:
         is_overwrite = self._rinex_store_strategy == "overwrite"
         temp_branch = None
 
+        # Timing for perf-degradation investigation (dev/perf_degradation_
+        # findings_2026_07_15.md follow-up, 2026-07-18): batch_write_complete's
+        # `timings` dict left several calls unaccounted for, so its residual
+        # (duration_seconds - sum(timings)) grew 12x over a 63-min local-store
+        # run and correlated r=0.95 with manifest/snapshot count without
+        # pinning down which call. These four timers close that gap. Default
+        # 0.0 for steps that don't run this batch (e.g. non-overwrite runs
+        # skip branch_setup entirely).
+        t_branch_setup = 0.0
         if is_overwrite:
+            _t_branch0 = time.perf_counter()
             yyyydoy = self.matched_data_dirs.yyyydoy.to_str()
             temp_branch = f"overwrite_{receiver_name}_{yyyydoy}"
             current_snapshot = next(
@@ -2247,6 +2257,7 @@ class RinexDataProcessor:
                 current_snapshot[:8],
             )
             branch = temp_branch
+            t_branch_setup = time.perf_counter() - _t_branch0
         else:
             branch = "main"
 
@@ -2257,13 +2268,21 @@ class RinexDataProcessor:
             t4 = time.time()
             log.info("Session opened in %.2fs", t4 - t3)
 
+            # Fires on every batch after the group's first write -- this
+            # opens the group via xr.open_zarr(), a candidate for O(manifest
+            # count) cost as the store grows (see comment above).
+            t_vars_consistency = 0.0
             if receiver_name in groups:
+                _t_vars0 = time.perf_counter()
                 self._check_store_vars_consistency(
                     session, receiver_name, augmented_datasets
                 )
+                t_vars_consistency = time.perf_counter() - _t_vars0
 
             # Prepare store for overwrite (remove old epochs, drop stale vars)
+            t_overwrite_prep = 0.0
             if is_overwrite and receiver_name in groups:
+                _t_ovr0 = time.perf_counter()
                 self._prepare_store_for_overwrite(
                     session,
                     receiver_name,
@@ -2271,6 +2290,7 @@ class RinexDataProcessor:
                     existing_hashes,
                     file_hash_map,
                 )
+                t_overwrite_prep = time.perf_counter() - _t_ovr0
 
             actions = {
                 "initial": 0,
@@ -2505,12 +2525,15 @@ class RinexDataProcessor:
                 # 07_15.md, Problem B) -- additive, inert, off by default.
                 # Never fails the write: create_keeper_tag() swallows tag
                 # name collisions itself.
+                t_keeper_tag = 0.0
                 if self._keeper_tags_enabled:
+                    _t_keeper0 = time.perf_counter()
                     self.site.rinex_store.create_keeper_tag(
                         receiver_name,
                         str(self.matched_data_dirs.yyyydoy),
                         snapshot_id,
                     )
+                    t_keeper_tag = time.perf_counter() - _t_keeper0
 
                 # Cheap on-disk store-internal stats (manifest/snapshot/
                 # transaction directory entry counts) sampled once per
@@ -2520,9 +2543,10 @@ class RinexDataProcessor:
                 # 2026-07-14). Deliberately skips chunks/ (unbounded).
                 t_stats = time.perf_counter()
                 dir_counts = self.site.rinex_store.dir_entry_counts()
+                t_store_stats = time.perf_counter() - t_stats
                 self._icechunk_log.info(
                     "store_stats",
-                    duration_seconds=round(time.perf_counter() - t_stats, 4),
+                    duration_seconds=round(t_store_stats, 4),
                     receiver=receiver_name,
                     date=str(self.matched_data_dirs.yyyydoy),
                     **dir_counts,
@@ -2563,10 +2587,15 @@ class RinexDataProcessor:
                     duration_seconds=round(t_end - t_start, 2),
                     timings={
                         "batch_check": round(t2 - t1, 2),
+                        "branch_setup": round(t_branch_setup, 2),
                         "open_session": round(t4 - t3, 2),
+                        "vars_consistency": round(t_vars_consistency, 2),
+                        "overwrite_prep": round(t_overwrite_prep, 2),
                         "process_data": round(t6 - t5, 2),
                         "commit": round(t8 - t7, 2),
                         "metadata": round(t10 - t9, 2),
+                        "keeper_tag": round(t_keeper_tag, 2),
+                        "store_stats": round(t_store_stats, 2),
                     },
                     process_data_per_file=process_data_per_file,
                     actions=actions,
