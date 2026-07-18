@@ -149,7 +149,7 @@ def diagnose_processing_new_api(
     days_since_rechunk = 0
 
     # Main processing loop using NEW API
-    # Context manager ensures Dask cluster is shut down on exit
+    # Context manager ensures orchestrator resources are released on exit
     with site.pipeline(keep_vars=keep_vars, dry_run=False) as pipeline:
         for date_key, datasets in pipeline.process_range(
             start=start_from or "2000001",  # Default to very early date

@@ -56,7 +56,7 @@ from canvodpy.orchestrator.interpolator import (
 )
 
 # ============================================================================
-# MODULE-LEVEL FUNCTIONS (Required for Dask / ProcessPoolExecutor serialization)
+# MODULE-LEVEL FUNCTIONS (Required for loky / ProcessPoolExecutor serialization)
 # ============================================================================
 
 
@@ -582,7 +582,7 @@ def _compute_spherical_coords_fast(
     """Compute spherical coordinates using shared utility function.
 
     This function is used by the parallel processor and must remain
-    at module level for Dask / ProcessPoolExecutor serialization.
+    at module level for loky / ProcessPoolExecutor serialization.
     """
     # Get satellite positions (already interpolated with Hermite splines)
     sat_x = aux_ds["X"].values
@@ -793,7 +793,7 @@ class RinexDataProcessor:
     Pipeline:
     1. Initialize auxiliary data (ephemerides, clock) - ONCE
     2. Preprocess aux data with Hermite splines to disk - ONCE per day
-    3. Parallel process RINEX files via Dask distributed (or ProcessPoolExecutor fallback)
+    3. Parallel process RINEX files via ProcessPoolExecutor
     4. Each worker reads its time slice from preprocessed Zarr
     5. Compute spherical coordinates and append to Icechunk store
     6. Yield final daily datasets
@@ -2790,7 +2790,7 @@ class RinexDataProcessor:
         2. Compute receiver position ONCE (shared for all receivers)
         3. For each receiver type (canopy, reference):
            a. Get list of RINEX files
-           b. Parallel process via Dask distributed (or ProcessPoolExecutor fallback)
+           b. Parallel process via ProcessPoolExecutor
            c. Each worker: read RINEX + slice Zarr + compute φ, θ, r
            d. Sequential append to Icechunk store
            e. Yield final daily dataset
@@ -2901,7 +2901,7 @@ class RinexDataProcessor:
             else:
                 receiver_position = shared_position
 
-            # 3c. Parallel process via Dask (or ProcessPoolExecutor fallback)
+            # 3c. Parallel process via ProcessPoolExecutor
             augmented_datasets, aux_datasets, sid_issues = self._parallel_process_rinex(
                 rinex_files=rinex_files,
                 keep_vars=keep_vars,
@@ -2946,9 +2946,9 @@ class RinexDataProcessor:
         keep_vars: list[str] | None,
         receiver_configs: list[tuple[str, str, Path, Path | None, str]],
     ) -> tuple[list[tuple], list[tuple[str, list[Path]]]]:
-        """Prepare aux Zarr and task descriptors for flat Dask submission.
+        """Prepare aux Zarr and task descriptors for flat loky submission.
 
-        Performs Phase 1 work for one DOY without submitting to Dask:
+        Performs Phase 1 work for one DOY without submitting to loky:
         normalize configs, preprocess aux data, compute positions, and
         build a flat list of task arguments.
 
@@ -3259,7 +3259,7 @@ class RinexDataProcessor:
         1. Preprocess aux data ONCE per day with Hermite splines → Zarr
         2. For each receiver:
         a. Compute receiver position (from own files or position_data_dir)
-        b. Parallel process RINEX files via Dask distributed (or ProcessPoolExecutor fallback)
+        b. Parallel process RINEX files via ProcessPoolExecutor
         c. Append to Icechunk store with receiver_name as group
         d. Yield final daily dataset
 
@@ -3920,7 +3920,7 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
         2. Compute receiver position ONCE (shared for all receivers)
         3. For each receiver type (canopy, reference):
            a. Get list of RINEX files
-           b. Parallel process via Dask distributed (or ProcessPoolExecutor fallback)
+           b. Parallel process via ProcessPoolExecutor
            c. Each worker: read RINEX + slice Zarr + compute φ, θ, r
            d. Sequential append to Icechunk store
            e. Yield final daily dataset
@@ -4039,7 +4039,7 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
             else:
                 receiver_position = shared_position
 
-            # 3c. Parallel process via Dask (or ProcessPoolExecutor fallback)
+            # 3c. Parallel process via ProcessPoolExecutor
             _ = self._cooperative_distributed_writing(
                 rinex_files=rinex_files,
                 keep_vars=keep_vars,

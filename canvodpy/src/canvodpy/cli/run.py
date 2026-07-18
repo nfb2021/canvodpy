@@ -761,7 +761,7 @@ def run(
     workers: Annotated[
         int | None,
         typer.Option(
-            "--workers", help="Number of Dask workers (default: from config)."
+            "--workers", help="Number of loky worker processes (default: from config)."
         ),
     ] = None,
     days_per_batch: Annotated[

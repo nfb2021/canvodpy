@@ -21,7 +21,7 @@ class ProcessingParams(_StrictModel):
     resource_mode: Literal["auto", "manual"] = Field(
         "auto",
         description=(
-            "'auto': Dask/OS auto-detects workers and memory (local machines). "
+            "'auto': OS auto-detects workers and memory (local machines). "
             "'manual': hard caps via n_max_threads, max_memory_gb, etc. (shared servers)."
         ),
     )

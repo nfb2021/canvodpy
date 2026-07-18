@@ -232,7 +232,7 @@ class Pipeline:
     aux_agency : str, optional
         Analysis center for auxiliary data. Default: from config.
     n_workers : int, optional
-        Number of parallel Dask workers. Default: from config
+        Number of parallel loky worker processes. Default: from config
         (``processing.n_max_threads``).
     dry_run : bool, default False
         If True, simulate without execution.
@@ -245,7 +245,7 @@ class Pipeline:
     nice_priority : int, optional
         Process nice value (0=normal, 19=lowest). Default: from config.
     threads_per_worker : int, optional
-        Threads per Dask worker process. Default: from config.
+        Threads per loky worker process. Default: from config.
     on_group_written : Callable[[str], None], optional
         Called with the receiver-group name each time a group's data for one
         day finishes writing to Icechunk. Lets a caller drive its own
@@ -370,7 +370,7 @@ class Pipeline:
         )
 
     def close(self) -> None:
-        """Shut down the Dask cluster managed by the orchestrator."""
+        """Release orchestrator resources (loky's reusable executor is shared and left running)."""
         self._orchestrator.close()
 
     def __enter__(self) -> Pipeline:

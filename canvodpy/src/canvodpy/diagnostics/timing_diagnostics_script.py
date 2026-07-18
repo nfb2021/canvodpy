@@ -139,7 +139,7 @@ def diagnose_processing(
     days_since_rechunk = 0
 
     # Main processing loop
-    # Context manager ensures Dask cluster is shut down on exit
+    # Context manager ensures orchestrator resources are released on exit
     # All params from config — no hardcoded defaults
     resources = proc.resolve_resources()
     with PipelineOrchestrator(
