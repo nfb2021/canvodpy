@@ -837,6 +837,7 @@ class PipelineOrchestrator:
             task_descriptors_by_date: dict[str, list[tuple]] = {}
 
             phase1_workers = min(len(batch), 4)
+            batch_receivers_by_date = dict(batch)
             with ThreadPoolExecutor(max_workers=phase1_workers) as tp:
                 futures = {
                     tp.submit(
@@ -858,12 +859,28 @@ class PipelineOrchestrator:
                             continue
                         raise
                     except (OSError, ValueError) as e:
-                        self._logger.error(
-                            "prepare_batch_failed",
+                        # Transient race: Zarr's internal directory listing can
+                        # briefly see a concurrent thread's .DS_Store cleanup
+                        # mid-scan during Phase-1 aux cache prep. Retry once
+                        # synchronously before dropping the date.
+                        self._logger.warning(
+                            "prepare_batch_failed_retrying",
                             date=date_key,
                             error=str(e),
                         )
-                        continue
+                        try:
+                            result = self._prepare_single_date(
+                                date_key,
+                                batch_receivers_by_date[date_key],
+                                keep_vars,
+                            )
+                        except (OSError, ValueError) as retry_e:
+                            self._logger.error(
+                                "prepare_batch_failed",
+                                date=date_key,
+                                error=str(retry_e),
+                            )
+                            continue
 
                     if result is None:
                         continue
