@@ -21,10 +21,14 @@ Examples
 
 >>> from canvod.utils.tools import isfloat
 >>> isfloat("3.14")  # True
+
+>>> from canvod.utils.tools import sanitize_directory
+>>> sanitize_directory(store_path)  # removes stray .DS_Store files
 """
 
 from .date_utils import YYDOY, YYYYDOY, get_gps_week_from_filename
 from .hashing import file_hash
+from .sanitize import sanitize_directory
 from .validation import isfloat
 from .version import get_version_from_pyproject
 from .worker import _worker_init
@@ -42,4 +46,5 @@ __all__ = [
     "get_version_from_pyproject",
     "gpsweekday",
     "isfloat",
+    "sanitize_directory",
 ]
