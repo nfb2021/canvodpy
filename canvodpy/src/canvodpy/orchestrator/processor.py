@@ -45,7 +45,11 @@ from canvod.auxiliary.position import (
 from canvod.config import load_config
 from canvod.readers import DataDirMatcher, MatchedDirs
 from canvod.store import GnssResearchSite, scoped_zarr_concurrency
-from canvod.utils.tools import _worker_init, get_version_from_pyproject
+from canvod.utils.tools import (
+    _worker_init,
+    get_version_from_pyproject,
+    sanitize_directory,
+)
 from canvodpy.logging import get_logger, stage_timer
 from canvodpy.logging.run_context import get_run_id, set_run_id
 from canvodpy.orchestrator.interpolator import (
@@ -865,7 +869,7 @@ class RinexDataProcessor:
         self._product_type = aux_cfg.product_type
         servers = aux_cfg.get_ftp_servers(config.nasa_earthdata_acc_mail)
         self._ftp_server = servers[0][0]
-        self._rinex_store_strategy = config.processing.storage.gnss_store_strategy
+        self._gnss_store_strategy = config.processing.storage.gnss_store_strategy
         t_config_end = time.perf_counter()
 
         self._logger.info(
@@ -1590,7 +1594,10 @@ class RinexDataProcessor:
 
         t0 = time.perf_counter()
         aux_base_dir = self._config.processing.storage.get_aux_data_dir()
-        aux_zarr_path = aux_base_dir / f"aux_{date_str}.zarr"
+        # Nest alongside canvod-auxiliary's 01_SP3/02_CLK download subdirs
+        # instead of littering aux_base_dir's root with one aux_*.zarr per date.
+        aux_zarr_path = aux_base_dir / "00_aux_zarr" / f"aux_{date_str}.zarr"
+        aux_zarr_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Always reprocess from raw SP3/CLK files — the Hermite interpolation
         # is cheap and this avoids stale caches when SIDs change.
@@ -1621,6 +1628,13 @@ class RinexDataProcessor:
                 raise RuntimeError(
                     f"Aux preprocessing completed but file not found: {aux_zarr_path}"
                 )
+
+            # macOS creates .DS_Store inside directories Finder/Spotlight has
+            # touched; zarr's group listing then warns on the unrecognized
+            # member. Same fix as MyIcechunkStore._clean_ds_store() in
+            # canvod-store, applied here since this plain aux Zarr isn't
+            # opened through that class.
+            sanitize_directory(aux_zarr_path)
 
             self._logger.info(
                 "aux_preprocessing_verified",
@@ -1677,6 +1691,12 @@ class RinexDataProcessor:
 
         if (cache_root / group).exists():
             self._logger.info("aux_cache_hit", fingerprint=fingerprint, date=date_str)
+            # Sweep on every hit, not just on populate (below) -- Finder can
+            # drop a fresh .DS_Store into a shared/mounted cache dir between
+            # runs, and a hit path that skips this leaves every subsequent
+            # xr.open_zarr() on cache_root tripping zarr's group-listing
+            # warning until the next miss happens to populate+sweep it.
+            sanitize_directory(cache_root)
             return cache_root, group
 
         self._logger.info("aux_cache_miss", fingerprint=fingerprint, date=date_str)
@@ -1701,6 +1721,16 @@ class RinexDataProcessor:
             # final path from concurrent writers, not the (benign)
             # redundant computation itself.
             (cache_root / tmp_group).rename(cache_root / group)
+
+            # macOS creates .DS_Store inside directories Finder/Spotlight has
+            # touched; zarr's group listing then warns on the unrecognized
+            # member. Same fix as MyIcechunkStore._clean_ds_store() in
+            # canvod-store, applied here since this is a plain Zarr store
+            # (cache_root), not opened through that class. Sweeps the whole
+            # cache_root tree, not just this date's group, since a stray
+            # .DS_Store anywhere above it (e.g. at the fingerprint level)
+            # would still trigger the warning on every future open.
+            sanitize_directory(cache_root)
         except Exception as e:
             self._logger.error(
                 "aux_cache_populate_failed",
@@ -2039,22 +2069,22 @@ class RinexDataProcessor:
                 ds_filtered = ds_filtered.drop_vars(stale_vars)
 
         # 5. Backup metadata, rewrite group, restore metadata
-        metadata_backup = self.site.rinex_store.backup_metadata_table(
+        metadata_backup = self.site.gnss_store.backup_metadata_table(
             receiver_name, session
         )
 
-        ds_filtered = self.site.rinex_store._normalize_encodings(ds_filtered)
+        ds_filtered = self.site.gnss_store._normalize_encodings(ds_filtered)
 
         if ds_filtered.sizes.get("epoch", 0) > 0:
             to_icechunk(ds_filtered, session, group=receiver_name, mode="w")
         else:
             # No epochs remain — write empty structure from first incoming dataset
             _, first_ds = augmented_datasets[0]
-            empty = self.site.rinex_store._normalize_encodings(first_ds.isel(epoch=[]))
+            empty = self.site.gnss_store._normalize_encodings(first_ds.isel(epoch=[]))
             to_icechunk(empty, session, group=receiver_name, mode="w")
 
         if metadata_backup is not None:
-            self.site.rinex_store.restore_metadata_table(
+            self.site.gnss_store.restore_metadata_table(
                 receiver_name, metadata_backup, session
             )
 
@@ -2082,11 +2112,11 @@ class RinexDataProcessor:
         # §34 -- confirmed 2026-07-15 that batch_check duration tracks
         # metadata_rows almost exactly, so halving the reads halves that
         # cost directly). `None` means fresh store / no metadata yet.
-        metadata_df = self.site.rinex_store.load_metadata_for_dedup(receiver_name)
+        metadata_df = self.site.gnss_store.load_metadata_for_dedup(receiver_name)
         if metadata_df is None:
             existing_hashes: set[str] = set()
         else:
-            existing_hashes = self.site.rinex_store.batch_check_existing(
+            existing_hashes = self.site.gnss_store.batch_check_existing(
                 receiver_name, valid_hashes, metadata_df=metadata_df
             )
 
@@ -2105,7 +2135,7 @@ class RinexDataProcessor:
                             )
                         )
                 if file_intervals:
-                    temporal_overlaps = self.site.rinex_store.check_temporal_overlaps(
+                    temporal_overlaps = self.site.gnss_store.check_temporal_overlaps(
                         receiver_name, file_intervals, metadata_df=metadata_df
                     )
                     existing_hashes |= temporal_overlaps
@@ -2216,7 +2246,7 @@ class RinexDataProcessor:
             # correlate batch_check duration against store growth directly
             # instead of assuming O(rows) scaling (dev/todo_later.md
             # perf-degradation investigation, 2026-07-14).
-            metadata_rows=self.site.rinex_store.metadata_row_count(receiver_name),
+            metadata_rows=self.site.gnss_store.metadata_row_count(receiver_name),
         )
         log.info(
             "Batch check complete in %.2fs: %s/%s existing",
@@ -2226,7 +2256,7 @@ class RinexDataProcessor:
         )
 
         # STEP 2: Branch-stage-promote for overwrite; direct main for others
-        is_overwrite = self._rinex_store_strategy == "overwrite"
+        is_overwrite = self._gnss_store_strategy == "overwrite"
         temp_branch = None
 
         # Timing for perf-degradation investigation (dev/perf_degradation_
@@ -2243,14 +2273,14 @@ class RinexDataProcessor:
             yyyydoy = self.matched_data_dirs.yyyydoy.to_str()
             temp_branch = f"overwrite_{receiver_name}_{yyyydoy}"
             current_snapshot = next(
-                self.site.rinex_store.repo.ancestry(branch="main")
+                self.site.gnss_store.repo.ancestry(branch="main")
             ).id
             try:
-                self.site.rinex_store.repo.create_branch(temp_branch, current_snapshot)
+                self.site.gnss_store.repo.create_branch(temp_branch, current_snapshot)
             except Exception:
                 # Branch may exist from a failed previous run; delete and recreate
-                self.site.rinex_store.repo.delete_branch(temp_branch)
-                self.site.rinex_store.repo.create_branch(temp_branch, current_snapshot)
+                self.site.gnss_store.repo.delete_branch(temp_branch)
+                self.site.gnss_store.repo.create_branch(temp_branch, current_snapshot)
             log.info(
                 "Created temp branch '%s' for overwrite (snapshot: %s...)",
                 temp_branch,
@@ -2263,8 +2293,8 @@ class RinexDataProcessor:
 
         log.info("Opening Icechunk session...")
         t3 = time.time()
-        with self.site.rinex_store.writable_session(branch) as session:
-            groups = self.site.rinex_store.list_groups() or []
+        with self.site.gnss_store.writable_session(branch) as session:
+            groups = self.site.gnss_store.list_groups() or []
             t4 = time.time()
             log.info("Session opened in %.2fs", t4 - t3)
 
@@ -2325,7 +2355,7 @@ class RinexDataProcessor:
                         )
 
                     try:
-                        rel_path = self.site.rinex_store.rel_path_for_commit(fname)
+                        rel_path = self.site.gnss_store.rel_path_for_commit(fname)
                         rinex_hash = file_hash_map[fname]
 
                         if not rinex_hash:
@@ -2340,10 +2370,10 @@ class RinexDataProcessor:
                         exists = rinex_hash in existing_hashes
 
                         # Cleanse dataset
-                        ds_clean = self.site.rinex_store._cleanse_dataset_attrs(
+                        ds_clean = self.site.gnss_store._cleanse_dataset_attrs(
                             ds,
                         )
-                        ds_clean = self.site.rinex_store._normalize_encodings(
+                        ds_clean = self.site.gnss_store._normalize_encodings(
                             ds_clean,
                         )
 
@@ -2367,7 +2397,7 @@ class RinexDataProcessor:
                         # Handle data writes using ONLY to_icechunk() with our session
                         t_file = time.perf_counter()
                         action = "skipped"
-                        match (exists, self._rinex_store_strategy):
+                        match (exists, self._gnss_store_strategy):
                             case (False, _) if receiver_name not in groups:
                                 # Initial group creation (first non-skipped file).
                                 # encoding= fixes physical chunk shape to match
@@ -2381,7 +2411,7 @@ class RinexDataProcessor:
                                     ds_clean,
                                     session,
                                     group=receiver_name,
-                                    encoding=self.site.rinex_store.chunk_encoding_for(
+                                    encoding=self.site.gnss_store.chunk_encoding_for(
                                         ds_clean
                                     ),
                                 )
@@ -2435,7 +2465,7 @@ class RinexDataProcessor:
                                 log.warning(
                                     "Unhandled strategy: exists=%s, strategy=%s for %s",
                                     exists,
-                                    self._rinex_store_strategy,
+                                    self._gnss_store_strategy,
                                     rel_path,
                                 )
                                 action = "unhandled"
@@ -2481,7 +2511,7 @@ class RinexDataProcessor:
                 )
                 t9 = time.time()
                 try:
-                    self.site.rinex_store.append_metadata_bulk(
+                    self.site.gnss_store.append_metadata_bulk(
                         group_name=receiver_name,
                         rows=metadata_records,
                         session=session,
@@ -2528,7 +2558,7 @@ class RinexDataProcessor:
                 t_keeper_tag = 0.0
                 if self._keeper_tags_enabled:
                     _t_keeper0 = time.perf_counter()
-                    self.site.rinex_store.create_keeper_tag(
+                    self.site.gnss_store.create_keeper_tag(
                         receiver_name,
                         str(self.matched_data_dirs.yyyydoy),
                         snapshot_id,
@@ -2542,7 +2572,7 @@ class RinexDataProcessor:
                 # count (dev/todo_later.md perf-degradation investigation,
                 # 2026-07-14). Deliberately skips chunks/ (unbounded).
                 t_stats = time.perf_counter()
-                dir_counts = self.site.rinex_store.dir_entry_counts()
+                dir_counts = self.site.gnss_store.dir_entry_counts()
                 t_store_stats = time.perf_counter() - t_stats
                 self._icechunk_log.info(
                     "store_stats",
@@ -2623,10 +2653,10 @@ class RinexDataProcessor:
                 raise
 
         # STEP 5: Set source_format root attr (once, idempotent)
-        if self.site.rinex_store.source_format is None:
+        if self.site.gnss_store.source_format is None:
             reader_fmt = reader_format or self._reader_name
             try:
-                self.site.rinex_store.set_root_attrs(
+                self.site.gnss_store.set_root_attrs(
                     {"source_format": reader_fmt}, branch=branch
                 )
                 log.info("Set store source_format='%s'", reader_fmt)
@@ -2647,7 +2677,7 @@ class RinexDataProcessor:
                 write_metadata,
             )
 
-            store_path = self.site.rinex_store.store_path
+            store_path = self.site.gnss_store.store_path
             site_name = self.site.site_name
 
             # Find site config from CanvodConfig
@@ -2666,7 +2696,7 @@ class RinexDataProcessor:
                         config=self._config,
                         site_name=site_name,
                         site_config=site_cfg,
-                        store_type="rinex_store",
+                        store_type="gnss_store",
                         source_format=reader_fmt,
                         store_path=store_path,
                         dask_workers=resources.get("n_workers"),
@@ -2728,7 +2758,7 @@ class RinexDataProcessor:
             ]
             if sbf_parts:
                 try:
-                    self.site.rinex_store.append_metadata_datasets(
+                    self.site.gnss_store.append_metadata_datasets(
                         sbf_parts, receiver_name, "sbf_obs", branch
                     )
                     n_epochs = sum(p.sizes.get("epoch", 0) for p in sbf_parts)
@@ -2749,9 +2779,9 @@ class RinexDataProcessor:
         if is_overwrite and temp_branch:
             try:
                 new_tip = next(
-                    self.site.rinex_store.repo.ancestry(branch=temp_branch)
+                    self.site.gnss_store.repo.ancestry(branch=temp_branch)
                 ).id
-                self.site.rinex_store.repo.reset_branch("main", new_tip)
+                self.site.gnss_store.repo.reset_branch("main", new_tip)
                 log.info(
                     "Promoted %s to main (snapshot: %s...)",
                     temp_branch,
@@ -2759,7 +2789,7 @@ class RinexDataProcessor:
                 )
             finally:
                 with contextlib.suppress(Exception):
-                    self.site.rinex_store.repo.delete_branch(temp_branch)
+                    self.site.gnss_store.repo.delete_branch(temp_branch)
 
         # Additive stage_timing for the performance dashboard's per-iteration
         # breakdown (reading/validating/augmenting/writing) -- reuses the
@@ -3711,7 +3741,7 @@ class RinexDataProcessor:
 
             try:
                 # Read metadata table
-                with self.site.rinex_store.readonly_session("main") as session:
+                with self.site.gnss_store.readonly_session("main") as session:
                     zmeta = zarr.open_group(session.store, mode="r")[
                         f"{receiver_name}/metadata/table"
                     ]
@@ -3826,7 +3856,7 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
         receiver_name: str,
     ) -> list[Path]:
         version = get_version_from_pyproject()
-        repo = self.site.rinex_store.repo
+        repo = self.site.gnss_store.repo
         rinex_files_sorted = sorted(rinex_files, key=lambda p: p.name)
 
         # STEP 1: Initialize dataset structure with ALL files' time coordinates
@@ -4127,7 +4157,7 @@ if __name__ == "__main__":
             )
 
             # Check if should skip
-            if processor._rinex_store_strategy in ["skip", "append"]:
+            if processor._gnss_store_strategy in ["skip", "append"]:
                 should_skip, coverage = processor.should_skip_day()
 
                 if should_skip:

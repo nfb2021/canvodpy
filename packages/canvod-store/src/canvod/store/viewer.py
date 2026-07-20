@@ -379,12 +379,12 @@ class IcechunkStoreViewer:
         Resolution order:
         1. ``source_format`` root attr (set by GNSSReader via orchestrator)
         2. Presence of ``metadata/sbf_obs`` group (legacy detection)
-        3. Default: "RINEX v3.04" for rinex_store, "VOD" for vod_store
+        3. Default: "RINEX v3.04" for gnss_store, "VOD" for vod_store
         """
         store_type = self.store.store_type
         if store_type == "vod_store":
             return "VOD"
-        if store_type == "rinex_store":
+        if store_type == "gnss_store":
             # 1. Check root-level source_format attr
             fmt = self.store.source_format
             if fmt:

@@ -121,17 +121,17 @@ class TestFindVodBackfillGaps:
 
     def test_rinex_group_missing_returns_no_gaps(self):
         site = _make_site(vod_analyses={"a": _make_analysis_cfg()})
-        site.rinex_store.group_exists.return_value = False
+        site.gnss_store.group_exists.return_value = False
         assert find_vod_backfill_gaps(site, "a") == []
         site.vod_store.group_exists.assert_not_called()
 
     def test_vod_group_missing_all_rinex_dates_are_gaps(self):
         site = _make_site(vod_analyses={"a": _make_analysis_cfg()})
-        site.rinex_store.group_exists.return_value = True
-        site.rinex_store.readonly_session.return_value.__enter__.return_value = (
+        site.gnss_store.group_exists.return_value = True
+        site.gnss_store.readonly_session.return_value.__enter__.return_value = (
             unittest.mock.MagicMock()
         )
-        site.rinex_store.read_metadata_table.return_value = _meta_df(
+        site.gnss_store.read_metadata_table.return_value = _meta_df(
             [
                 ("2025-01-01T00:00:00", "2025-01-01T00:15:00"),
                 ("2025-01-02T00:00:00", "2025-01-02T00:15:00"),
@@ -144,11 +144,11 @@ class TestFindVodBackfillGaps:
 
     def test_partial_overlap_returns_only_missing_dates(self):
         site = _make_site(vod_analyses={"a": _make_analysis_cfg()})
-        site.rinex_store.group_exists.return_value = True
-        site.rinex_store.readonly_session.return_value.__enter__.return_value = (
+        site.gnss_store.group_exists.return_value = True
+        site.gnss_store.readonly_session.return_value.__enter__.return_value = (
             unittest.mock.MagicMock()
         )
-        site.rinex_store.read_metadata_table.return_value = _meta_df(
+        site.gnss_store.read_metadata_table.return_value = _meta_df(
             [
                 ("2025-01-01T00:00:00", "2025-01-01T00:15:00"),
                 ("2025-01-02T00:00:00", "2025-01-02T00:15:00"),
@@ -168,11 +168,11 @@ class TestFindVodBackfillGaps:
 
     def test_full_coverage_returns_no_gaps(self):
         site = _make_site(vod_analyses={"a": _make_analysis_cfg()})
-        site.rinex_store.group_exists.return_value = True
-        site.rinex_store.readonly_session.return_value.__enter__.return_value = (
+        site.gnss_store.group_exists.return_value = True
+        site.gnss_store.readonly_session.return_value.__enter__.return_value = (
             unittest.mock.MagicMock()
         )
-        site.rinex_store.read_metadata_table.return_value = _meta_df(
+        site.gnss_store.read_metadata_table.return_value = _meta_df(
             [("2025-01-01T00:00:00", "2025-01-02T00:15:00")]
         )
         site.vod_store.group_exists.return_value = True
@@ -189,8 +189,8 @@ class TestFindVodBackfillGaps:
         site = _make_site(
             vod_analyses={"a": _make_analysis_cfg(canopy="c1", reference="r1")}
         )
-        site.rinex_store.group_exists.return_value = False
+        site.gnss_store.group_exists.return_value = False
 
         find_vod_backfill_gaps(site, "a", "my_calc")
 
-        site.rinex_store.group_exists.assert_called_once_with("r1_c1")
+        site.gnss_store.group_exists.assert_called_once_with("r1_c1")

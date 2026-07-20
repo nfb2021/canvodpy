@@ -909,7 +909,7 @@ def process_rinex(
                 # write_or_append_group(dedup=True) repeats this check as the
                 # authoritative store-level gate, covering races and future
                 # refactors that might bypass this pre-check.
-                skip, reason = research_site.rinex_store.should_skip_file(
+                skip, reason = research_site.gnss_store.should_skip_file(
                     group_name=group,
                     file_hash=file_hash,
                     time_start=time_start,
@@ -924,7 +924,7 @@ def process_rinex(
                     )
                     continue
 
-                research_site.rinex_store.write_or_append_group(
+                research_site.gnss_store.write_or_append_group(
                     dataset=augmented_ds,
                     group_name=group,
                     commit_message=f"Airflow ingest {rnx_file.name}",
@@ -1089,7 +1089,7 @@ def process_sbf(
                 # write_or_append_group(dedup=True) repeats this check as the
                 # authoritative store-level gate, covering races and future
                 # refactors that might bypass this pre-check.
-                skip, reason = research_site.rinex_store.should_skip_file(
+                skip, reason = research_site.gnss_store.should_skip_file(
                     group_name=group,
                     file_hash=file_hash,
                     time_start=time_start,
@@ -1104,7 +1104,7 @@ def process_sbf(
                     )
                     continue
 
-                research_site.rinex_store.write_or_append_group(
+                research_site.gnss_store.write_or_append_group(
                     dataset=augmented_ds,
                     group_name=group,
                     commit_message=f"Airflow SBF ingest {sbf_file.name}",
@@ -1115,8 +1115,8 @@ def process_sbf(
         # Write sbf_obs metadata per receiver — no in-memory concat
         if sbf_obs_parts:
             try:
-                rinex_store_any = cast(Any, research_site.rinex_store)
-                rinex_store_any.append_metadata_datasets(
+                gnss_store_any = cast(Any, research_site.gnss_store)
+                gnss_store_any.append_metadata_datasets(
                     sbf_obs_parts, recv_name, "sbf_obs"
                 )
                 sbf_obs_written = True
@@ -1331,7 +1331,7 @@ def calculate_vod(site: str, yyyydoy: str) -> dict:
         )
 
         calculator_name = vod_ds.attrs.get("calculator", "unknown")
-        rinex_store_path = str(research_site.rinex_store.store_path)
+        gnss_store_path = str(research_site.gnss_store.store_path)
         research_site.store_vod_analysis(
             vod_dataset=vod_ds,
             analysis_name=analysis_name,
@@ -1345,8 +1345,8 @@ def calculate_vod(site: str, yyyydoy: str) -> dict:
                 ),
             },
             source_gnss_stores={
-                analysis_cfg.canopy_receiver: rinex_store_path,
-                analysis_cfg.reference_receiver: rinex_store_path,
+                analysis_cfg.canopy_receiver: gnss_store_path,
+                analysis_cfg.reference_receiver: gnss_store_path,
             },
             commit_message=f"Airflow VOD {analysis_name} {date_obj.to_str()}",
         )

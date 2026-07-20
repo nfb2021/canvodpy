@@ -23,9 +23,9 @@ from canvod.store_metadata.schema import (
 def _make_metadata() -> StoreMetadata:
     return StoreMetadata(
         identity=StoreIdentity(
-            id="test/rinex_store",
+            id="test/gnss_store",
             title="Test Store",
-            store_type="rinex_store",
+            store_type="gnss_store",
             source_format="rinex3",
         ),
         creator=Creator(

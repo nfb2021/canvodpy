@@ -235,7 +235,7 @@ class VodComputer:
         canopy_name = analysis_cfg.canopy_receiver
         ref_name = analysis_cfg.reference_receiver
 
-        store = self._site.rinex_store
+        store = self._site.gnss_store
 
         with store.readonly_session() as session:
             canopy_ds = xr.open_zarr(
@@ -351,7 +351,7 @@ class VodComputer:
         analysis_cfg = self._get_analysis_config(analysis_name)
         canopy_name = analysis_cfg.canopy_receiver
         ref_name = analysis_cfg.reference_receiver
-        rinex_store_path = str(self._site._site.rinex_store.store_path)
+        gnss_store_path = str(self._site._site.gnss_store.store_path)
 
         ensure_vod_store_metadata(self._site, self._calculator_name)
 
@@ -364,8 +364,8 @@ class VodComputer:
                 ref_name: sky_ds.attrs.get("File Hash", "unknown"),
             },
             source_gnss_stores={
-                canopy_name: rinex_store_path,
-                ref_name: rinex_store_path,
+                canopy_name: gnss_store_path,
+                ref_name: gnss_store_path,
             },
         )
 

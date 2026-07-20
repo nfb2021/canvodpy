@@ -489,7 +489,7 @@ class FluentWorkflow:
         else:
             for name, ds in self._datasets.items():
                 self.log.info("to_store_dataset", receiver=name)
-                self._site.rinex_store.write_or_append_group(ds, name)
+                self._site.gnss_store.write_or_append_group(ds, name)
         return self
 
     @terminal

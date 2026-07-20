@@ -26,7 +26,7 @@ def _create_store_with_metadata(path, store_id="test/store"):
         identity=StoreIdentity(
             id=store_id,
             title=f"Store {store_id}",
-            store_type="rinex_store",
+            store_type="gnss_store",
             source_format="rinex3",
         ),
         creator=Creator(name="Test", email="t@e.com", institution="U"),

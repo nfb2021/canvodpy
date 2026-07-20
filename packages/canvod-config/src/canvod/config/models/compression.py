@@ -90,7 +90,7 @@ class IcechunkConfig(_StrictModel):
             # commits once per day, so chunks should match one day exactly.
             # 17280 = 86400 s/day / 5 s sampling interval (the reference site's
             # actual cadence). Sites sampling at a different rate must override.
-            "rinex_store": ChunkStrategy(epoch=17280, sid=-1),
+            "gnss_store": ChunkStrategy(epoch=17280, sid=-1),
             "vod_store": ChunkStrategy(epoch=17280, sid=-1),
         },
     )

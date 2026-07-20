@@ -35,8 +35,8 @@ DATE = "2025001"
 if __name__ == "__main__":
     site = Site(SITE)
 
-    canopy_data = site.rinex_store.read_group(CANOPY, date=DATE)
-    ref_data = site.rinex_store.read_group(REFERENCE, date=DATE)
+    canopy_data = site.gnss_store.read_group(CANOPY, date=DATE)
+    ref_data = site.gnss_store.read_group(REFERENCE, date=DATE)
 
     vod_results = TauOmegaZerothOrder.from_datasets(canopy_data, ref_data)
 

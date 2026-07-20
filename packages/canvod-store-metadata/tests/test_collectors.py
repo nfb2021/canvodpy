@@ -154,10 +154,10 @@ class TestCollectors:
                 config=config,
                 site_name="TestSite",
                 site_config=site_cfg,
-                store_type="rinex_store",
+                store_type="gnss_store",
                 source_format="rinex3",
                 store_path=Path("/tmp/test"),
             )
-        assert meta.identity.id == "TestSite/rinex_store"
+        assert meta.identity.id == "TestSite/gnss_store"
         assert meta.creator.name == "Test"
         assert meta.processing.python is not None

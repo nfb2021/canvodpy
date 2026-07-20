@@ -200,7 +200,7 @@ def _resolve_date_range(args, site) -> tuple[str, str]:
     if args.start:
         start = args.start
     else:
-        last = _last_processed_date(site.rinex_store)
+        last = _last_processed_date(site.gnss_store)
         if last is not None:
             # Start from the day after the last processed date
             # (the skip strategy handles overlap, but this avoids
@@ -221,7 +221,7 @@ def _compute_vod_for_day(
     date_key: str,
     reporter=None,
     calculator_name: str = "tau_omega",
-    rinex_store_path: str = "",
+    gnss_store_path: str = "",
 ) -> dict[str, dict]:
     """Compute VOD for all configured analysis pairs.
 
@@ -238,7 +238,7 @@ def _compute_vod_for_day(
         YYYYDOY string for logging.
     calculator_name
         Name registered in ``VODFactory`` (e.g. ``"tau_omega"``).
-    rinex_store_path
+    gnss_store_path
         Path to the site's RINEX store, for VOD provenance (both receivers
         of a site live in the same store).
 
@@ -310,8 +310,8 @@ def _compute_vod_for_day(
                     ref_name: ref_ds.attrs.get("File Hash", "unknown"),
                 },
                 "source_gnss_stores": {
-                    canopy_name: rinex_store_path,
-                    ref_name: rinex_store_path,
+                    canopy_name: gnss_store_path,
+                    ref_name: gnss_store_path,
                 },
             }
 
@@ -514,8 +514,8 @@ def _main_impl(args: SimpleNamespace) -> int:
                                 date_key,
                                 reporter,
                                 calculator_name=args.vod_calculator,
-                                rinex_store_path=str(
-                                    research_site.rinex_store.store_path
+                                gnss_store_path=str(
+                                    research_site.gnss_store.store_path
                                 ),
                             )
                             dt_vod = time.perf_counter() - t_vod

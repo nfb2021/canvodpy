@@ -8,7 +8,7 @@ from canvod.store.manager import GnssResearchSite
 from canvod.store.reader import IcechunkDataReader
 from canvod.store.store import (
     MyIcechunkStore,
-    create_rinex_store,
+    create_gnss_store,
     create_vod_store,
 )
 from canvod.store.zarr_concurrency import scoped_zarr_concurrency
@@ -19,7 +19,7 @@ __all__ = [
     "GnssResearchSite",
     "IcechunkDataReader",
     "MyIcechunkStore",
-    "create_rinex_store",
+    "create_gnss_store",
     "create_vod_store",
     "scoped_zarr_concurrency",
 ]

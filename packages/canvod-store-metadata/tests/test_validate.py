@@ -21,10 +21,10 @@ from canvod.store_metadata.validate import (
 def _make_complete_metadata() -> StoreMetadata:
     return StoreMetadata(
         identity=StoreIdentity(
-            id="Rosalia/rinex_store",
+            id="Rosalia/gnss_store",
             title="Rosalia Rinex Store",
             description="GNSS observations from Rosalia research site",
-            store_type="rinex_store",
+            store_type="gnss_store",
             source_format="rinex3",
             keywords=["GNSS", "VOD"],
         ),
@@ -76,7 +76,7 @@ class TestValidation:
             identity=StoreIdentity(
                 id="test/store",
                 title="Test",
-                store_type="rinex_store",
+                store_type="gnss_store",
                 source_format="rinex3",
             ),
             creator=Creator(

@@ -18,9 +18,9 @@ def _make_minimal_metadata() -> StoreMetadata:
     """Create a minimal valid StoreMetadata."""
     return StoreMetadata(
         identity=StoreIdentity(
-            id="test/rinex_store",
+            id="test/gnss_store",
             title="Test Rinex Store",
-            store_type="rinex_store",
+            store_type="gnss_store",
             source_format="rinex3",
         ),
         creator=Creator(
@@ -41,7 +41,7 @@ def _make_minimal_metadata() -> StoreMetadata:
 class TestStoreMetadata:
     def test_minimal_creation(self):
         meta = _make_minimal_metadata()
-        assert meta.identity.id == "test/rinex_store"
+        assert meta.identity.id == "test/gnss_store"
         assert meta.metadata_version == "1.0.0"
 
     def test_round_trip_via_root_attrs(self):
@@ -55,7 +55,7 @@ class TestStoreMetadata:
         attrs = meta.to_root_attrs()
         assert "canvod_metadata" in attrs
         data = attrs["canvod_metadata"]
-        assert data["identity"]["id"] == "test/rinex_store"
+        assert data["identity"]["id"] == "test/gnss_store"
         assert data["creator"]["name"] == "Test User"
 
     def test_defaults_applied(self):

@@ -40,9 +40,9 @@ def _create_store(path):
 def _make_metadata(config_snapshot) -> StoreMetadata:
     return StoreMetadata(
         identity=StoreIdentity(
-            id="test/rinex_store",
+            id="test/gnss_store",
             title="Test Store",
-            store_type="rinex_store",
+            store_type="gnss_store",
             source_format="rinex3",
         ),
         creator=Creator(name="Test", email="test@example.com", institution="TestU"),

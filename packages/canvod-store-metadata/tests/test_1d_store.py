@@ -198,7 +198,7 @@ class TestOneDayStore:
     """Build real 1-day stores, write metadata, query it."""
 
     @pytest.fixture
-    def rinex_store_path(self, tmp_path):
+    def gnss_store_path(self, tmp_path):
         sp = tmp_path / "test_1d_rinex"
         yield sp
         if sp.exists():
@@ -212,7 +212,7 @@ class TestOneDayStore:
             shutil.rmtree(sp)
 
     @pytest.mark.skipif(not _RINEX_DIR.exists(), reason=SKIP_REASON)
-    def test_build_1d_rinex_store(self, rinex_store_path):
+    def test_build_1d_gnss_store(self, gnss_store_path):
         from canvod.readers.rinex.v3_04 import Rnxv3Obs
 
         obs_files = sorted(_RINEX_DIR.glob("*.rnx"))[:4]
@@ -224,11 +224,11 @@ class TestOneDayStore:
             datasets.append(reader.to_ds())
 
         _build_store_and_metadata(
-            rinex_store_path,
+            gnss_store_path,
             datasets,
-            store_id="Rosalia/rinex_store",
+            store_id="Rosalia/gnss_store",
             title="Rosalia Rinex Store (1-day test)",
-            store_type="rinex_store",
+            store_type="gnss_store",
             source_format="rinex3",
             file_count=len(obs_files),
         )

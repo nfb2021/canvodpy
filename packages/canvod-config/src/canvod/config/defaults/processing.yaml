@@ -43,7 +43,7 @@ icechunk:
   # cache_num_chunk_refs: null      # icechunk default
   # cache_num_bytes_chunks: null    # icechunk default
   chunk_strategies:
-    rinex_store:
+    gnss_store:
       epoch: 17280  # 24h at 5s sampling; override to match your site's rate
       sid: -1
     vod_store:

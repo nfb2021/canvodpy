@@ -6,7 +6,7 @@ def test_import():
     import canvod.store
 
     assert hasattr(canvod.store, "MyIcechunkStore")
-    assert hasattr(canvod.store, "create_rinex_store")
+    assert hasattr(canvod.store, "create_gnss_store")
     assert hasattr(canvod.store, "create_vod_store")
     assert hasattr(canvod.store, "GnssResearchSite")
 

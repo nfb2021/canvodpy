@@ -337,7 +337,7 @@ class IcechunkDataReader:
             for idx, (fname, ds) in enumerate(results):
                 log = self._logger.bind(file=str(fname))
                 try:
-                    rel_path = self._site.rinex_store.rel_path_for_commit(fname)
+                    rel_path = self._site.gnss_store.rel_path_for_commit(fname)
                     version = get_version_from_pyproject()
 
                     rinex_hash = ds.attrs.get("File Hash")
@@ -348,11 +348,11 @@ class IcechunkDataReader:
                     start_epoch = np.datetime64(ds.epoch.min().values)
                     end_epoch = np.datetime64(ds.epoch.max().values)
 
-                    exists, matches = self._site.rinex_store.metadata_row_exists(
+                    exists, matches = self._site.gnss_store.metadata_row_exists(
                         store_group, rinex_hash, start_epoch, end_epoch
                     )
 
-                    ds = self._site.rinex_store._cleanse_dataset_attrs(ds)
+                    ds = self._site.gnss_store._cleanse_dataset_attrs(ds)
 
                     # --- 2) Compute approx_pos once from first canopy file ---
                     if receiver_type == "canopy" and approx_pos is None:
@@ -384,23 +384,23 @@ class IcechunkDataReader:
                     ds.attrs.update(pipeline_result.to_metadata_dict())
 
                     # --- 4) Store to Icechunk ---
-                    existing_groups = self._site.rinex_store.list_groups()
+                    existing_groups = self._site.gnss_store.list_groups()
                     if not exists and store_group not in existing_groups and idx == 0:
                         msg = (
                             f"[v{version}] Initial commit {rel_path} "
                             f"(hash={rinex_hash}, epoch={start_epoch}→{end_epoch})"
                         )
-                        self._site.rinex_store.write_initial_group(
+                        self._site.gnss_store.write_initial_group(
                             dataset=ds, group_name=store_group, commit_message=msg
                         )
                         log.info(msg)
                         continue
 
-                    match (exists, self._site.rinex_store._rinex_store_strategy):
+                    match (exists, self._site.gnss_store._gnss_store_strategy):
                         case (True, "skip"):
                             log.info(f"[v{version}] Skipped {rel_path}")
                             # just metadata row
-                            self._site.rinex_store.append_metadata(
+                            self._site.gnss_store.append_metadata(
                                 group_name=store_group,
                                 rinex_hash=rinex_hash,
                                 start=start_epoch,
@@ -413,7 +413,7 @@ class IcechunkDataReader:
 
                         case (True, "overwrite"):
                             msg = f"[v{version}] Overwrote {rel_path}"
-                            self._site.rinex_store.overwrite_file_in_group(
+                            self._site.gnss_store.overwrite_file_in_group(
                                 dataset=ds,
                                 group_name=store_group,
                                 rinex_hash=rinex_hash,
@@ -424,7 +424,7 @@ class IcechunkDataReader:
 
                         case (True, "append"):
                             msg = f"[v{version}] Appended {rel_path}"
-                            self._site.rinex_store.append_to_group(
+                            self._site.gnss_store.append_to_group(
                                 dataset=ds,
                                 group_name=store_group,
                                 append_dim="epoch",
@@ -434,7 +434,7 @@ class IcechunkDataReader:
 
                         case (False, _):
                             msg = f"[v{version}] Wrote {rel_path}"
-                            self._site.rinex_store.append_to_group(
+                            self._site.gnss_store.append_to_group(
                                 dataset=ds,
                                 group_name=store_group,
                                 append_dim="epoch",
@@ -513,7 +513,7 @@ class IcechunkDataReader:
                 f"Processing {len(rinex_files)} RINEX files for {receiver_type}"
             )
 
-            groups = self._site.rinex_store.list_groups() or []
+            groups = self._site.gnss_store.list_groups() or []
 
             # --- one pool per receiver type ---
             futures = {
@@ -540,7 +540,7 @@ class IcechunkDataReader:
             for idx, (fname, ds) in enumerate(results):
                 log = self._logger.bind(file=str(fname))
                 try:
-                    rel_path = self._site.rinex_store.rel_path_for_commit(fname)
+                    rel_path = self._site.gnss_store.rel_path_for_commit(fname)
                     version = get_version_from_pyproject()
 
                     rinex_hash = ds.attrs.get("File Hash")
@@ -554,11 +554,11 @@ class IcechunkDataReader:
                     start_epoch = np.datetime64(ds.epoch.min().values)
                     end_epoch = np.datetime64(ds.epoch.max().values)
 
-                    exists, matches = self._site.rinex_store.metadata_row_exists(
+                    exists, matches = self._site.gnss_store.metadata_row_exists(
                         store_group, rinex_hash, start_epoch, end_epoch
                     )
 
-                    ds = self._site.rinex_store._cleanse_dataset_attrs(ds)
+                    ds = self._site.gnss_store._cleanse_dataset_attrs(ds)
 
                     # --- Initial commit ---
                     if not exists and store_group not in groups and idx == 0:
@@ -567,7 +567,7 @@ class IcechunkDataReader:
                             f"(hash={rinex_hash}, epoch={start_epoch}→{end_epoch}) "
                             f"to group '{store_group}'"
                         )
-                        self._site.rinex_store.write_initial_group(
+                        self._site.gnss_store.write_initial_group(
                             dataset=ds,
                             group_name=store_group,
                             commit_message=msg,
@@ -577,7 +577,7 @@ class IcechunkDataReader:
                         continue
 
                     # --- Handle strategies with match ---
-                    match (exists, self._site.rinex_store._rinex_store_strategy):
+                    match (exists, self._site.gnss_store._gnss_store_strategy):
                         case (True, "skip"):
                             msg = (
                                 f"[v{version}] Skipped {rel_path} "
@@ -585,7 +585,7 @@ class IcechunkDataReader:
                                 f"in group '{store_group}'"
                             )
                             log.info(msg)
-                            self._site.rinex_store.append_metadata(
+                            self._site.gnss_store.append_metadata(
                                 group_name=store_group,
                                 rinex_hash=rinex_hash,
                                 start=start_epoch,
@@ -603,7 +603,7 @@ class IcechunkDataReader:
                                 f"in group '{store_group}'"
                             )
                             log.info(msg)
-                            self._site.rinex_store.overwrite_file_in_group(
+                            self._site.gnss_store.overwrite_file_in_group(
                                 dataset=ds,
                                 group_name=store_group,
                                 rinex_hash=rinex_hash,
@@ -618,7 +618,7 @@ class IcechunkDataReader:
                                 f"(hash={rinex_hash}, epoch={start_epoch}→{end_epoch}) "
                                 f"to group '{store_group}'"
                             )
-                            self._site.rinex_store.append_to_group(
+                            self._site.gnss_store.append_to_group(
                                 dataset=ds,
                                 group_name=store_group,
                                 append_dim="epoch",
@@ -633,7 +633,7 @@ class IcechunkDataReader:
                                 f"(hash={rinex_hash}, epoch={start_epoch}→{end_epoch}) "
                                 f"to group '{store_group}'"
                             )
-                            self._site.rinex_store.append_to_group(
+                            self._site.gnss_store.append_to_group(
                                 dataset=ds,
                                 group_name=store_group,
                                 append_dim="epoch",
@@ -730,7 +730,7 @@ class IcechunkDataReader:
         for receiver_type in ["canopy", "reference"]:
             receivers = self.get_receiver_by_type(receiver_type)
             # Filter to only receivers that have data
-            with_data = [r for r in receivers if self._site.rinex_store.group_exists(r)]
+            with_data = [r for r in receivers if self._site.gnss_store.group_exists(r)]
             available[receiver_type] = with_data
 
         return available

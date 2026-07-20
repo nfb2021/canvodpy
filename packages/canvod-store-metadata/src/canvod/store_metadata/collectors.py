@@ -280,7 +280,7 @@ def collect_processing_provenance(
         software=collect_software_versions(),
         python=collect_python_info(),
         uv_version=collect_uv_version(),
-        level="L1" if store_type == "rinex_store" else "L2",
+        level="L1" if store_type == "gnss_store" else "L2",
         lineage=f"Raw {source_format} data ingested into Icechunk store",
         facility=socket.gethostname(),
         datetime=now,

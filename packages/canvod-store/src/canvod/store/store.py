@@ -14,7 +14,7 @@ import numpy as np
 import polars as pl
 import xarray as xr
 import zarr
-from canvod.utils.tools import get_version_from_pyproject
+from canvod.utils.tools import get_version_from_pyproject, sanitize_directory
 from canvodpy.logging import get_logger, stage_timer
 from canvodpy.logging.run_context import get_run_id
 from icechunk.xarray import to_icechunk
@@ -77,8 +77,8 @@ class MyIcechunkStore:
     ----------
     store_path : Path
         Path to the Icechunk store directory.
-    store_type : str, default "rinex_store"
-        Type of store ("rinex_store" or "vod_store").
+    store_type : str, default "gnss_store"
+        Type of store ("gnss_store" or "vod_store").
     compression_level : int | None, optional
         Override default compression level.
     compression_algorithm : str | None, optional
@@ -89,7 +89,7 @@ class MyIcechunkStore:
     store_path : Path
         Path to the Icechunk store directory.
     store_type : str
-        Type of store ("rinex_store" or "vod_store").
+        Type of store ("gnss_store" or "vod_store").
     compression_level : int
         Compression level (1-9).
     compression_algorithm : icechunk.CompressionAlgorithm
@@ -101,7 +101,7 @@ class MyIcechunkStore:
     def __init__(
         self,
         store_path: Path,
-        store_type: str = "rinex_store",
+        store_type: str = "gnss_store",
         compression_level: int | None = None,
         compression_algorithm: str | None = None,
     ) -> None:
@@ -111,8 +111,8 @@ class MyIcechunkStore:
         ----------
         store_path : Path
             Path to the Icechunk store directory.
-        store_type : str, default "rinex_store"
-            Type of store ("rinex_store" or "vod_store").
+        store_type : str, default "gnss_store"
+            Type of store ("gnss_store" or "vod_store").
         compression_level : int | None, optional
             Override default compression level.
         compression_algorithm : str | None, optional
@@ -125,14 +125,14 @@ class MyIcechunkStore:
 
             cfg = load_config()
             ic_cfg = cfg.processing.icechunk
-            _rinex_store_strategy = cfg.processing.storage.gnss_store_strategy
+            _gnss_store_strategy = cfg.processing.storage.gnss_store_strategy
             _vod_store_strategy = cfg.processing.storage.vod_store_strategy
             _log_path_depth = cfg.processing.logging.log_path_depth
         except Exception:
             from canvod.config.models import IcechunkConfig
 
             ic_cfg = IcechunkConfig()
-            _rinex_store_strategy = "append"
+            _gnss_store_strategy = "append"
             _vod_store_strategy = "overwrite"
             _log_path_depth = 3
 
@@ -153,7 +153,7 @@ class MyIcechunkStore:
         self.chunk_strategy = chunk_strategies.get(store_type, {})
 
         # Storage config cached for metadata rows
-        self._rinex_store_strategy = _rinex_store_strategy
+        self._gnss_store_strategy = _gnss_store_strategy
         self._vod_store_strategy = _vod_store_strategy
         self._log_path_depth = _log_path_depth
         self._zarr_async_concurrency = ic_cfg.zarr_async_concurrency
@@ -307,11 +307,8 @@ class MyIcechunkStore:
         macOS creates these files automatically and they corrupt icechunk's
         ref listing, causing 'invalid ref type `.DS_Store`' errors.
         """
-        if not self.store_path.exists():
-            return
-        for ds_store in self.store_path.rglob(".DS_Store"):
-            ds_store.unlink()
-            self._logger.debug(f"Removed {ds_store}")
+        for removed in sanitize_directory(self.store_path):
+            self._logger.debug(f"Removed {removed}")
 
     def _normalize_encodings(self, ds: xr.Dataset) -> xr.Dataset:
         """Normalize dataset encodings for Icechunk.
@@ -1688,8 +1685,8 @@ class MyIcechunkStore:
             "action": str(action),
             "commit_msg": str(commit_msg),
             "written_at": written_at,
-            "write_strategy": str(self._rinex_store_strategy)
-            if self.store_type == "rinex_store"
+            "write_strategy": str(self._gnss_store_strategy)
+            if self.store_type == "gnss_store"
             else str(self._vod_store_strategy),
             "attrs": json.dumps(dataset_attrs, default=str),
             "canonical_name": str(canonical_name) if canonical_name else "",
@@ -2114,7 +2111,7 @@ class MyIcechunkStore:
             computation read from — the dedup key (no single hash exists
             for a two-receiver computation).
         source_gnss_stores : dict[str, str]
-            ``{receiver_name: rinex_store_path}`` — provenance back to the
+            ``{receiver_name: gnss_store_path}`` — provenance back to the
             GNSS store(s) the inputs came from.
         calculator_name : str
             Registered ``VODFactory`` name (e.g. ``"tau_omega"``).
@@ -2876,7 +2873,7 @@ class MyIcechunkStore:
         str
             Representation string.
         """
-        display_names = {"rinex_store": "GNSS Store", "vod_store": "VOD Store"}
+        display_names = {"gnss_store": "GNSS Store", "vod_store": "VOD Store"}
         display = display_names.get(self.store_type, self.store_type)
         return f"MyIcechunkStore(store_path={self.store_path}, store_type={display})"
 
@@ -3394,7 +3391,7 @@ class MyIcechunkStore:
 
 
 # Factory functions for common use cases
-def create_rinex_store(store_path: Path) -> MyIcechunkStore:
+def create_gnss_store(store_path: Path) -> MyIcechunkStore:
     """
     Create a RINEX Icechunk store with appropriate configuration.
 
@@ -3408,7 +3405,7 @@ def create_rinex_store(store_path: Path) -> MyIcechunkStore:
     MyIcechunkStore
         Configured store for RINEX data.
     """
-    return MyIcechunkStore(store_path=store_path, store_type="rinex_store")
+    return MyIcechunkStore(store_path=store_path, store_type="gnss_store")
 
 
 def create_vod_store(store_path: Path) -> MyIcechunkStore:

@@ -24,7 +24,7 @@ from canvod.config.models import VodAnalysisConfig
 from canvodpy.logging import get_logger
 
 from canvod.store.store import (
-    create_rinex_store,
+    create_gnss_store,
     create_vod_store,
 )
 
@@ -82,16 +82,16 @@ class GnssResearchSite:
         self._site_config = sites[site_name]
         self._logger = get_logger(__name__).bind(site=site_name)
 
-        rinex_store_path = config.processing.storage.get_rinex_store_path(site_name)
+        gnss_store_path = config.processing.storage.get_gnss_store_path(site_name)
         vod_store_path = config.processing.storage.get_vod_store_path(site_name)
 
         # Initialize stores using paths from processing.yaml
-        self.rinex_store = create_rinex_store(rinex_store_path)
+        self.gnss_store = create_gnss_store(gnss_store_path)
         self.vod_store = create_vod_store(vod_store_path)
 
         self._logger.info(
             f"Initialized GNSS research site: {site_name}",
-            rinex_store=str(rinex_store_path),
+            gnss_store=str(gnss_store_path),
             vod_store=str(vod_store_path),
         )
 
@@ -160,16 +160,16 @@ class GnssResearchSite:
         return cfg.metadata
 
     @classmethod
-    def from_rinex_store_path(
+    def from_gnss_store_path(
         cls,
-        rinex_store_path: Path,
+        gnss_store_path: Path,
     ) -> GnssResearchSite:
         """
         Create a GnssResearchSite instance from a RINEX store path.
 
         Parameters
         ----------
-        rinex_store_path : Path
+        gnss_store_path : Path
             Path to the RINEX Icechunk store.
 
         Returns
@@ -189,12 +189,12 @@ class GnssResearchSite:
 
         # Try to match against each site's expected rinex store path
         for site_name in config.sites.sites.keys():
-            expected_path = config.processing.storage.get_rinex_store_path(site_name)
-            if expected_path == rinex_store_path:
+            expected_path = config.processing.storage.get_gnss_store_path(site_name)
+            if expected_path == gnss_store_path:
                 return cls(site_name)
 
         raise ValueError(
-            f"No research site found for RINEX store path: {rinex_store_path}"
+            f"No research site found for RINEX store path: {gnss_store_path}"
         )
 
     def get_reference_canopy_pairs(self) -> list[tuple[str, str]]:
@@ -290,7 +290,7 @@ class GnssResearchSite:
         list[str]
             Existing receiver group names.
         """
-        return self.rinex_store.list_groups()
+        return self.gnss_store.list_groups()
 
     def get_vod_analysis_groups(self) -> list[str]:
         """
@@ -366,7 +366,7 @@ class GnssResearchSite:
 
         self._logger.info(f"Ingesting RINEX data for receiver '{receiver_name}'")
 
-        self.rinex_store.write_or_append_group(
+        self.gnss_store.write_or_append_group(
             dataset=dataset, group_name=receiver_name, commit_message=commit_message
         )
 
@@ -395,7 +395,7 @@ class GnssResearchSite:
         ValueError
             If the receiver group does not exist.
         """
-        if not self.rinex_store.group_exists(receiver_name):
+        if not self.gnss_store.group_exists(receiver_name):
             available_groups = self.get_receiver_groups()
             raise ValueError(
                 f"No data found for receiver '{receiver_name}'. "
@@ -404,10 +404,10 @@ class GnssResearchSite:
 
         self._logger.info(f"Reading data for receiver '{receiver_name}'")
 
-        if self.rinex_store._rinex_store_strategy == "append":
-            ds = self.rinex_store.read_group_deduplicated(receiver_name, keep="last")
+        if self.gnss_store._gnss_store_strategy == "append":
+            ds = self.gnss_store.read_group_deduplicated(receiver_name, keep="last")
         else:
-            ds = self.rinex_store.read_group(receiver_name)
+            ds = self.gnss_store.read_group(receiver_name)
 
         # Apply time filtering if specified
         if time_range is not None:
@@ -453,7 +453,7 @@ class GnssResearchSite:
             computation read from — used as the dedup key (no single hash
             exists for a two-receiver computation).
         source_gnss_stores : dict[str, str]
-            ``{receiver_name: rinex_store_path}`` — provenance back to the
+            ``{receiver_name: gnss_store_path}`` — provenance back to the
             GNSS store(s) the inputs came from.
         commit_message : str, optional
             Commit message to store with the results.
@@ -774,7 +774,7 @@ class GnssResearchSite:
                 "vod_groups": vod_groups,
             },
             "stores": {
-                "rinex_store_path": str(self.rinex_store.store_path),
+                "gnss_store_path": str(self.gnss_store.store_path),
                 "vod_store_path": str(self.vod_store.store_path),
             },
         }
@@ -791,7 +791,7 @@ class GnssResearchSite:
 
             if has_data:
                 try:
-                    info = self.rinex_store.get_group_info(receiver_name)
+                    info = self.gnss_store.get_group_info(receiver_name)
                     summary["receivers"][receiver_name]["data_info"] = {
                         "dimensions": info["dimensions"],
                         "variables": len(info["variables"]),

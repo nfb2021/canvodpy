@@ -135,10 +135,10 @@ def find_vod_backfill_gaps(
     rinex_group = f"{cfg.reference_receiver}_{cfg.canopy_receiver}"
     vod_group = f"{calculator_name}/{analysis_name}"
 
-    if not site.rinex_store.group_exists(rinex_group):
+    if not site.gnss_store.group_exists(rinex_group):
         return []
-    with site.rinex_store.readonly_session() as session:
-        rinex_df = site.rinex_store.read_metadata_table(session, rinex_group)
+    with site.gnss_store.readonly_session() as session:
+        rinex_df = site.gnss_store.read_metadata_table(session, rinex_group)
     rinex_dates = _dates_covered(rinex_df) if not rinex_df.is_empty() else set()
 
     vod_dates: set[str] = set()

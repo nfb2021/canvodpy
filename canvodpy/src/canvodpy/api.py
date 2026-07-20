@@ -66,7 +66,7 @@ class Site:
         Only active receivers
     vod_analyses : dict
         Configured VOD analysis pairs
-    rinex_store
+    gnss_store
         Access to RINEX data store
     vod_store
         Access to VOD results store
@@ -81,7 +81,7 @@ class Site:
     >>> pipeline = site.pipeline()
 
     >>> # Access stores
-    >>> site.rinex_store.list_groups()
+    >>> site.gnss_store.list_groups()
 
     """
 
@@ -118,9 +118,9 @@ class Site:
         return self._vod_computer
 
     @property
-    def rinex_store(self) -> MyIcechunkStore:
+    def gnss_store(self) -> MyIcechunkStore:
         """Access RINEX data store."""
-        return self._site.rinex_store
+        return self._site.gnss_store
 
     @property
     def vod_store(self) -> MyIcechunkStore:
@@ -506,19 +506,19 @@ class Pipeline:
                 raise ValueError(f"Could not parse date from {date!r}")
             _time_slice = slice(str(_d), str(_d + datetime.timedelta(days=1)))
             # Load processed data from stores
-            # canopy_data = self.site.rinex_store.read_group(canopy, date=date)
-            # ref_data = self.site.rinex_store.read_group(reference, date=date)
-            canopy_data = self.site.rinex_store.read_group(
+            # canopy_data = self.site.gnss_store.read_group(canopy, date=date)
+            # ref_data = self.site.gnss_store.read_group(reference, date=date)
+            canopy_data = self.site.gnss_store.read_group(
                 canopy, time_slice=_time_slice
             )
             try:
-                ref_data = self.site.rinex_store.read_group(
+                ref_data = self.site.gnss_store.read_group(
                     reference, time_slice=_time_slice
                 )
             except Exception:
                 paired_name = f"{reference}_{canopy}"
                 log.info("group_fallback", original=reference, paired=paired_name)
-                ref_data = self.site.rinex_store.read_group(
+                ref_data = self.site.gnss_store.read_group(
                     paired_name, time_slice=_time_slice
                 )
 

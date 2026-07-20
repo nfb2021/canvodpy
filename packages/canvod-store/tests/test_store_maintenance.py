@@ -37,7 +37,7 @@ class TestExpireOldSnapshotsDefaults:
         store.repo = Mock()
         store.repo.expire_snapshots.return_value = set()
         store._logger = Mock()
-        store.store_type = "rinex_store"
+        store.store_type = "gnss_store"
 
         from canvod.store.store import MyIcechunkStore
 
@@ -55,7 +55,7 @@ class TestExpireOldSnapshotsDefaults:
         store.repo = Mock()
         store.repo.expire_snapshots.return_value = set()
         store._logger = Mock()
-        store.store_type = "rinex_store"
+        store.store_type = "gnss_store"
 
         from canvod.store.store import MyIcechunkStore
 
@@ -76,7 +76,7 @@ class TestMaintenanceRunsGcExactlyOnce:
     def test_gc_called_exactly_once(self):
         store = Mock()
         store._logger = Mock()
-        store.store_type = "rinex_store"
+        store.store_type = "gnss_store"
         store.expire_old_snapshots = Mock(return_value=set())
         store.cleanup_stale_branches = Mock(return_value=[])
         store.garbage_collect = Mock(
@@ -104,7 +104,7 @@ class TestMaintenanceRunsGcExactlyOnce:
     def test_dry_run_gc_passed_through(self):
         store = Mock()
         store._logger = Mock()
-        store.store_type = "rinex_store"
+        store.store_type = "gnss_store"
         store.expire_old_snapshots = Mock(return_value=set())
         store.cleanup_stale_branches = Mock(return_value=[])
         store.garbage_collect = Mock(return_value={"dry_run": True})
@@ -118,7 +118,7 @@ class TestMaintenanceRunsGcExactlyOnce:
     def test_expire_delete_flags_passed_through(self):
         store = Mock()
         store._logger = Mock()
-        store.store_type = "rinex_store"
+        store.store_type = "gnss_store"
         store.expire_old_snapshots = Mock(return_value=set())
         store.cleanup_stale_branches = Mock(return_value=[])
         store.garbage_collect = Mock(return_value={})
