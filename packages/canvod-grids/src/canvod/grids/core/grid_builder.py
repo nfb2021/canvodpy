@@ -118,16 +118,31 @@ class BaseGridBuilder(ABC):
             )
 
             if "phi_min" in grid.columns:
+                # Wrap phi_min into [0, 2*pi) but offset phi_max by the same
+                # rotation (not re-wrapped independently) so each cell's
+                # angular width (phi_max - phi_min) is preserved even when
+                # the rotated interval straddles the 0/2*pi seam. Wrapping
+                # both bounds independently collapses full-circle cells
+                # (e.g. the zenith cap, phi_min=0/phi_max=2*pi) to zero
+                # width and flips phi_max < phi_min for any other cell that
+                # crosses the seam after rotation, producing negative solid
+                # angles downstream. phi_max may end up > 2*pi here, which
+                # is fine: consumers use phi_max - phi_min directly (e.g.
+                # GridData._geometric_solid_angles, get_patches), and polar
+                # axes wrap angles > 2*pi visually.
+                grid = grid.with_columns(
+                    [(pl.col("phi_max") - pl.col("phi_min")).alias("_phi_width")]
+                )
                 grid = grid.with_columns(
                     [
                         (
                             (pl.col("phi_min") + self.phi_rotation_rad) % (2 * np.pi)
-                        ).alias("phi_min"),
-                        (
-                            (pl.col("phi_max") + self.phi_rotation_rad) % (2 * np.pi)
-                        ).alias("phi_max"),
+                        ).alias("phi_min")
                     ]
                 )
+                grid = grid.with_columns(
+                    [(pl.col("phi_min") + pl.col("_phi_width")).alias("phi_max")]
+                ).drop("_phi_width")
 
         self._logger.info("grid_build_complete", ncells=len(grid))
 

@@ -257,6 +257,43 @@ rendering Mermaid diagrams to SVG/PNG. Source files live in `docs/diagrams/` (`.
 Do not commit generated images (`*.png`, `*.svg` except `docs/assets/logo.svg`),
 `node_modules/`, or `package*.json`.
 
+## 3D visualization conventions (non-negotiable)
+
+Every 3D hemisphere plot built with `canvod.viz.HemisphereVisualizer3D` (or the
+`visualize_grid_3d()` convenience function) must always include:
+
+1. **Cell boundary wireframes** — `plot_hemisphere_surface(..., show_wireframe=True)`.
+   Without this the underlying `Mesh3d` has no visible edges between cells at all,
+   even with distinct per-cell colours — you cannot judge cell density or shape.
+2. **The E/N/Up reference axes** — `HemisphereVisualizer3D.add_custom_axes(fig)`,
+   with the native Plotly x/y/z axes fully **disabled** (`visible=False` on
+   each scene axis — not just `showbackground=False`, which only hides the
+   background pane and leaves the native axis line, ticks, and raw
+   sin/cos-projected tick values/title rendering right alongside the custom
+   labels). Fixed 2026-07-20 in both `plot_hemisphere_surface` and
+   `plot_cell_mesh`. `add_custom_axes()` then draws artificial but
+   native-looking labelled E/N/Up axis lines in the native axes' place.
+   Without disabling the native ones, a 3D hemisphere plot shows two
+   conflicting, overlapping axis systems at once.
+3. **Elevation rings and meridians** — `HemisphereVisualizer3D.add_spherical_overlays(fig)`,
+   for the same reason: an angular reference grid, since there's no native
+   equivalent to polar-plot gridlines in a bare 3D scene.
+
+A 3D plot missing any of these three is not acceptable for this project —
+treat it the same as a plot with no axis labels. See
+`demo/19_grid_3d_gallery.py` for the reference pattern (a small
+`add_reference_frame(fig, viz)` helper wrapping (2) and (3), called on every
+figure right after `plot_hemisphere_surface(..., show_wireframe=True)`).
+
+`show_wireframe` was a declared-but-unwired no-op parameter in
+`plot_hemisphere_surface` until 2026-07-20 — cell boundaries were silently
+never drawn regardless of its value. Fixed via a new
+`HemisphereVisualizer3D._extract_wireframe_lines()` helper (one
+`Scatter3d` line trace per figure, None-separated per-cell perimeter loops,
+mirroring each grid type's own `_render_*_cells` vertex-extraction logic).
+If you touch `plot_hemisphere_surface` or add a new grid type's render path,
+keep this helper's per-grid-type branches in sync.
+
 ## Key documentation — breadcrumb trail
 
 When you need deeper context than this file provides, read these docs **in order**.

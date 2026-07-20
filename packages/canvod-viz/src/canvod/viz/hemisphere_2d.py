@@ -272,8 +272,11 @@ class HemisphereVisualizer2D:
                 # Convert to spherical coordinates
                 r = np.sqrt(x**2 + y**2 + z**2)
                 theta = np.arccos(np.clip(z / r, -1, 1))
-                phi = np.arctan2(y, x)
-                phi = np.mod(phi, 2 * np.pi)
+                # unwrap (not mod 2*pi) so a triangle straddling the
+                # phi=0/2*pi seam gets contiguous polygon vertices instead
+                # of two clustered near 0 and one near 2*pi, which would
+                # otherwise draw an edge streaking across the whole plot.
+                phi = np.unwrap(np.arctan2(y, x))
 
                 # Skip if beyond hemisphere
                 if np.all(theta > np.pi / 2):
@@ -320,8 +323,9 @@ class HemisphereVisualizer2D:
 
                 r = np.sqrt(x**2 + y**2 + z**2)
                 theta = np.arccos(np.clip(z / r, -1, 1))
-                phi = np.arctan2(y, x)
-                phi = np.mod(phi, 2 * np.pi)
+                # See _extract_htm_patches: unwrap keeps seam-straddling
+                # triangles contiguous instead of streaking across the plot.
+                phi = np.unwrap(np.arctan2(y, x))
 
                 if np.all(theta > np.pi / 2):
                     continue
@@ -363,8 +367,9 @@ class HemisphereVisualizer2D:
 
             r = np.sqrt(x**2 + y**2 + z**2)
             theta = np.arccos(np.clip(z / r, -1, 1))
-            phi = np.arctan2(y, x)
-            phi = np.mod(phi, 2 * np.pi)
+            # See _extract_htm_patches: unwrap keeps seam-straddling pixels
+            # contiguous instead of streaking across the plot.
+            phi = np.unwrap(np.arctan2(y, x))
 
             # Keep only vertices in upper hemisphere
             mask = theta <= np.pi / 2 + 0.01
@@ -404,8 +409,9 @@ class HemisphereVisualizer2D:
 
                 r = np.sqrt(x**2 + y**2 + z**2)
                 theta = np.arccos(np.clip(z / r, -1, 1))
-                phi = np.arctan2(y, x)
-                phi = np.mod(phi, 2 * np.pi)
+                # See _extract_htm_patches: unwrap keeps seam-straddling
+                # cells contiguous instead of streaking across the plot.
+                phi = np.unwrap(np.arctan2(y, x))
 
                 # Vertices are already in polygon winding order from
                 # sort_vertices_of_regions() — use directly.
@@ -600,8 +606,13 @@ def add_tissot_indicatrix(
     cell_count = 0
     grid_df = grid.grid
 
-    # Different handling for triangular vs rectangular grids
-    if grid.grid_type in ["htm", "geodesic"]:
+    # Curvilinear/point-based grids (triangular meshes, HEALPix pixels,
+    # Fibonacci Voronoi cells) get a true spherical circle constructed in 3D
+    # and projected -- exact under the rho=sin(theta) projection used here.
+    # Only the ring-based rectangular grids (equal_area, equal_angle,
+    # equirectangular) fall through to the ellipse approximation below,
+    # since their cells are already axis-aligned in (phi, theta).
+    if grid.grid_type in ["htm", "geodesic", "healpix", "fibonacci"]:
         # For triangular grids: create circles on sphere surface and project
         for i, row in enumerate(grid_df.iter_rows(named=True)):
             if n_sample is not None and i % n_sample != 0:
@@ -656,7 +667,14 @@ def add_tissot_indicatrix(
             # Project to 2D polar coordinates
             x_2d, y_2d, z_2d = circle_3d[:, 0], circle_3d[:, 1], circle_3d[:, 2]
             theta_2d = np.arccos(np.clip(z_2d, -1, 1))
-            phi_2d = np.arctan2(y_2d, x_2d)
+            # arctan2's branch cut at +/-pi would otherwise split a circle
+            # straddling that seam into vertices ~2*pi apart, drawing a
+            # streak across the whole plot when connected into a polygon.
+            # circle_angles walks the loop in order, so unwrap stitches the
+            # projected sequence back into a contiguous span (and correctly
+            # leaves a genuine full revolution around a near-pole cell
+            # untouched, since that's a real 2*pi sweep, not a seam jump).
+            phi_2d = np.unwrap(np.arctan2(y_2d, x_2d))
 
             # Convert to polar plot coordinates (rho = sin(theta))
             rho_2d = np.sin(theta_2d)
@@ -687,10 +705,28 @@ def add_tissot_indicatrix(
                 # Convert to polar plot coordinates
                 rho_center = np.sin(theta_center)
 
+                # Ellipse axes approximate the orthographic (rho=sin(theta))
+                # projection of a true angular-radius-r circle at colatitude
+                # theta_center. Radial extent: d(rho)/d(theta) = cos(theta)
+                # (NOT sin(theta) -- that inverts the distortion pattern,
+                # shrinking to zero at the zenith instead of the horizon).
+                # Azimuthal extent: a physical circle's tangential arc length
+                # is theta-independent (orthographic projection preserves
+                # it), but this plot's angular coordinate is raw phi, and
+                # parallels of latitude shrink toward the pole (circumference
+                # 2*pi*sin(theta)), so the same arc length r subtends a
+                # *larger* phi range closer to the zenith: d(phi) = r /
+                # sin(theta). Right at the pole (sin(theta) -> 0) a small
+                # physical circle spans the full azimuth, so clamp rather
+                # than divide by ~0.
+                sin_theta = np.sin(theta_center)
+                width = 2 * radius_rad / sin_theta if sin_theta > 1e-6 else 2 * np.pi
+                height = 2 * radius_rad * np.cos(theta_center)
+
                 ell = Ellipse(
                     (phi_center, rho_center),
-                    width=2 * radius_rad,
-                    height=2 * radius_rad * np.sin(theta_center),  # Scale by projection
+                    width=width,
+                    height=height,
                     facecolor=facecolor,
                     alpha=alpha,
                     edgecolor=edgecolor,

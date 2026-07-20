@@ -378,54 +378,38 @@ class WeightCalculator:
         return solid_angles
 
     def _compute_geodesic_solid_angles(self) -> np.ndarray:
-        """Solid angles for geodesic cells from vertex data."""
-        import polars as pl
+        """Solid angles for geodesic cells from vertex data.
 
+        ``GridData.vertices`` for geodesic grids is a plain ``(n, 3)``
+        ndarray of unit-sphere vertex coordinates (see
+        ``GeodesicBuilder._build_grid``); each grid row's
+        ``geodesic_vertices`` column holds the 3 indices into it for that
+        cell's triangle.
+        """
         solid_angles = np.zeros(self.grid.ncells)
 
-        if hasattr(self.grid, "vertices") and self.grid.vertices is not None:
-            vertices_df = self.grid.vertices
-            if not isinstance(vertices_df, pl.DataFrame):
-                return solid_angles
-
-            for cell_id in range(self.grid.ncells):
-                try:
-                    cell_verts = vertices_df.filter(pl.col("cell_id") == cell_id).sort(
-                        "vertex_idx"
-                    )
-                    if len(cell_verts) < 3:
-                        continue
-
-                    x = cell_verts["x"].to_numpy()[:3]
-                    y = cell_verts["y"].to_numpy()[:3]
-                    z = cell_verts["z"].to_numpy()[:3]
-
-                    v0 = np.array([x[0], y[0], z[0]])
-                    v1 = np.array([x[1], y[1], z[1]])
-                    v2 = np.array([x[2], y[2], z[2]])
-
-                    v0 = v0 / np.linalg.norm(v0)
-                    v1 = v1 / np.linalg.norm(v1)
-                    v2 = v2 / np.linalg.norm(v2)
-
-                    numerator = np.abs(np.dot(v0, np.cross(v1, v2)))
-                    denominator = 1 + np.dot(v0, v1) + np.dot(v1, v2) + np.dot(v2, v0)
-
-                    solid_angles[cell_id] = 2 * np.arctan2(
-                        numerator,
-                        denominator,
-                    )
-
-                except Exception as e:
-                    logger.warning(
-                        f"Error computing geodesic solid angle {cell_id}: {e}"
-                    )
-        else:
+        vertices = self.grid.vertices
+        if vertices is None or "geodesic_vertices" not in self._grid_df.columns:
             # Approximate: equal area
-            solid_angles = np.full(
-                self.grid.ncells,
-                (2 * np.pi) / self.grid.ncells,
-            )
+            return np.full(self.grid.ncells, (2 * np.pi) / self.grid.ncells)
+
+        for cell_id, v_indices in enumerate(
+            self._grid_df["geodesic_vertices"].to_list()
+        ):
+            try:
+                v0, v1, v2 = vertices[v_indices]
+
+                v0 = v0 / np.linalg.norm(v0)
+                v1 = v1 / np.linalg.norm(v1)
+                v2 = v2 / np.linalg.norm(v2)
+
+                numerator = np.abs(np.dot(v0, np.cross(v1, v2)))
+                denominator = 1 + np.dot(v0, v1) + np.dot(v1, v2) + np.dot(v2, v0)
+
+                solid_angles[cell_id] = 2 * np.arctan2(numerator, denominator)
+
+            except Exception as e:
+                logger.warning(f"Error computing geodesic solid angle {cell_id}: {e}")
 
         return solid_angles
 

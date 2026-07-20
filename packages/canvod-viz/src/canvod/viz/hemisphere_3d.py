@@ -144,7 +144,10 @@ class HemisphereVisualizer3D:
                 show_colorbar,
             )
 
-        fig = go.Figure(data=[trace])
+        fig_data = [trace]
+        if show_wireframe:
+            fig_data.append(self._extract_wireframe_lines())
+        fig = go.Figure(data=fig_data)
 
         # Apply layout
         layout_config = style.to_plotly_layout() if style else {}
@@ -153,9 +156,14 @@ class HemisphereVisualizer3D:
                 "title": title or "Hemisphere 3D",
                 "scene": dict(
                     aspectmode="data",
-                    xaxis=dict(title="East", showbackground=False),
-                    yaxis=dict(title="North", showbackground=False),
-                    zaxis=dict(title="Up", showbackground=False),
+                    # visible=False (not just showbackground=False) --
+                    # otherwise Plotly's native axis line, ticks, and
+                    # "East"/"North"/"Up" title still render, showing
+                    # meaningless raw sin/cos-projected tick values
+                    # alongside add_custom_axes()'s own E/N/Up labels.
+                    xaxis=dict(visible=False),
+                    yaxis=dict(visible=False),
+                    zaxis=dict(visible=False),
                     bgcolor=layout_config.get("plot_bgcolor", "white"),
                 ),
                 "width": width,
@@ -570,6 +578,121 @@ class HemisphereVisualizer3D:
             hoverinfo="text",
         )
 
+    def _extract_wireframe_lines(self) -> go.Scatter3d:
+        """Build one Scatter3d trace outlining every cell's boundary.
+
+        Mirrors the per-grid-type vertex extraction each `_render_*_cells`
+        method already does, but emits closed perimeter line loops
+        (None-separated segments, one trace total) instead of a
+        triangulated Mesh3d -- this is what `show_wireframe` in
+        `plot_hemisphere_surface` actually draws (previously a no-op: the
+        parameter was declared and documented but never wired to
+        anything, so cell boundaries were never visible in 3D).
+        """
+        grid_type = self.grid.grid_type.lower()
+        grid_df = self.grid.grid
+
+        xs: list[float | None] = []
+        ys: list[float | None] = []
+        zs: list[float | None] = []
+
+        def _add_ring(verts_xyz: np.ndarray) -> None:
+            closed = np.vstack([verts_xyz, verts_xyz[:1]])
+            xs.extend([*closed[:, 0].tolist(), None])
+            ys.extend([*closed[:, 1].tolist(), None])
+            zs.extend([*closed[:, 2].tolist(), None])
+
+        if grid_type in ("equal_area", "equal_angle", "equirectangular"):
+            for row in grid_df.iter_rows(named=True):
+                theta_min, theta_max = row["theta_min"], row["theta_max"]
+                if theta_min > np.pi / 2:
+                    continue
+                phi_min, phi_max = row["phi_min"], row["phi_max"]
+                phi_c = [phi_min, phi_max, phi_max, phi_min]
+                theta_c = [theta_min, theta_min, theta_max, theta_max]
+                verts = np.array(
+                    [
+                        [np.sin(t) * np.sin(p), np.sin(t) * np.cos(p), np.cos(t)]
+                        for p, t in zip(phi_c, theta_c)
+                    ]
+                )
+                _add_ring(verts)
+
+        elif grid_type == "htm":
+            for row in grid_df.iter_rows(named=True):
+                try:
+                    v0 = np.array(row["htm_vertex_0"], dtype=float)
+                    v1 = np.array(row["htm_vertex_1"], dtype=float)
+                    v2 = np.array(row["htm_vertex_2"], dtype=float)
+                    if np.all([v[2] < 0 for v in [v0, v1, v2]]):
+                        continue
+                    verts = np.array([[v[1], v[0], v[2]] for v in (v0, v1, v2)])
+                    _add_ring(verts)
+                except KeyError, TypeError, ValueError:
+                    continue
+
+        elif grid_type == "geodesic":
+            shared_vertices = self.grid.vertices
+            if shared_vertices is not None and "geodesic_vertices" in grid_df.columns:
+                for row in grid_df.iter_rows(named=True):
+                    try:
+                        v_indices = np.array(row["geodesic_vertices"], dtype=int)
+                        if len(v_indices) < 3:
+                            continue
+                        v = shared_vertices[v_indices]
+                        if np.all(v[:, 2] < 0):
+                            continue
+                        verts = np.column_stack([v[:, 1], v[:, 0], v[:, 2]])
+                        _add_ring(verts)
+                    except KeyError, IndexError, TypeError, ValueError:
+                        continue
+
+        elif grid_type == "healpix":
+            try:
+                import healpy as hp
+            except ImportError:
+                hp = None
+            if hp is not None and "healpix_ipix" in grid_df.columns:
+                nside = int(grid_df["healpix_nside"][0])
+                for row in grid_df.iter_rows(named=True):
+                    try:
+                        ipix = int(row["healpix_ipix"])
+                        boundary = hp.boundaries(nside, ipix, step=4)
+                        x, y, z = boundary[1], boundary[0], boundary[2]
+                        if np.all(z < -0.01):
+                            continue
+                        verts = np.column_stack([x, y, z])
+                        _add_ring(verts)
+                    except KeyError, IndexError, TypeError, ValueError:
+                        continue
+
+        elif grid_type == "fibonacci":
+            voronoi = self.grid.voronoi
+            if voronoi is not None and "voronoi_region" in grid_df.columns:
+                for row in grid_df.iter_rows(named=True):
+                    try:
+                        region_indices = row["voronoi_region"]
+                        if region_indices is None or len(region_indices) < 3:
+                            continue
+                        v = voronoi.vertices[region_indices]
+                        if np.all(v[:, 2] < -0.01):
+                            continue
+                        verts = np.column_stack([v[:, 1], v[:, 0], v[:, 2]])
+                        _add_ring(verts)
+                    except KeyError, IndexError, TypeError, ValueError:
+                        continue
+
+        return go.Scatter3d(
+            x=xs,
+            y=ys,
+            z=zs,
+            mode="lines",
+            line=dict(color="rgba(20,20,20,0.55)", width=2),
+            hoverinfo="skip",
+            showlegend=False,
+            name="Cell boundaries",
+        )
+
     def plot_hemisphere_scatter(
         self,
         data: np.ndarray | None = None,
@@ -741,9 +864,13 @@ class HemisphereVisualizer3D:
             title=title or "Hemisphere Mesh 3D",
             scene=dict(
                 aspectmode="data",
-                xaxis=dict(title="East", showbackground=False),
-                yaxis=dict(title="North", showbackground=False),
-                zaxis=dict(title="Up", showbackground=False),
+                # See plot_hemisphere_surface: visible=False fully hides
+                # the native axis (line, ticks, title), not just the
+                # background pane -- meaningless raw sin/cos tick values
+                # would otherwise show alongside add_custom_axes().
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False),
+                zaxis=dict(visible=False),
             ),
             width=width,
             height=height,

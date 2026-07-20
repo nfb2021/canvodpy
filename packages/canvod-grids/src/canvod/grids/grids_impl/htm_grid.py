@@ -3,6 +3,7 @@
 import numpy as np
 import polars as pl
 
+from canvod.grids._internal import phi_bbox
 from canvod.grids.core.grid_builder import BaseGridBuilder
 from canvod.grids.core.grid_types import GridType
 
@@ -65,10 +66,13 @@ class HTMBuilder(BaseGridBuilder):
 
        The four children are [v₀, m₀, m₂], [v₁, m₁, m₀], [v₂, m₂, m₁],
        and [m₀, m₁, m₂].  This is repeated ``htm_level`` times.
-    3. **Hemisphere filter** – a triangle is kept if *any* of its three
-       vertices satisfies ``theta ≤ π/2 − cutoff_theta``.  Boundary
-       triangles that straddle the horizon are therefore included and may
-       extend slightly below it.
+    3. **Hemisphere filter** – a triangle is kept if its *centroid* (the
+       3D Cartesian mean of the three vertices, renormalised to the unit
+       sphere) satisfies ``theta ≤ π/2 − cutoff_theta``.  Filtering on
+       centroid rather than "any vertex above" avoids keeping boundary
+       triangles that are mostly below the horizon; kept triangles may
+       still extend slightly across the horizon since cells are not
+       clipped to an exact circle.
     4. Each leaf triangle becomes one cell; its centre, bounding box, and
        three vertex coordinates are stored.
 
@@ -78,8 +82,8 @@ class HTMBuilder(BaseGridBuilder):
         Approximate angular resolution in degrees.  Used only to derive
         ``htm_level`` when that parameter is not given explicitly.
     cutoff_theta : float
-        Elevation mask angle in degrees.  Triangles are excluded only when
-        *all* their vertices are below this elevation.
+        Elevation mask angle in degrees.  Triangles are excluded if their
+        centroid is below this elevation.
     htm_level : int or None
         HTM subdivision depth.  If ``None``, estimated from
         ``angular_resolution``.  Practical range 0–15.
@@ -208,6 +212,8 @@ class HTMBuilder(BaseGridBuilder):
             all_triangles.extend(triangles)
             all_htm_ids.extend(ids)
 
+        max_theta = np.pi / 2 - self.cutoff_theta_rad
+
         # Convert to cells
         cells = []
         for tri, htm_id in zip(all_triangles, all_htm_ids):
@@ -218,13 +224,15 @@ class HTMBuilder(BaseGridBuilder):
             center = center / np.linalg.norm(center)
 
             theta_center = np.arccos(np.clip(center[2], -1, 1))
+
+            # Filter hemisphere on the centroid, not "any vertex above" --
+            # the latter keeps boundary triangles that are mostly below the
+            # horizon.
+            if theta_center > max_theta:
+                continue
+
             phi_center = np.arctan2(center[1], center[0])
             phi_center = np.mod(phi_center, 2 * np.pi)
-
-            # Filter hemisphere
-            vertex_thetas = [np.arccos(np.clip(v[2], -1, 1)) for v in [v0, v1, v2]]
-            if all(t > (np.pi / 2 - self.cutoff_theta_rad) for t in vertex_thetas):
-                continue
 
             # Vertex coords
             thetas, phis = [], []
@@ -235,12 +243,14 @@ class HTMBuilder(BaseGridBuilder):
                 thetas.append(t)
                 phis.append(p)
 
+            phi_min, phi_max = phi_bbox(np.array(phis))
+
             cells.append(
                 {
                     "phi": phi_center,
                     "theta": theta_center,
-                    "phi_min": min(phis),
-                    "phi_max": max(phis),
+                    "phi_min": phi_min,
+                    "phi_max": phi_max,
                     "theta_min": min(thetas),
                     "theta_max": max(thetas),
                     "htm_id": htm_id,

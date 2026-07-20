@@ -5,6 +5,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 
+from canvod.grids._internal import phi_bbox
 from canvod.grids.core.grid_builder import BaseGridBuilder
 from canvod.grids.core.grid_types import GridType
 
@@ -59,13 +60,16 @@ class GeodesicBuilder(BaseGridBuilder):
        midpoints.  Each midpoint is projected onto the unit sphere
        (re-normalised) before the next subdivision.  This is repeated
        ``subdivision_level`` times.
-    3. **Hemisphere filter** – faces are kept if *any* of their three
-       vertices satisfies ``theta ≤ π/2 − cutoff_theta``.  Consequently,
-       boundary triangles that straddle the horizon *are* included and
-       extend slightly below it.
+    3. **Hemisphere filter** – faces are kept if their *centroid* (the
+       3D Cartesian mean of the three vertices, renormalised to the unit
+       sphere) satisfies ``theta ≤ π/2 − cutoff_theta``.  Filtering on
+       centroid rather than "any vertex above" avoids keeping boundary
+       triangles that are mostly below the horizon; kept triangles may
+       still extend slightly across the horizon since cells are not
+       clipped to an exact circle.
     4. **Phi wrapping** – for triangles that straddle the 0/2π azimuthal
-       boundary, vertex phis below π are shifted by +2π before computing
-       bounding-box limits, then wrapped back.
+       boundary, bounding-box limits are computed with a seam-aware
+       min/max (see ``phi_bbox``) rather than naive ``min``/``max``.
 
     Parameters
     ----------
@@ -73,8 +77,8 @@ class GeodesicBuilder(BaseGridBuilder):
         Approximate angular resolution in degrees.  Used only to derive
         ``subdivision_level`` when that parameter is not given explicitly.
     cutoff_theta : float
-        Elevation mask angle in degrees.  Triangles are excluded only if
-        *all* their vertices are below this elevation.
+        Elevation mask angle in degrees.  Triangles are excluded if their
+        centroid is below this elevation.
     subdivision_level : int or None
         Number of icosahedral subdivisions.  If ``None``, estimated from
         ``angular_resolution``.  Typical range 0–5.
@@ -214,43 +218,18 @@ class GeodesicBuilder(BaseGridBuilder):
         phi = np.arctan2(y, x)
         phi = np.mod(phi, 2 * np.pi)
 
-        # Filter to northern hemisphere
-        hemisphere_mask = theta <= (np.pi / 2 - self.cutoff_theta_rad)
+        max_theta = np.pi / 2 - self.cutoff_theta_rad
 
-        # Filter faces
+        # Build cells for every face, then keep only those whose centroid is
+        # above the horizon. Filtering on the centroid (rather than "any
+        # vertex above horizon") avoids keeping boundary triangles that are
+        # mostly below the horizon.
+        cells = []
         valid_faces = []
         for face in faces:
-            if any(hemisphere_mask[v] for v in face):
-                valid_faces.append(face)
-
-        if len(valid_faces) == 0:
-            raise ValueError("No valid faces in hemisphere")
-
-        valid_faces = np.array(valid_faces)
-
-        # Create cells
-        cells = []
-        for face in valid_faces:
             v_indices = face
             face_phi = phi[v_indices]
             face_theta = theta[v_indices]
-
-            # Handle phi wrapping for triangles crossing 0/2π boundary
-            phi_range = np.ptp(face_phi)
-            if phi_range > np.pi:
-                # Triangle crosses the wraparound - unwrap relative to median
-                ref_phi = np.median(face_phi)
-                face_phi_unwrapped = face_phi.copy()
-                # Unwrap angles that are > π away from reference
-                mask_low = (ref_phi - face_phi_unwrapped) > np.pi
-                mask_high = (face_phi_unwrapped - ref_phi) > np.pi
-                face_phi_unwrapped[mask_low] += 2 * np.pi
-                face_phi_unwrapped[mask_high] -= 2 * np.pi
-                phi_min = float(np.min(face_phi_unwrapped) % (2 * np.pi))
-                phi_max = float(np.max(face_phi_unwrapped) % (2 * np.pi))
-            else:
-                phi_min = float(np.min(face_phi))
-                phi_max = float(np.max(face_phi))
 
             # Cell center - 3D Cartesian mean
             face_vertices_3d = vertices[v_indices]
@@ -258,8 +237,14 @@ class GeodesicBuilder(BaseGridBuilder):
             center_3d = center_3d / np.linalg.norm(center_3d)
 
             center_theta = np.arccos(np.clip(center_3d[2], -1, 1))
+
+            if center_theta > max_theta:
+                continue
+
             center_phi = np.arctan2(center_3d[1], center_3d[0])
             center_phi = np.mod(center_phi, 2 * np.pi)
+
+            phi_min, phi_max = phi_bbox(face_phi)
 
             # Cell bounds (theta from vertices, phi already computed above)
             theta_min = float(np.min(face_theta))
@@ -277,6 +262,10 @@ class GeodesicBuilder(BaseGridBuilder):
                     "geodesic_subdivision": self.subdivision_level,
                 }
             )
+            valid_faces.append(face)
+
+        if len(cells) == 0:
+            raise ValueError("No valid faces in hemisphere")
 
         grid = pl.DataFrame(cells).with_columns(
             pl.int_range(0, pl.len()).alias("cell_id")
@@ -292,7 +281,11 @@ class GeodesicBuilder(BaseGridBuilder):
         phi_lims = [np.linspace(0, 2 * np.pi, 20) for _ in range(len(theta_lims))]
         cell_ids_list = [np.arange(grid.height)]
 
-        self._triangles = self._extract_triangle_vertices(vertices, faces)
+        # Align with the kept (hemisphere-filtered) faces, not the full
+        # sphere's, so get_triangles() zips 1:1 with the grid's rows.
+        self._triangles = self._extract_triangle_vertices(
+            vertices, np.array(valid_faces)
+        )
 
         return grid, theta_lims, phi_lims, cell_ids_list, extra_kwargs
 
