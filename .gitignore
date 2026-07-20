@@ -234,7 +234,11 @@ $RECYCLE.BIN/
 # Logs
 *.log
 .logs/
+.logs_*/
 logs/
+
+# Sweep-run artifacts (dev/rechunk_sweep_remote.sh)
+dev/sweep_overlays/
 
 # Data directories
 .data/
