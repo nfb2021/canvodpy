@@ -45,6 +45,12 @@ OVERLAY_DIR="${OVERLAY_DIR:-dev/sweep_overlays}"
 
 mkdir -p "$LOG_ARCHIVE_ROOT" "$OVERLAY_DIR"
 
+# --dashboard spawns a detached marimo subprocess that stays alive after
+# canvodpy run exits (by design, so you can review a finished run) -- so a
+# fixed port would collide with the previous chunk size's still-running
+# dashboard. Increment per launch instead of trying to kill/reuse it.
+port_offset=0
+
 for CHUNK in $CHUNK_SIZES; do
     stores_root="${STORES_ROOT_TEMPLATE//\$chunksize\$/$CHUNK}"
     overlay="$OVERLAY_DIR/chunk_${CHUNK}.yaml"
@@ -72,10 +78,13 @@ EOF
         attempt=$((attempt + 1))
         echo "=== chunk=${CHUNK}: attempt ${attempt}/${MAX_REVIVES} ==="
 
+        this_port=$((DASHBOARD_PORT + port_offset))
+        port_offset=$((port_offset + 1))
+
         if ! $started; then
             uv run canvodpy run --site "$SITE" --start "$START" --end "$END" \
                 --config "$overlay" \
-                --dashboard --dashboard-host "$DASHBOARD_HOST" --dashboard-port "$DASHBOARD_PORT"
+                --dashboard --dashboard-host "$DASHBOARD_HOST" --dashboard-port "$this_port"
             status=$?
             started=true
         else
@@ -83,9 +92,10 @@ EOF
             # this chunk size's store (see canvodpy run --help).
             uv run canvodpy run --site "$SITE" --end "$END" \
                 --config "$overlay" \
-                --dashboard --dashboard-host "$DASHBOARD_HOST" --dashboard-port "$DASHBOARD_PORT"
+                --dashboard --dashboard-host "$DASHBOARD_HOST" --dashboard-port "$this_port"
             status=$?
         fi
+        echo "=== chunk=${CHUNK}: dashboard on port ${this_port} ==="
 
         if [ "$status" -eq 0 ]; then
             echo "=== chunk=${CHUNK}: completed cleanly after ${attempt} attempt(s) ==="
