@@ -275,3 +275,92 @@ class TestStoreMaintain:
         assert "Maintenance complete" in result.output
         # 90-day default cutoff means nothing this fresh actually expires
         assert "Expired snapshots: 0" in result.output
+
+
+class TestStoreMaintainDue:
+    """Cron-safe counterpart to `maintain` -- never prompts, off by
+    default (dev/todo_later.md icechunk-maintenance-scheduling gap,
+    2026-07-21)."""
+
+    def test_disabled_by_default_is_a_noop(self, tmp_path):
+        config_dir = tmp_path / "config"
+        stores_root = tmp_path / "stores"
+        _write_config(config_dir, stores_root)  # no maintenance: block -> enabled=False
+        _write_synthetic_store(stores_root / "TestSite" / "rinex")
+
+        result = runner.invoke(
+            main_app,
+            ["store", "maintain-due", "TestSite"],
+            env=_env(config_dir),
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "nothing to do" in result.output
+        assert "Traceback" not in result.output
+
+    def test_requires_exactly_one_of_site_or_all_sites(self, tmp_path):
+        config_dir = tmp_path / "config"
+        stores_root = tmp_path / "stores"
+        _write_config(config_dir, stores_root)
+
+        result = runner.invoke(
+            main_app, ["store", "maintain-due"], env=_env(config_dir)
+        )
+        assert result.exit_code == 1
+        assert "exactly one of" in result.output
+
+        result = runner.invoke(
+            main_app,
+            ["store", "maintain-due", "TestSite", "--all-sites"],
+            env=_env(config_dir),
+        )
+        assert result.exit_code == 1
+        assert "exactly one of" in result.output
+
+    def test_invalid_store_kind_rejected(self, tmp_path):
+        config_dir = tmp_path / "config"
+        stores_root = tmp_path / "stores"
+        _write_config(config_dir, stores_root)
+
+        result = runner.invoke(
+            main_app,
+            ["store", "maintain-due", "TestSite", "--store", "bogus"],
+            env=_env(config_dir),
+        )
+        assert result.exit_code == 1
+        assert "must be one of" in result.output
+
+    def test_unknown_site_exits_nonzero(self, tmp_path):
+        """Regression lock: an unrecognized site must not exit 0 -- a cron
+        job silently exiting clean on a real misconfiguration would never
+        alert anyone."""
+        config_dir = tmp_path / "config"
+        stores_root = tmp_path / "stores"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "canvod-settings.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "processing": {
+                        "metadata": {
+                            "author": "A",
+                            "email": "a@example.com",
+                            "institution": "B",
+                        },
+                        "storage": {
+                            "stores_root_dir": str(stores_root),
+                            "maintenance": {"enabled": True},
+                        },
+                    },
+                    "sites": {},
+                }
+            )
+        )
+
+        result = runner.invoke(
+            main_app,
+            ["store", "maintain-due", "NoSuchSite"],
+            env=_env(config_dir),
+        )
+
+        assert result.exit_code == 1
+        assert "Unknown site" in result.output

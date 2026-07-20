@@ -303,3 +303,151 @@ def maintain(
     console.print(f"  Deleted branches:  {results['deleted_branches']}")
     if results["gc_summary"] is not None:
         console.print(f"  GC summary:        {results['gc_summary']}")
+
+
+@store_app.command("maintain-due")
+def maintain_due(
+    site: Annotated[
+        str | None,
+        typer.Argument(help="Site name. Omit when using --all-sites."),
+    ] = None,
+    all_sites: Annotated[
+        bool,
+        typer.Option("--all-sites", help="Run for every site in canvod-settings.yaml"),
+    ] = False,
+    store: Annotated[
+        str,
+        typer.Option("--store", help="Which store(s): gnss, vod, or both"),
+    ] = "both",
+) -> None:
+    """Non-interactive maintenance: runs only what's actually due, or nothing.
+
+    Cron/systemd-timer-safe counterpart to ``maintain`` -- never prompts,
+    always exits 0 on a normal "nothing to do" outcome. `maintain` itself
+    can't be scheduled unattended: its --execute path requires an
+    interactive confirmation. This command instead reads
+    ``processing.storage.maintenance`` from canvod-settings.yaml and does
+    nothing unless all of the following hold:
+
+    \b
+    - maintenance.enabled is true (default: false -- inert until a
+      deployment has validated `maintain --store ... ` (dry run) against
+      its real store first, see dev/perf_degradation_findings_2026_07_15.md)
+    - no `canvodpy run` is currently active on this host
+    - the store's own ops log shows expiration/GC genuinely due, per
+      maintenance.expire_interval_days / .gc_delay_days
+
+    While maintenance.dry_run_until_confirmed is true (the default), a due
+    store is only ever reported, never actually touched -- flip it to
+    false per-deployment once satisfied with the reports.
+    """
+    if store == "both":
+        store_kinds = _STORE_KINDS
+    elif store in _STORE_KINDS:
+        store_kinds = (store,)
+    else:
+        console.print(
+            f"[red]❌ --store must be one of: both, {', '.join(_STORE_KINDS)}[/red]"
+        )
+        raise typer.Exit(1)
+
+    if bool(site) == all_sites:
+        console.print("[red]❌ Pass exactly one of: a site name, or --all-sites[/red]")
+        raise typer.Exit(1)
+
+    from canvod.config import load_config
+    from canvodpy.orchestrator.resources import is_pipeline_running
+
+    config = load_config()
+    mcfg = config.processing.storage.maintenance
+
+    if not mcfg.enabled:
+        console.print(
+            "[dim]maintenance.enabled is false in canvod-settings.yaml -- "
+            "nothing to do.[/dim]"
+        )
+        return
+
+    if is_pipeline_running():
+        console.print(
+            "[yellow]⊘ A canvodpy run is active on this host -- skipping "
+            "(never run maintenance alongside active writes).[/yellow]"
+        )
+        return
+
+    if all_sites:
+        site_names = list(config.sites.sites)
+    else:
+        if site not in config.sites.sites:
+            console.print(f"[red]❌ Unknown site:[/red] {site}")
+            raise typer.Exit(1)
+        site_names = [site]
+
+    for site_name in site_names:
+        for kind in store_kinds:
+            storage = config.processing.storage
+            path = (
+                storage.get_gnss_store_path(site_name)
+                if kind == "gnss"
+                else storage.get_vod_store_path(site_name)
+            )
+            if not path.exists():
+                console.print(
+                    f"[dim]{site_name} ({kind}): no store yet, skipping.[/dim]"
+                )
+                continue
+
+            from canvod.store import MyIcechunkStore
+
+            icestore = MyIcechunkStore(
+                path, store_type="gnss_store" if kind == "gnss" else "vod_store"
+            )
+            due = icestore.maintenance_due(
+                expire_interval_days=mcfg.expire_interval_days,
+                gc_delay_days=mcfg.gc_delay_days,
+            )
+
+            if not due["expire_due"] and not due["gc_due"]:
+                console.print(
+                    f"[dim]{site_name} ({kind}): not due "
+                    f"(last expire: {due['last_expire']}, "
+                    f"last gc: {due['last_gc']}).[/dim]"
+                )
+                continue
+
+            console.print(
+                f"\n[bold]{site_name}[/bold] ({kind}) -- due: "
+                f"expire={due['expire_due']} gc={due['gc_due']}"
+            )
+
+            if mcfg.dry_run_until_confirmed:
+                console.print(
+                    "[yellow]DRY RUN[/yellow] (maintenance.dry_run_until_confirmed=true)"
+                )
+                if due["gc_due"]:
+                    gc_result = icestore.garbage_collect(
+                        days=mcfg.retention_days, dry_run=True
+                    )
+                    console.print(f"  Would garbage-collect: {gc_result}")
+                if due["expire_due"]:
+                    from datetime import UTC, datetime, timedelta
+
+                    cutoff = datetime.now(UTC) - timedelta(days=mcfg.retention_days)
+                    stale = sum(
+                        1
+                        for snap in icestore.repo.ancestry(branch="main")
+                        if snap.written_at < cutoff
+                    )
+                    console.print(
+                        f"  Would expire: {stale} ancestry entries older than cutoff"
+                    )
+                continue
+
+            if due["expire_due"]:
+                expired = icestore.expire_old_snapshots(days=mcfg.retention_days)
+                console.print(f"  Expired: {len(expired)} snapshots")
+            if due["gc_due"]:
+                gc_result = icestore.garbage_collect(
+                    days=mcfg.retention_days, dry_run=False
+                )
+                console.print(f"  GC: {gc_result}")

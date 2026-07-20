@@ -195,3 +195,105 @@ class TestKeeperTagsConfigDefault:
 
         config = StorageConfig(stores_root_dir="/tmp/canvod-test-stores")
         assert config.keeper_tags is False
+
+
+class TestMaintenanceConfigDefaults:
+    def test_defaults_are_inert(self):
+        """Off/dry-run by default, mirroring keeper_tags' shipping precedent."""
+        from canvod.config.models.storage import MaintenanceConfig
+
+        config = MaintenanceConfig()
+        assert config.enabled is False
+        assert config.dry_run_until_confirmed is True
+        assert config.retention_days == 90
+        assert config.expire_interval_days == 45
+        assert config.gc_delay_days == 20
+
+    def test_nested_under_storage_config(self):
+        from canvod.config.models.storage import StorageConfig
+
+        config = StorageConfig(stores_root_dir="/tmp/canvod-test-stores")
+        assert config.maintenance.enabled is False
+
+
+class TestMaintenanceDue:
+    """dev/todo_later.md's icechunk-maintenance-scheduling gap, 2026-07-21:
+    nothing ever calls expire_old_snapshots()/garbage_collect() on its own.
+    maintenance_due() uses the store's own ops log (Icechunk-written,
+    can't drift like a separate marker file) as the source of truth for
+    "when did maintenance last actually run"."""
+
+    def test_never_maintained_expire_due_gc_not_due(self, tmp_path: Path) -> None:
+        store_path = tmp_path / "test_site" / "vod_store"
+        store = create_vod_store(store_path)
+        with store.writable_session() as session:
+            root = zarr.open(session.store, mode="w")
+            root.create_group("canopy")
+            session.commit("test commit")
+
+        due = store.maintenance_due(expire_interval_days=45, gc_delay_days=20)
+
+        assert due["expire_due"] is True
+        assert due["gc_due"] is False, "GC must never be due before any expire ran"
+        assert due["last_expire"] is None
+        assert due["last_gc"] is None
+
+    def test_expire_writes_ops_log_entry_even_when_nothing_expired(
+        self, tmp_path: Path
+    ) -> None:
+        """Empirically confirmed 2026-07-20: expire_old_snapshots() always
+        writes ExpirationRan, even when the expired set is empty (root/tip
+        snapshots are protected) -- so due-checking doesn't need to special
+        -case "nothing was actually expired"."""
+        store_path = tmp_path / "test_site" / "vod_store"
+        store = create_vod_store(store_path)
+        with store.writable_session() as session:
+            root = zarr.open(session.store, mode="w")
+            root.create_group("canopy")
+            session.commit("test commit")
+
+        expired = store.expire_old_snapshots(days=0)
+        assert expired == set()  # nothing eligible (root/tip protected)
+
+        due = store.maintenance_due(expire_interval_days=45, gc_delay_days=20)
+        assert due["expire_due"] is False
+        assert due["last_expire"] is not None
+
+    def test_gc_due_only_after_delay_elapses_past_expiration(
+        self, tmp_path: Path
+    ) -> None:
+        store_path = tmp_path / "test_site" / "vod_store"
+        store = create_vod_store(store_path)
+        with store.writable_session() as session:
+            root = zarr.open(session.store, mode="w")
+            root.create_group("canopy")
+            session.commit("test commit")
+
+        store.expire_old_snapshots(days=0)
+
+        not_yet = store.maintenance_due(expire_interval_days=45, gc_delay_days=20)
+        assert not_yet["gc_due"] is False, "delay hasn't elapsed yet"
+
+        now_due = store.maintenance_due(expire_interval_days=45, gc_delay_days=0)
+        assert now_due["gc_due"] is True
+
+    def test_gc_not_due_again_after_it_already_ran(self, tmp_path: Path) -> None:
+        """dry_run=True GC must NOT count as having run (confirmed
+        empirically: garbage_collect(dry_run=True) writes no GCRan entry) --
+        only a real GC should clear gc_due."""
+        store_path = tmp_path / "test_site" / "vod_store"
+        store = create_vod_store(store_path)
+        with store.writable_session() as session:
+            root = zarr.open(session.store, mode="w")
+            root.create_group("canopy")
+            session.commit("test commit")
+
+        store.expire_old_snapshots(days=0)
+
+        store.garbage_collect(days=0, dry_run=True)
+        still_due = store.maintenance_due(expire_interval_days=45, gc_delay_days=0)
+        assert still_due["gc_due"] is True, "dry-run GC must not clear gc_due"
+
+        store.garbage_collect(days=0, dry_run=False)
+        no_longer_due = store.maintenance_due(expire_interval_days=45, gc_delay_days=0)
+        assert no_longer_due["gc_due"] is False

@@ -2865,6 +2865,83 @@ class MyIcechunkStore:
             ts = entry["updated_at"].strftime("%Y-%m-%d %H:%M:%S")
             print(f"{ts}  {entry['kind']}")
 
+    def maintenance_due(
+        self,
+        expire_interval_days: int,
+        gc_delay_days: int,
+    ) -> dict[str, Any]:
+        """
+        Determine whether scheduled expiration/GC are due, from the ops log.
+
+        Used by ``canvodpy store maintain-due`` (a cron-safe, unattended
+        entry point -- see ``processing.storage.maintenance`` config). The
+        repo's own ops log (:meth:`get_ops_log`) is the source of truth for
+        "when did maintenance last actually run": it is written atomically
+        by Icechunk itself as part of the same operation, so it cannot
+        drift the way a separate marker file could (deleted, stale-copied
+        across hosts on a shared mount, or never written if a prior run
+        crashed after the real operation completed but before a marker
+        write). Confirmed empirically (2026-07-20, throwaway store): a real
+        ``expire_old_snapshots()`` call always writes an ``ExpirationRan``
+        entry (even when zero snapshots were actually expired -- root/tip
+        snapshots are protected); ``garbage_collect(dry_run=True)`` does
+        **not** write a ``GCRan`` entry, only a real (non-dry-run) GC does
+        -- so a dry run correctly never counts as "GC happened" here.
+
+        GC is only ever considered due *after* a qualifying expiration, and
+        never again for the same expiration -- physical deletion should
+        lag the (reversible-in-effect) soft-delete by ``gc_delay_days``,
+        per the skill doc's "expire every 1-2 months, GC every 15-30 days"
+        guidance.
+
+        Parameters
+        ----------
+        expire_interval_days : int
+            Re-run expiration if this many days have passed since the most
+            recent ``ExpirationRan`` entry (or if there is none yet).
+        gc_delay_days : int
+            Run GC this many days after the most recent expiration, once
+            per expiration (skipped if GC already ran since that
+            expiration).
+
+        Returns
+        -------
+        dict[str, Any]
+            ``expire_due`` (bool), ``gc_due`` (bool), ``last_expire``
+            (datetime | None), ``last_gc`` (datetime | None).
+        """
+        last_expire: datetime | None = None
+        last_gc: datetime | None = None
+        # Iterate the lazy Repository.ops_log() directly (not get_ops_log(),
+        # which always fully materializes the log into a list) so the
+        # early-break below actually short-circuits I/O instead of paying
+        # an unbounded, ever-growing scan on every scheduled invocation --
+        # ironic for a feature that exists because logs grow unbounded.
+        for update in self._repo.ops_log():
+            kind = str(update.kind)
+            if last_expire is None and "ExpirationRan" in kind:
+                last_expire = update.updated_at
+            elif last_gc is None and "GCRan" in kind:
+                last_gc = update.updated_at
+            if last_expire is not None and last_gc is not None:
+                break
+
+        now = datetime.now(UTC)
+        expire_due = last_expire is None or (now - last_expire) >= timedelta(
+            days=expire_interval_days
+        )
+        gc_due = (
+            last_expire is not None
+            and (now - last_expire) >= timedelta(days=gc_delay_days)
+            and (last_gc is None or last_gc < last_expire)
+        )
+        return {
+            "expire_due": expire_due,
+            "gc_due": gc_due,
+            "last_expire": last_expire,
+            "last_gc": last_gc,
+        }
+
     def __repr__(self) -> str:
         """Return the developer-facing representation.
 

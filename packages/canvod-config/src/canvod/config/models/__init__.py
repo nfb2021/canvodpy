@@ -35,7 +35,7 @@ from .references import FundingRef, PublicationRef, ReferencesConfig
 from .root import CanvodConfig
 from .sids import SidsConfig
 from .sites import ReceiverConfig, SiteConfig, SitesConfig, VodAnalysisConfig
-from .storage import StorageConfig
+from .storage import MaintenanceConfig, StorageConfig
 
 __all__ = [
     "AuxDataConfig",
@@ -48,6 +48,7 @@ __all__ = [
     "HistogramBinsConfig",
     "IcechunkConfig",
     "LoggingConfig",
+    "MaintenanceConfig",
     "MetadataConfig",
     "NetcdfCompressionConfig",
     "PreprocessingConfig",

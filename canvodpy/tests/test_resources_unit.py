@@ -45,3 +45,50 @@ class TestMemoryMonitor:
         with unittest.mock.patch("psutil.virtual_memory", return_value=_mock_vmem()):
             mm = MemoryMonitor()
             mm.log_memory_stats(context="test_context")  # should not raise
+
+
+class TestPipelineRunLock:
+    """Same-host signal for `canvodpy store maintain-due` to skip itself
+    while a pipeline write is active (dev/todo_later.md icechunk-
+    maintenance-scheduling gap, 2026-07-21)."""
+
+    def test_not_running_when_no_pid_file(self, tmp_path):
+        from canvodpy.orchestrator.resources import is_pipeline_running
+
+        assert is_pipeline_running(tmp_path / "nonexistent.pid") is False
+
+    def test_running_while_lock_held(self, tmp_path):
+        from canvodpy.orchestrator.resources import (
+            PipelineRunLock,
+            is_pipeline_running,
+        )
+
+        pid_file = tmp_path / "run.pid"
+        with PipelineRunLock(pid_file):
+            assert is_pipeline_running(pid_file) is True
+        assert is_pipeline_running(pid_file) is False, "removed on clean exit"
+        assert not pid_file.exists()
+
+    def test_stale_pid_file_reads_as_not_running(self, tmp_path):
+        """A PID file surviving a hard crash (SIGKILL/OOM) must not
+        permanently wedge every future scheduled run -- liveness is
+        checked via the recorded PID, not just file existence."""
+        from canvodpy.orchestrator.resources import is_pipeline_running
+
+        pid_file = tmp_path / "run.pid"
+        # A PID essentially guaranteed not to be a live process right now.
+        pid_file.write_text("999999999")
+        assert is_pipeline_running(pid_file) is False
+
+    def test_lock_released_even_on_exception(self, tmp_path):
+        from canvodpy.orchestrator.resources import (
+            PipelineRunLock,
+            is_pipeline_running,
+        )
+
+        pid_file = tmp_path / "run.pid"
+        with pytest.raises(ValueError):
+            with PipelineRunLock(pid_file):
+                raise ValueError("simulated pipeline crash")
+        assert is_pipeline_running(pid_file) is False
+        assert not pid_file.exists()

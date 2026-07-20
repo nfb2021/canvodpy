@@ -492,6 +492,34 @@ summary = repo.garbage_collect(
   yields marginal storage savings for real operational risk. Not something
   to run every pipeline batch or every day.
 
+### Scheduling maintenance in canvodpy
+
+Everything above works, but nothing in canvodpy ever calls it automatically
+— it's a human running `canvodpy store maintain <site> --execute` by hand
+(and that command itself requires an interactive confirmation, so it can't
+be scheduled unattended as-is). `canvodpy store maintain-due` is the
+cron/systemd-timer-safe counterpart: never prompts, does nothing unless
+`processing.storage.maintenance.enabled: true` in canvod-settings.yaml, no
+pipeline run is currently active on the host (checked via a same-host PID
+file, see `canvodpy.orchestrator.resources.PipelineRunLock`), and the
+store's own ops log shows expiration/GC are actually due (per
+`maintenance.expire_interval_days`/`.gc_delay_days`) — `MyIcechunkStore.
+maintenance_due()` reads `ExpirationRan`/`GCRan` ops-log entries as the
+source of truth rather than a separate marker file, since Icechunk writes
+those atomically as part of the operation itself. `maintenance.
+dry_run_until_confirmed` (default `true`) gates the very first automated
+touch to report-only, matching `garbage_collect(dry_run=True)`'s own
+recommended first-run practice.
+
+Example cron entry (personal-machine deployment):
+```
+0 3 * * * cd /path/to/canvodpy && uv run canvodpy store maintain-due --all-sites >> ~/.canvodpy_maintenance.log 2>&1
+```
+Does **not** protect against a second host writing to the same store on a
+network-mounted (CIFS/NFS) deployment — that case is a documented
+operational constraint (keep the maintenance window and pipeline-run
+windows apart by convention), not something this locking mechanism covers.
+
 ### `rewrite_manifests()` — manifest compaction without expiring anything
 
 ```python

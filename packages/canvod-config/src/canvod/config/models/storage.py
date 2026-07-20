@@ -10,6 +10,77 @@ from pydantic import Field, field_validator
 from .base import _StrictModel
 
 
+class MaintenanceConfig(_StrictModel):
+    """Scheduled Icechunk maintenance (expiration + garbage collection).
+
+    Completes the retention scheme from dev/perf_degradation_findings_
+    2026_07_15.md (Problem B): expire_old_snapshots()/garbage_collect()
+    already exist on MyIcechunkStore and work correctly, but nothing has
+    ever triggered them automatically -- this is the config surface for
+    `canvodpy store maintain-due`, a non-interactive, cron-safe entry
+    point (the existing `canvodpy store maintain` command requires an
+    interactive typer.confirm, so it cannot itself run unattended).
+
+    Notes
+    -----
+    This is a Pydantic model for configuration validation.
+    """
+
+    enabled: bool = Field(
+        False,
+        description=(
+            "Master switch for `canvodpy store maintain-due`. Off by "
+            "default -- mirrors keeper_tags' precedent of shipping inert "
+            "until validated against a real store (see "
+            "dev/perf_degradation_findings_2026_07_15.md, open question 4: "
+            "garbage_collect(dry_run=True) should be checked against the "
+            "real store before this is ever enabled for real)."
+        ),
+    )
+    dry_run_until_confirmed: bool = Field(
+        True,
+        description=(
+            "Force every `maintain-due` invocation to dry-run only, "
+            "regardless of due-ness, until explicitly set False per "
+            "deployment. The interactive CLI's `maintain --execute` "
+            "requires a typer.confirm a cron job can't answer; this is "
+            "the config-level equivalent gate for the unattended path."
+        ),
+    )
+    retention_days: int = Field(
+        90,
+        ge=7,
+        description=(
+            "Snapshot retention window passed to expire_old_snapshots()/ "
+            "garbage_collect() by the scheduled job (weeks-to-months, a "
+            "generous margin past any realistic write-session duration). "
+            "Mirrors MyIcechunkStore.maintenance()'s own default; kept "
+            "separate so a human running `maintain --expire-days` "
+            "interactively is unaffected by this value."
+        ),
+    )
+    expire_interval_days: int = Field(
+        45,
+        ge=1,
+        description=(
+            "How often (wall-clock days since the most recent "
+            "ExpirationRan entry in the store's own ops log) the "
+            "scheduled job re-runs expiration. Skill-doc guidance: every "
+            "1-2 months."
+        ),
+    )
+    gc_delay_days: int = Field(
+        20,
+        ge=1,
+        description=(
+            "Extra days to wait after the most recent expiration before "
+            "running garbage_collect(), so physical deletion always lags "
+            "the (reversible-in-effect) soft-delete by a safety buffer. "
+            "Skill-doc guidance: GC every 15-30 days, offset from expire."
+        ),
+    )
+
+
 class StorageConfig(_StrictModel):
     """Storage strategy configuration.
 
@@ -74,6 +145,7 @@ class StorageConfig(_StrictModel):
             "open question 8)."
         ),
     )
+    maintenance: MaintenanceConfig = Field(default_factory=MaintenanceConfig)
 
     @field_validator("stores_root_dir", mode="before")
     @classmethod

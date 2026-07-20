@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import threading
 import time
+from pathlib import Path
 
 import psutil
 
@@ -150,3 +152,75 @@ class ResourceSampler:
                 )
             except Exception:
                 logger.debug("resource_sample_failed", exc_info=True)
+
+
+# Anchored to the user's home directory, not Path.cwd() -- `canvodpy run`
+# and `canvodpy store maintain-due` are typically launched from different
+# contexts (interactive shell vs. cron/systemd, each with its own working
+# directory), and a cwd-relative default would silently produce two
+# different paths, defeating the same-host concurrency check with no
+# error. Same-user, same-host is still required (see is_pipeline_running's
+# docstring for the network-mounted-store caveat this doesn't cover).
+DEFAULT_RUN_PID_FILE = Path.home() / ".cache" / "canvodpy" / "run.pid"
+
+
+def is_pipeline_running(pid_file: Path = DEFAULT_RUN_PID_FILE) -> bool:
+    """Check whether a `canvodpy run` process is currently active.
+
+    Used by ``canvodpy store maintain-due`` (a cron-safe, non-interactive
+    entry point for scheduled Icechunk expiration/GC) to defend against
+    running maintenance concurrently with an active pipeline write -- both
+    are explicitly documented as unsafe to overlap (see
+    ``MyIcechunkStore.maintenance()``'s docstring). Same-host only: this
+    cannot see a pipeline run on a different host writing to the same
+    network-mounted (CIFS/NFS) store -- that case must be kept apart by
+    the operator (e.g. scheduling maintenance in a known-idle window).
+
+    Liveness is checked via the recorded PID, not just the file's
+    existence, so a stale file left behind by a hard crash (SIGKILL, OOM)
+    correctly reads as "not running" without needing separate stale-lock
+    cleanup.
+
+    Parameters
+    ----------
+    pid_file : Path
+        Location written by :class:`PipelineRunLock`.
+
+    Returns
+    -------
+    bool
+        True if the recorded PID belongs to a live process.
+    """
+    if not pid_file.exists():
+        return False
+    try:
+        pid = int(pid_file.read_text().strip())
+    except ValueError, OSError:
+        return False
+    return psutil.pid_exists(pid)
+
+
+class PipelineRunLock:
+    """Context manager marking a `canvodpy run` invocation as active.
+
+    Writes this process's PID to ``pid_file`` on entry, removes it on
+    clean exit. Does not prevent concurrent pipeline runs (loky/dask
+    already have their own resource contention if that's attempted) --
+    it exists solely as a same-host signal for
+    :func:`is_pipeline_running`, so a scheduled maintenance job can skip
+    itself while a pipeline write is in progress.
+    """
+
+    def __init__(self, pid_file: Path = DEFAULT_RUN_PID_FILE) -> None:
+        self.pid_file = pid_file
+
+    def __enter__(self) -> PipelineRunLock:
+        self.pid_file.parent.mkdir(parents=True, exist_ok=True)
+        self.pid_file.write_text(str(os.getpid()))
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        try:
+            self.pid_file.unlink()
+        except FileNotFoundError:
+            pass

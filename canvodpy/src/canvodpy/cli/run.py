@@ -402,7 +402,15 @@ def _main_impl(args: SimpleNamespace) -> int:
     total_vod = 0
     t_total = time.perf_counter()
 
-    with make_reporter(rows) as reporter:
+    from canvodpy.orchestrator.resources import PipelineRunLock
+
+    # Marks this process as an active pipeline run for the duration of the
+    # real write loop below (not the dry-run preview above, which returns
+    # before this point) -- lets `canvodpy store maintain-due` (a
+    # cron-safe, unattended Icechunk maintenance entry point) skip itself
+    # instead of racing an in-progress write. Same-host only; see
+    # PipelineRunLock's docstring for the network-mounted-store caveat.
+    with PipelineRunLock(), make_reporter(rows) as reporter:
         for site_name, site, start, end in site_infos:
             # One run_id per site: failures are site-scoped, and this keeps
             # correlation with Icechunk commits (also per-site-store) clean.
