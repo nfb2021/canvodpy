@@ -330,12 +330,22 @@ def maintain_due(
     nothing unless all of the following hold:
 
     \b
-    - maintenance.enabled is true (default: false -- inert until a
-      deployment has validated `maintain --store ... ` (dry run) against
-      its real store first, see dev/perf_degradation_findings_2026_07_15.md)
+    - maintenance.enabled or maintenance.manifests_enabled is true (both
+      default false -- inert until a deployment has validated `maintain
+      --store ...` (dry run) against its real store first, see
+      dev/perf_degradation_findings_2026_07_15.md)
     - no `canvodpy run` is currently active on this host
-    - the store's own ops log shows expiration/GC genuinely due, per
-      maintenance.expire_interval_days / .gc_delay_days
+
+    Expiration/GC are gated on maintenance.enabled specifically, and are
+    due when the store's own ops log shows expiration/GC genuinely due
+    per maintenance.expire_interval_days / .gc_delay_days. Manifest
+    compaction (rewrite_manifests()) is gated independently by
+    maintenance.manifests_enabled -- it's a different risk profile (an
+    ordinary commit, no history rewrite or physical deletion) and has no
+    ops-log entry of its own to check, so due-ness is measured directly
+    from the store's current on-disk manifest count vs
+    maintenance.manifest_count_threshold instead of a time interval. A
+    deployment can enable either independently of the other.
 
     While maintenance.dry_run_until_confirmed is true (the default), a due
     store is only ever reported, never actually touched -- flip it to
@@ -361,10 +371,10 @@ def maintain_due(
     config = load_config()
     mcfg = config.processing.storage.maintenance
 
-    if not mcfg.enabled:
+    if not mcfg.enabled and not mcfg.manifests_enabled:
         console.print(
-            "[dim]maintenance.enabled is false in canvod-settings.yaml -- "
-            "nothing to do.[/dim]"
+            "[dim]maintenance.enabled and maintenance.manifests_enabled are "
+            "both false in canvod-settings.yaml -- nothing to do.[/dim]"
         )
         return
 
@@ -405,19 +415,29 @@ def maintain_due(
             due = icestore.maintenance_due(
                 expire_interval_days=mcfg.expire_interval_days,
                 gc_delay_days=mcfg.gc_delay_days,
+                manifest_count_threshold=(
+                    mcfg.manifest_count_threshold if mcfg.manifests_enabled else None
+                ),
             )
+            if not mcfg.enabled:
+                # expire/GC stay gated on `enabled` specifically --
+                # `manifests_enabled` only ever authorizes compaction.
+                due["expire_due"] = False
+                due["gc_due"] = False
 
-            if not due["expire_due"] and not due["gc_due"]:
+            if not due["expire_due"] and not due["gc_due"] and not due["manifests_due"]:
                 console.print(
                     f"[dim]{site_name} ({kind}): not due "
                     f"(last expire: {due['last_expire']}, "
-                    f"last gc: {due['last_gc']}).[/dim]"
+                    f"last gc: {due['last_gc']}, "
+                    f"manifests: {due['manifest_count']}).[/dim]"
                 )
                 continue
 
             console.print(
                 f"\n[bold]{site_name}[/bold] ({kind}) -- due: "
-                f"expire={due['expire_due']} gc={due['gc_due']}"
+                f"expire={due['expire_due']} gc={due['gc_due']} "
+                f"manifests={due['manifests_due']}"
             )
 
             if mcfg.dry_run_until_confirmed:
@@ -441,6 +461,13 @@ def maintain_due(
                     console.print(
                         f"  Would expire: {stale} ancestry entries older than cutoff"
                     )
+                if due["manifests_due"]:
+                    # rewrite_manifests() has no dry-run mode -- report the
+                    # fragmentation count that triggered due-ness instead.
+                    console.print(
+                        f"  Would compact manifests: {due['manifest_count']} "
+                        f">= threshold {mcfg.manifest_count_threshold}"
+                    )
                 continue
 
             if due["expire_due"]:
@@ -451,3 +478,6 @@ def maintain_due(
                     days=mcfg.retention_days, dry_run=False
                 )
                 console.print(f"  GC: {gc_result}")
+            if due["manifests_due"]:
+                snapshot_id = icestore.compact_manifests(branch="main")
+                console.print(f"  Compacted manifests: snapshot {snapshot_id}")

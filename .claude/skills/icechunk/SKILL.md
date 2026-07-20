@@ -520,6 +520,24 @@ network-mounted (CIFS/NFS) deployment — that case is a documented
 operational constraint (keep the maintenance window and pipeline-run
 windows apart by convention), not something this locking mechanism covers.
 
+`maintain-due` also schedules manifest compaction (`MyIcechunkStore.
+compact_manifests()`, below), gated separately by
+`maintenance.manifests_enabled` since it's a different risk profile than
+expire/GC (an ordinary commit, no history rewrite or physical deletion —
+see below). Due-ness is measured directly from
+`dir_entry_counts()['manifests']` vs `maintenance.manifest_count_threshold`
+(default 3000), not a time interval — `rewrite_manifests()` logs as an
+ordinary `NewCommit` in the ops log, indistinguishable from a data-ingest
+commit, so there's no `ExpirationRan`/`GCRan`-style entry to check
+instead. **Compaction alone doesn't shrink on-disk manifest count** —
+confirmed empirically (2026-07-20, throwaway store, 300 commits): it adds
+a new consolidated manifest set but leaves the old fragmented ones on
+disk until the next expire+GC cycle reclaims them (399 → 401 manifests
+right after compacting, → 2 after a subsequent expire/GC). Also validated
+against the real production rosalia RINEX store on a throwaway branch
+(deleted afterward, `main` untouched): 0.08s, data read back bit-identical
+before/after.
+
 ### `rewrite_manifests()` — manifest compaction without expiring anything
 
 ```python

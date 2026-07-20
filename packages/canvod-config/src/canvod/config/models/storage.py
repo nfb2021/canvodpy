@@ -79,6 +79,33 @@ class MaintenanceConfig(_StrictModel):
             "Skill-doc guidance: GC every 15-30 days, offset from expire."
         ),
     )
+    manifests_enabled: bool = Field(
+        False,
+        description=(
+            "Enable scheduled manifest compaction (rewrite_manifests()) "
+            "under maintain-due, independent of `enabled`'s expire/GC "
+            "gate -- rewrite_manifests() is an ordinary commit (no "
+            "history rewrite or physical deletion), a different risk "
+            "profile than expire/GC, safe to validate and enable "
+            "separately. Off by default until confirmed against the "
+            "real store (see maintain-due's dry-run path)."
+        ),
+    )
+    manifest_count_threshold: int = Field(
+        3000,
+        ge=1,
+        description=(
+            "Trigger rewrite_manifests() when the store's on-disk "
+            "manifest count (MyIcechunkStore.dir_entry_counts()) reaches "
+            "this. A direct fragmentation measurement, not a time "
+            "interval -- rewrite_manifests() has no distinguishing "
+            "ops-log entry (it logs as an ordinary NewCommit, "
+            "indistinguishable from any data-ingest commit), so "
+            "'how fragmented is the store right now' is the available "
+            "and more meaningful signal here, unlike expire/GC's "
+            "ExpirationRan/GCRan-based due-check."
+        ),
+    )
 
 
 class StorageConfig(_StrictModel):

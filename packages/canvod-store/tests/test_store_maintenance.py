@@ -208,6 +208,8 @@ class TestMaintenanceConfigDefaults:
         assert config.retention_days == 90
         assert config.expire_interval_days == 45
         assert config.gc_delay_days == 20
+        assert config.manifests_enabled is False
+        assert config.manifest_count_threshold == 3000
 
     def test_nested_under_storage_config(self):
         from canvod.config.models.storage import StorageConfig
@@ -297,3 +299,91 @@ class TestMaintenanceDue:
         store.garbage_collect(days=0, dry_run=False)
         no_longer_due = store.maintenance_due(expire_interval_days=45, gc_delay_days=0)
         assert no_longer_due["gc_due"] is False
+
+
+class TestManifestCompaction:
+    """dev/todo_later.md's manifest-fragmentation gap, 2026-07-21:
+    canvodpy's one-to_icechunk()-call-per-file write pattern creates one
+    new manifest per flush; rewrite_manifests() was documented but never
+    invoked anywhere. Unlike expire/GC, due-ness here is measured
+    directly from on-disk manifest count (no distinguishing ops-log
+    entry exists for rewrite_manifests() -- it logs as an ordinary
+    NewCommit)."""
+
+    def _make_fragmented_store(self, tmp_path: Path, n_commits: int = 5):
+        import numpy as np
+        import xarray as xr
+        from icechunk.xarray import to_icechunk
+
+        store_path = tmp_path / "test_site" / "vod_store"
+        store = create_vod_store(store_path)
+        with store.writable_session() as session:
+            for i in range(n_commits):
+                ds = xr.Dataset(
+                    {"x": (("epoch",), np.arange(3.0) + i)},
+                    coords={"epoch": np.arange(i * 3, i * 3 + 3)},
+                )
+                if i == 0:
+                    to_icechunk(ds, session, group="canopy", mode="w")
+                else:
+                    to_icechunk(ds, session, group="canopy", append_dim="epoch")
+            session.commit("fragmented write")
+        return store
+
+    def test_manifest_count_threshold_none_never_due(self, tmp_path: Path) -> None:
+        """manifests_enabled=False -> caller passes threshold=None ->
+        manifests_due always False, regardless of actual fragmentation."""
+        store = self._make_fragmented_store(tmp_path)
+        due = store.maintenance_due(
+            expire_interval_days=45, gc_delay_days=20, manifest_count_threshold=None
+        )
+        assert due["manifests_due"] is False
+        assert due["manifest_count"] is None
+
+    def test_manifest_count_threshold_triggers_when_exceeded(
+        self, tmp_path: Path
+    ) -> None:
+        store = self._make_fragmented_store(tmp_path, n_commits=5)
+        counts = store.dir_entry_counts()
+        assert counts.get("manifests", 0) >= 1, "sanity: fragmented store has manifests"
+
+        due_low = store.maintenance_due(
+            expire_interval_days=45, gc_delay_days=20, manifest_count_threshold=1
+        )
+        assert due_low["manifests_due"] is True
+        assert due_low["manifest_count"] == counts["manifests"]
+
+        due_high = store.maintenance_due(
+            expire_interval_days=45,
+            gc_delay_days=20,
+            manifest_count_threshold=10_000_000,
+        )
+        assert due_high["manifests_due"] is False
+
+    def test_compact_manifests_succeeds_without_error(self, tmp_path: Path) -> None:
+        store = self._make_fragmented_store(tmp_path, n_commits=8)
+
+        snapshot_id = store.compact_manifests(branch="main")
+
+        assert isinstance(snapshot_id, str) and snapshot_id
+        after = store.dir_entry_counts()["manifests"]
+        # rewrite_manifests() adds one new manifest set and a new commit;
+        # old per-flush manifests remain on disk until GC, but the *live*
+        # branch tip reads from the consolidated set -- assert compaction
+        # ran (new snapshot) and didn't error, not a specific count delta
+        # (that depends on GC, out of scope here).
+        assert after >= 1
+
+    def test_compact_manifests_data_unchanged_after_compaction(
+        self, tmp_path: Path
+    ) -> None:
+        """The whole point is compaction must be data-invisible -- a
+        read after compact_manifests() must return identical data."""
+        store = self._make_fragmented_store(tmp_path, n_commits=4)
+        before = store.read_group("canopy")
+
+        store.compact_manifests(branch="main")
+
+        after = store.read_group("canopy")
+        assert before["x"].values.tolist() == after["x"].values.tolist()
+        assert before["epoch"].values.tolist() == after["epoch"].values.tolist()

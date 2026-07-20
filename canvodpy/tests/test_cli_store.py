@@ -364,3 +364,60 @@ class TestStoreMaintainDue:
 
         assert result.exit_code == 1
         assert "Unknown site" in result.output
+
+    def test_manifests_enabled_works_independently_of_enabled(self, tmp_path):
+        """Regression lock: manifest compaction must be reachable with
+        maintenance.enabled=False and maintenance.manifests_enabled=True
+        -- the config's own docstring promises these are independent
+        gates, and a top-level `if not mcfg.enabled: return` would
+        silently defeat that (found and fixed 2026-07-21)."""
+        config_dir = tmp_path / "config"
+        stores_root = tmp_path / "stores"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "canvod-settings.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "processing": {
+                        "metadata": {
+                            "author": "A",
+                            "email": "a@example.com",
+                            "institution": "B",
+                        },
+                        "storage": {
+                            "stores_root_dir": str(stores_root),
+                            "maintenance": {
+                                "enabled": False,
+                                "manifests_enabled": True,
+                                "manifest_count_threshold": 1,
+                            },
+                        },
+                    },
+                    "sites": {
+                        "TestSite": {
+                            "gnss_site_data_root": str(stores_root / "raw"),
+                            "receivers": {
+                                "canopy_01": {
+                                    "type": "canopy",
+                                    "directory": "02_canopy",
+                                },
+                            },
+                        }
+                    },
+                }
+            )
+        )
+        _write_synthetic_store(stores_root / "TestSite" / "rinex")
+
+        result = runner.invoke(
+            main_app,
+            ["store", "maintain-due", "TestSite"],
+            env=_env(config_dir),
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "nothing to do" not in result.output
+        assert "Would compact manifests" in result.output
+        # enabled=False must suppress expire/GC even though the manifest
+        # threshold made this store "due" overall.
+        assert "Would garbage-collect" not in result.output
+        assert "Would expire" not in result.output

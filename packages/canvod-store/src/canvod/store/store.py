@@ -2869,9 +2869,11 @@ class MyIcechunkStore:
         self,
         expire_interval_days: int,
         gc_delay_days: int,
+        manifest_count_threshold: int | None = None,
     ) -> dict[str, Any]:
         """
-        Determine whether scheduled expiration/GC are due, from the ops log.
+        Determine whether scheduled expiration/GC/manifest compaction are
+        due.
 
         Used by ``canvodpy store maintain-due`` (a cron-safe, unattended
         entry point -- see ``processing.storage.maintenance`` config). The
@@ -2903,12 +2905,25 @@ class MyIcechunkStore:
             Run GC this many days after the most recent expiration, once
             per expiration (skipped if GC already ran since that
             expiration).
+        manifest_count_threshold : int | None, optional
+            Trigger ``rewrite_manifests()`` (manifest compaction) when
+            :meth:`dir_entry_counts`'s ``manifests`` count reaches this.
+            Unlike expiration/GC, ``rewrite_manifests()`` writes no
+            distinguishing ops-log entry -- it logs as an ordinary
+            ``NewCommit``, indistinguishable from a data-ingest commit --
+            so due-ness is measured directly from current fragmentation
+            rather than time-since-last-ops-log-entry. ``None`` (default)
+            always reports ``manifests_due=False`` (caller opted out via
+            ``manifests_enabled=False``). Returns ``False`` (not an
+            error) if the store isn't local-filesystem-backed
+            (:meth:`dir_entry_counts` returns ``{}`` for S3/GCS).
 
         Returns
         -------
         dict[str, Any]
-            ``expire_due`` (bool), ``gc_due`` (bool), ``last_expire``
-            (datetime | None), ``last_gc`` (datetime | None).
+            ``expire_due`` (bool), ``gc_due`` (bool), ``manifests_due``
+            (bool), ``last_expire`` (datetime | None), ``last_gc``
+            (datetime | None), ``manifest_count`` (int | None).
         """
         last_expire: datetime | None = None
         last_gc: datetime | None = None
@@ -2935,12 +2950,81 @@ class MyIcechunkStore:
             and (now - last_expire) >= timedelta(days=gc_delay_days)
             and (last_gc is None or last_gc < last_expire)
         )
+
+        manifest_count: int | None = None
+        manifests_due = False
+        if manifest_count_threshold is not None:
+            manifest_count = self.dir_entry_counts().get("manifests")
+            manifests_due = (
+                manifest_count is not None
+                and manifest_count >= manifest_count_threshold
+            )
+
         return {
             "expire_due": expire_due,
             "gc_due": gc_due,
+            "manifests_due": manifests_due,
             "last_expire": last_expire,
             "last_gc": last_gc,
+            "manifest_count": manifest_count,
         }
+
+    def compact_manifests(self, branch: str = "main") -> str:
+        """
+        Consolidate all of a branch's fragmented manifests in one commit.
+
+        Thin wrapper over ``repo.rewrite_manifests()``: canvodpy's write
+        pattern (one ``to_icechunk()`` call per file within a batch, e.g.
+        96 fifteen-minute files/receiver-day) creates one new manifest
+        per flush, not per commit -- a single day's ingest for one
+        receiver can create ~96 manifests. This rewrites them back to
+        the currently-configured splitting boundaries.
+
+        Uses ``commit_method="new_commit"`` deliberately, not ``"amend"``:
+        amend replaces the immediately-preceding commit's own message/
+        metadata rather than merging with it, and ``_append_to_icechunk``
+        already attaches structured provenance (receiver, date, file
+        hashes) to every ingest commit -- amending could silently clobber
+        that. An explicit, separate, auditable commit matches the
+        precedent expire/GC already set.
+
+        Like ``expire_old_snapshots()``/``garbage_collect()``, this is an
+        administrative operation -- never call it while a pipeline run is
+        active against this branch (ordinary commit conflict-retry
+        semantics apply, but a still-draining worker pool committing
+        per-file would just make every retry lose, burning cycles for
+        nothing).
+
+        Does **not** shrink on-disk manifest count by itself -- confirmed
+        empirically (2026-07-20, throwaway store, 300 commits): compaction
+        adds a new, consolidated manifest set but leaves the old
+        fragmented ones on disk (399 -> 401 manifests immediately after
+        compacting); only a subsequent ``expire_old_snapshots()`` +
+        ``garbage_collect()`` actually reclaims them (399 -> 2 in the same
+        test). This mirrors GC's own relationship to expiration -- don't
+        expect ``dir_entry_counts()['manifests']`` to drop right after
+        calling this; it drops after the next expire/GC cycle instead.
+
+        Parameters
+        ----------
+        branch : str, default "main"
+            Branch to compact.
+
+        Returns
+        -------
+        str
+            Snapshot ID of the compaction commit.
+        """
+        self._logger.info(
+            f"Compacting manifests on store '{self.store_type}' (branch '{branch}')"
+        )
+        new_snapshot = self.repo.rewrite_manifests(
+            f"Compact manifests ({self.store_type})",
+            branch=branch,
+            commit_method="new_commit",
+        )
+        self._logger.info(f"Manifest compaction complete: snapshot {new_snapshot}")
+        return new_snapshot
 
     def __repr__(self) -> str:
         """Return the developer-facing representation.
