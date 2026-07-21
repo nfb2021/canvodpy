@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import time
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from concurrent.futures.process import BrokenProcessPool
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from datetime import time as dt_time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import polars as pl
@@ -784,6 +787,55 @@ def worker_task_with_region_auto(
     )
 
     return fork  # Return the modified fork
+
+
+# ============================================================================
+# Cross-group fork/merge batch writes (dev/cross_group_fork_merge_plan.md)
+# ============================================================================
+
+
+@dataclass
+class GroupWritePlan:
+    """One receiver group's dedup-checked write plan, pre-fork.
+
+    Built by `RinexDataProcessor._prepare_group_write` -- a pure
+    metadata-table read, no session/fork involved -- so it's safe to compute
+    for every group before any fork exists.
+    """
+
+    receiver_name: str
+    augmented_datasets: list[tuple[Path, xr.Dataset]]
+    rinex_files: list[Path]
+    aux_datasets: dict[Path, dict[str, xr.Dataset]] | None
+    sid_issues: dict[str, list[str]] | None
+    reader_format: str | None
+    file_hash_map: dict[Path, str | None]
+    existing_hashes: set[str]
+
+
+@dataclass
+class GroupWriteResult:
+    """One receiver group's outcome from a forked (or pre-pass-only) write."""
+
+    receiver_name: str
+    fork: ForkSession | None
+    actions: dict[str, int] = field(
+        default_factory=lambda: {
+            "initial": 0,
+            "skipped": 0,
+            "appended": 0,
+            "written": 0,
+        }
+    )
+    metadata_records: list[dict[str, Any]] = field(default_factory=list)
+    file_append_seconds: list[float] = field(default_factory=list)
+    total_epochs: int = 0
+    total_nbytes: int = 0
+    existing_hashes: set[str] = field(default_factory=set)
+    aux_datasets: dict[Path, dict[str, xr.Dataset]] | None = None
+    reader_format: str | None = None
+    duration_seconds: float = 0.0
+    snapshot_id: str | None = None
 
 
 # ============================================================================
@@ -2180,6 +2232,716 @@ class RinexDataProcessor:
             existing_hashes |= intra_overlaps
 
         return existing_hashes
+
+    # ── Cross-group fork/merge batch writes (skip/unsafe_append only) ──────
+    #
+    # dev/cross_group_fork_merge_plan.md. Parallelizes PHASE 3's per-group
+    # writes across receiver groups (e.g. reference + N canopies) using
+    # Icechunk's fork/merge primitive instead of one sequential commit per
+    # group. Scope: only the "skip" and "unsafe_append" gnss_store_strategy
+    # values -- "overwrite" keeps using `_append_to_icechunk` unchanged
+    # (temp-branch-create + reset_branch has the same ref-write hazard this
+    # plan sidesteps for the other two strategies, and redesigning it is
+    # separate future work).
+
+    def _prepare_group_write(
+        self,
+        augmented_datasets: list[tuple[Path, xr.Dataset]],
+        receiver_name: str,
+        rinex_files: list[Path],
+        aux_datasets: dict[Path, dict[str, xr.Dataset]] | None = None,
+        sid_issues: dict[str, list[str]] | None = None,
+        reader_format: str | None = None,
+    ) -> GroupWritePlan:
+        """Dedup-check one receiver group's files ahead of a forked write.
+
+        Mirrors `_append_to_icechunk`'s STEP 1: `receiver_name`-scoped
+        metadata-table reads only (`load_metadata_for_dedup`,
+        `batch_check_existing`, `check_temporal_overlaps` all key off
+        `receiver_name`), zero cross-group reads, no store write.
+        """
+        file_hash_map = {
+            fname: ds.attrs.get("File Hash") for fname, ds in augmented_datasets
+        }
+        existing_hashes = self._check_existing_with_temporal_overlap(
+            receiver_name, augmented_datasets, file_hash_map
+        )
+        return GroupWritePlan(
+            receiver_name=receiver_name,
+            augmented_datasets=augmented_datasets,
+            rinex_files=rinex_files,
+            aux_datasets=aux_datasets,
+            sid_issues=sid_issues,
+            reader_format=reader_format,
+            file_hash_map=file_hash_map,
+            existing_hashes=existing_hashes,
+        )
+
+    def _write_group_into_fork(
+        self,
+        fork_session: ForkSession,
+        plan: GroupWritePlan,
+    ) -> GroupWriteResult:
+        """Write one receiver group's remaining files into its own fork.
+
+        Runs inside the cross-group thread pool, one call per group. Mirrors
+        `_append_to_icechunk`'s STEP 2 (non-overwrite branches) + STEP 3,
+        with `session` replaced by this group's own `fork_session` --
+        `ForkSession` is a drop-in for `to_icechunk`/`append_metadata_bulk`,
+        already proven by `_cooperative_distributed_writing`. No "initial"
+        case here: `_write_receiver_batch_forked`'s pre-pass has already
+        created any brand-new group (and trimmed its first file out of
+        `plan.augmented_datasets`) before this is ever called, so every file
+        seen here targets an already-existing group.
+        """
+        log = self._logger
+        receiver_name = plan.receiver_name
+        file_hash_map = plan.file_hash_map
+        existing_hashes = plan.existing_hashes
+
+        t_start = time.perf_counter()
+        result = GroupWriteResult(
+            receiver_name=receiver_name,
+            fork=fork_session,
+            existing_hashes=existing_hashes,
+            aux_datasets=plan.aux_datasets,
+            reader_format=plan.reader_format,
+        )
+
+        for idx, (fname, ds) in enumerate(plan.augmented_datasets):
+            try:
+                rel_path = self.site.gnss_store.rel_path_for_commit(fname)
+                rinex_hash = file_hash_map[fname]
+                if not rinex_hash:
+                    log.debug("No hash for %s, skipping", fname)
+                    continue
+
+                start_epoch = np.datetime64(ds.epoch.min().values)
+                end_epoch = np.datetime64(ds.epoch.max().values)
+                exists = rinex_hash in existing_hashes
+
+                ds_clean = self.site.gnss_store._cleanse_dataset_attrs(ds)
+                ds_clean = self.site.gnss_store._normalize_encodings(ds_clean)
+
+                result.metadata_records.append(
+                    {
+                        "fname": fname,
+                        "rinex_hash": rinex_hash,
+                        "start": start_epoch,
+                        "end": end_epoch,
+                        "dataset_attrs": ds.attrs.copy(),
+                        "exists": exists,
+                        "rel_path": rel_path,
+                        "canonical_name": ds.attrs.get("canonical_name", ""),
+                        "physical_path": ds.attrs.get("physical_path", str(fname)),
+                    }
+                )
+
+                t_file = time.perf_counter()
+                action = "skipped"
+                match (exists, self._gnss_store_strategy):
+                    case (True, "skip"):
+                        result.actions["skipped"] += 1
+                        log.debug("Skipped: %s", rel_path)
+
+                    case (True, "unsafe_append"):
+                        # File exists but write again anyway -- no
+                        # epoch-uniqueness check, see StorageConfig.
+                        # gnss_store_strategy docstring for the risk.
+                        to_icechunk(
+                            ds_clean,
+                            fork_session,
+                            group=receiver_name,
+                            append_dim="epoch",
+                        )
+                        result.actions["appended"] += 1
+                        action = "appended"
+                        log.debug("Appended (unsafe): %s", rel_path)
+
+                    case (False, _):
+                        to_icechunk(
+                            ds_clean,
+                            fork_session,
+                            group=receiver_name,
+                            append_dim="epoch",
+                        )
+                        result.actions["written"] += 1
+                        action = "written"
+                        log.debug("Wrote: %s", rel_path)
+
+                    case _:
+                        log.warning(
+                            "Unhandled strategy: exists=%s, strategy=%s for %s",
+                            exists,
+                            self._gnss_store_strategy,
+                            rel_path,
+                        )
+                        action = "unhandled"
+
+                dt_file = time.perf_counter() - t_file
+                result.file_append_seconds.append(dt_file)
+                n_epochs = int(ds_clean.sizes.get("epoch", 0))
+                result.total_epochs += n_epochs
+                result.total_nbytes += int(ds_clean.nbytes)
+                self._icechunk_log.info(
+                    "icechunk.file_append",
+                    duration_seconds=round(dt_file, 4),
+                    receiver=receiver_name,
+                    date=str(self.matched_data_dirs.yyyydoy),
+                    file=fname.name,
+                    file_index=idx,
+                    action=action,
+                    n_epochs=n_epochs,
+                    n_sids=int(ds_clean.sizes.get("sid", 0)),
+                )
+
+            except (OSError, RuntimeError, ValueError):  # fmt: skip
+                log.exception("Failed to process %s", fname.name)
+
+        if result.metadata_records:
+            self.site.gnss_store.append_metadata_bulk(
+                group_name=receiver_name,
+                rows=result.metadata_records,
+                session=fork_session,
+            )
+
+        result.duration_seconds = time.perf_counter() - t_start
+        return result
+
+    def _write_receiver_batch_forked(
+        self,
+        group_inputs: Sequence[
+            tuple[
+                str,  # receiver_name
+                list[tuple[Path, xr.Dataset]],  # augmented_datasets
+                list[Path],  # rinex_files
+                dict[Path, dict[str, xr.Dataset]] | None,  # aux_datasets
+                dict[str, list[str]] | None,  # sid_issues
+                str | None,  # reader_format
+            ]
+        ],
+    ) -> dict[str, GroupWriteResult]:
+        """Write a whole batch's receiver groups in parallel via fork/merge.
+
+        1. Sequential pre-pass, on its own clean session that commits alone
+           before any fork exists: any group not yet in the store gets its
+           first file written directly here (never touches a fork -- avoids
+           relying on unverified concurrent-new-group-creation semantics in
+           `Session.merge()`), and that file is trimmed out of the group's
+           plan before dedup-checking so it's never written twice or
+           double-counted. This session MUST be separate from the fork/merge
+           session below and MUST commit on its own -- verified empirically
+           (not documented anywhere in Icechunk's Python API) that when a
+           session has its own pending uncommitted writes before `.fork()`
+           is called on it, `session.merge(fork)` silently drops the fork's
+           appended data on commit. The only way to combine "some groups
+           need creating" with "other groups get parallel forked writes"
+           correctly is two commits: the pre-pass commits alone, then the
+           fork/merge phase opens a session with no pending writes of its
+           own before forking. Cost: one small extra commit, only on
+           batches that see a brand-new group (i.e. rarely, after a
+           store's first day).
+        2. `_prepare_group_write` per group (post-pre-pass, so a
+           newly-created group's dedup check runs against the group it now
+           has, not "doesn't exist yet").
+        3. One independent fork per group, dispatched into a thread pool
+           (`_write_group_into_fork`) -- not a process pool: PHASE 2 already
+           holds all datasets in this process's memory, PHASE 3 is I/O-bound
+           (releases the GIL), and threads keep `zarr_async_concurrency` at
+           its configured per-process value instead of multiplying it by
+           worker count against a CIFS/NFS mount.
+        4. Fail-fast: if any group's write raises, do not merge or commit --
+           groups before it in today's sequential loop stay committed on
+           retry, but under one shared batch commit that property is
+           structurally impossible, so a partial merge would silently drop
+           a group's data from an apparently-successful commit. A pre-pass
+           commit that already landed before a later fork failure is safe
+           to leave in place: the next run's dedup check sees that group's
+           first file as already-committed metadata and won't re-attempt it.
+        5. One `base_session.merge(*forks)` + one `base_session.commit(...)`
+           for the groups written this round via fork.
+        """
+        version = get_version_from_pyproject()
+        log = self._logger
+        yyyydoy = str(self.matched_data_dirs.yyyydoy)
+
+        groups = self.site.gnss_store.list_groups() or []
+        results: dict[str, GroupWriteResult] = {}
+        plan_inputs: list[
+            tuple[
+                str,
+                list[tuple[Path, xr.Dataset]],
+                list[Path],
+                dict[Path, dict[str, xr.Dataset]] | None,
+                dict[str, list[str]] | None,
+                str | None,
+            ]
+        ] = []
+        new_group_inputs: list[
+            tuple[
+                str,
+                list[tuple[Path, xr.Dataset]],
+                list[Path],
+                dict[Path, dict[str, xr.Dataset]] | None,
+                dict[str, list[str]] | None,
+                str | None,
+            ]
+        ] = []
+
+        for (
+            receiver_name,
+            augmented_datasets,
+            rinex_files,
+            aux_datasets,
+            sid_issues,
+            reader_format,
+        ) in group_inputs:
+            if not augmented_datasets:
+                # No files for this group today -- still produce a
+                # (zero-action) result so downstream steps 5-9 and the
+                # PHASE 3 caller see it, matching `_append_to_icechunk`
+                # being called (and yielded from) even with an empty
+                # `augmented_datasets` list today.
+                results.setdefault(
+                    receiver_name,
+                    GroupWriteResult(
+                        receiver_name=receiver_name,
+                        fork=None,
+                        aux_datasets=aux_datasets,
+                        reader_format=reader_format,
+                    ),
+                )
+            elif receiver_name in groups:
+                plan_inputs.append(
+                    (
+                        receiver_name,
+                        augmented_datasets,
+                        rinex_files,
+                        aux_datasets,
+                        sid_issues,
+                        reader_format,
+                    )
+                )
+            else:
+                new_group_inputs.append(
+                    (
+                        receiver_name,
+                        augmented_datasets,
+                        rinex_files,
+                        aux_datasets,
+                        sid_issues,
+                        reader_format,
+                    )
+                )
+
+        # STEP 1 (pre-pass): new groups only, sequential, on its own session
+        # that commits alone (see docstring point 1).
+        prepass_snapshot_id: str | None = None
+        if new_group_inputs:
+            prepass_summary_parts: list[str] = []
+            with self.site.gnss_store.writable_session("main") as prepass_session:
+                for (
+                    receiver_name,
+                    augmented_datasets,
+                    rinex_files,
+                    aux_datasets,
+                    sid_issues,
+                    reader_format,
+                ) in new_group_inputs:
+                    # Find the first file with a usable hash (matches
+                    # `_append_to_icechunk`'s STEP 3, which silently
+                    # `continue`s past unhashed files without counting or
+                    # consuming them -- the "initial" writer isn't
+                    # necessarily index 0).
+                    init_idx = next(
+                        (
+                            i
+                            for i, (_fn, _ds) in enumerate(augmented_datasets)
+                            if _ds.attrs.get("File Hash")
+                        ),
+                        None,
+                    )
+                    result = results.setdefault(
+                        receiver_name,
+                        GroupWriteResult(
+                            receiver_name=receiver_name,
+                            fork=None,
+                            aux_datasets=aux_datasets,
+                            reader_format=reader_format,
+                        ),
+                    )
+
+                    if init_idx is None:
+                        # No hashed file in this brand-new group's batch --
+                        # nothing to create the group with, leave it absent
+                        # from the store (same net effect as
+                        # `_append_to_icechunk` today, which would also fail
+                        # to ever hit its "initial" case here).
+                        log.warning(
+                            "No hashed file to initialize new group '%s' "
+                            "with -- skipping (0 usable files)",
+                            receiver_name,
+                        )
+                        continue
+
+                    first_fname, first_ds = augmented_datasets[init_idx]
+                    rinex_hash = first_ds.attrs.get("File Hash")
+                    t_file = time.perf_counter()
+                    rel_path = self.site.gnss_store.rel_path_for_commit(first_fname)
+                    ds_clean = self.site.gnss_store._cleanse_dataset_attrs(first_ds)
+                    ds_clean = self.site.gnss_store._normalize_encodings(ds_clean)
+                    to_icechunk(
+                        ds_clean,
+                        prepass_session,
+                        group=receiver_name,
+                        encoding=self.site.gnss_store.chunk_encoding_for(ds_clean),
+                    )
+                    start_epoch = np.datetime64(first_ds.epoch.min().values)
+                    end_epoch = np.datetime64(first_ds.epoch.max().values)
+                    row = {
+                        "fname": first_fname,
+                        "rinex_hash": rinex_hash,
+                        "start": start_epoch,
+                        "end": end_epoch,
+                        "dataset_attrs": first_ds.attrs.copy(),
+                        "exists": False,
+                        "rel_path": rel_path,
+                        "canonical_name": first_ds.attrs.get("canonical_name", ""),
+                        "physical_path": first_ds.attrs.get(
+                            "physical_path", str(first_fname)
+                        ),
+                    }
+                    self.site.gnss_store.append_metadata_bulk(
+                        group_name=receiver_name,
+                        rows=[row],
+                        session=prepass_session,
+                    )
+                    result.metadata_records.append(row)
+                    result.actions["initial"] += 1
+                    dt_file = time.perf_counter() - t_file
+                    result.file_append_seconds.append(dt_file)
+                    n_epochs = int(ds_clean.sizes.get("epoch", 0))
+                    result.total_epochs += n_epochs
+                    result.total_nbytes += int(ds_clean.nbytes)
+                    self._icechunk_log.info(
+                        "icechunk.file_append",
+                        duration_seconds=round(dt_file, 4),
+                        receiver=receiver_name,
+                        date=yyyydoy,
+                        file=first_fname.name,
+                        file_index=init_idx,
+                        action="initial",
+                        n_epochs=n_epochs,
+                        n_sids=int(ds_clean.sizes.get("sid", 0)),
+                    )
+                    log.debug("Initial (pre-pass): %s", rel_path)
+
+                    groups = [*groups, receiver_name]
+                    prepass_summary_parts.append(f"{receiver_name}(initial=1)")
+                    remaining = [
+                        fd for i, fd in enumerate(augmented_datasets) if i != init_idx
+                    ]
+                    plan_inputs.append(
+                        (
+                            receiver_name,
+                            remaining,
+                            rinex_files,
+                            aux_datasets,
+                            sid_issues,
+                            reader_format,
+                        )
+                    )
+
+                if prepass_summary_parts:
+                    prepass_msg = (
+                        f"[v{version}] {yyyydoy}: pre-pass create "
+                        f"{len(prepass_summary_parts)} groups: "
+                        f"{', '.join(prepass_summary_parts)}"
+                    )
+                    prepass_snapshot_id = prepass_session.commit(prepass_msg)
+                    log.info(
+                        "Committed pre-pass %s (snapshot: %s...)",
+                        yyyydoy,
+                        prepass_snapshot_id[:8],
+                    )
+                    for name in (p[0] for p in new_group_inputs):
+                        if name in results:
+                            results[name].snapshot_id = prepass_snapshot_id
+
+        # STEP 2: dedup-check plans, now that every group in this batch
+        # already exists (pre-pass ran above, on its own committed session).
+        plans = {
+            name: self._prepare_group_write(
+                augmented_datasets=aug,
+                receiver_name=name,
+                rinex_files=rinex_files,
+                aux_datasets=aux_datasets,
+                sid_issues=sid_issues,
+                reader_format=reader_format,
+            )
+            for name, aug, rinex_files, aux_datasets, sid_issues, reader_format in plan_inputs
+            if aug
+        }
+
+        # STEP 3/4/5: fork + dispatch + fail-fast collect + merge + one
+        # commit, on a fresh session with no pending writes of its own.
+        if plans:
+            with self.site.gnss_store.writable_session("main") as base_session:
+                forks = {name: base_session.fork() for name in plans}
+                with ThreadPoolExecutor(max_workers=len(plans)) as tpe:
+                    futures = {
+                        tpe.submit(self._write_group_into_fork, forks[name], plan): name
+                        for name, plan in plans.items()
+                    }
+                    completed: dict[str, GroupWriteResult] = {}
+                    try:
+                        for fut in as_completed(futures):
+                            name = futures[fut]
+                            completed[name] = fut.result()
+                    except Exception:
+                        log.error(
+                            "cross_group_batch_write_failed",
+                            date=yyyydoy,
+                            succeeded=list(completed),
+                            pending=[n for n in plans if n not in completed],
+                        )
+                        raise
+
+                # Merge pre-pass results (if any) into fork results.
+                for name, forked_result in completed.items():
+                    if name in results:
+                        pre = results[name]
+                        forked_result.actions["initial"] += pre.actions["initial"]
+                        forked_result.metadata_records = (
+                            pre.metadata_records + forked_result.metadata_records
+                        )
+                        forked_result.file_append_seconds = (
+                            pre.file_append_seconds + forked_result.file_append_seconds
+                        )
+                        forked_result.total_epochs += pre.total_epochs
+                        forked_result.total_nbytes += pre.total_nbytes
+                        forked_result.duration_seconds += pre.duration_seconds
+                    results[name] = forked_result
+
+                base_session.merge(*forks.values())
+
+                summary = ", ".join(
+                    f"{name}({', '.join(f'{k}={v}' for k, v in completed[name].actions.items() if v > 0)})"
+                    for name in completed
+                )
+                commit_msg = (
+                    f"[v{version}] {yyyydoy}: {len(completed)} groups: {summary}"
+                )
+
+                agg_metadata: dict[str, Any] = {
+                    "date": yyyydoy,
+                    "receivers": ",".join(completed),
+                    "total_files": str(
+                        sum(len(r.metadata_records) for r in completed.values())
+                    ),
+                }
+                for name, r in completed.items():
+                    if not r.metadata_records:
+                        continue
+                    group_meta = {
+                        "receiver": name,
+                        "start": str(min(rec["start"] for rec in r.metadata_records)),
+                        "end": str(max(rec["end"] for rec in r.metadata_records)),
+                        "rinex_hashes": ",".join(
+                            str(rec["rinex_hash"])
+                            for rec in r.metadata_records
+                            if rec.get("rinex_hash")
+                        ),
+                        "canonical_names": ",".join(
+                            str(rec["canonical_name"])
+                            for rec in r.metadata_records
+                            if rec.get("canonical_name")
+                        ),
+                    }
+                    agg_metadata[f"group__{name}"] = json.dumps(group_meta)
+
+                batch_snapshot_id = base_session.commit(
+                    commit_msg, metadata=agg_metadata
+                )
+                log.info(
+                    "Committed batch %s (snapshot: %s...)",
+                    yyyydoy,
+                    batch_snapshot_id[:8],
+                )
+                for name in completed:
+                    results[name].snapshot_id = batch_snapshot_id
+
+        # STEP 6: per-group post-commit diagnostics + keeper tags, sourced
+        # from each group's own snapshot_id -- a group may have landed in
+        # the pre-pass commit only (single-file new group, never forked),
+        # the batch commit only (pre-existing group), both (new group with
+        # more than one file), or neither (empty augmented_datasets today).
+        dir_counts = self.site.gnss_store.dir_entry_counts()
+        for name, r in results.items():
+            if r.snapshot_id is None:
+                # Nothing written for this group today (empty
+                # augmented_datasets or a hashless new group) -- no
+                # snapshot to tag or report against.
+                continue
+
+            if self._keeper_tags_enabled:
+                self.site.gnss_store.create_keeper_tag(name, yyyydoy, r.snapshot_id)
+
+            self._icechunk_log.info(
+                "store_stats",
+                receiver=name,
+                date=yyyydoy,
+                **dir_counts,
+            )
+
+            if r.file_append_seconds:
+                _sorted = sorted(r.file_append_seconds)
+                _n = len(_sorted)
+                process_data_per_file = {
+                    "n": _n,
+                    "mean": round(sum(_sorted) / _n, 4),
+                    "p50": round(_sorted[_n // 2], 4),
+                    "p95": round(_sorted[min(_n - 1, int(_n * 0.95))], 4),
+                    "max": round(_sorted[-1], 4),
+                    "first": round(r.file_append_seconds[0], 4),
+                    "last": round(r.file_append_seconds[-1], 4),
+                }
+            else:
+                process_data_per_file = {}
+
+            self._icechunk_log.info(
+                "batch_write_complete",
+                receiver=name,
+                date=yyyydoy,
+                snapshot_id=r.snapshot_id[:12],
+                total_files=len(r.metadata_records),
+                total_epochs=r.total_epochs,
+                total_nbytes=r.total_nbytes,
+                duration_seconds=round(r.duration_seconds, 2),
+                process_data_per_file=process_data_per_file,
+                actions=r.actions,
+                throughput_files_per_sec=(
+                    round(len(r.metadata_records) / r.duration_seconds, 2)
+                    if r.duration_seconds > 0
+                    else 0.0
+                ),
+            )
+
+        # STEP 7: source_format root attr, once per batch (idempotent).
+        if results and self.site.gnss_store.source_format is None:
+            first_result = next(iter(results.values()))
+            reader_fmt = first_result.reader_format or self._reader_name
+            try:
+                self.site.gnss_store.set_root_attrs(
+                    {"source_format": reader_fmt}, branch="main"
+                )
+                log.info("Set store source_format='%s'", reader_fmt)
+            except Exception:
+                log.warning("Failed to set source_format root attr")
+
+        # STEP 8: rich store metadata, once per batch (real behavior change
+        # vs. today's once-per-group: see dev/cross_group_fork_merge_plan.md
+        # §7 -- was already non-idempotent per-group, this consolidates it
+        # to one history entry per ingest event instead of one per group).
+        try:
+            from canvod.store_metadata import (
+                collect_config_snapshot,
+                collect_metadata,
+                metadata_exists,
+                read_metadata,
+                update_metadata,
+                write_metadata,
+            )
+
+            store_path = self.site.gnss_store.store_path
+            site_name = self.site.site_name
+            sites_cfg = self._config.sites
+            site_cfg = sites_cfg.sites.get(site_name)
+
+            if site_cfg is not None and results:
+                reader_fmt = next(iter(results.values())).reader_format or (
+                    self._reader_name
+                )
+                if not metadata_exists(store_path, branch="main"):
+                    resources = self._config.processing.params.resolve_resources()
+                    meta = collect_metadata(
+                        config=self._config,
+                        site_name=site_name,
+                        site_config=site_cfg,
+                        store_type="gnss_store",
+                        source_format=reader_fmt,
+                        store_path=store_path,
+                        dask_workers=resources.get("n_workers"),
+                        dask_threads_per_worker=resources.get("threads_per_worker"),
+                    )
+                    write_metadata(store_path, meta, branch="main")
+                    log.info("Wrote rich store metadata")
+                else:
+                    now = datetime.now(UTC).isoformat()
+                    existing_meta = read_metadata(store_path, branch="main")
+                    new_snapshot = collect_config_snapshot(self._config)
+
+                    per_receiver = ", ".join(
+                        f"{name}={len(r.metadata_records)}"
+                        for name, r in results.items()
+                    )
+                    history_entries = [f"{now}: Ingested {per_receiver}"]
+                    updates: dict[str, object] = {"temporal.updated": now}
+
+                    drifted = (
+                        new_snapshot.config_hash != existing_meta.config.config_hash
+                    )
+                    if drifted:
+                        old_hash = (existing_meta.config.config_hash or "unknown")[:12]
+                        new_hash = (new_snapshot.config_hash or "unknown")[:12]
+                        history_entries.append(
+                            f"{now}: Config changed ({old_hash} -> {new_hash})"
+                        )
+                        updates["config"] = new_snapshot.model_dump(mode="json")
+
+                    updates["summaries.history"] = [
+                        *existing_meta.summaries.history,
+                        *history_entries,
+                    ]
+
+                    update_metadata(store_path, updates, branch="main")
+                    log.info(
+                        "Updated store metadata%s",
+                        " (config drift detected)" if drifted else "",
+                    )
+        except Exception:
+            log.debug(
+                "canvod-store-metadata not available or write failed",
+                exc_info=True,
+            )
+
+        # STEP 9: SBF metadata datasets (sbf_obs) per receiver, unchanged
+        # from `_append_to_icechunk`'s STEP 6 -- kept per-group since each
+        # group's aux_datasets differ.
+        for name, r in results.items():
+            if not r.aux_datasets:
+                continue
+            sbf_parts = [
+                aux_dict["sbf_obs"]
+                for aux_dict in r.aux_datasets.values()
+                if "sbf_obs" in aux_dict
+            ]
+            if sbf_parts:
+                try:
+                    self.site.gnss_store.append_metadata_datasets(
+                        sbf_parts, name, "sbf_obs", "main"
+                    )
+                    n_epochs = sum(p.sizes.get("epoch", 0) for p in sbf_parts)
+                    log.info(
+                        "Wrote sbf_obs metadata for %s (%d parts, %d epochs)",
+                        name,
+                        len(sbf_parts),
+                        n_epochs,
+                    )
+                except Exception:
+                    log.warning("Failed to write sbf_obs for %s", name, exc_info=True)
+
+        return results
 
     def _append_to_icechunk(
         self,
@@ -3581,8 +4343,16 @@ class RinexDataProcessor:
                             skipped.add(name)
 
         # ====================================================================
-        # PHASE 3 — sequential writes + yields (deterministic, original order)
+        # PHASE 3 — writes + yields
         # ====================================================================
+        # "overwrite" keeps today's exact sequential per-group loop
+        # (temp-branch-create + reset_branch has the same LocalFileSystem
+        # ref-write hazard the forked path below sidesteps for the other two
+        # strategies -- redesigning it is separate future work, see
+        # dev/cross_group_fork_merge_plan.md). "skip"/"unsafe_append" go
+        # through the cross-group fork/merge batch write instead: one
+        # ThreadPoolExecutor dispatch + one shared commit for the whole
+        # batch, rather than one sequential commit per group.
         date_obj = self.matched_data_dirs.yyyydoy.date
         assert date_obj is not None, "yyyydoy.date must not be None"
         start_time = datetime.combine(date_obj, datetime.min.time())
@@ -3590,45 +4360,104 @@ class RinexDataProcessor:
         time_range = (start_time, end_time)
 
         n_written = 0
-        for name, rtype, data_dir, _pos, fmt in normalized_configs:
-            if name in skipped:
-                continue
-            augmented, aux_datasets, sid_issues = per_receiver_results[name]
-            rinex_files = files_by_dir[(data_dir, fmt)]
 
-            t_write_start = time.perf_counter()
-            self._append_to_icechunk(
-                augmented_datasets=augmented,
-                receiver_name=name,
-                rinex_files=rinex_files,
-                aux_datasets=aux_datasets,
-                sid_issues=sid_issues,
-                reader_format=fmt,
-            )
-            t_write_end = time.perf_counter()
+        if self._gnss_store_strategy == "overwrite":
+            for name, rtype, data_dir, _pos, fmt in normalized_configs:
+                if name in skipped:
+                    continue
+                augmented, aux_datasets, sid_issues = per_receiver_results[name]
+                rinex_files = files_by_dir[(data_dir, fmt)]
 
-            t_read_start = time.perf_counter()
-            daily_dataset = self.site.read_receiver_data(
-                receiver_name=name, time_range=time_range
-            )
-            t_read_end = time.perf_counter()
+                t_write_start = time.perf_counter()
+                self._append_to_icechunk(
+                    augmented_datasets=augmented,
+                    receiver_name=name,
+                    rinex_files=rinex_files,
+                    aux_datasets=aux_datasets,
+                    sid_issues=sid_issues,
+                    reader_format=fmt,
+                )
+                t_write_end = time.perf_counter()
 
-            compute_s = compute_durations.get(name, 0.0)
-            total_s = (
-                compute_s + (t_write_end - t_write_start) + (t_read_end - t_read_start)
-            )
+                t_read_start = time.perf_counter()
+                daily_dataset = self.site.read_receiver_data(
+                    receiver_name=name, time_range=time_range
+                )
+                t_read_end = time.perf_counter()
+
+                compute_s = compute_durations.get(name, 0.0)
+                total_s = (
+                    compute_s
+                    + (t_write_end - t_write_start)
+                    + (t_read_end - t_read_start)
+                )
+                self._logger.info(
+                    "receiver_processing_complete",
+                    receiver=name,
+                    total_seconds=round(total_s, 2),
+                    rinex_parallel_seconds=round(compute_s, 2),
+                    icechunk_write_seconds=round(t_write_end - t_write_start, 2),
+                    store_readback_seconds=round(t_read_end - t_read_start, 2),
+                    dataset_size=dict(daily_dataset.sizes),
+                    epochs=(
+                        len(daily_dataset.epoch) if "epoch" in daily_dataset.dims else 0
+                    ),
+                )
+                n_written += 1
+                yield name, daily_dataset, total_s
+
+        else:  # "skip" or "unsafe_append"
+            group_inputs = []
+            rinex_files_by_name: dict[str, list[Path]] = {}
+            for name, rtype, data_dir, _pos, fmt in normalized_configs:
+                if name in skipped:
+                    continue
+                augmented, aux_datasets, sid_issues = per_receiver_results[name]
+                rinex_files = files_by_dir[(data_dir, fmt)]
+                rinex_files_by_name[name] = rinex_files
+                group_inputs.append(
+                    (name, augmented, rinex_files, aux_datasets, sid_issues, fmt)
+                )
+
+            t_batch_start = time.perf_counter()
+            results: dict[str, GroupWriteResult] = {}
+            if group_inputs:
+                results = self._write_receiver_batch_forked(group_inputs)
+            t_batch_end = time.perf_counter()
             self._logger.info(
-                "receiver_processing_complete",
-                receiver=name,
-                total_seconds=round(total_s, 2),
-                rinex_parallel_seconds=round(compute_s, 2),
-                icechunk_write_seconds=round(t_write_end - t_write_start, 2),
-                store_readback_seconds=round(t_read_end - t_read_start, 2),
-                dataset_size=dict(daily_dataset.sizes),
-                epochs=len(daily_dataset.epoch) if "epoch" in daily_dataset.dims else 0,
+                "cross_group_batch_write_complete",
+                date=self.matched_data_dirs.yyyydoy.to_str(),
+                groups=list(results),
+                duration_seconds=round(t_batch_end - t_batch_start, 2),
             )
-            n_written += 1
-            yield name, daily_dataset, total_s
+
+            for name, rtype, data_dir, _pos, fmt in normalized_configs:
+                if name in skipped or name not in results:
+                    continue
+
+                t_read_start = time.perf_counter()
+                daily_dataset = self.site.read_receiver_data(
+                    receiver_name=name, time_range=time_range
+                )
+                t_read_end = time.perf_counter()
+
+                compute_s = compute_durations.get(name, 0.0)
+                write_s = results[name].duration_seconds
+                total_s = compute_s + write_s + (t_read_end - t_read_start)
+                self._logger.info(
+                    "receiver_processing_complete",
+                    receiver=name,
+                    total_seconds=round(total_s, 2),
+                    rinex_parallel_seconds=round(compute_s, 2),
+                    icechunk_write_seconds=round(write_s, 2),
+                    store_readback_seconds=round(t_read_end - t_read_start, 2),
+                    dataset_size=dict(daily_dataset.sizes),
+                    epochs=(
+                        len(daily_dataset.epoch) if "epoch" in daily_dataset.dims else 0
+                    ),
+                )
+                n_written += 1
+                yield name, daily_dataset, total_s
 
         self._logger.info(
             "rinex_pipeline_complete",

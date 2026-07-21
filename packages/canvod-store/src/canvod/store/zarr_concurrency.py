@@ -15,10 +15,22 @@ fix that originally shipped this -- can use the exact same mechanism.
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 
 import zarr
+
+# zarr.config is a single process-wide donfig singleton; zarr.config.set()'s
+# context manager does a plain save-on-enter/restore-on-exit against it, with
+# no locking or thread-local isolation of its own. Safe under a strictly
+# sequential caller, but multiple threads entering/exiting this block
+# concurrently (e.g. canvodpy's cross-group forked writes) could interleave
+# out of stack order and restore each other's scoped value mid-write. This
+# lock serializes only this small config-mutation+write critical section, not
+# whole callers -- cheap, and a no-op whenever concurrency is None (the
+# common case, since this feature is opt-in per deployment).
+_zarr_config_scope_lock = threading.RLock()
 
 
 @contextmanager
@@ -33,11 +45,20 @@ def scoped_zarr_concurrency(concurrency: int | None) -> Iterator[None]:
     ``timeout``) for the scope of the block. This crashed a production run
     with ``KeyError: 'timeout'`` the first time this mistake was made; do
     not reintroduce it.
+
+    Thread-safe: serializes concurrent callers via ``_zarr_config_scope_lock``
+    so interleaved enter/exit from multiple threads can't corrupt each
+    other's scoped value (see module docstring). The lock is reentrant
+    (``RLock``) because this context manager nests on a single thread today
+    (see ``test_nested_scoping_reverts_to_the_outer_value``) -- a plain
+    ``Lock`` here deadlocks the inner call against its own thread's outer
+    acquisition.
     """
     if concurrency is None:
         yield
         return
-    scoped_async_cfg = dict(zarr.config.get("async"))
-    scoped_async_cfg["concurrency"] = concurrency
-    with zarr.config.set({"async": scoped_async_cfg}):
-        yield
+    with _zarr_config_scope_lock:
+        scoped_async_cfg = dict(zarr.config.get("async"))
+        scoped_async_cfg["concurrency"] = concurrency
+        with zarr.config.set({"async": scoped_async_cfg}):
+            yield

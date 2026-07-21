@@ -9,6 +9,10 @@ extraction (verified there, unmodified).
 
 from __future__ import annotations
 
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import zarr
 
 from canvod.store.zarr_concurrency import scoped_zarr_concurrency
@@ -50,3 +54,43 @@ def test_nested_scoping_reverts_to_the_outer_value() -> None:
         with scoped_zarr_concurrency(2):
             assert zarr.config.get("async.concurrency") == 2
         assert zarr.config.get("async.concurrency") == 4
+
+
+def test_concurrent_threads_never_observe_each_others_scoped_value() -> None:
+    """Regression test for the cross-group fork/merge write-batch design.
+
+    `zarr.config` is a single process-wide donfig singleton;
+    `scoped_zarr_concurrency` mutates it via save-on-enter/restore-on-exit.
+    Before `_zarr_config_scope_lock` was added, concurrent callers (e.g. one
+    thread per receiver group in `RinexDataProcessor._write_group_into_fork`)
+    could interleave enter/exit out of stack order and observe -- or restore
+    -- each other's scoped value mid-write. The lock forces full
+    serialization of the config-mutation+read critical section, so each
+    thread's block always sees exactly its own value, no matter how many
+    other threads are contending for the same block concurrently.
+    """
+    before = zarr.config.get("async.concurrency")
+    n_threads = 8
+    barrier = threading.Barrier(n_threads)
+    observed: dict[int, int] = {}
+
+    def _worker(thread_idx: int) -> None:
+        concurrency = 100 + thread_idx
+        barrier.wait()  # maximize contention: all threads race to enter together
+        with scoped_zarr_concurrency(concurrency):
+            # A tiny sleep widens the window in which an unprotected,
+            # interleaved implementation would leak another thread's value.
+            time.sleep(0.01)
+            observed[thread_idx] = zarr.config.get("async.concurrency")
+
+    with ThreadPoolExecutor(max_workers=n_threads) as tpe:
+        futures = [tpe.submit(_worker, i) for i in range(n_threads)]
+        for fut in as_completed(futures):
+            fut.result()
+
+    for thread_idx in range(n_threads):
+        assert observed[thread_idx] == 100 + thread_idx, (
+            f"thread {thread_idx} observed a concurrency value that wasn't "
+            "its own -- scoped_zarr_concurrency is not thread-safe"
+        )
+    assert zarr.config.get("async.concurrency") == before
