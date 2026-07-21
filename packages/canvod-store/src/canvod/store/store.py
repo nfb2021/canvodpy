@@ -217,6 +217,34 @@ class MyIcechunkStore:
             )
             self._logger.info(f"Manifest splitting enabled: epoch_range={_n_ep}")
 
+        if ic_cfg.num_updates_per_repo_info_file is not None:
+            self.config.num_updates_per_repo_info_file = (
+                ic_cfg.num_updates_per_repo_info_file
+            )
+
+        if (
+            ic_cfg.repo_update_max_tries is not None
+            or ic_cfg.repo_update_initial_backoff_ms is not None
+            or ic_cfg.repo_update_max_backoff_ms is not None
+        ):
+            # RepoUpdateRetryConfig is documented (and self-reports its own
+            # __repr__ path as) `icechunk.config.RepoUpdateRetryConfig`, but
+            # is not actually re-exported at either `icechunk` or
+            # `icechunk.config` as of icechunk==2.1.1 -- an upstream gap, not
+            # intentional privacy. Prefer the public path in case a future
+            # release fixes it; fall back to the private module otherwise.
+            try:
+                from icechunk import RepoUpdateRetryConfig
+            except ImportError:
+                from icechunk._icechunk_python import RepoUpdateRetryConfig
+            self.config.repo_update_retries = RepoUpdateRetryConfig(
+                default=icechunk.StorageRetriesSettings(
+                    max_tries=ic_cfg.repo_update_max_tries,
+                    initial_backoff_ms=ic_cfg.repo_update_initial_backoff_ms,
+                    max_backoff_ms=ic_cfg.repo_update_max_backoff_ms,
+                )
+            )
+
         if preload_cfg is not None or splitting_cfg is not None:
             self.config.manifest = icechunk.ManifestConfig(
                 preload=preload_cfg,

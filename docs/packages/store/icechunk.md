@@ -163,7 +163,7 @@ Icechunk is a cloud-native transactional storage format for multidimensional arr
 ## Configuration
 
 All knobs live under `processing.icechunk:` in `canvod-settings.yaml`, backed by
-`IcechunkConfig` in `canvod-utils`.
+`IcechunkConfig` in `canvod-config`.
 
 ```yaml
 # config/canvod-settings.yaml
@@ -179,7 +179,7 @@ processing:
                                           # connection-abort errors under a write burst
 
     chunk_strategies:
-      rinex_store:
+      gnss_store:
         epoch: 17280   # ≈ 24 h at 5 s cadence
         sid: -1        # no chunking along sid axis
       vod_store:
@@ -199,6 +199,12 @@ processing:
     # Chunk cache (relevant for S3; local FS uses OS page cache)
     # cache_num_chunk_refs: null
     # cache_num_bytes_chunks: null
+
+    # Repo-info rewrite tuning (opt-in; null = icechunk's own internal defaults)
+    # num_updates_per_repo_info_file: null
+    # repo_update_max_tries: null
+    # repo_update_initial_backoff_ms: null
+    # repo_update_max_backoff_ms: null
 ```
 
 | Key | Default | Description |
@@ -219,6 +225,10 @@ processing:
 | `manifest_preload_pattern` | `^(epoch\|sid)$` | Regex for arrays to preload |
 | `cache_num_chunk_refs` | `null` | LRU chunk-reference cache size; `null` = unlimited |
 | `cache_num_bytes_chunks` | `null` | LRU decompressed-data cache in bytes; `null` = unlimited |
+| `num_updates_per_repo_info_file` | `null` | Commits sharing one repo-info object before icechunk starts a new one; `null` = icechunk default. Lower = smaller write payloads, more read-time object fetches — tune deliberately |
+| `repo_update_max_tries` | `null` | Max attempts updating the repo-info object under write contention; `null` = icechunk default (100) |
+| `repo_update_initial_backoff_ms` | `null` | Initial retry backoff for repo-info updates; `null` = icechunk default (50 ms) |
+| `repo_update_max_backoff_ms` | `null` | Retry backoff ceiling for repo-info updates; `null` = icechunk default (30,000 ms) |
 
 ### Migrating to S3
 

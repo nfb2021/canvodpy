@@ -124,3 +124,41 @@ class IcechunkConfig(_StrictModel):
             "Set to match your epoch chunk size (e.g. 17280 for 24 h at 5 s)."
         ),
     )
+    num_updates_per_repo_info_file: int | None = Field(
+        None,
+        ge=1,
+        le=65535,
+        description=(
+            "How many commits/updates share one repo-info object before "
+            "Icechunk starts a new one (None = icechunk default). Lower "
+            "values mean smaller per-write payloads but more object fetches "
+            "to reconstruct repo history; very low values (e.g. 1) trade "
+            "write-time cost for read-time cost on every operation -- tune "
+            "deliberately, don't set blindly."
+        ),
+    )
+    repo_update_max_tries: int | None = Field(
+        None,
+        ge=1,
+        description=(
+            "Maximum attempts (including the first) when updating the repo "
+            "info object, e.g. under write contention (None = icechunk "
+            "default, currently 100)."
+        ),
+    )
+    repo_update_initial_backoff_ms: int | None = Field(
+        None,
+        ge=0,
+        description=(
+            "Initial backoff in milliseconds between repo-info update "
+            "retries (None = icechunk default, currently 50)."
+        ),
+    )
+    repo_update_max_backoff_ms: int | None = Field(
+        None,
+        ge=0,
+        description=(
+            "Upper bound in milliseconds on repo-info update retry backoff "
+            "(None = icechunk default, currently 30,000)."
+        ),
+    )

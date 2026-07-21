@@ -457,6 +457,39 @@ class TestIcechunkConfig:
         assert ic.manifest_preload_pattern == r"^(epoch|sid)$"
         assert ic.manifest_splitting_enabled is True
 
+    def test_repo_info_rewrite_defaults_are_unset(self):
+        ic = IcechunkConfig()
+        assert ic.num_updates_per_repo_info_file is None
+        assert ic.repo_update_max_tries is None
+        assert ic.repo_update_initial_backoff_ms is None
+        assert ic.repo_update_max_backoff_ms is None
+
+    def test_num_updates_per_repo_info_file_bounds(self):
+        IcechunkConfig(num_updates_per_repo_info_file=1)
+        IcechunkConfig(num_updates_per_repo_info_file=65535)
+        with pytest.raises(ValidationError):
+            IcechunkConfig(num_updates_per_repo_info_file=0)  # ge=1
+        with pytest.raises(ValidationError):
+            IcechunkConfig(num_updates_per_repo_info_file=65536)  # le=65535 (u16)
+
+    def test_repo_update_retry_bounds(self):
+        with pytest.raises(ValidationError):
+            IcechunkConfig(repo_update_max_tries=0)  # ge=1
+        with pytest.raises(ValidationError):
+            IcechunkConfig(repo_update_initial_backoff_ms=-1)  # ge=0
+        with pytest.raises(ValidationError):
+            IcechunkConfig(repo_update_max_backoff_ms=-1)  # ge=0
+
+    def test_repo_update_retry_settings_roundtrip(self):
+        ic = IcechunkConfig(
+            repo_update_max_tries=5,
+            repo_update_initial_backoff_ms=100,
+            repo_update_max_backoff_ms=5_000,
+        )
+        assert ic.repo_update_max_tries == 5
+        assert ic.repo_update_initial_backoff_ms == 100
+        assert ic.repo_update_max_backoff_ms == 5_000
+
 
 # ===================================================================
 # CompressionConfig / ChunkStrategy

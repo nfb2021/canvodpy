@@ -600,7 +600,12 @@ Two distinct mechanisms, both real, at different scales:
    mean smaller per-write payloads but more object fetches to reconstruct
    history. `RepositoryConfig.repo_update_retries` controls retry backoff
    for repo-info update conflicts (default: 100 tries, 50ms initial
-   backoff, 30s max backoff). For a store with sustained high commit
+   backoff, 30s max backoff). Both are now exposed in canvodpy as opt-in
+   `IcechunkConfig` fields (`num_updates_per_repo_info_file`,
+   `repo_update_max_tries`, `repo_update_initial_backoff_ms`,
+   `repo_update_max_backoff_ms` — see `docs/packages/store/icechunk.md`),
+   threaded through in `MyIcechunkStore.__init__`; unset (`null`) leaves
+   icechunk's own defaults above untouched. For a store with sustained high commit
    frequency, tuning `num_updates_per_repo_info_file` down is worth
    experimenting with if commit latency (not manifest-flush latency) is the
    bottleneck — profile which one first, they have different fixes.
