@@ -38,7 +38,9 @@ nav = [
   { "Home" = "index.md" },
 
   { "Usage" = [
-    { "Quickstart — Retrieve VOD" = "guides/quickstart.md" },
+    { "Get Started" = "users/index.md" },
+    { "CLI Quickstart" = "users/cli.md" },
+    { "Python Quickstart" = "users/python.md" },
     { "Configuration" = "guides/configuration.md" },
     { "Optional Extensions" = "guides/extensions.md" },
     { "API Levels" = "guides/api-levels.md" },

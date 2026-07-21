@@ -12,8 +12,9 @@ receiver based on their polar angle (θ) and azimuth (φ). The primary grid type
 for GNSS-T is the **equal-area** grid, where each 2° band is divided into cells
 of equal solid angle.
 
-Seven grid types are available: `equal_area`, `equal_angle`, `equirectangular`,
-`htm`, `geodesic`, `healpix`, and `fibonacci`.
+Six grid types are available: `equal_area`, `equal_angle`, `equirectangular`,
+`htm`, `geodesic`, and `fibonacci`. Of these, `equal_area` and `equal_angle`
+are verified correct; the rest are implemented but not yet verified.
 
 ## Installation
 

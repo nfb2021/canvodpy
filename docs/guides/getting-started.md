@@ -4,8 +4,8 @@ This guide walks you through everything you need, from creating a GitHub account
 
 !!! tip "Just want to *use* canVODpy, not contribute?"
 
-    Install it like any other Python package and skip straight to
-    [processing your first day of data](#10b-process-your-first-day-of-data):
+    Install it like any other Python package and head straight to the
+    [Users guide](../users/index.md) instead of this page.
 
     ```bash
     uv add canvodpy    # or: pip install canvodpy
@@ -28,11 +28,11 @@ This guide walks you through everything you need, from creating a GitHub account
 
     [Install `uv` + `just`](#6-install-development-tools) · [Fork + clone](#7-fork-and-clone-the-repository) · [Submodules](#8-initialize-submodules) · [Dev environment](#9-set-up-the-development-environment)
 
--   :fontawesome-solid-sliders: &nbsp; **[Step 10](#10-configure-the-project)** &nbsp; Configuration
+-   :fontawesome-solid-sliders: &nbsp; **[Step 10](#10-configure-and-process-your-first-day-of-data)** &nbsp; Configuration + First Run
 
     ---
 
-    [Initialize `canvod-settings.yaml`](#10-configure-the-project) · Set paths and credentials · Validate · [First run](#10b-process-your-first-day-of-data)
+    [Configure and process your first day](#10-configure-and-process-your-first-day-of-data) — via the [Users guide](../users/index.md)
 
 -   :fontawesome-solid-circle-check: &nbsp; **[Steps 11–13](#11-verify-everything-works)** &nbsp; Verify + Contribute
 
@@ -347,118 +347,15 @@ just hooks
 
 ---
 
-## 10. Configure the project
+## 10. Configure and process your first day of data
 
-canVODpy is configured through a **single YAML file** — `config/canvod-settings.yaml`, located in the project root's `config/` directory — with three sections:
+Configuring `canvod-settings.yaml` and running the pipeline for the first
+time works identically whether you're contributing or just using canVODpy —
+see the [Users guide](../users/index.md), which covers configuration and
+both the [CLI](../users/cli.md#1-configure-the-project) and
+[Python](../users/python.md#1-configure-the-project) paths in full.
 
-| Section       | Purpose                                                                                                                                                                               |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sites:`      | Research sites: data root paths, receiver definitions (name, type, directory), and VOD analysis pairs. Each receiver's `directory` is relative to the site's `gnss_site_data_root`.   |
-| `processing:` | Processing parameters: metadata, credentials (NASA Earthdata), auxiliary data settings (agency, product type), time aggregation, compression, Icechunk storage, and store strategies. |
-| `sids:`       | Signal ID (SID) filtering: choose `all`, a named `preset` (e.g. `default`), or list `custom` SIDs to keep.                                                                            |
-
-To initialize from the template:
-
-```bash
-just config-init          # runs: uv run canvodpy config init
-```
-
-Prefer a guided setup over hand-editing YAML? `canvodpy config init --interactive`
-(`-i` for short) asks a few setup questions and writes the answers straight
-into `canvod-settings.yaml` instead — see the [Quickstart](quickstart.md) for
-details.
-
-After editing, validate your configuration:
-
-```bash
-just config-validate      # runs: uv run canvodpy config validate
-```
-
-To view the resolved configuration:
-
-```bash
-just config-show          # runs: uv run canvodpy config show
-```
-
-Something not working? `canvodpy doctor` reports your resolved config
-location, whether bundled templates are reachable, and whether
-`canvod-settings.yaml` currently validates, all in one read-only command.
-
-!!! note "Overriding config without editing files"
-
-    Every setting in `canvod-settings.yaml` can also be overridden by an environment
-    variable with the `CANVOD__` prefix (note the **double** underscores, which
-    separate nesting levels). This is useful on HPC clusters or in CI, where
-    editing a config file per job is impractical. For example:
-
-    ```bash
-    export CANVOD__PROCESSING__PARAMS__DAYS_PER_BATCH=7
-    export CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL="you@example.com"
-    ```
-
-    Environment variables take priority over values in the YAML file.
-    See the [Configuration Guide](configuration.md) for the full reference.
-
----
-
-## 10b. Process your first day of data
-
-Once your `canvod-settings.yaml` points to a site with GNSS data, you can run the pipeline.
-
-### Check your data first (pre-flight)
-
-Before processing, validate that your data files match the expected
-[naming convention](configuration.md) with the standalone `canvod-preflight` tool:
-
-```bash
-canvod-preflight validate <path/to/your/data-dir>
-```
-
-This checks every file in the directory against the GNSS file naming convention
-(`{SIT}{T}{NN}{AGC}_R_{YYYY}{DOY}{HHMM}_{PERIOD}_{SAMPLING}_{CONTENT}.{TYPE}`)
-and reports mismatches **before** they cause cryptic errors mid-pipeline.
-
-### Dates: the `YYYYDDD` format
-
-canVODpy identifies days by **year + Day of Year (DOY)**: a 7-digit string
-`YYYYDDD`, where `DDD` counts days from 001. For example, `"2025001"` is
-1 January 2025 and `"2025032"` is 1 February 2025. This is the standard
-date convention in GNSS data products.
-
-### Run it
-
-Recommended: run it via the CLI —
-
-```bash
-canvodpy run --site ExampleSite --start 2025001 --end 2025001
-```
-
-This reads the raw files, augments them with satellite positions (ephemeris),
-and writes the results to the site's Icechunk store. Omit `--start` on later
-runs and it resumes automatically from the last processed date.
-
-From Python, the same thing via `Site.pipeline()`:
-
-```python
-from canvodpy import Site
-
-site = Site("ExampleSite")
-pipeline = site.pipeline()          # options like n_workers default to config values
-data = pipeline.process_date("2025001")
-```
-
-!!! info "Ephemeris downloads"
-
-    Satellite orbit products (SP3, and by default CLK) are downloaded
-    automatically from **ESA GSSC** (no account needed). If you configure NASA
-    Earthdata (CDDIS) credentials in `canvod-settings.yaml`, NASA is tried
-    first with ESA as fallback. CLK isn't used by the VOD formula — set
-    `aux_data.fetch_clock: false` to skip it.
-
-See the [API Levels guide](api-levels.md) for the full picture — CLI,
-`Site.pipeline()`, and the functional building blocks (`read_rinex`,
-`augment_with_ephemeris`, `assign_grid_cells`) for component-level scripting
-and analysis.
+Come back here once your first day of data has processed successfully.
 
 ---
 
@@ -595,7 +492,7 @@ main
 └── develop/sprint-2026              ← integration branch (shared by all teams)
     ├── team-grids/                  ← Team A
     │   ├── (direct commits)         ← Workflow A
-    │   └── team-grids/add-healpix   ← Workflow B feature branches
+    │   └── team-grids/add-new-grid   ← Workflow B feature branches
     ├── team-readers/                ← Team B
     └── team-vod/                    ← Team C
 ```
@@ -647,15 +544,15 @@ From here, choose the workflow that fits your team:
 
     ```bash
     git checkout team-grids
-    git checkout -b team-grids/add-healpix
+    git checkout -b team-grids/add-new-grid
     ```
 
     Work, commit, and push your feature branch:
 
     ```bash
     git add <files you changed>
-    git commit -m "feat(grids): add HEALPix support"
-    git push -u origin team-grids/add-healpix
+    git commit -m "feat(grids): add new grid tessellation"
+    git push -u origin team-grids/add-new-grid
     ```
 
     Then open a pull request on GitHub targeting `team-grids`.
@@ -665,7 +562,7 @@ From here, choose the workflow that fits your team:
     ```bash
     git checkout team-grids
     git pull origin team-grids
-    git checkout team-grids/add-healpix
+    git checkout team-grids/add-new-grid
     git rebase team-grids
     ```
 

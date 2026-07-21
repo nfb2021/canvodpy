@@ -12,7 +12,7 @@ flowchart TD
     end
 
     subgraph Agency["Agency Final Pipeline"]
-        DL["FTP Download<br/>COD / ESA / IGS"] --> HERMI["Hermite Interpolation<br/>Orbits → target epochs"]
+        DL["FTP Download<br/>ESA (primary) / NASA CDDIS (fallback)<br/>agency product: COD default"] --> HERMI["Hermite Interpolation<br/>Orbits → target epochs"]
         HERMI --> ZCACHE["Zarr Cache<br/>aux_{date}.zarr"]
         DL -.->|"if fetch_clock"| CLK["Clock Interpolation (optional)<br/>Piecewise linear"]
         CLK -.-> ZCACHE
@@ -20,8 +20,8 @@ flowchart TD
 
     subgraph Broadcast["Broadcast Pipeline"]
         SATVIS["SatVisibility Extract<br/>θ, φ from receiver FW"]
-        KEPLER["Keplerian Propagation<br/>GPS/Galileo/BeiDou orbital elements"]
-        RK4["RK4 Integration<br/>GLONASS state vectors"]
+        KEPLER["🚧 Keplerian Propagation<br/>GPS/Galileo/BeiDou orbital elements<br/><i>Planned — not yet implemented</i>"]
+        RK4["🚧 RK4 Integration<br/>GLONASS state vectors<br/><i>Planned — not yet implemented</i>"]
     end
 
     subgraph Transform["Coordinate Transform"]
@@ -35,12 +35,12 @@ flowchart TD
 
     SP3 --> DL
     SBFVIS --> SATVIS
-    NAV --> KEPLER
-    NAV --> RK4
+    NAV -.-> KEPLER
+    NAV -.-> RK4
 
     ZCACHE --> SCS
-    KEPLER --> SCS
-    RK4 --> SCS
+    KEPLER -.-> SCS
+    RK4 -.-> SCS
     SATVIS --> DIRECT
 
     SCS --> DS
@@ -58,3 +58,5 @@ flowchart TD
     style Output fill:#e0f2f1,stroke:#00695c,stroke-width:2px
     style NAV fill:#fff9c4,stroke:#f9a825,stroke-width:2px,stroke-dasharray: 5 5
     style CLK fill:#fff9c4,stroke:#f9a825,stroke-width:2px,stroke-dasharray: 5 5
+    style KEPLER fill:#fff9c4,stroke:#f9a825,stroke-width:2px,stroke-dasharray: 5 5
+    style RK4 fill:#fff9c4,stroke:#f9a825,stroke-width:2px,stroke-dasharray: 5 5

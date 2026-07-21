@@ -14,7 +14,10 @@ in the browser, but its default "app" mode hides code entirely, and the
 alternatives (forcing code visibility, or duplicating code into markdown
 text) either don't fit the run mode or make the notebooks harder to
 maintain for their primary purpose — being read and adapted as reference
-code. Every notebook also links to its source on
+code. WASM is also a non-starter here regardless: these notebooks depend
+on Icechunk, which has a Rust-compiled backend, and marimo's WASM runtime
+(Pyodide) can only execute pure-Python or WASM-compiled dependencies in
+the browser. Every notebook also links to its source on
 [molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo) for forking
 and live editing.
 

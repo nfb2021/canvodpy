@@ -8,7 +8,7 @@ ical data.
 
 ### 2D Visualization (matplotlib)
 - **Publication-quality polar plots** with full control over styling
-- **Multiple grid type support**: equal-area, HTM, geodesic, HEALPix, Fibonacci
+- **Multiple grid type support**: equal-area, equal-angle, HTM, geodesic, Fibonacci
 - **Flexible colormaps** and styling options
 - **High-resolution export** for papers and presentations
 
@@ -221,9 +221,9 @@ fig = viz.plot_3d(data=data)
 ## Supported Grid Types
 
 - **Equal Area**: Latitude bands with equal solid angle
+- **Equal Angle**: Regular θ/φ spacing
 - **HTM**: Hierarchical Triangular Mesh
 - **Geodesic**: Subdivided icosahedron
-- **HEALPix**: Hierarchical Equal Area isoLatitude Pixelization
 - **Fibonacci**: Spiral point distribution
 
 ## API Reference

@@ -64,7 +64,7 @@ flowchart TD
 
     %% ── Grid Assignment ──
     subgraph GRID[Hemispheric Grid Assignment]
-        BUILD_GRID["Construct Grid (equal-area, HEALPix, geodesic, fibonacci, ...)"]
+        BUILD_GRID["Construct Grid (equal-area, equal-angle, ...)"]
         KDTREE["Build KDTree (cell centres in Cartesian coordinates)"]
         ASSIGN["Spatial Query (O(n log m) per observation)"]
     end

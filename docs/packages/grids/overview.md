@@ -33,14 +33,6 @@ Seven implementations are available, all inheriting from `BaseGridBuilder`:
     Simple rectangular latitude/longitude grid. Fast to compute;
     strong area distortion at low elevations.
 
--   :fontawesome-solid-circle-dot: &nbsp; **HEALPixBuilder**
-
-    ---
-
-    Hierarchical Equal Area isoLatitude Pixelization. All cells have
-    identical areas; supports multi-resolution refinement.
-    Requires `healpy`.
-
 -   :fontawesome-solid-dice-d20: &nbsp; **GeodesicBuilder**
 
     ---

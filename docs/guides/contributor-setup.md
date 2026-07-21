@@ -4,7 +4,7 @@ This guide walks you through everything you need, from creating a GitHub account
 
 !!! tip "Just want to *use* canVODpy, not contribute?"
 
-    See the [Quickstart](quickstart.md) instead.
+    See the [Users guide](../users/index.md) instead.
 
 <div class="grid cards" markdown>
 
@@ -341,7 +341,7 @@ just hooks
 
 ## 10. Configure and run
 
-Follow the [Quickstart](quickstart.md) to initialize `canvod-settings.yaml`, validate it, and process your first day of GNSS data.
+Follow the [Users guide](../users/index.md) to initialize `canvod-settings.yaml`, validate it, and process your first day of GNSS data.
 
 ---
 
@@ -478,7 +478,7 @@ main
 └── develop/sprint-2026              ← integration branch (shared by all teams)
     ├── team-grids/                  ← Team A
     │   ├── (direct commits)         ← Workflow A
-    │   └── team-grids/add-healpix   ← Workflow B feature branches
+    │   └── team-grids/add-new-grid   ← Workflow B feature branches
     ├── team-readers/                ← Team B
     └── team-vod/                    ← Team C
 ```
@@ -530,15 +530,15 @@ From here, choose the workflow that fits your team:
 
     ```bash
     git checkout team-grids
-    git checkout -b team-grids/add-healpix
+    git checkout -b team-grids/add-new-grid
     ```
 
     Work, commit, and push your feature branch:
 
     ```bash
     git add <files you changed>
-    git commit -m "feat(grids): add HEALPix support"
-    git push -u origin team-grids/add-healpix
+    git commit -m "feat(grids): add new grid tessellation"
+    git push -u origin team-grids/add-new-grid
     ```
 
     Then open a pull request on GitHub targeting `team-grids`.
@@ -548,7 +548,7 @@ From here, choose the workflow that fits your team:
     ```bash
     git checkout team-grids
     git pull origin team-grids
-    git checkout team-grids/add-healpix
+    git checkout team-grids/add-new-grid
     git rebase team-grids
     ```
 

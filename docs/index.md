@@ -21,8 +21,7 @@ signal-to-noise ratio observations.
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nfb2021/canvodpy/badge)](https://securityscorecards.dev/viewer/?uri=github.com/nfb2021/canvodpy)
 [![VODnet](https://img.shields.io/badge/-VODnet-2d6a4f?labelColor=555555&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAAXNSR0IArs4c6QAAAHhlWElmTU0AKgAAAAgABAEaAAUAAAABAAAAPgEbAAUAAAABAAAARgEoAAMAAAABAAIAAIdpAAQAAAABAAAATgAAAAAAAABIAAAAAQAAAEgAAAABAAOgAQADAAAAAQABAACgAgAEAAAAAQAAAA6gAwAEAAAAAQAAAA4AAAAAjn8NzQAAAAlwSFlzAAALEwAACxMBAJqcGAAAAflJREFUKBWtUEtoE1EUPe+9SczHiam/aixtqi1E7aai4kK0CAVBDFZwrQs3xp2KIriYtiKuav3QRVxYKIjFVihWrCBIaaWioKidQBsxi3SwYmMmkxidYWaemYEEKUgRPHDhXu4575x3gf+NKfVD3UQ2u/Zv7wrLF8mPfV2ZH1ZCNIM7xUCAHHjyfN6wQ8mZo3vvE4Av57tzOjfd/WZpivfJSW5wkzvomnzFe2SFTyyU+iFJtCpk1eaRfOIw84TuRsN7kEkVMDzyEjPvUtga2YiDTRFM5+m+F8XYHMZuzDqaWlQf8yVMpmJ0/DUu9g6hVNQAy8au3W04NHAV85oFRulZS+LDkIjtWmcyHT6vQHYoXwrouTWKkv4LLOAHE4N4K6dxZ2AISl4DpawVDVrYcXSFZtTPGSV8IatjUVErJ+Cwbdstx3Vw8CG+pmQIHg+HUVlWo7aSp/qz9Kn3W5p5S/x4DJ8/lfGt4kAow7bmBpQ9fuQ3RUFtM4Uz61Qk/vijbpLbgtc61n05zjQ1hCvXHmB9fT3OnT8NOWfi+uxP0IJxE4S4jrXzxrffm1xlb75Aud/cEFmD9vYW6KaNUoUmCpS3BblUPNk45sR0UBM6Qzx2qd9LVnfqujGS+64puaX8olEuj4uMHHnc2dTrcFZGtCOMxv11KxP/kfEbTTzNcyb5ar0AAAAASUVORK5CYII=&logoColor=white)](https://www.gfz.de/en/section/remote-sensing-and-geoinformatics/projects/vodnet)
 
-[Get started retrieving VOD :fontawesome-solid-arrow-right:](guides/quickstart.md){ .md-button .md-button--primary }
-[Browse interactive notebooks :fontawesome-solid-play:](notebooks/index.md){ .md-button }
+[Get started retrieving VOD :fontawesome-solid-arrow-right:](users/index.md){ .md-button .md-button--primary }
 [Get started contributing to the ecosystem :fontawesome-solid-arrow-right:](CONTRIBUTING.md){ .md-button }
 
 </div>
@@ -33,23 +32,11 @@ signal-to-noise ratio observations.
 
 <div class="grid cards" markdown>
 
-
--   :fontawesome-solid-stamp: &nbsp; **No more breaking code - multi-reader support and GNSS data validation**
-
-    ---
-
-    Supports RINEX v2.11, RINEX v3.04, Stripped RINEX v3.05, NMEA v4 and Septentrio SBF. Every supported GNSS reader produces a strcuturally identical xarray Dataset
-    that passes structural and content validation at run-time. Downstream code is reader-agnostic.
-
-    [:octicons-arrow-right-24: Reader Architecture](packages/readers/architecture.md)
-
-
--   :fontawesome-solid-layer-group: &nbsp; **Single unified & validated dataset format**
+-   :fontawesome-solid-stamp: &nbsp; **Multi-reader support with unified, validated output**
 
     ---
 
-    Every supported GNSS reader produces a strcuturally identical xarray Dataset
-    that passes structural and content validation at run-time. Downstream code is reader-agnostic.
+    Supports RINEX v2.11, RINEX v3.04, Stripped RINEX v3.05, NMEA v4 and Septentrio SBF. Every supported GNSS reader produces a structurally identical, run-time-validated xarray Dataset. Downstream code is reader-agnostic.
 
     [:octicons-arrow-right-24: Reader Architecture](packages/readers/architecture.md)
 
@@ -57,7 +44,7 @@ signal-to-noise ratio observations.
 
     ---
 
-    Icechunk let's you manage xarray Datasets of your entire network like a database and gives every write a git-like commit snapshot. Scroll through your commit history, branch off into development branches and create immutable tags for releases. Local-storage first, but S3-ready with full write-concurrency when you are.
+    Icechunk let's you manage xarray Datasets of your entire network like a database and gives every write a git-like commit snapshot. Scroll through your commit history, branch off into development branches and create immutable tags for releases. Local filesystem storage today, with cloud object-store support on the roadmap.
 
     [:octicons-arrow-right-24: Storage Engine](packages/store/overview.md)
 
@@ -65,18 +52,49 @@ signal-to-noise ratio observations.
 
     ---
 
-    Different hemispheric tessellations (equal-area, equal-angle, geodesic, ...) defined in 3D, enabling full spatial analyses. Supports  KDTree cell assignment and interactive data exploration.
+    Hemispheric tessellations (equal-area and equal-angle verified; others experimental) defined in 3D, enabling full spatial analyses. KDTree-backed cell assignment and interactive data exploration.
 
     [:octicons-arrow-right-24: canvod-grids](packages/grids/overview.md)
-
 
 -   :fontawesome-solid-rotate: &nbsp; **Fully parallel processing**
 
     ---
 
-    Per default, all file reading and processign is natively parallelized. Sw
+    By default, all file reading and processing is natively parallelized.
 
     [:octicons-arrow-right-24: Architecture](architecture.md)
+
+-   :fontawesome-solid-flask: &nbsp; **Four-tier verification suite**
+
+    ---
+
+    Self-consistency, internal cross-checks, regression snapshots, and comparison against reference implementations — a structured audit trail for trusting the numbers.
+
+    [:octicons-arrow-right-24: canvod-audit](packages/audit/overview.md)
+
+-   :fontawesome-solid-shield-halved: &nbsp; **Reliable by design**
+
+    ---
+
+    Field data gets corrupted — power outages, partial writes, stray files. The store actively guards against it: hash- and time-overlap checks block corrupting appends before they happen, and it's the authoritative last line of defense for ingest, not just a passive write target.
+
+    [:octicons-arrow-right-24: Storage Engine](packages/store/overview.md)
+
+-   :fontawesome-solid-fingerprint: &nbsp; **Traceability, top to bottom**
+
+    ---
+
+    FAIR-compliant, OpenSSF-vetted, DOI-versioned releases at the software layer. SHA-256 file hashing and DataCite/ACDD/STAC-aligned provenance metadata at the data layer. Every citable release and every stored dataset is independently traceable.
+
+    [:octicons-arrow-right-24: Store Metadata](packages/store-metadata/overview.md)
+
+</div>
+
+---
+
+<div class="hero" markdown>
+
+[Browse interactive notebooks :fontawesome-solid-play:](notebooks/index.md){ .md-button .md-button--primary }
 
 </div>
 

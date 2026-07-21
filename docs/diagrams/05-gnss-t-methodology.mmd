@@ -25,9 +25,10 @@ flowchart TD
         SCS["Spherical Coordinate Transformation (ECEF → r, θ, φ)"]
     end
 
-    subgraph STORAGE[Versioned Storage - Icechunk]
-        ICECHUNK["Observations Repository<br/>(append per epoch, commit per file)"]
+    subgraph STORAGE[Versioned Storage - two Icechunk repositories per site]
+        ICECHUNK["RINEX/SBF Repository<br/>(append per epoch, commit per file)"]
         META_TRACK["Metadata Tracking<br/>(RINEX hash, snapshot ID, epoch range)"]
+        VOD_REPO["VOD Repository<br/>(per calculator/analysis group)"]
     end
 
     subgraph VOD[VOD Retrieval]
@@ -37,7 +38,7 @@ flowchart TD
     end
 
     subgraph GRIDDING[Hemispheric Grid Assignment]
-        GRID["Grid Construction<br/>(equal-area, HEALPix, geodesic, ...)"]
+        GRID["Grid Construction<br/>(equal-area, equal-angle, ...)"]
         KDTREE["KDTree Cell Assignment (O(n log m) spatial query)"]
     end
 
@@ -72,6 +73,7 @@ flowchart TD
     PAIR --> TAU
     TAU --> FORMULA
     FORMULA --> VOD_DS
+    VOD_DS --> VOD_REPO
     VOD_DS --> GRID
     GRID --> KDTREE
     KDTREE --> VIZ

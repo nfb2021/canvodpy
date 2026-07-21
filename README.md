@@ -139,7 +139,7 @@ flowchart TD
 
     subgraph Analysis[📊 Analysis]
         VODCalc["VodComputer<br/>Tau-Omega model · canopy vs reference"]
-        GridAssign["Hemispheric Grid Assignment<br/>Equal-area / HEALPix / geodesic"]
+        GridAssign["Hemispheric Grid Assignment<br/>Equal-area / Equal-angle / ..."]
         Aggregate["Aggregation<br/>Per-cell statistics"]
     end
 
@@ -251,8 +251,9 @@ flowchart TD
     L4H --> STORE
 ```
 
-`canvodpy.functional` is also what the optional `canvod-airflow` extension
-builds its DAGs on. `FluentWorkflow`, the flat `process_date()` /
+The optional `canvod-airflow` extension builds its DAGs on
+`canvodpy.workflows.tasks`, a dedicated set of Airflow-compatible task
+functions — not `canvodpy.functional` directly. `FluentWorkflow`, the flat `process_date()` /
 `calculate_vod()` / `preview_processing()` functions, and `VODWorkflow` are
 deprecated (`DeprecationWarning` on use) — kept working, no longer taught;
 `VODWorkflow` additionally has a broken augmentation step and shouldn't be

@@ -32,20 +32,10 @@ file_hash(path)                    # SHA-256 of a file, used by store dedup guar
 
 ## Diagnostics
 
-```python
-from canvod.utils.diagnostics import track_time, track_memory, BatchTracker
-
-with track_time("ingest batch"):
-    ...
-```
-
-| Component | Purpose |
-|---|---|
-| `TaskMetrics` | Structured timing/memory record for one unit of work |
-| `track_time` / `track_memory` | Context managers for measuring a code block |
-| `BatchTracker` | Aggregates `TaskMetrics` across a batch (e.g. a day's worth of files) |
-| `DatasetReport` | Summary report over an `xarray.Dataset` (shape, nulls, memory) |
-| `retry` | Retry decorator for auxiliary-data downloads and other flaky I/O |
+Processing diagnostics and performance tracking (`stage_timer`, `run_id`
+correlation, structured logging) live in `canvodpy.logging`, not in
+`canvod-utils` — see the [Diagnostics & Performance Monitoring
+guide](../../guides/diagnostics.md) for the current implementation.
 
 ---
 

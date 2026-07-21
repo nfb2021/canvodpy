@@ -337,14 +337,15 @@ library — there is no distributed cluster to configure:
 
 ### Hemispheric grids
 
-`canvod-grids` provides five grid tessellations designed for hemispheric VOD
-analysis — **equal-area** (ring-based, equal solid angle; the default),
-**geodesic** (icosahedral subdivision), **HTM** (hierarchical triangular mesh),
-**HEALPix**, and **Fibonacci** (golden-spiral + Voronoi) — plus two simple
-rectangular tessellations (equal-angle, equirectangular) kept for comparison
-and not recommended for analysis. Equal-area cells matter because a fixed
-solid angle per cell means each cell receives a comparable observation
-density, avoiding polar oversampling artifacts in VOD maps.
+`canvod-grids` provides several grid tessellations for hemispheric VOD
+analysis. **Equal-area** (ring-based, equal solid angle; the default) and
+**equal-angle** (regular θ/φ spacing) are verified correct and safe to use
+for analysis. The remaining tessellations (geodesic, HTM, Fibonacci,
+equirectangular) are implemented but not yet verified against a reference
+and should be treated as experimental pending that check. Equal-area cells
+matter because a fixed solid angle per cell means each cell receives a
+comparable observation density, avoiding polar oversampling artifacts in
+VOD maps.
 
 ### API levels
 

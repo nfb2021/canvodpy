@@ -18,13 +18,7 @@ management lives in [canvod.config](canvod-config.md) instead.
 
 ## Diagnostics
 
-::: canvod.utils.diagnostics
-    options:
-      members:
-        - TaskMetrics
-        - task_metrics
-        - track_time
-        - track_memory
-        - BatchTracker
-        - DatasetReport
-        - retry
+Processing diagnostics and performance tracking now live in
+`canvodpy.logging` (see [canvodpy API Reference](canvodpy.md#configuration)
+and the [Diagnostics & Performance Monitoring guide](../guides/diagnostics.md))
+rather than in `canvod-utils` — `canvod.utils.diagnostics` was removed.

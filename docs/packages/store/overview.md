@@ -60,17 +60,23 @@ This gives the store three properties that matter for reproducible science:
 
 ## Architecture
 
+`GnssResearchSite` coordinates **two separate Icechunk repositories per site**, not one — a RINEX/SBF store for raw, standardized observations and a VOD store for retrieval results:
+
 ```mermaid
 graph TD
     A1["`**GNSS Data (RINEX / SBF)**
     epoch x sid`"]
     A1 --> B["`**Preprocessing**
     encoding, padding`"]
-    B --> C["Icechunk Repository"]
+    B --> C["RINEX/SBF Icechunk Repository"]
     C --> D1["`**receiver group**
     canopy/, reference/
     epoch x sid`"]
-    D1 --> E["VOD Analysis"]
+    D1 --> E["VOD Calculation"]
+    E --> F["VOD Icechunk Repository"]
+    F --> G["`**calculator/analysis group**
+    e.g. TauOmegaZerothOrder/canopy_reference
+    epoch x sid`"]
 ```
 
 ---

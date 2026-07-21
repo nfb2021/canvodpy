@@ -3597,3 +3597,12 @@ prerequisite for cross-group fork/merge. Diagnostic write-timing/shape
 logging added in the same original commit (`icechunk_write_data_started` /
 `_succeeded` / `_error` in `MyIcechunkStore`) was kept — unconditional,
 cheap, and independently useful.
+
+**Update 2026-07-21 (2):** the `unsafe_append` rename (see storage-strategy
+doc rewrite, same day) narrowed this task's real scope further — cross-group
+fork/merge only needs to cover `skip`/`unsafe_append` strategies (and
+new-file-always-write); `overwrite` keeps its own sequential branch/reset
+path untouched, out of scope. Full design doc, resolving points 1-3 above and
+covering the refactor boundary, new-group edge case, commit/metadata
+aggregation, fail-fast error handling, and a throwaway-store test plan:
+`dev/cross_group_fork_merge_plan.md`. Design only — no code written yet.

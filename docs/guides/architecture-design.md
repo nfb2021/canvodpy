@@ -84,7 +84,7 @@ flowchart TD
     subgraph BUILTIN["Built-in"]
         RINEX3["Rnxv3Obs"]
         EA["EqualAreaBuilder"]
-        HP["HEALPixBuilder"]
+        HP["EqualAngleBuilder"]
         TO["TauOmegaZerothOrder"]
     end
 

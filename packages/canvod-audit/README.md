@@ -1,6 +1,6 @@
 # canvod-audit
 
-Three-tier verification and regression suite for canVODpy pipelines.
+Four-tier verification and regression suite for canVODpy pipelines.
 
 Part of the [canVODpy](https://github.com/nfb2021/canvodpy) ecosystem.
 
