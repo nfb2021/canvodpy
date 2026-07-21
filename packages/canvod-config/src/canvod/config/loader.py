@@ -403,6 +403,7 @@ def load_config(
 
 # Backwards-compatible cache introspection/control on the public name --
 # some tests/callers reach for `load_config.cache_clear()`/`.cache_info()`
-# directly (the function used to be the lru_cache-wrapped one itself).
-load_config.cache_clear = _load_config_cached.cache_clear
-load_config.cache_info = _load_config_cached.cache_info
+# directly (the function used to be the lru_cache-wrapped one itself). ty
+# can't model attributes bolted onto a plain function.
+load_config.cache_clear = _load_config_cached.cache_clear  # ty: ignore[unresolved-attribute]
+load_config.cache_info = _load_config_cached.cache_info  # ty: ignore[unresolved-attribute]
