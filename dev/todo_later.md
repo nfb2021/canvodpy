@@ -3470,3 +3470,33 @@ alias-corrupt one pairing's output with another's). Full fast suite
 (1846 tests) and the audit suite (60 tests) pass; not yet verified
 against real multi-canopy production data (no local fixture) — pending
 the next live rosalia run.
+
+## 48. Three pre-existing test failures surfaced while verifying the `load_config()` cache fix (2026-07-21)
+
+While verifying `fix(config): load_config() cache blind to CANVOD_CONFIG_FILE/
+CANVOD_CONFIG_DIR env var changes` (commit `26756184`), the fast suite and
+`canvodpy/tests/test_cli_store.py` showed 3 failures, confirmed via
+`git stash` to pre-date that fix (fail identically with it removed) and thus
+unrelated to it:
+
+1. `canvodpy/tests/test_cli_store.py::TestStoreInfo::test_shows_tree_and_stats_for_existing_store`
+   — `assert 'Groups:      1' in ...`. Rich console output rendered under
+   `CliRunner` appears to wrap/pad differently than the test's exact-string
+   assertion expects.
+2. `canvodpy/tests/test_cli_store.py::TestStoreMaintain::test_execute_with_confirmation_runs_maintenance`
+   — `assert 'Expired snapshots: 0' in ...`. Same class of issue as (1).
+3. `canvodpy/tests/test_cli_config.py::TestValidateRecipeWithoutFilemap::test_recipe_without_filemap_fails_fast`
+   — `assert 'uv sync --extra filemap' in ...`; the run instead shows only a
+   "receiver directory settings" failure. Reproduces in isolation too (not
+   test-order pollution) — the "not installed" branch that emits the
+   `uv sync --extra filemap` message doesn't appear to be triggering,
+   possibly because `canvod-filemap` (or something that makes the check
+   think it's importable) is present in this dev venv where the test
+   assumes it isn't.
+
+**Action:** not started. (1) and (2) likely need either a wider `CliRunner`
+terminal width or a less brittle assertion (substring-after-strip, or assert
+on parsed table cells instead of raw rendered text). (3) needs tracing
+`canvodpy/cli/config.py`'s filemap-recipe validation branch to find what
+environment fact it's actually keying off, and whether the test's assumption
+about the dev venv still holds.
