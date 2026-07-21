@@ -3580,12 +3580,20 @@ no). Building cross-group fork/merge needs, before implementation:
    worker count and validate against the real mount — the cap is per-process,
    not global, so N workers multiply concurrent I/O against the mount in a
    way today's fully-sequential design never produces.
-3. This is why it's tied to §-numbered-task "Revisit zarr_async_concurrency
-   and batch_drain_settle_seconds" — `scoped_zarr_concurrency`'s global
-   `donfig`-backed state has no thread/contextvar isolation (confirmed unsafe
-   under thread-based fan-out in one process; fine under today's
-   process-based pool, which any implementation must preserve), and
-   `batch_drain_settle_seconds`'s whole "pause once after the pool drains,
-   before the one write that follows" model assumes exactly one write event
-   per batch — that assumption breaks if chunk-write I/O gets fanned out to
-   concurrent workers instead of funneled through the single shared session.
+3. This is why it's tied to §-numbered-task "Revisit zarr_async_concurrency" —
+   `scoped_zarr_concurrency`'s global `donfig`-backed state has no
+   thread/contextvar isolation (confirmed unsafe under thread-based fan-out
+   in one process; fine under today's process-based pool, which any
+   implementation must preserve).
+
+**Update 2026-07-21:** `batch_drain_settle_seconds` was removed entirely
+(field, pipeline hook, dedicated test, example-config entry) — the CIFS
+connection-abort issue it was a hypothesis-driven mitigation for hasn't
+recurred since deployment, and per-user decision the whole mechanism was
+reverted rather than left dormant. Its "single write event per batch"
+constraint on point 3 above no longer applies (there's nothing left to
+break); `zarr_async_concurrency`'s thread-safety gap is still the only real
+prerequisite for cross-group fork/merge. Diagnostic write-timing/shape
+logging added in the same original commit (`icechunk_write_data_started` /
+`_succeeded` / `_error` in `MyIcechunkStore`) was kept — unconditional,
+cheap, and independently useful.

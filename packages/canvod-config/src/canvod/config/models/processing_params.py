@@ -150,23 +150,6 @@ class ProcessingParams(_StrictModel):
             "Set to False to reduce dataset size when raw quantities are not needed."
         ),
     )
-    batch_drain_settle_seconds: float | None = Field(
-        None,
-        ge=0,
-        description=(
-            "Pause after a multi-day batch's loky pool fully drains "
-            "('flat_loky_complete') and before the first VOD-store write of "
-            "that batch. None (default) = no pause, zero behavior change. "
-            "The VOD write is the first thing to touch a network-mounted "
-            "(CIFS/NFS) store immediately after a batch's sustained "
-            "multi-process RINEX I/O -- OS/SMB-client connection/handle "
-            "state from that burst may not have settled yet, even though "
-            "no worker process is still running (dev/todo_later.md, "
-            "2026-07-18 VOD-write-crash investigation). Set on affected "
-            "network-mounted deployments (start around 10-30s); costs "
-            "nothing on local/fast storage, so leave unset there."
-        ),
-    )
 
     @model_validator(mode="after")
     def validate_resource_mode(self) -> ProcessingParams:
