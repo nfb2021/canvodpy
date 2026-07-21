@@ -29,7 +29,7 @@ processing.yaml::
       stores_root_dir: /Volumes/ExtremePro/canvod_audit_output/tier1_sbf_vs_rinex
       aux_data_dir: <repo>/packages/canvod-readers/tests/test_data/valid/rinex_v3_04/01_Rosalia
       gnss_store_name: canvodpy_SBF_store
-      gnss_store_strategy: append
+      gnss_store_strategy: unsafe_append
 
 Input data
 ----------

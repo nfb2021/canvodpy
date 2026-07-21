@@ -262,7 +262,7 @@ processing:
 
   storage:
     stores_root_dir: /path/to/stores  # prefer CANVOD__PROCESSING__STORAGE__STORES_ROOT_DIR
-    gnss_store_strategy: skip         # skip, overwrite, or append
+    gnss_store_strategy: skip         # skip, overwrite, or unsafe_append -- see warning below
     vod_store_strategy: overwrite
 ```
 
@@ -278,10 +278,35 @@ processing:
 | `params.days_per_batch`         | 1–30                     | Calendar days pooled per parallel processing wave.                                                                                                                                       |
 | `params.resource_mode`          | `auto`, `manual`         | `auto` detects available CPU cores and leaves two free for the operating system. `manual` enforces explicit limits (`n_max_threads` is then required) — use this on shared servers.      |
 | `params.store_radial_distance`  | `true`, `false`          | Whether to store satellite radial distance in the output.                                                                                                                                |
+| `storage.gnss_store_strategy`   | `skip`, `overwrite`, `unsafe_append` | What to do when a file already exists in the store. `skip` (default) is the normal case. See warning below before ever using `unsafe_append`.                              |
 
 For a full explanation of how `resource_mode`, `days_per_batch`, and `n_max_threads` interact
 with the parallel processing architecture, see
 [Parallel Processing](parallel-processing.md).
+
+!!! warning "`gnss_store_strategy: unsafe_append` can corrupt unguarded reads"
+    `skip` (the default) is a no-op when a file already exists — the correct behavior for
+    the normal workflow of chronologically filling an initially-empty store, where a
+    re-run over already-ingested files should change nothing. `overwrite` deletes the old
+    epochs for a file's range before writing the replacement — use it after a *pipeline*
+    bug fix (reader logic, ephemeris source) when you need to regenerate previously-stored
+    results, not because the raw GNSS file itself changed.
+
+    `unsafe_append` writes the file's data again on top of what's already there, with **no
+    epoch-level uniqueness check**, producing duplicate `epoch` coordinate values in the
+    Zarr array. The two built-in pipeline read paths already guard against this:
+    `GnssResearchSite.read_receiver_data()` routes through `read_group_deduplicated()`
+    whenever this strategy is set, and `VodComputer.compute_bulk()` unconditionally
+    deduplicates every read via `_dedup_sort()` regardless of strategy. But
+    `MyIcechunkStore.read_group()` itself — the low-level API used directly by custom
+    scripts/notebooks, and by the deprecated L1 `Pipeline.calculate_vod()` — has no such
+    guard: `.sel()` on a duplicated label can raise or silently return multiple matches,
+    and aligning two datasets that both carry the duplicate (e.g. canopy vs. reference)
+    produces a cartesian product at those epochs. The duplication is also physical, not
+    just a read-time artifact: Icechunk stores the extra chunks permanently regardless of
+    whether the read side protects against it. Avoid `unsafe_append` unless you have a
+    specific reason, and be aware any read path outside the two guarded ones above is
+    unprotected.
 
 ### Ephemeris data sources
 

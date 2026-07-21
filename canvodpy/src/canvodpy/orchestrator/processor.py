@@ -2425,8 +2425,10 @@ class RinexDataProcessor:
                                 actions["skipped"] += 1
                                 log.debug("Skipped: %s", rel_path)
 
-                            case (True, "append"):
-                                # File exists but append anyway
+                            case (True, "unsafe_append"):
+                                # File exists but write again anyway -- no
+                                # epoch-uniqueness check, see StorageConfig.
+                                # gnss_store_strategy docstring for the risk.
                                 to_icechunk(
                                     ds_clean,
                                     session,
@@ -2435,7 +2437,7 @@ class RinexDataProcessor:
                                 )
                                 actions["appended"] += 1
                                 action = "appended"
-                                log.debug("Appended: %s", rel_path)
+                                log.debug("Appended (unsafe): %s", rel_path)
 
                             case (False, _):
                                 # New file, write it
@@ -4157,7 +4159,7 @@ if __name__ == "__main__":
             )
 
             # Check if should skip
-            if processor._gnss_store_strategy in ["skip", "append"]:
+            if processor._gnss_store_strategy in ["skip", "unsafe_append"]:
                 should_skip, coverage = processor.should_skip_day()
 
                 if should_skip:

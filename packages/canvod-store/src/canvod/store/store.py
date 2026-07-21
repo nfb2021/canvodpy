@@ -132,7 +132,7 @@ class MyIcechunkStore:
             from canvod.config.models import IcechunkConfig
 
             ic_cfg = IcechunkConfig()
-            _gnss_store_strategy = "append"
+            _gnss_store_strategy = "skip"
             _vod_store_strategy = "overwrite"
             _log_path_depth = 3
 

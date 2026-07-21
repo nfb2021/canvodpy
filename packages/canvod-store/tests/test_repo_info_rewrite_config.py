@@ -26,7 +26,7 @@ def _fake_cfg(ic_cfg: IcechunkConfig) -> SimpleNamespace:
         processing=SimpleNamespace(
             icechunk=ic_cfg,
             storage=SimpleNamespace(
-                gnss_store_strategy="append",
+                gnss_store_strategy="skip",
                 vod_store_strategy="overwrite",
             ),
             logging=SimpleNamespace(log_path_depth=3),

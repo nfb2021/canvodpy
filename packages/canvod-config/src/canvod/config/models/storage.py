@@ -160,8 +160,41 @@ class StorageConfig(_StrictModel):
             "rebuilding it independently."
         ),
     )
-    gnss_store_strategy: Literal["skip", "overwrite", "append"] = "skip"
-    vod_store_strategy: Literal["skip", "overwrite", "append"] = "overwrite"
+    gnss_store_strategy: Literal["skip", "overwrite", "unsafe_append"] = Field(
+        "skip",
+        description=(
+            "How to handle a file whose hash/time-range already exists in "
+            "the GNSS store (new files are always written regardless of "
+            "this setting). 'skip' (default, recommended): do nothing -- "
+            "the normal case, since a re-run over already-ingested files "
+            "should be a no-op, not a rewrite. 'overwrite': delete the old "
+            "epochs for that file's range first, then write the new "
+            "version -- for correcting already-ingested data after a "
+            "pipeline bug fix (reader logic, ephemeris source, etc.), not "
+            "because the raw GNSS file itself changed. 'unsafe_append': "
+            "write the file's data again on top of what's already there, "
+            "with NO epoch-level uniqueness check. This produces duplicate "
+            "epoch coordinate values in the Zarr array, and xarray does not "
+            "enforce unique index values. The two built-in pipeline read "
+            "paths already guard against it -- GnssResearchSite."
+            "read_receiver_data() routes through read_group_deduplicated() "
+            "whenever this strategy is set (manager.py), and VodComputer."
+            "compute_bulk() unconditionally deduplicates every read via "
+            "_dedup_sort() regardless of strategy -- but MyIcechunkStore."
+            "read_group() itself (the low-level API used directly by "
+            "custom scripts/notebooks, and by the deprecated L1 "
+            "Pipeline.calculate_vod()) has no such guard: `.sel()` on a "
+            "duplicated label can raise or return multiple matches, and "
+            "aligning two duplicated datasets (e.g. canopy vs. reference) "
+            "produces a cartesian product at the duplicated epochs. The "
+            "duplication is also physical, not just a read-time artifact -- "
+            "Icechunk stores the extra chunks permanently; dedup-on-read "
+            "does not undo that. Avoid 'unsafe_append' unless you have a "
+            "specific reason, and be aware any read path outside the two "
+            "guarded ones above is unprotected."
+        ),
+    )
+    vod_store_strategy: Literal["skip", "overwrite", "unsafe_append"] = "overwrite"
     keeper_tags: bool = Field(
         False,
         description=(

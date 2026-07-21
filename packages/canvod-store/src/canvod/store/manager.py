@@ -404,7 +404,7 @@ class GnssResearchSite:
 
         self._logger.info(f"Reading data for receiver '{receiver_name}'")
 
-        if self.gnss_store._gnss_store_strategy == "append":
+        if self.gnss_store._gnss_store_strategy == "unsafe_append":
             ds = self.gnss_store.read_group_deduplicated(receiver_name, keep="last")
         else:
             ds = self.gnss_store.read_group(receiver_name)

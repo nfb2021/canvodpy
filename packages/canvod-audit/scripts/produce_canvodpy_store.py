@@ -28,7 +28,7 @@ processing.yaml::
     storage:
       aux_data_dir: <repo>/packages/canvod-readers/tests/test_data/valid/rinex_v3_04/01_Rosalia
       gnss_store_name: canvodpy_Rinex_Icechunk_Store
-      gnss_store_strategy: append
+      gnss_store_strategy: unsafe_append
 
 Input data
 ----------

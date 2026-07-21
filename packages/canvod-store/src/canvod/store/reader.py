@@ -422,7 +422,7 @@ class IcechunkDataReader:
                                 commit_message=msg,
                             )
 
-                        case (True, "append"):
+                        case (True, "unsafe_append"):
                             msg = f"[v{version}] Appended {rel_path}"
                             self._site.gnss_store.append_to_group(
                                 dataset=ds,
@@ -612,7 +612,7 @@ class IcechunkDataReader:
                                 commit_message=msg,
                             )
 
-                        case (True, "append"):
+                        case (True, "unsafe_append"):
                             msg = (
                                 f"[v{version}] Appended {rel_path} "
                                 f"(hash={rinex_hash}, epoch={start_epoch}→{end_epoch}) "

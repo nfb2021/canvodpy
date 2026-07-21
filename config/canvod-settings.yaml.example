@@ -200,7 +200,24 @@ processing:
     # site-based, so this is safe across sites with different sampling rates.
     # shared_aux_cache_dir: /path/to/shared/aux_cache
 
-    gnss_store_strategy: skip      # skip, overwrite, append
+    # What to do when a file's hash/time-range already exists in the store
+    # (new files are always written regardless):
+    #   skip          — do nothing (default, recommended; a re-run is a no-op)
+    #   overwrite     — delete old epochs for that range, write the new
+    #                   version (for pipeline bug fixes, not raw-data changes)
+    #   unsafe_append — write the data again on top, with NO epoch-uniqueness
+    #                   check. Produces duplicate epoch coordinate values.
+    #                   The two built-in pipeline read paths already guard
+    #                   against this (read_receiver_data() and VodComputer.
+    #                   compute_bulk() both dedup), but MyIcechunkStore.
+    #                   read_group() itself (custom scripts/notebooks, and
+    #                   the deprecated L1 Pipeline.calculate_vod()) has no
+    #                   such guard -- .sel() and dataset alignment can
+    #                   silently produce wrong results at duplicated epochs
+    #                   there. Also stores the extra chunks permanently
+    #                   regardless of read-side protection. Avoid unless you
+    #                   have a specific reason.
+    gnss_store_strategy: skip
     vod_store_strategy: overwrite
 
   # ---------------------------------------------------------------------------
