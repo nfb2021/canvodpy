@@ -328,6 +328,14 @@ class ConfigLoader:
 
 
 @functools.lru_cache(maxsize=8)
+def _load_config_cached(
+    config_dir: Path | None,
+    config_file: Path | None,
+) -> CanvodConfig:
+    loader = ConfigLoader(config_dir, config_file=config_file)
+    return loader.load()
+
+
 def load_config(
     config_dir: Path | None = None,
     config_file: Path | None = None,
@@ -357,6 +365,24 @@ def load_config(
     FileNotFoundError
         If ``config_file`` is specified but does not exist.
 
+    Notes
+    -----
+    ``CANVOD_CONFIG_DIR``/``CANVOD_CONFIG_FILE`` are resolved here, *before*
+    the cached call, not inside it. The actual caching happens in
+    ``_load_config_cached``, keyed on the fully-resolved paths. Resolving
+    the env vars inside the cached function itself (as this used to do)
+    made the cache key blind to them: whichever call happened first in a
+    process -- e.g. ``canvodpy.logging.logging_config``'s module-level
+    ``LOGGER = configure_logging()``, which calls ``load_config()`` bare at
+    import time, before a CLI's ``--config``/``CANVOD_CONFIG_FILE`` is ever
+    set -- would cache the config under the no-arg key, and every later
+    bare ``load_config()`` call in that process (e.g. store-path/chunk-
+    strategy resolution deep in ``canvod-store``) would silently get that
+    stale, pre-overlay config back, no matter what the env var said by
+    then. See ``canvodpy/tests/test_cli_store.py``'s ``_clear_config_cache``
+    fixture for a hand-rolled workaround of the same symptom that predates
+    this fix.
+
     Examples
     --------
     >>> from canvod.config import load_config
@@ -372,5 +398,11 @@ def load_config(
         env_file = os.environ.get("CANVOD_CONFIG_FILE")
         if env_file:
             config_file = Path(env_file)
-    loader = ConfigLoader(config_dir, config_file=config_file)
-    return loader.load()
+    return _load_config_cached(config_dir, config_file)
+
+
+# Backwards-compatible cache introspection/control on the public name --
+# some tests/callers reach for `load_config.cache_clear()`/`.cache_info()`
+# directly (the function used to be the lru_cache-wrapped one itself).
+load_config.cache_clear = _load_config_cached.cache_clear
+load_config.cache_info = _load_config_cached.cache_info

@@ -134,6 +134,123 @@ class TestGetDefaultConfigDir:
         assert result == tmp_path / "xdg" / "canvodpy"
 
 
+def _write_minimal_config(config_dir: Path, stores_root: Path) -> None:
+    import yaml
+
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "canvod-settings.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "processing": {
+                    "metadata": {
+                        "author": "A",
+                        "email": "a@example.com",
+                        "institution": "B",
+                    },
+                    "storage": {"stores_root_dir": str(stores_root)},
+                },
+                "sites": {},
+            }
+        )
+    )
+
+
+class TestLoadConfigEnvCaching:
+    """Regression tests for the stale-cache bug fixed 2026-07-21.
+
+    ``load_config()`` used to be the ``lru_cache``-wrapped function itself,
+    resolving ``CANVOD_CONFIG_DIR``/``CANVOD_CONFIG_FILE`` from the
+    environment *inside* the cached body. A bare ``load_config()`` call made
+    before those env vars were set (e.g. ``canvodpy.logging.logging_config``'s
+    module-level ``LOGGER = configure_logging()``, which calls it at import
+    time) would cache the pre-overlay config under the no-arg key -- and
+    every later bare call in the same process, however much later, however
+    many env vars had since been set, would silently get that stale config
+    back. Confirmed against a real remote chunk-size sweep (dev/
+    rechunk_sweep_remote.sh, 2026-07-20/21): every leg after the first wrote
+    to the same store with the same chunk strategy, because the store-path
+    and chunk-strategy resolution deep in canvod-store both go through bare
+    ``load_config()`` calls.
+    """
+
+    def _clear(self):
+        loader_module.load_config.cache_clear()
+
+    def test_bare_call_after_env_var_set_picks_up_new_config_dir(
+        self, tmp_path, monkeypatch
+    ):
+        self._clear()
+        try:
+            base_dir = tmp_path / "base"
+            base_root = tmp_path / "base_store"
+            _write_minimal_config(base_dir, base_root)
+            monkeypatch.setenv("CANVOD_CONFIG_DIR", str(base_dir))
+
+            # Simulate an early bare call before the "real" config dir is
+            # known -- e.g. an import-time side effect elsewhere.
+            early = loader_module.load_config()
+            assert early.processing.storage.stores_root_dir == base_root
+
+            # A different config dir becomes active later in the same
+            # process (e.g. a test fixture, or a CLI overlay env var).
+            other_dir = tmp_path / "other"
+            other_root = tmp_path / "other_store"
+            _write_minimal_config(other_dir, other_root)
+            monkeypatch.setenv("CANVOD_CONFIG_DIR", str(other_dir))
+
+            # A later bare call, with no args, must reflect the *current*
+            # environment, not whatever was cached from the first call.
+            later = loader_module.load_config()
+            assert later.processing.storage.stores_root_dir == other_root
+        finally:
+            self._clear()
+
+    def test_bare_call_after_overlay_env_var_set_picks_up_overlay(
+        self, tmp_path, monkeypatch
+    ):
+        self._clear()
+        try:
+            config_dir = tmp_path / "config"
+            base_root = tmp_path / "base_store"
+            _write_minimal_config(config_dir, base_root)
+            monkeypatch.setenv("CANVOD_CONFIG_DIR", str(config_dir))
+            monkeypatch.delenv("CANVOD_CONFIG_FILE", raising=False)
+
+            # Early bare call, no overlay active yet.
+            early = loader_module.load_config()
+            assert early.processing.storage.stores_root_dir == base_root
+
+            # An overlay becomes active (mirrors cli/run.py's `--config`
+            # handling: it sets CANVOD_CONFIG_FILE in os.environ, then
+            # calls load_config(config_file=...) explicitly).
+            overlay_root = tmp_path / "overlay_store"
+            overlay_path = tmp_path / "overlay.yaml"
+            overlay_path.write_text(
+                f"processing:\n  storage:\n    stores_root_dir: {overlay_root}\n"
+            )
+            monkeypatch.setenv("CANVOD_CONFIG_FILE", str(overlay_path))
+            explicit = loader_module.load_config(config_file=overlay_path)
+            assert explicit.processing.storage.stores_root_dir == overlay_root
+
+            # A bare call elsewhere in the same process, after the overlay
+            # env var was set, must also see the overlay -- not the config
+            # cached by the first bare call above.
+            later = loader_module.load_config()
+            assert later.processing.storage.stores_root_dir == overlay_root
+        finally:
+            self._clear()
+
+    def test_cache_clear_is_still_exposed_on_the_public_function(self):
+        """`load_config` is now a thin wrapper, not the lru_cache object
+        itself -- `.cache_clear()`/`.cache_info()` must still work, since
+        callers (e.g. canvodpy/tests/test_cli_store.py) rely on them."""
+        assert hasattr(loader_module.load_config, "cache_clear")
+        assert hasattr(loader_module.load_config, "cache_info")
+        loader_module.load_config.cache_clear()
+        info = loader_module.load_config.cache_info()
+        assert info.currsize == 0
+
+
 class TestFormatValidationError:
     """format_validation_error() turns a ConfigValidationError into
     actionable, human-readable text — no Pydantic internals, no traceback."""
