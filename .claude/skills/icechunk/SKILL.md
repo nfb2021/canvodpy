@@ -406,15 +406,87 @@ to_icechunk(dask_ds, session)
 session.commit("parallel write")
 ```
 
+**The only backend-agnostic way to safely parallelize *multiple independent
+writers* (e.g. one worker per receiver-group) is fork/merge into one shared
+session, ending in a single `commit()`** — not concurrent `commit()` calls
+(see Conflict Resolution below for why that's unsafe on LocalFileSystem).
+`Session.fork()` internally does an anonymous flush-only commit (persists
+content-addressed snapshot/manifest objects, never touches the branch ref);
+`Session.merge()` is pure in-memory changeset merging, zero I/O. Neither
+touches the racy ref-update path, so this pattern is genuinely safe on every
+backend, including LocalFileSystem — confirmed 2026-07-21 by reading
+`session.rs`'s `fork()`/`merge()` implementations directly, not inferred from
+behavior:
+
+```python
+base_session = repo.writable_session("main")
+forks = [base_session.fork() for _ in workers]
+# ... each worker writes into its own fork, in parallel ...
+base_session.merge(*[w.result() for w in workers])  # in-memory, no I/O
+base_session.commit("multi-group write")            # the only real ref write
+```
+
+canvodpy has this wired **within** one receiver-group's file-level writes
+(`processor.py`'s per-group fork-per-file dispatch, one `merge()` + one
+`commit()` per group) but not yet **across** receiver-groups — each group
+still gets its own sequential session+commit today. Extending the same
+primitive across groups is architecturally sound; the open blocker is dedup
+timing (hash/temporal-overlap checks must run before fork dispatch, since
+each fork writes directly with no chance to veto after the fact) — unresolved
+even for the existing intra-group case, not a new problem introduced by
+widening the scope.
+
+**Also matters on shared/network mounts**: fanning write *preparation* out to
+real concurrent worker processes multiplies concurrent I/O against the mount
+(N workers × each one's own `zarr_async_concurrency` cap, since that cap is
+per-process, not global) — the connection-abort risk that knob was built to
+manage doesn't shrink itself just because the fan-out is otherwise safe. On
+CIFS/NFS, prefer forking for parallel *compute* while still funneling the
+actual chunk-write I/O through one path, or divide the cap by expected worker
+count and validate against the real mount before rollout.
+
 ### Conflict Resolution
 
-If two writers commit to the same branch concurrently, the second commit will
-fail with a conflict error. Solutions:
+If two writers commit to the same branch concurrently **on an object-store
+backend with real conditional/CAS writes (S3, GCS, Azure)**, the second
+commit fails with a detectable conflict error. Solutions:
 1. Retry the transaction (re-read, re-apply changes, re-commit)
 2. Use separate branches and merge later
 3. Use `session.commit(message, rebase_with=solver, rebase_tries=N)` — automatic
    rebase-and-retry against a conflict solver, instead of a hand-rolled retry loop
 4. Use optimistic concurrency with snapshot IDs
+
+**None of this applies on LocalFileSystem storage — concurrent commits there
+don't raise a conflict at all, they can silently lose one.** Confirmed
+2026-07-21 against the actual source (not just the `tracing::warn!` visible
+at runtime), two layers deep:
+- `ObjectStorage::get_put_mode()` (`icechunk-arrow-object-store/src/lib.rs`)
+  returns `PutMode::Overwrite` (a blind write), never `PutMode::Update` (a
+  conditional/CAS write), whenever `unsafe_use_conditional_update` is `false`
+  — the hard-coded default for `LocalFileSystemObjectStoreBackend`.
+- This isn't a conservative default you can safely flip to `true`: the
+  underlying `object_store` crate's `LocalFileSystem::put_opts` rejects
+  `PutMode::Update` outright with `Error::NotImplemented`. Local plain
+  filesystems have no atomic conditional-write primitive for `object_store`
+  to use — this is a capability gap in the storage layer itself, not an
+  Icechunk policy choice, and there is no config escape hatch.
+- v1's `refs.rs::update_branch` does a read-then-write existence check before
+  writing — a TOCTOU race, not a CAS. v2's `write_repo_info` retry loop
+  (keyed on a `RepoInfoUpdated` error) is real optimistic-concurrency code,
+  but it can only fire if `put_object` ever returns `NotOnLatestVersion` —
+  which requires a conditional put, which LocalFileSystem never attempts. The
+  retry apparatus is unreachable dead code on this backend.
+- Net effect: **`rebase_with=`/`ConflictSolver` cannot help on LocalFileSystem
+  storage** — not because conflicts don't happen, but because the mechanism
+  that would need to detect a conflict to trigger rebase never fires one.
+  The two commits race purely on wall-clock timing; the loser's ref update is
+  silently overwritten rather than rejected.
+
+**Practical rule for LocalFileSystem-backed stores (canvodpy's only
+deployment target — local SSD or CIFS/NFS, never S3/GCS/Azure): never call
+`commit()` from more than one process/thread against the same branch at the
+same time, full stop.** Use the fork/merge-into-one-session pattern above
+instead of trying to parallelize `commit()` itself.
 
 `commit()` also accepts `metadata=` (arbitrary dict attached to the snapshot,
 queryable later via `ancestry()`/`lookup_snapshot()` without opening the
@@ -634,7 +706,8 @@ snapshots need to reconstruct from.
 | Writing after commit | `session.commit()` makes session read-only | Create new `repo.writable_session()` |
 | Missing `consolidated=False` | xarray tries to read consolidated metadata | Always pass `consolidated=False` to `open_zarr` |
 | Using `to_zarr` for parallel writes | Distributed writes may not be captured | Use `to_icechunk` from `icechunk.xarray` |
-| Concurrent branch writes | Second commit conflicts | Retry, use separate branches, or use `transaction` |
+| Concurrent branch writes on S3/GCS/Azure | Second commit conflicts (detectable) | Retry, use separate branches, or use `transaction` |
+| Concurrent branch writes on LocalFileSystem | Second commit **silently clobbers the first — no conflict raised** (no CAS support in this backend, see Conflict Resolution) | Never call `commit()` concurrently on this backend; fork/merge into one session + one `commit()` instead |
 | Large inline threshold | Too many small chunks in manifest | Keep `inline_chunk_threshold_bytes` at 512 (default) |
 | Forgetting `zarr_format=3` | Zarr Python defaults may differ | Pass `zarr_format=3` when using `to_zarr` directly |
 | One `to_icechunk()` call per file | Each flush creates a new manifest — N files/batch = N manifests/commit | Batch files into fewer, larger `to_icechunk()` calls; periodic `rewrite_manifests()` |
@@ -646,7 +719,7 @@ snapshots need to reconstruct from.
 
 | Backend | Function | Use Case |
 |---|---|---|
-| Local filesystem | `icechunk.local_filesystem_storage(path)` | Development, testing |
+| Local filesystem | `icechunk.local_filesystem_storage(path)` | Development, testing, and (canvodpy's actual deployment) local SSD/CIFS/NFS single-writer production — **cannot safely take concurrent `commit()` calls at all** (no CAS support in this backend; see Conflict Resolution). Icechunk's own docs describe it as not intended for production, but it's canvodpy's only backend in practice |
 | AWS S3 | `icechunk.s3_storage(bucket, prefix)` | Production cloud |
 | Google Cloud Storage | `icechunk.gcs_storage(bucket, prefix)` | Production cloud |
 | Azure Blob | `icechunk.azure_storage(account=, container=, prefix=)` | Production cloud (`account` is required, keyword-only) |

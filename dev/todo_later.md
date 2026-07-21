@@ -3518,3 +3518,74 @@ this branch's investigation but shouldn't ship to `main` as-is.
    silently lost. Closed/`Status: built`/`FIXED` sections don't need issues
    (their outcome is already in the commit history) — only sections whose
    "Action" line says "not started" or is otherwise still pending.
+
+## 50. Parallel writes across receiver-groups — feasibility resolved: don't build rebase/ConflictSolver, cross-group fork/merge is the safe alternative (2026-07-21)
+
+**Status: investigation complete, decision made, no code changes (documentation only).**
+
+The original question ("can concurrent commits across disjoint receiver-groups
+be made safe on LocalFileSystem storage via `.rebase()`/`ConflictSolver`?")
+is answered **no, and not fixable by config** — confirmed against the actual
+Icechunk Rust source (not just the runtime `tracing::warn!`), Fable-verified
+independently:
+
+- `ObjectStorage::get_put_mode()` (`icechunk-arrow-object-store/src/lib.rs`)
+  returns a blind `PutMode::Overwrite`, never a conditional `PutMode::Update`,
+  for `LocalFileSystemObjectStoreBackend` — its `default_settings()`
+  hard-codes `unsafe_use_conditional_update: Some(false)`, and flipping that
+  to `true` isn't a safer option: the underlying `object_store` crate's
+  `LocalFileSystem::put_opts` rejects `PutMode::Update` outright with
+  `Error::NotImplemented`. Plain local filesystems have no atomic
+  conditional-write primitive for `object_store` to build on — a hard
+  capability gap, not an Icechunk policy choice.
+- v1's branch-ref update is a read-then-write TOCTOU check, not a CAS. v2's
+  `write_repo_info` retry loop is real optimistic-concurrency code, but can
+  only trigger off a `NotOnLatestVersion` error that requires a conditional
+  put — which never happens on this backend. **`rebase_with=`/`ConflictSolver`
+  would be silently ineffective, not just unnecessary** — two commits racing
+  on LocalFileSystem don't raise a detectable conflict, the loser's ref
+  update is just clobbered.
+- This is canvodpy's **only** deployment backend (local SSD or CIFS/NFS,
+  never S3/GCS/Azure), so this isn't a hypothetical edge case.
+
+**Decision: do not build `.rebase()`/`ConflictSolver` support. Documented in
+`.claude/skills/icechunk/SKILL.md`'s Concurrency and Transactions section
+(Parallel Writes / Conflict Resolution subsections, plus the Storage Backends
+and Common Pitfalls tables) so this doesn't get re-investigated from scratch
+later.**
+
+**A genuinely safe alternative exists and is worth building separately**:
+fork/merge into one shared session ending in a single `commit()`. Verified
+against `session.rs` directly — `Session.fork()` does an anonymous flush-only
+commit (persists content-addressed objects, never touches the branch ref);
+`Session.merge()` is pure in-memory changeset merging, zero I/O. Neither
+touches the racy ref-update path, so N workers (one per receiver-group) can
+prepare writes in parallel and still land in exactly one `commit()` call.
+canvodpy already has this wired **within** one receiver-group's file-level
+writes (`processor.py`'s per-group fork-per-file dispatch) but the outer loop
+over receiver groups (`processor.py` around line 2922/2974) is still fully
+sequential — N groups → N sessions → N sequential commits today.
+
+**Action: not started, proposed as a new task** (not the same as this one —
+this one's scope was narrowly "is rebase/ConflictSolver viable," answered
+no). Building cross-group fork/merge needs, before implementation:
+1. Resolve dedup-under-fork/merge timing (open since `perf_strategy.md`
+   2026-07-02, unresolved even for the existing intra-group case — dedup
+   must run before fork dispatch, since forks write directly with no chance
+   to veto after the fact).
+2. Decide the storage-backend-dependent design fork Fable flagged: local/fast
+   SSD can safely use real concurrent worker-process writes; CIFS/NFS should
+   either keep actual chunk-write I/O funneled through one path (fork for
+   parallel *compute* only) or divide `zarr_async_concurrency` by expected
+   worker count and validate against the real mount — the cap is per-process,
+   not global, so N workers multiply concurrent I/O against the mount in a
+   way today's fully-sequential design never produces.
+3. This is why it's tied to §-numbered-task "Revisit zarr_async_concurrency
+   and batch_drain_settle_seconds" — `scoped_zarr_concurrency`'s global
+   `donfig`-backed state has no thread/contextvar isolation (confirmed unsafe
+   under thread-based fan-out in one process; fine under today's
+   process-based pool, which any implementation must preserve), and
+   `batch_drain_settle_seconds`'s whole "pause once after the pool drains,
+   before the one write that follows" model assumes exactly one write event
+   per batch — that assumption breaks if chunk-write I/O gets fanned out to
+   concurrent workers instead of funneled through the single shared session.
