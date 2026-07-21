@@ -16,11 +16,25 @@
 #                           ($chunksize$ is replaced with the actual value)
 #
 # Optional (defaults shown):
-#   SITE=rosalia  START=2025087  END=2025146
+#   SITE=rosalia  START=2025087  END=2025114  (28 days)
 #   DASHBOARD_HOST=0.0.0.0  DASHBOARD_PORT=3333
-#   CHUNK_SIZES="180 720 2880 5760 17280"
+#   CHUNK_SIZES="90 180 17280"  -- 90: below native file granularity (180),
+#     180: native (1 file = 1 chunk, matches the reader's own 15-min output
+#     and the current canvod-settings.yaml default), 17280: old 1-day-chunk
+#     default, kept as the upper-bound reference point.
 #   MAX_REVIVES=50  REVIVE_BACKOFF_S=30  REVIVE_BACKOFF_MAX_S=300
 #   LOG_ARCHIVE_ROOT=.logs_archive  OVERLAY_DIR=dev/sweep_overlays
+#
+# 2026-07-21: the first 60-day/5-chunk-size run of this script only ever
+# wrote real data for its first leg -- every later leg silently reused the
+# same store and chunk strategy as leg 1 (100% dedup-skip), because of a
+# load_config() lru_cache bug (fixed in packages/canvod-config/src/canvod/
+# config/loader.py, commit 26756184) that made canvod-store's store-path and
+# chunk-strategy resolution ignore --config overlays after the first bare
+# load_config() call in the process. Re-verify with `cat dev/sweep_overlays/
+# chunk_*.yaml` and the per-leg `store_stats` log lines (component/
+# icechunk.log) before trusting a run's numbers -- each leg's manifest/
+# snapshot counts should start near 0, not continue from the previous leg's.
 #
 # Usage:
 #   STORES_ROOT_TEMPLATE='/home/nbader/shares/climers/Studies/GNSS_Vegetation_Study/05_data/01_Rosalia/03_Rinex_Data/02_Rosalia_Development_Stores_$chunksize$' \
@@ -33,10 +47,10 @@ set -uo pipefail  # no -e: revive loop must survive non-zero exits itself
 : "${STORES_ROOT_TEMPLATE:?Set STORES_ROOT_TEMPLATE, e.g. /path/to/Stores_\$chunksize\$}"
 SITE="${SITE:-rosalia}"
 START="${START:-2025087}"
-END="${END:-2025146}"
+END="${END:-2025114}"
 DASHBOARD_HOST="${DASHBOARD_HOST:-0.0.0.0}"
 DASHBOARD_PORT="${DASHBOARD_PORT:-3333}"
-CHUNK_SIZES="${CHUNK_SIZES:-180 720 2880 5760 17280}"
+CHUNK_SIZES="${CHUNK_SIZES:-90 180 17280}"
 MAX_REVIVES="${MAX_REVIVES:-50}"
 REVIVE_BACKOFF_S="${REVIVE_BACKOFF_S:-30}"
 REVIVE_BACKOFF_MAX_S="${REVIVE_BACKOFF_MAX_S:-300}"

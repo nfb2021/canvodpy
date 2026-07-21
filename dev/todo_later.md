@@ -3500,3 +3500,21 @@ on parsed table cells instead of raw rendered text). (3) needs tracing
 `canvodpy/cli/config.py`'s filemap-recipe validation branch to find what
 environment fact it's actually keying off, and whether the test's assumption
 about the dev venv still holds.
+
+## 49. PR back to `main`: exclude `dev/` and migrate this file's items to GitHub issues (2026-07-21)
+
+`dev/` on `explore/performance-review` has accumulated a large number of
+one-off scripts, benchmarks, and this running notes file
+(`dev/todo_later.md`, 49 sections as of this entry) that were useful for
+this branch's investigation but shouldn't ship to `main` as-is.
+
+**Action:** not started. When opening the PR from `explore/performance-review`
+(or its eventual successor) back to `main`:
+1. Exclude `dev/` from the PR entirely (or move anything still load-bearing
+   — e.g. a script a `just` recipe depends on — out of `dev/` and into a
+   proper package/tooling location first).
+2. Every still-open `dev/todo_later.md` section needs a corresponding GitHub
+   issue before the file itself is dropped, so none of the open threads are
+   silently lost. Closed/`Status: built`/`FIXED` sections don't need issues
+   (their outcome is already in the commit history) — only sections whose
+   "Action" line says "not started" or is otherwise still pending.
