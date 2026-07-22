@@ -126,8 +126,8 @@ processing:
   # GridAssignment ops) — nothing in the live orchestrator (processor.py,
   # workflows/tasks.py) or the CLI calls that pipeline yet. Grid-cell
   # assignment for real ingested data currently happens ad hoc downstream
-  # instead (e.g. canvod-streamviz's own KDTree-based ingest step), not from
-  # this angular_resolution value. Intent: once wired in, these become the
+  # instead (in whatever consumer reads the store), not from this
+  # angular_resolution value. Intent: once wired in, these become the
   # community-agreed standard grid resolution + temporal aggregation applied
   # uniformly across all sites, enforced (not just default) in a future
   # version.

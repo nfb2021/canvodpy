@@ -4,7 +4,7 @@
 
 [tool.uv.workspace]
 members = ["packages/*", "canvodpy"]
-exclude = ["packages/canvod-streamstats", "packages/canvod-filemap"]
+exclude = ["packages/canvod-filemap"]
 
 # canvod-filemap and canvod-adapters live in the separate canvodpy-extensions
 # repo (https://github.com/nfb2021/canvodpy-extensions), not in this

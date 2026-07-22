@@ -138,7 +138,7 @@ class StorageConfig(_StrictModel):
     )
     rollup_store_name: str = Field(
         "rollup",
-        description="Name of the canvod-streamviz hemigrid rollup Icechunk store directory",
+        description="Name of the hemigrid rollup Icechunk store directory",
     )
     aux_data_dir: Path | None = Field(
         None,
@@ -277,7 +277,7 @@ class StorageConfig(_StrictModel):
         return self.stores_root_dir / site_name / self.statistics_store_name
 
     def get_rollup_store_path(self, site_name: str) -> Path:
-        """Get the canvod-streamviz rollup store path for a site.
+        """Get the hemigrid rollup store path for a site.
 
         Parameters
         ----------
