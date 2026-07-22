@@ -237,8 +237,8 @@ $RECYCLE.BIN/
 .logs_*/
 logs/
 
-# Sweep-run artifacts (dev/rechunk_sweep_remote.sh)
-dev/sweep_overlays/
+# Scratch/notes workspace — never shipped to main (see PR history for what's load-bearing)
+dev/
 
 # Data directories
 .data/
@@ -366,11 +366,6 @@ packages/*/config/
 .processing/
 .vscode/
 .icechunk_gridding_claude/
-
-# ============================================================================
-# Private packages (symlinked from external repos, local only)
-# ============================================================================
-packages/canvod-streamstats
 
 # ============================================================================
 # Private audit scripts (gnssvodpy cross-validation, local only)
