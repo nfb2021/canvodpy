@@ -783,11 +783,16 @@ class Rnxv3Obs(GNSSDataReader):
     @model_validator(mode="after")
     def _post_init(self) -> Self:
         """Initialize derived state after validation."""
+        # PrivateAttr()-declared attributes are mutable even on frozen=True
+        # Pydantic models -- only public fields are frozen. ty's pydantic
+        # support doesn't model this and treats the assignment inside the
+        # validator that first sets them as establishing a read-only
+        # "property".
         # Load header once
-        self._header = Rnxv3Header.from_file(self.fpath)
+        self._header = Rnxv3Header.from_file(self.fpath)  # ty: ignore[invalid-assignment]
 
         # Initialize signal mapper
-        self._signal_mapper = SignalIDMapper(
+        self._signal_mapper = SignalIDMapper(  # ty: ignore[invalid-assignment]
             aggregate_glonass_fdma=self.aggregate_glonass_fdma
         )
 
@@ -804,7 +809,7 @@ class Rnxv3Obs(GNSSDataReader):
                 warnings.warn(str(e), RuntimeWarning, stacklevel=2)
 
         # Cache file lines
-        self._lines = self._load_file()
+        self._lines = self._load_file()  # ty: ignore[invalid-assignment]
 
         return self
 
@@ -958,7 +963,8 @@ class Rnxv3Obs(GNSSDataReader):
             i for i, line in enumerate(lines) if line.startswith(epoch_record_indicator)
         ]
         starts.append(len(lines))  # Add EOF
-        self._cached_epoch_batches = [
+        # PrivateAttr, mutable despite frozen=True -- see _post_init's comment.
+        self._cached_epoch_batches = [  # ty: ignore[invalid-assignment]
             (start, starts[i + 1])
             for i, start in enumerate(starts)
             if i + 1 < len(starts)

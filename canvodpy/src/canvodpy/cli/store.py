@@ -388,6 +388,10 @@ def maintain_due(
     if all_sites:
         site_names = list(config.sites.sites)
     else:
+        # The `bool(site) == all_sites` guard above already ensures site is
+        # truthy here (exactly one of site/--all-sites is set) -- assert
+        # narrows the type for ty rather than leaving it `str | None`.
+        assert site is not None
         if site not in config.sites.sites:
             console.print(f"[red]❌ Unknown site:[/red] {site}")
             raise typer.Exit(1)
