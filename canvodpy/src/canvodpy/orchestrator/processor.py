@@ -2057,7 +2057,7 @@ class RinexDataProcessor:
         if not augmented_datasets:
             return
         _, first_ds = augmented_datasets[0]
-        batch_vars = set(first_ds.data_vars)
+        batch_vars: set[str] = {str(name) for name in first_ds.data_vars}
 
         stale_vars = store_vars - batch_vars
         missing_vars = batch_vars - store_vars
@@ -3319,10 +3319,16 @@ class RinexDataProcessor:
                     "files": str(len(metadata_records)),
                 }
                 if metadata_records:
+                    # metadata_records is an untyped list[dict] merged from
+                    # several call sites with different value types per key
+                    # (Path/str/datetime64/...); "start"/"end" are always
+                    # np.datetime64 at runtime and comparable.
                     _commit_meta["start"] = str(
-                        min(r["start"] for r in metadata_records)
+                        min(r["start"] for r in metadata_records)  # ty: ignore[invalid-argument-type]
                     )
-                    _commit_meta["end"] = str(max(r["end"] for r in metadata_records))
+                    _commit_meta["end"] = str(
+                        max(r["end"] for r in metadata_records)  # ty: ignore[invalid-argument-type]
+                    )
                     _commit_meta["rinex_hashes"] = ",".join(
                         str(r["rinex_hash"])
                         for r in metadata_records
