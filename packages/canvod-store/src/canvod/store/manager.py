@@ -9,6 +9,7 @@ Module: src/gnssvodpy/icechunk_manager/manager.py
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -24,6 +25,8 @@ from canvod.config.models import VodAnalysisConfig
 from canvodpy.logging import get_logger
 
 from canvod.store.store import (
+    VodWriteItem,
+    VodWriteResult,
     create_gnss_store,
     create_vod_store,
 )
@@ -494,6 +497,65 @@ class GnssResearchSite:
         if written:
             self._logger.info(f"Successfully stored VOD analysis: '{group_name}'")
         return written
+
+    def store_vod_analyses_batch(
+        self,
+        items: Sequence[dict[str, Any]],
+    ) -> dict[str, VodWriteResult]:
+        """Store multiple VOD analysis results in one fork/merge batch write.
+
+        Same cross-group parallelization `RinexDataProcessor` uses for GNSS
+        receiver groups, applied to VOD analysis pairs: each pair writes
+        into its own fork concurrently, then one shared commit lands them
+        all at once, instead of one full session-open/write/commit cycle
+        per analysis pair in sequence.
+
+        Parameters
+        ----------
+        items : Sequence[dict]
+            Each dict needs: ``vod_dataset``, ``analysis_name``,
+            ``calculator_name``, ``source_file_hashes``,
+            ``source_gnss_stores``, and optionally ``commit_message``.
+
+        Returns
+        -------
+        dict[str, VodWriteResult]
+            Keyed by ``{calculator_name}/{analysis_name}`` group name.
+
+        Raises
+        ------
+        ValueError
+            If any ``analysis_name`` is not configured.
+        """
+        write_items: list[VodWriteItem] = []
+        for entry in items:
+            analysis_name = entry["analysis_name"]
+            if analysis_name not in self.vod_analyses:
+                available_analyses = list(self.vod_analyses.keys())
+                raise ValueError(
+                    f"VOD analysis '{analysis_name}' not configured. "
+                    f"Available: {available_analyses}"
+                )
+            calculator_name = entry["calculator_name"]
+            group_name = f"{calculator_name}/{analysis_name}"
+            self._logger.info(f"Storing VOD analysis results: '{group_name}'")
+            write_items.append(
+                VodWriteItem(
+                    group_name=group_name,
+                    dataset=entry["vod_dataset"],
+                    source_file_hashes=entry["source_file_hashes"],
+                    source_gnss_stores=entry["source_gnss_stores"],
+                    calculator_name=calculator_name,
+                    commit_message=entry.get("commit_message"),
+                )
+            )
+
+        results = self.vod_store.write_or_append_vod_groups_batch(write_items)
+
+        for group_name, result in results.items():
+            if result.written:
+                self._logger.info(f"Successfully stored VOD analysis: '{group_name}'")
+        return results
 
     def read_vod_analysis(
         self,

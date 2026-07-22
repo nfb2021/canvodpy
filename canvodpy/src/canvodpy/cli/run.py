@@ -554,34 +554,65 @@ def _main_impl(args: SimpleNamespace) -> int:
                                     op="vod_metadata_write",
                                 )
                             t_vod_store = time.perf_counter()
-                            for analysis_name, result in vod_results.items():
-                                t_analysis_store = time.perf_counter()
-                                call_with_store_retries(
+                            if vod_results:
+                                # One fork/merge batch commit for all of
+                                # today's analysis pairs, instead of one
+                                # full session-open/write/commit cycle per
+                                # pair in sequence -- same cross-group
+                                # parallelization as the RINEX receiver-group
+                                # writes (RinexDataProcessor.
+                                # _write_receiver_batch_forked). Retried as
+                                # one unit: the batch write is all-or-nothing
+                                # (fail-fast, no partial merge -- see
+                                # write_or_append_vod_groups_batch), so a
+                                # retry after a transient error is safe --
+                                # any pre-pass commit for a brand-new group
+                                # that already landed is dedup-visible and
+                                # won't be re-attempted.
+                                batch_results = call_with_store_retries(
                                     partial(
-                                        research_site.store_vod_analysis,
-                                        vod_dataset=result["vod_ds"],
-                                        analysis_name=analysis_name,
-                                        calculator_name=args.vod_calculator,
-                                        source_file_hashes=result["source_file_hashes"],
-                                        source_gnss_stores=result["source_gnss_stores"],
-                                        commit_message=f"VOD {analysis_name} {date_key}",
+                                        research_site.store_vod_analyses_batch,
+                                        items=[
+                                            {
+                                                "vod_dataset": result["vod_ds"],
+                                                "analysis_name": analysis_name,
+                                                "calculator_name": args.vod_calculator,
+                                                "source_file_hashes": result[
+                                                    "source_file_hashes"
+                                                ],
+                                                "source_gnss_stores": result[
+                                                    "source_gnss_stores"
+                                                ],
+                                                "commit_message": (
+                                                    f"VOD {analysis_name} {date_key}"
+                                                ),
+                                            }
+                                            for analysis_name, result in vod_results.items()
+                                        ],
                                     ),
                                     logger=log,
                                     date=date_key,
-                                    analysis=analysis_name,
-                                    op="vod_write",
+                                    op="vod_write_batch",
                                 )
-                                log.info(
-                                    "stage_timing",
-                                    stage="vod_store",
-                                    duration_seconds=round(
-                                        time.perf_counter() - t_analysis_store, 3
-                                    ),
-                                    status="ok",
-                                    date_key=date_key,
-                                    calculator=args.vod_calculator,
-                                    analysis=analysis_name,
-                                )
+                                for analysis_name in vod_results:
+                                    group_name = (
+                                        f"{args.vod_calculator}/{analysis_name}"
+                                    )
+                                    group_result = batch_results.get(group_name)
+                                    log.info(
+                                        "stage_timing",
+                                        stage="vod_store",
+                                        duration_seconds=round(
+                                            group_result.duration_seconds
+                                            if group_result is not None
+                                            else 0.0,
+                                            3,
+                                        ),
+                                        status="ok",
+                                        date_key=date_key,
+                                        calculator=args.vod_calculator,
+                                        analysis=analysis_name,
+                                    )
                             dt_vod_store = time.perf_counter() - t_vod_store
                             total_vod += len(vod_results)
                             site_vod += len(vod_results)

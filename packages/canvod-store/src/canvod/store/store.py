@@ -4,7 +4,9 @@ import json
 import os
 import sys
 import time
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -17,6 +19,7 @@ import zarr
 from canvod.utils.tools import get_version_from_pyproject, sanitize_directory
 from canvodpy.logging import get_logger, stage_timer
 from canvodpy.logging.run_context import get_run_id
+from icechunk.session import ForkSession
 from icechunk.xarray import to_icechunk
 from zarr.dtype import VariableLengthUTF8
 
@@ -43,6 +46,39 @@ def _with_run_id(commit_message: str) -> str:
     if run_id is None:
         return commit_message
     return f"{commit_message} (run={run_id})"
+
+
+@dataclass
+class VodWriteItem:
+    """One VOD analysis pair's write request, as passed into a batch write."""
+
+    group_name: str
+    dataset: xr.Dataset
+    source_file_hashes: dict[str, str]
+    source_gnss_stores: dict[str, str]
+    calculator_name: str
+    commit_message: str | None = None
+
+
+@dataclass
+class VodWritePlan:
+    """A `VodWriteItem` after dedup-check + normalization, ready to write."""
+
+    item: VodWriteItem
+    action: str  # "write" | "append"
+    start: np.datetime64
+    end: np.datetime64
+    commit_message: str
+    dataset: xr.Dataset
+
+
+@dataclass
+class VodWriteResult:
+    group_name: str
+    written: bool
+    skip_reason: str | None = None
+    snapshot_id: str | None = None
+    duration_seconds: float = 0.0
 
 
 @add_rich_display_to_store
@@ -676,7 +712,8 @@ class MyIcechunkStore:
         Parameters
         ----------
         group_name : str
-            Name of the group to check.
+            Name of the group to check. May be a nested path (e.g. VOD's
+            ``"{calculator}/{analysis_name}"``), not just a top-level name.
         branch : str, default "main"
             Repository branch to examine.
 
@@ -684,13 +721,28 @@ class MyIcechunkStore:
         -------
         bool
             True if the group exists, False otherwise.
-        """
-        group_dict = self.get_group_names(branch)
 
-        # get_group_names returns dict like {'main': ['canopy_01', ...]}
-        if branch in group_dict:
-            exists = group_name in group_dict[branch]
-        else:
+        Notes
+        -----
+        Checks membership directly against the opened root group rather
+        than via :meth:`get_group_names`/:meth:`list_groups` -- those only
+        enumerate *top-level* Zarr group keys (``root.group_keys()``), so
+        for a nested ``group_name`` like a VOD analysis group, membership
+        in that flat list is always ``False`` even when the group exists.
+        Confirmed 2026-07-21: this previously caused every VOD write after
+        a group's first to take the ``mode="w"`` (full overwrite) branch in
+        :meth:`write_or_append_vod_group` instead of appending, silently
+        destroying all previously-written VOD data on each subsequent
+        write. Zarr's ``Group.__contains__`` supports slash-separated
+        nested paths directly, so this works for both flat GNSS receiver
+        names (no behavior change there) and nested VOD group names (the
+        actual fix).
+        """
+        try:
+            with self.readonly_session(branch) as session:
+                root = zarr.open_group(session.store, mode="r")
+                exists = group_name in root
+        except Exception:
             exists = False
 
         self._logger.debug(
@@ -1820,12 +1872,21 @@ class MyIcechunkStore:
             self._logger.info(f"No metadata rows to append for group '{group_name}'")
             return
 
-        # Ensure datetime conversions for consistency
+        # Ensure datetime conversions for consistency. Explicitly pinned to
+        # "ns" (not just "any string -> datetime64", which leaves an
+        # already-datetime64 value at whatever unit it arrived in, e.g. "s"
+        # for a bare-string-derived epoch): mixing datetime64 units across
+        # separate `pl.DataFrame()` constructions in the same process
+        # triggers a polars/numpy interop bug where a later, differently-
+        # shaped construction misreads a boxed `datetime.datetime` value as
+        # needing `float()` coercion (confirmed 2026-07-21 with a minimal
+        # repro -- `_append_vod_metadata_row` already pins to "ns" for the
+        # same reason, this was the one remaining unpinned call site).
         for row in rows:
-            if isinstance(row.get("start"), str):
-                row["start"] = np.datetime64(row["start"])
-            if isinstance(row.get("end"), str):
-                row["end"] = np.datetime64(row["end"])
+            if row.get("start") is not None:
+                row["start"] = np.datetime64(row["start"], "ns")
+            if row.get("end") is not None:
+                row["end"] = np.datetime64(row["end"], "ns")
             if "written_at" not in row:
                 row["written_at"] = datetime.now(UTC).isoformat()
 
@@ -2247,6 +2308,283 @@ class MyIcechunkStore:
             f"({len(dataset.epoch)} epochs, calculator={calculator_name})"
         )
         return True
+
+    def _prepare_vod_write(
+        self,
+        item: VodWriteItem,
+        branch: str = "main",
+        dedup: bool = True,
+    ) -> tuple[VodWriteResult | None, VodWritePlan | None]:
+        """Dedup-check + normalize one VOD write ahead of a forked batch.
+
+        Mirrors the pre-write half of `write_or_append_vod_group`, minus the
+        session/write/commit -- `group_name`-scoped only (its own metadata
+        table), zero cross-group reads, so safe to run for every item in a
+        batch before any fork exists. Returns `(skip_result, None)` if this
+        item should be skipped as a duplicate, else `(None, plan)`.
+        """
+        start = item.dataset.epoch.min().values
+        end = item.dataset.epoch.max().values
+
+        if dedup:
+            skip, reason = self.should_skip_vod_write(
+                group_name=item.group_name,
+                source_file_hashes=item.source_file_hashes,
+                time_start=start,
+                time_end=end,
+                branch=branch,
+            )
+            if skip:
+                self._logger.warning(
+                    "write_or_append_vod_group_skipped_duplicate",
+                    group=item.group_name,
+                    reason=reason,
+                    calculator=item.calculator_name,
+                )
+                return (
+                    VodWriteResult(
+                        group_name=item.group_name, written=False, skip_reason=reason
+                    ),
+                    None,
+                )
+
+        dataset = self._normalize_encodings(item.dataset)
+        start = dataset.epoch.min().values
+        end = dataset.epoch.max().values
+        action = "append" if self.group_exists(item.group_name, branch) else "write"
+        commit_message = item.commit_message
+        if commit_message is None:
+            version = get_version_from_pyproject()
+            commit_message = (
+                f"[v{version}] {action.capitalize()}d VOD group "
+                f"'{item.group_name}' (calculator={item.calculator_name})"
+            )
+        return None, VodWritePlan(
+            item=item,
+            action=action,
+            start=start,
+            end=end,
+            commit_message=commit_message,
+            dataset=dataset,
+        )
+
+    def _write_vod_into_fork(
+        self,
+        fork_session: ForkSession,
+        plan: VodWritePlan,
+    ) -> VodWriteResult:
+        """Append one VOD analysis group's dataset into its own fork.
+
+        Runs inside the cross-group thread pool, one call per group. Only
+        ever called for `action == "append"` --
+        `write_or_append_vod_groups_batch`'s pre-pass fully handles any
+        brand-new group before this is ever invoked. Unlike GNSS receiver
+        groups (many files per group per day), a VOD write is exactly one
+        dataset per group per call, so there is no "remaining data" left
+        over for a newly-created group the way there is for GNSS -- the
+        pre-pass write IS that group's entire contribution to the batch.
+        """
+        group_name = plan.item.group_name
+        dataset = plan.dataset
+        t_start = time.perf_counter()
+        self._logger.info(
+            "icechunk_write_data_started",
+            group=group_name,
+            action=plan.action,
+            n_data_vars=len(dataset.data_vars),
+            data_vars=list(dataset.data_vars.keys()),
+            n_epochs=int(dataset.sizes.get("epoch", 0)),
+            approx_size_mb=round(dataset.nbytes / 1e6, 2),
+            zarr_async_concurrency=self._zarr_async_concurrency,
+        )
+        try:
+            self._to_icechunk_throttled(
+                dataset, fork_session, group=group_name, append_dim="epoch"
+            )
+        except Exception:
+            self._logger.error(
+                "icechunk_write_data_error",
+                group=group_name,
+                action=plan.action,
+                elapsed_seconds=round(time.perf_counter() - t_start, 2),
+            )
+            raise
+        self._logger.info(
+            "icechunk_write_data_succeeded",
+            group=group_name,
+            action=plan.action,
+            elapsed_seconds=round(time.perf_counter() - t_start, 2),
+        )
+        zroot = zarr.open_group(fork_session.store, mode="a")
+        self._append_vod_metadata_row(
+            zroot=zroot,
+            group_name=group_name,
+            source_file_hashes=plan.item.source_file_hashes,
+            source_gnss_stores=plan.item.source_gnss_stores,
+            start=plan.start,
+            end=plan.end,
+            snapshot_id="",
+            action=plan.action,
+            commit_msg=plan.commit_message,
+            calculator_name=plan.item.calculator_name,
+            dataset_attrs=dict(dataset.attrs),
+        )
+        return VodWriteResult(
+            group_name=group_name,
+            written=True,
+            duration_seconds=time.perf_counter() - t_start,
+        )
+
+    def write_or_append_vod_groups_batch(
+        self,
+        items: Sequence[VodWriteItem],
+        branch: str = "main",
+        dedup: bool = True,
+    ) -> dict[str, VodWriteResult]:
+        """Write/append multiple VOD analysis groups in one fork/merge batch.
+
+        The same cross-group parallelization `RinexDataProcessor` uses for
+        GNSS receiver groups (`_write_receiver_batch_forked`), applied to VOD
+        analysis groups: any brand-new analysis group is created directly on
+        its own clean session that commits alone (pre-pass) -- verified
+        empirically (see `_write_receiver_batch_forked`'s docstring) that
+        `Session.merge()` silently drops a fork's data if the base session
+        it merges into had its own pending uncommitted writes before
+        `.fork()` was called, so new-group creation and forked appends can
+        never safely share one session. Only groups that already exist go
+        through the fork/merge phase; a brand-new group's pre-pass write is
+        its entire contribution to this batch (a VOD write is exactly one
+        dataset per group per call, unlike GNSS's many-files-per-group-per-
+        day case, so there is never leftover data for a newly-created group
+        to append afterward).
+
+        Fail-fast: if any group's forked write raises, no merge or commit
+        happens for the fork/merge phase -- a partial merge would silently
+        drop a group's data from an apparently-successful commit. A
+        pre-pass commit that already landed before a later fork failure is
+        safe to leave in place: the next retry's dedup check sees that
+        group's data as already-committed and won't re-attempt it.
+        """
+        version = get_version_from_pyproject()
+        log = self._logger
+        results: dict[str, VodWriteResult] = {}
+
+        new_plans: list[VodWritePlan] = []
+        append_plans: dict[str, VodWritePlan] = {}
+
+        for item in items:
+            skip_result, plan = self._prepare_vod_write(item, branch, dedup)
+            if skip_result is not None:
+                results[item.group_name] = skip_result
+                continue
+            assert plan is not None
+            if plan.action == "write":
+                new_plans.append(plan)
+            else:
+                append_plans[item.group_name] = plan
+
+        if not new_plans and not append_plans:
+            return results
+
+        # Pre-pass: brand-new groups, sequential, one clean session, one commit.
+        if new_plans:
+            summary_parts: list[str] = []
+            with self.writable_session(branch) as prepass_session:
+                for plan in new_plans:
+                    t_start = time.perf_counter()
+                    group_name = plan.item.group_name
+                    self._logger.info(
+                        "icechunk_write_data_started",
+                        group=group_name,
+                        action="write",
+                        n_data_vars=len(plan.dataset.data_vars),
+                        data_vars=list(plan.dataset.data_vars.keys()),
+                        n_epochs=int(plan.dataset.sizes.get("epoch", 0)),
+                        approx_size_mb=round(plan.dataset.nbytes / 1e6, 2),
+                        zarr_async_concurrency=self._zarr_async_concurrency,
+                    )
+                    self._to_icechunk_throttled(
+                        plan.dataset,
+                        prepass_session,
+                        group=group_name,
+                        mode="w",
+                        encoding=self.chunk_encoding_for(plan.dataset),
+                    )
+                    zroot = zarr.open_group(prepass_session.store, mode="a")
+                    self._append_vod_metadata_row(
+                        zroot=zroot,
+                        group_name=group_name,
+                        source_file_hashes=plan.item.source_file_hashes,
+                        source_gnss_stores=plan.item.source_gnss_stores,
+                        start=plan.start,
+                        end=plan.end,
+                        snapshot_id="",
+                        action="write",
+                        commit_msg=plan.commit_message,
+                        calculator_name=plan.item.calculator_name,
+                        dataset_attrs=dict(plan.dataset.attrs),
+                    )
+                    results[group_name] = VodWriteResult(
+                        group_name=group_name,
+                        written=True,
+                        duration_seconds=time.perf_counter() - t_start,
+                    )
+                    summary_parts.append(group_name)
+
+                if summary_parts:
+                    prepass_msg = (
+                        f"[v{version}] pre-pass create {len(summary_parts)} "
+                        f"VOD groups: {', '.join(summary_parts)}"
+                    )
+                    prepass_snapshot_id = prepass_session.commit(
+                        _with_run_id(prepass_msg)
+                    )
+                    for name in summary_parts:
+                        results[name].snapshot_id = prepass_snapshot_id
+
+        # Fork/merge phase: pre-existing groups only.
+        if append_plans:
+            with self.writable_session(branch) as base_session:
+                forks = {name: base_session.fork() for name in append_plans}
+                with ThreadPoolExecutor(max_workers=len(append_plans)) as tpe:
+                    futures = {
+                        tpe.submit(self._write_vod_into_fork, forks[name], plan): name
+                        for name, plan in append_plans.items()
+                    }
+                    completed: dict[str, VodWriteResult] = {}
+                    try:
+                        for fut in as_completed(futures):
+                            name = futures[fut]
+                            completed[name] = fut.result()
+                    except Exception:
+                        log.error(
+                            "vod_batch_write_failed",
+                            succeeded=list(completed),
+                            pending=[n for n in append_plans if n not in completed],
+                        )
+                        raise
+
+                base_session.merge(*forks.values())
+                summary = ", ".join(completed)
+                commit_msg = f"[v{version}] {len(completed)} VOD groups: {summary}"
+                agg_metadata = {
+                    "groups": ",".join(completed),
+                    "total_groups": str(len(completed)),
+                }
+                batch_snapshot_id = base_session.commit(
+                    _with_run_id(commit_msg), metadata=agg_metadata
+                )
+                for name, result in completed.items():
+                    result.snapshot_id = batch_snapshot_id
+                    results[name] = result
+
+        log.info(
+            "vod_batch_write_complete",
+            groups=list(results),
+            written=[name for name, r in results.items() if r.written],
+            skipped=[name for name, r in results.items() if not r.written],
+        )
+        return results
 
     def load_metadata(self, store: Any, group_name: str) -> pl.DataFrame:
         """Load metadata directly from Zarr into a Polars DataFrame.
