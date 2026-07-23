@@ -567,6 +567,8 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
     apply_overlap_filter: bool = False
     overlap_preferences: dict[str, str] | None = None
 
+    # Pydantic exempts PrivateAttr fields from frozen=True immutability, but ty
+    # doesn't model that and flags every assignment below as read-only.
     _header: Rnxv2Header = PrivateAttr()
     _signal_mapper: SignalIDMapper = PrivateAttr()
     _lines: list[str] = PrivateAttr()
@@ -581,11 +583,11 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
     @model_validator(mode="after")
     def _post_init(self) -> Self:
         """Initialize derived state after validation."""
-        self._header = Rnxv2Header.from_file(self.fpath)
-        self._signal_mapper = SignalIDMapper(
+        self._header = Rnxv2Header.from_file(self.fpath)  # ty: ignore[invalid-assignment]
+        self._signal_mapper = SignalIDMapper(  # ty: ignore[invalid-assignment]
             aggregate_glonass_fdma=self.aggregate_glonass_fdma,
         )
-        self._lines = self._load_file()
+        self._lines = self._load_file()  # ty: ignore[invalid-assignment]
         return self
 
     @property
@@ -612,13 +614,13 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
             data = f.read()
             h.update(data)
             lines = data.decode("utf-8", errors="replace").splitlines()
-        self._file_hash = h.hexdigest()[:16]
+        self._file_hash = h.hexdigest()[:16]  # ty: ignore[invalid-assignment]
 
         # Find line after END OF HEADER
-        self._header_end_line = 0
+        self._header_end_line = 0  # ty: ignore[invalid-assignment]
         for i, line in enumerate(lines):
             if "END OF HEADER" in line:
-                self._header_end_line = i + 1
+                self._header_end_line = i + 1  # ty: ignore[invalid-assignment]
                 break
 
         return lines

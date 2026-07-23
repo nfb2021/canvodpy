@@ -773,6 +773,8 @@ class Rnxv3Obs(GNSSDataReader):
 
     aggregate_glonass_fdma: bool = True
 
+    # Pydantic exempts PrivateAttr fields from frozen=True immutability, but ty
+    # doesn't model that and flags every assignment below as read-only.
     _header: Rnxv3Header = PrivateAttr()
     _signal_mapper: SignalIDMapper = PrivateAttr()
 
@@ -784,10 +786,10 @@ class Rnxv3Obs(GNSSDataReader):
     def _post_init(self) -> Self:
         """Initialize derived state after validation."""
         # Load header once
-        self._header = Rnxv3Header.from_file(self.fpath)
+        self._header = Rnxv3Header.from_file(self.fpath)  # ty: ignore[invalid-assignment]
 
         # Initialize signal mapper
-        self._signal_mapper = SignalIDMapper(
+        self._signal_mapper = SignalIDMapper(  # ty: ignore[invalid-assignment]
             aggregate_glonass_fdma=self.aggregate_glonass_fdma
         )
 
@@ -804,7 +806,7 @@ class Rnxv3Obs(GNSSDataReader):
                 warnings.warn(str(e), RuntimeWarning, stacklevel=2)
 
         # Cache file lines
-        self._lines = self._load_file()
+        self._lines = self._load_file()  # ty: ignore[invalid-assignment]
 
         return self
 
@@ -958,7 +960,7 @@ class Rnxv3Obs(GNSSDataReader):
             i for i, line in enumerate(lines) if line.startswith(epoch_record_indicator)
         ]
         starts.append(len(lines))  # Add EOF
-        self._cached_epoch_batches = [
+        self._cached_epoch_batches = [  # ty: ignore[invalid-assignment]
             (start, starts[i + 1])
             for i, start in enumerate(starts)
             if i + 1 < len(starts)
