@@ -37,6 +37,7 @@ except ImportError:
     _HAS_LOKY = False
     _loky_reusable = None  # ty: ignore[invalid-assignment]
 
+from canvodpy._deprecation import deprecated
 from canvodpy.logging import get_logger
 from canvodpy.logging.run_context import get_run_id
 from canvodpy.orchestrator.processor import (
@@ -1318,6 +1319,11 @@ class PipelineOrchestrator:
         )
 
 
+@deprecated(
+    "SingleReceiverProcessor is never instantiated by the live pipeline and its "
+    "process() calls a RinexDataProcessor method that no longer exists (would "
+    "raise AttributeError if invoked). Use PipelineOrchestrator instead."
+)
 class SingleReceiverProcessor:
     """Process a single receiver for one day.
 

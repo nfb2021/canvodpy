@@ -24,6 +24,7 @@ Notes
 from __future__ import annotations
 
 import time
+import warnings
 from multiprocessing import Pool, cpu_count
 from typing import Any, cast
 
@@ -175,6 +176,13 @@ def hampel_cell_sid_parallelized(
         Dataset-level attrs include full processing metadata.
 
     """
+    warnings.warn(
+        "hampel_cell_sid_parallelized() has no callers in this codebase — use "
+        "aggr_hampel_cell_sid_parallelized() instead, which additionally "
+        "supports optional temporal aggregation.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if n_workers is None:
         n_workers = min(cpu_count(), 8)
 

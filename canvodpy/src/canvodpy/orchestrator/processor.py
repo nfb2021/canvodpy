@@ -53,6 +53,7 @@ from canvod.utils.tools import (
     get_version_from_pyproject,
     sanitize_directory,
 )
+from canvodpy._deprecation import deprecated
 from canvodpy.logging import get_logger, stage_timer
 from canvodpy.logging.run_context import get_run_id, set_run_id
 from canvodpy.orchestrator.interpolator import (
@@ -691,6 +692,11 @@ def append_rinex_ds_to_store(
     return fork
 
 
+@deprecated(
+    "worker_task() is unused by the live pipeline (Phase 2 submits "
+    "preprocess_with_hermite_aux()/preprocess_reference_with_hermite_aux_fanout() "
+    "directly to the loky pool). Kept for reference only."
+)
 def worker_task(
     rinex_file: Path,
     keep_vars: list[str],
@@ -733,6 +739,11 @@ def worker_task(
     return fname, fork
 
 
+@deprecated(
+    "worker_task_append_only() is unused by the live pipeline (Phase 2 submits "
+    "preprocess_with_hermite_aux()/preprocess_reference_with_hermite_aux_fanout() "
+    "directly to the loky pool). Kept for reference only."
+)
 def worker_task_append_only(
     rinex_file: Path,
     keep_vars: list[str],
@@ -3647,6 +3658,11 @@ class RinexDataProcessor:
 
         return rinex_dir, receiver_name
 
+    @deprecated(
+        "parsed_rinex_data_gen_2_receivers() has no callers in the live pipeline "
+        "(PipelineOrchestrator._process_multi_day_batches() is the primary path). "
+        "Kept for reference only."
+    )
     def parsed_rinex_data_gen_2_receivers(
         self,
         keep_vars: list[str] | None = None,
@@ -4692,6 +4708,11 @@ class RinexDataProcessor:
         )
 
 
+@deprecated(
+    "DistributedRinexDataProcessor is never instantiated by the live pipeline "
+    "and is unfinished (own docstring: 'Under development. Use with caution.'). "
+    "Use PipelineOrchestrator/RinexDataProcessor instead."
+)
 class DistributedRinexDataProcessor(RinexDataProcessor):
     """Under development. Use with caution.
 
