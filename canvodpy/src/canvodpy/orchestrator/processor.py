@@ -159,6 +159,13 @@ def preprocess_with_hermite_aux(
     """
     import re
 
+    from canvod.auxiliary.preprocessing import reset_sid_accumulators
+
+    # Clear any SID-issue accumulation left over from earlier work in this
+    # process (e.g. aux/ephemeris padding during Phase 1 never flushes) so
+    # this call's sid_issues reflects only its own pad_to_global_sid() calls.
+    reset_sid_accumulators()
+
     log = get_logger(__name__).bind(
         file=str(rnx_file.name), receiver_type=receiver_type
     )
@@ -430,6 +437,13 @@ def preprocess_reference_with_hermite_aux_fanout(
 
     """
     import re
+
+    from canvod.auxiliary.preprocessing import reset_sid_accumulators
+
+    # Clear any SID-issue accumulation left over from earlier work in this
+    # process (e.g. aux/ephemeris padding during Phase 1 never flushes) so
+    # this call's sid_issues reflects only its own pad_to_global_sid() calls.
+    reset_sid_accumulators()
 
     log = get_logger(__name__).bind(
         file=str(rnx_file.name), receiver_type=receiver_type

@@ -59,6 +59,7 @@ def test_sid_filtering_integration(tmp_path, monkeypatch):
     from canvodpy.orchestrator.pipeline import PipelineOrchestrator
 
     import canvod.config as config_pkg
+    import canvod.config.loader as config_loader
     from canvod.config.models import ReceiverConfig, SiteConfig, VodAnalysisConfig
     from canvod.store import GnssResearchSite
 
@@ -71,15 +72,33 @@ def test_sid_filtering_integration(tmp_path, monkeypatch):
     # CANVOD__PROCESSING__STORAGE__... env vars replace the whole nested
     # `storage`/`sites` dict rather than merging into it (pydantic-settings'
     # BaseSettings source-merging), which would drop other sections.
+    #
+    # Patch _load_config_cached, not the public load_config name: every
+    # module that does `from canvod.config import load_config` (processor.py,
+    # pipeline.py, canvod-store/manager.py, ...) holds its own reference to
+    # the original function object, so monkeypatching config_pkg.load_config
+    # only affects call sites that do `canvod.config.load_config(...)` via
+    # attribute lookup -- not the `from ... import load_config` ones. But
+    # load_config() itself always delegates to _load_config_cached via a
+    # module-global lookup inside loader.py, so patching that one name is
+    # what all of them actually funnel through, regardless of which local
+    # binding a given module holds. (Found 2026-07-23: this gap let a real
+    # local config/canvod-settings.yaml with an external-drive
+    # aux_data_dir leak into this "self-contained" test's aux-pipeline
+    # setup and fail with PermissionError when the drive wasn't mounted.)
     patched_config = config_pkg.load_config()
     patched_config.processing.storage.stores_root_dir = tmp_path / "stores"
+    patched_config.processing.storage.aux_data_dir = tmp_path / "aux"
+    patched_config.processing.storage.shared_aux_cache_dir = None
     patched_config.sites.sites["rosalia"] = SiteConfig(
         gnss_site_data_root=str(_ROSALIA_DATA),
         receivers={
             "canopy_01": ReceiverConfig(type="canopy", directory="placeholder"),
         },
     )
-    monkeypatch.setattr(config_pkg, "load_config", lambda *a, **kw: patched_config)
+    monkeypatch.setattr(
+        config_loader, "_load_config_cached", lambda *a, **kw: patched_config
+    )
 
     site = GnssResearchSite(site_name="rosalia")
 
