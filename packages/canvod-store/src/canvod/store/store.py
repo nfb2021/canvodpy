@@ -34,6 +34,40 @@ if TYPE_CHECKING:
     from icechunk import AncestryGraph
 
 
+class _PatchedAncestryGraph:
+    """Wraps icechunk AncestryGraph to make SVG text readable in both colour schemes."""
+
+    def __init__(self, graph: "AncestryGraph") -> None:  # noqa: UP037
+        self._graph = graph
+
+    def _repr_html_(self) -> str:
+        import uuid
+
+        svg = self._graph._repr_svg_()
+        # Wrap the SVG in a <div> with a unique ID so CSS selectors are scoped
+        # and cannot bleed into surrounding notebook/DOM styles.
+        # _repr_html_ takes priority over _repr_svg_ in Jupyter/marimo display.
+        _id = f"icg{uuid.uuid4().hex[:8]}"
+        style = (
+            f"<style>"
+            f"#{_id} rect{{fill:#f9fafb!important;stroke:#e5e7eb!important}}"
+            f"#{_id} text{{fill:#1f2937!important}}"
+            f"@media(prefers-color-scheme:dark){{"
+            f"#{_id} rect{{fill:#1a1a1a!important;stroke:#374151!important}}"
+            f"#{_id} text{{fill:#ffffff!important}}"
+            f"}}"
+            f"</style>"
+            f'<div id="{_id}">{svg}</div>'
+        )
+        return style
+
+    def __repr__(self) -> str:
+        return repr(self._graph)
+
+    def __str__(self) -> str:
+        return str(self._graph)
+
+
 def _with_run_id(commit_message: str) -> str:
     """Append the current run_id (if any) to a commit message.
 
@@ -3206,16 +3240,25 @@ class MyIcechunkStore:
             and ``backup_path`` (str).
         """
         entries = []
-        for i, update in enumerate(self._repo.ops_log()):
-            entries.append(
-                {
-                    "kind": str(update.kind),
-                    "updated_at": update.updated_at,
-                    "backup_path": update.backup_path,
-                }
-            )
-            if limit is not None and i + 1 >= limit:
-                break
+        try:
+            for i, update in enumerate(self._repo.ops_log()):
+                entries.append(
+                    {
+                        "kind": str(update.kind),
+                        "updated_at": update.updated_at,
+                        "backup_path": update.backup_path,
+                    }
+                )
+                if limit is not None and i + 1 >= limit:
+                    break
+        except icechunk.IcechunkError as exc:
+            if "repository version" in str(exc):
+                self._logger.warning(
+                    "ops_log requires icechunk v2 store format; "
+                    "this store is v1. Returning empty log."
+                )
+            else:
+                raise
         return entries
 
     def print_ops_log(self, limit: int | None = 50) -> None:
@@ -3634,6 +3677,46 @@ class MyIcechunkStore:
                 self._logger.info(f"Deleted temporary branch '{temp_branch}'")
 
         return snapshot_id
+
+    def create_branch(self, branch_name: str, snapshot_id: str) -> None:
+        """
+        Create a branch pointing at a specific snapshot.
+
+        Accepts either the full snapshot ID or an 8-character prefix as shown
+        in ``plot_commit_graph()``.  Raises ``ValueError`` if the prefix is
+        ambiguous or not found.
+
+        Parameters
+        ----------
+        branch_name : str
+            Name of the new branch (e.g. ``"explore/my-analysis"``).
+        snapshot_id : str
+            Full snapshot ID or 8-char prefix (case-insensitive).
+        """
+        if len(snapshot_id) < 32:
+            prefix = snapshot_id.upper()
+            history = self.get_history(limit=None)
+            matches = [
+                h
+                for h in history
+                if h.get("snapshot_id", "").upper().startswith(prefix)
+            ]
+            if not matches:
+                raise ValueError(
+                    f"No snapshot found with prefix '{snapshot_id}'. "
+                    "Use get_history() to list available snapshots."
+                )
+            if len(matches) > 1:
+                ids = [m["snapshot_id"] for m in matches]
+                raise ValueError(
+                    f"Ambiguous prefix '{snapshot_id}' "
+                    f"matches {len(ids)} snapshots: {ids}"
+                )
+            snapshot_id = matches[0]["snapshot_id"]
+        self.repo.create_branch(branch_name, snapshot_id)
+        self._logger.info(
+            f"Created branch '{branch_name}' at snapshot {snapshot_id[:8]}"
+        )
 
     def create_release_tag(self, tag_name: str, snapshot_id: str | None = None) -> None:
         """
