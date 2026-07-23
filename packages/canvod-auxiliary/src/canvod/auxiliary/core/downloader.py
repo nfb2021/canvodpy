@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 from urllib import error as urlerror
 from urllib import request
+from urllib.parse import urlparse
 
 from rich.progress import (
     BarColumn,
@@ -242,7 +243,7 @@ class FtpDownloader(FileDownloader):
         """Attempt to download from a specific URL."""
         temp_path = destination.with_suffix(destination.suffix + ".tmp")
 
-        if "cddis.eosdis.nasa.gov" in url:
+        if urlparse(url).hostname == urlparse(self.NASA_FTP).hostname:
             return self._download_from_nasa_cddis(url, destination)
         else:
             with _download_progress() as progress:
