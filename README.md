@@ -65,7 +65,7 @@
 | packages/canvod-auxiliary/src/canvod/auxiliary/container.py                     |       10 |        0 |    100% |           |
 | packages/canvod-auxiliary/src/canvod/auxiliary/core/\_\_init\_\_.py             |        3 |        0 |    100% |           |
 | packages/canvod-auxiliary/src/canvod/auxiliary/core/base.py                     |      111 |       76 |     32% |57-65, 99-100, 130-138, 170-172, 210-285, 301, 306, 311-315, 325-332, 337, 342 |
-| packages/canvod-auxiliary/src/canvod/auxiliary/core/downloader.py               |      157 |      130 |     17% |29, 64, 68, 91-111, 135-237, 243-266, 270-328, 344-375, 379-381, 385-387 |
+| packages/canvod-auxiliary/src/canvod/auxiliary/core/downloader.py               |      158 |      130 |     18% |30, 65, 69, 92-112, 136-238, 244-267, 271-329, 345-376, 380-382, 386-388 |
 | packages/canvod-auxiliary/src/canvod/auxiliary/ephemeris/\_\_init\_\_.py        |        5 |        0 |    100% |           |
 | packages/canvod-auxiliary/src/canvod/auxiliary/ephemeris/parser.py              |       78 |       67 |     14% |28-29, 46-134, 154-155, 184-197, 201 |
 | packages/canvod-auxiliary/src/canvod/auxiliary/ephemeris/provider.py            |      103 |       86 |     17% |115-120, 144-217, 243-292, 317-318, 326, 352-409 |
@@ -194,7 +194,7 @@
 | packages/canvod-vod/src/canvod/vod/\_internal/\_\_init\_\_.py                   |        2 |        0 |    100% |           |
 | packages/canvod-vod/src/canvod/vod/\_internal/logger.py                         |        5 |        1 |     80% |        26 |
 | packages/canvod-vod/src/canvod/vod/calculator.py                                |       66 |        7 |     89% |51, 65, 106-112 |
-| **TOTAL**                                                                       | **19511** | **11344** | **42%** |           |
+| **TOTAL**                                                                       | **19512** | **11344** | **42%** |           |
 
 
 ## Setup coverage badge
