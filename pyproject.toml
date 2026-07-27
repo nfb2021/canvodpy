@@ -14,18 +14,18 @@ exclude = ["packages/canvod-streamstats"]
 dev = [
     "anywidget>=0.11.0",
     "commitizen>=4.16.5",
-    "hypothesis>=6.160.0",
+    "hypothesis>=6.161.6",
     "ipykernel>=7.3.0",
-    "marimo>=0.23.14",
+    "marimo>=0.23.15",
     "mkdocstrings-python>=2.0.5",
     "mystmd>=1.10.1",
     "pre-commit>=4.6.1",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "pytest-mock>=3.15.1",
-    "ruff>=0.15.22",
+    "ruff>=0.16.0",
     "traitlets>=5.15.1",
-    "ty>=0.0.62",
+    "ty>=0.0.63",
     "zensical>=0.0.51",
 ]
 
