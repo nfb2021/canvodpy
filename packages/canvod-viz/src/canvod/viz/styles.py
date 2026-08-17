@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from functools import wraps
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass
@@ -54,6 +54,13 @@ class PolarPlotStyle:
         Show degree labels on radial axis
     theta_labels : list of int, default [0, 30, 60, 90]
         Elevation angles for labels (degrees)
+    projection : {'orthographic', 'equidistant'}, default 'orthographic'
+        Radial mapping from zenith angle theta to plot radius rho.
+        'orthographic' (rho = sin(theta)) is a straight-down view of the 3D
+        hemisphere -- cells compress toward the horizon at the rim.
+        'equidistant' (rho = theta / (pi/2)) is a true polar plot with
+        elevation rings evenly spaced, the conventional GNSS skyplot
+        convention.
 
     """
 
@@ -75,6 +82,7 @@ class PolarPlotStyle:
     grid_linestyle: str = "--"
     show_degree_labels: bool = True
     theta_labels: list[int] = field(default_factory=lambda: [0, 30, 60, 90])
+    projection: Literal["orthographic", "equidistant"] = "orthographic"
 
 
 @dataclass
