@@ -178,13 +178,18 @@ class GridData:
                 continue
 
             vertices = sv.vertices[region]
-            center = np.array(
-                [
-                    np.sin(row["theta"]) * np.cos(row["phi"]),
-                    np.sin(row["theta"]) * np.sin(row["phi"]),
-                    np.cos(row["theta"]),
-                ]
-            )
+            # Derive the fan-triangulation center from the region's own
+            # vertices (mean, renormalized to the unit sphere), not from
+            # row["theta"]/row["phi"]. BaseGridBuilder.build() rotates the
+            # grid DataFrame's phi column under phi_rotation but never
+            # touches `self.voronoi` (sv.vertices stays in the original,
+            # unrotated frame) -- reconstructing center from the (possibly
+            # rotated) row desynced it from its own polygon, producing
+            # wrong solid angles whenever phi_rotation != 0. Mirrors the
+            # vertex-mean center already used by the sibling
+            # _compute_geodesic_solid_angles/_compute_htm_solid_angles.
+            center = np.mean(vertices, axis=0)
+            center = center / np.linalg.norm(center)
 
             total_angle = 0
             n = len(vertices)
