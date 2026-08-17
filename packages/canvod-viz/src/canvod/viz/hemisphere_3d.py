@@ -651,7 +651,11 @@ class HemisphereVisualizer3D:
             try:
                 import healpy as hp
             except ImportError:
-                hp = None
+                # ty infers hp's declared type from the successful-import
+                # branch (the healpy module) and flags this fallback as
+                # incompatible; the `if hp is not None` guard below makes
+                # it safe at runtime regardless.
+                hp = None  # ty: ignore[invalid-assignment]
             if hp is not None and "healpix_ipix" in grid_df.columns:
                 nside = int(grid_df["healpix_nside"][0])
                 for row in grid_df.iter_rows(named=True):
