@@ -12,15 +12,26 @@ receiver based on their polar angle (θ) and azimuth (φ). The primary grid type
 for GNSS-T is the **equal-area** grid, where each 2° band is divided into cells
 of equal solid angle.
 
-Six grid types are available: `equal_area`, `equal_angle`, `equirectangular`,
-`htm`, `geodesic`, and `fibonacci`. Of these, `equal_area` and `equal_angle`
-are verified correct; the rest are implemented but not yet verified.
+Seven grid types are available: `equal_area`, `equal_angle`, `equirectangular`,
+`htm`, `geodesic`, `fibonacci`, and `healpix`. All seven pass a dedicated
+correctness test suite (solid-angle sum, no below-horizon cells, no seam
+artifacts, structural invariants) — but `equal_area` remains the only type
+recommended for production VOD analysis; `equal_angle`/`equirectangular` are
+zenith-biased by design, and the others trade strict equal-area for other
+properties (see the [package docs](https://nfb2021.github.io/canvodpy/packages/grids/overview/)
+for the per-type tradeoffs).
 
 ## Installation
 
 ```bash
 uv pip install canvod-grids
 ```
+
+`healpix` additionally requires [`healpy`](https://healpy.readthedocs.io/),
+which is **not** installed by the above (no Windows wheels on PyPI, so it
+isn't a hard dependency of this package): `pip install healpy` /
+`uv pip install healpy` separately. `create_hemigrid("healpix", ...)` raises
+`ImportError` with the same instructions if it's missing.
 
 ## Quick Start
 

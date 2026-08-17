@@ -48,6 +48,17 @@ Seven implementations are available, all inheriting from `BaseGridBuilder`:
     distribution; ideal for scatter-plot analyses.
     Requires `scipy`.
 
+-   :fontawesome-solid-globe: &nbsp; **HEALPixBuilder**
+
+    ---
+
+    Hierarchical Equal Area isoLatitude Pixelization. Strictly
+    equal-area pixels, the gold standard for unbiased solid-angle
+    weighting.
+    Requires the optional `healpy` dependency — not installed by
+    default (see [Optional dependencies](#optional-dependencies)
+    below).
+
 -   :fontawesome-solid-triangle-exclamation: &nbsp; **HTMBuilder**
 
     ---
@@ -58,6 +69,31 @@ Seven implementations are available, all inheriting from `BaseGridBuilder`:
 </div>
 
 All builders accept `angular_resolution` (degrees) and `cutoff_theta` (maximum polar angle) and return a `GridData` object.
+
+### Optional dependencies
+
+!!! warning "HEALPix requires an explicit install"
+
+    `HEALPixBuilder` delegates pixel geometry entirely to
+    [`healpy`](https://healpy.readthedocs.io/), which is **not** installed
+    by `uv sync --dev` — it's declared in `canvod-grids`' own `optional`
+    dependency group, not the workspace's `dev` group. Install it with:
+
+    ```bash
+    uv sync --dev --group optional
+    ```
+
+    `healpy` publishes no Windows wheels on PyPI (Linux and macOS only),
+    which is the main reason it's kept optional rather than a hard
+    dependency — every other grid type only needs `numpy`/`scipy`, which
+    install everywhere. Calling `create_hemigrid("healpix", ...)` without
+    `healpy` installed raises `ImportError` with the same install
+    instructions.
+
+    CI installs the `optional` group on Linux/macOS runners so HEALPix is
+    covered by `canvod-grids`' correctness suite
+    (`test_grid_correctness_all_types.py`); it's skipped on the Windows
+    CI leg for the same wheel-availability reason.
 
 ---
 

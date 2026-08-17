@@ -46,6 +46,14 @@ jobs:
               if: github.actor == 'dependabot[bot]'
               run: uv lock
             - name: Install the Project
+              # healpy (canvod-grids' HEALPix grid builder, canvod-grids'
+              # `optional` group) ships no Windows wheels on PyPI, so it's
+              # only installable on Linux/macOS -- HEALPix-dependent tests
+              # skip on Windows, same as a local dev machine without it.
+              if: matrix.os != 'windows-latest'
+              run: uv sync --locked --dev --group optional
+            - name: Install the Project (Windows, no healpy)
+              if: matrix.os == 'windows-latest'
               run: uv sync --locked --dev
             - name: Run Tests
               run: |
