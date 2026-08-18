@@ -318,8 +318,18 @@ class Sp3InterpolationStrategy(Interpolator):
         for coord, vel in [("X", "Vx"), ("Y", "Vy"), ("Z", "Vz")]:
             pos = ds[coord].sel(sid=sv).values
 
-            # Skip if pos is all-NaN
+            # Skip if pos is all-NaN. coords[coord][:, idx] / vels[vel][:, idx]
+            # were allocated with np.empty() (uninitialized memory, not
+            # zeros/NaN) by the caller -- without these explicit NaN
+            # writes, a skipped satellite's entire column silently keeps
+            # whatever garbage was already in that memory, which then gets
+            # fed into compute_spherical_coordinates() as if it were a
+            # real ECEF position. Matches the canonical, correct handling
+            # in canvod.auxiliary.interpolation.interpolator.
             if not np.isfinite(pos).any():
+                coords[coord][:, idx] = np.nan
+                if vels is not None:
+                    vels[vel][:, idx] = np.nan
                 continue
 
             if vels is not None:
@@ -327,6 +337,8 @@ class Sp3InterpolationStrategy(Interpolator):
 
                 # Also skip if velocities are NaN
                 if not np.isfinite(vel_data).any():
+                    coords[coord][:, idx] = np.nan
+                    vels[vel][:, idx] = np.nan
                     continue
 
                 interpolator = CubicHermiteSpline(t_source, pos, vel_data)
