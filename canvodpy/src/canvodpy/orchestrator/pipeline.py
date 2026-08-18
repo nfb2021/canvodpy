@@ -423,8 +423,21 @@ class PipelineOrchestrator:
 
         return grouped
 
-    def preview_processing_plan(self) -> dict:
+    def preview_processing_plan(
+        self,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> dict:
         """Preview what would be processed without executing.
+
+        Parameters
+        ----------
+        start : str, optional
+            YYYYDOY string to start from (inclusive). ``None`` previews
+            every available date, matching legacy behavior.
+        end : str, optional
+            YYYYDOY string to end at (inclusive). ``None`` previews every
+            available date, matching legacy behavior.
 
         Returns
         -------
@@ -433,6 +446,7 @@ class PipelineOrchestrator:
 
         """
         grouped = self._group_by_date_and_receiver()
+        dates = self._filter_dates(grouped, start, end)
 
         plan = {
             "site": self.site.site_name,
@@ -441,7 +455,7 @@ class PipelineOrchestrator:
             "total_files": 0,
         }
 
-        for date_key, receivers in sorted(grouped.items()):
+        for date_key, receivers in dates:
             date_info = {"date": date_key, "receivers": []}
 
             for receiver_name, (data_dir, receiver_type, _pos_dir, _fmt) in sorted(
@@ -464,9 +478,13 @@ class PipelineOrchestrator:
 
         return plan
 
-    def print_preview(self) -> None:
+    def print_preview(
+        self,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> None:
         """Print a formatted preview of the processing plan."""
-        plan = self.preview_processing_plan()
+        plan = self.preview_processing_plan(start, end)
 
         print(f"\n{'=' * 70}")
         print(f"PROCESSING PLAN FOR SITE: {plan['site']}")
@@ -1286,7 +1304,7 @@ class PipelineOrchestrator:
             self._logger.info(
                 "dry_run_mode", message="Simulating processing without execution"
             )
-            self.print_preview()
+            self.print_preview(start_from, end_at)
             return
 
         grouped = self._group_by_date_and_receiver()

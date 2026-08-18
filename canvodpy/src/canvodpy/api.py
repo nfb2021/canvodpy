@@ -550,8 +550,21 @@ class Pipeline:
             )
             raise
 
-    def preview(self) -> dict:
+    def preview(
+        self,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> dict:
         """Preview processing plan without execution.
+
+        Parameters
+        ----------
+        start : str, optional
+            YYYYDOY string to start from (inclusive). ``None`` previews
+            every available date.
+        end : str, optional
+            YYYYDOY string to end at (inclusive). ``None`` previews every
+            available date.
 
         Returns
         -------
@@ -561,11 +574,11 @@ class Pipeline:
         Examples
         --------
         >>> pipeline = Pipeline("ExampleSite")
-        >>> plan = pipeline.preview()
+        >>> plan = pipeline.preview(start="2025001", end="2025003")
         >>> print(f"Total files: {plan['total_files']}")
 
         """
-        return self._orchestrator.preview_processing_plan()
+        return self._orchestrator.preview_processing_plan(start, end)
 
     def __repr__(self) -> str:
         return (

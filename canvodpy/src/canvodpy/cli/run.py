@@ -366,12 +366,13 @@ def _main_impl(args: SimpleNamespace) -> int:
     if args.dry_run:
         for site_name in site_names:
             site = Site(site_name)
+            start, end = _resolve_date_range(args, site)
             with site.pipeline(
                 n_workers=args.workers,
                 days_per_batch=args.days_per_batch,
                 dry_run=True,
             ) as pipeline:
-                plan = pipeline.preview()
+                plan = pipeline.preview(start=start, end=end)
                 print(f"Dry-run plan for {site_name}:")
                 for k, v in plan.items():
                     print(f"  {k}: {v}")
