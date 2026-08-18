@@ -145,6 +145,21 @@ def _decode_bytes(raw: bytes) -> str:
     return raw.decode("ascii", errors="replace").rstrip("\x00").strip()
 
 
+def _snr_dbhz_to_ssi(snr_dbhz: np.ndarray) -> np.ndarray:
+    """Derive RINEX-convention SSI (1-9) from continuous CN0 (dB-Hz).
+
+    SBF's raw MeasEpoch blocks carry only continuous CN0, not RINEX's
+    single-digit Signal Strength Indicator -- this is the standard
+    RINEX-writing-receiver conversion for CN0 given in dB-Hz (RINEX 3.04
+    §5.7): ``sn_rnx = MIN(MAX(INT(sn_raw/6), 1), 9)``. NaN (no
+    observation) stays at the -1 "no data" sentinel.
+    """
+    ssi = np.full(snr_dbhz.shape, -1, dtype=np.int8)
+    valid = np.isfinite(snr_dbhz)
+    ssi[valid] = np.clip(np.floor(snr_dbhz[valid] / 6.0), 1, 9).astype(np.int8)
+    return ssi
+
+
 # ---------------------------------------------------------------------------
 # Bandwidth / frequency helpers for to_ds() and to_metadata_ds()
 # ---------------------------------------------------------------------------
@@ -1398,7 +1413,6 @@ class SbfReader(GNSSDataReader):
         pr_arr = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Pseudorange"])
         ph_arr = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Phase"])
         dop_arr = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Doppler"])
-        ssi_arr = np.full((n_epochs, n_sids), -1, dtype=DTYPES["SSI"])
         # ObsInfo flags: -1 = no observation, 0 = flag clear, 1 = flag set
         smoothing_arr = np.full((n_epochs, n_sids), -1, dtype=np.int8)
         half_cycle_arr = np.full((n_epochs, n_sids), -1, dtype=np.int8)
@@ -1418,6 +1432,10 @@ class SbfReader(GNSSDataReader):
                 smoothing_arr[t_idx, sid_to_idx[sid]] = flag
             for sid, flag in e_half.items():
                 half_cycle_arr[t_idx, sid_to_idx[sid]] = flag
+
+        # SBF has no native RINEX-style SSI field -- derive it from the
+        # continuous CN0 just filled above.
+        ssi_arr = _snr_dbhz_to_ssi(snr_arr).astype(DTYPES["SSI"])
 
         # Build coordinate arrays
         freq_center = np.asarray(
@@ -2343,7 +2361,6 @@ class SbfReader(GNSSDataReader):
         pr_arr = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Pseudorange"])
         ph_arr = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Phase"])
         dop_arr = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Doppler"])
-        ssi_arr = np.full((n_epochs, n_sids), -1, dtype=DTYPES["SSI"])
         # ObsInfo flags: -1 = no observation, 0 = flag clear, 1 = flag set
         smoothing_arr = np.full((n_epochs, n_sids), -1, dtype=np.int8)
         half_cycle_arr = np.full((n_epochs, n_sids), -1, dtype=np.int8)
@@ -2363,6 +2380,10 @@ class SbfReader(GNSSDataReader):
                 smoothing_arr[t_idx, sid_to_idx[sid]] = flag
             for sid, flag in e_half.items():
                 half_cycle_arr[t_idx, sid_to_idx[sid]] = flag
+
+        # SBF has no native RINEX-style SSI field -- derive it from the
+        # continuous CN0 just filled above.
+        ssi_arr = _snr_dbhz_to_ssi(snr_arr).astype(DTYPES["SSI"])
 
         freq_center = np.asarray(
             [sid_props_obs[s]["freq_center"] for s in sorted_sids],
