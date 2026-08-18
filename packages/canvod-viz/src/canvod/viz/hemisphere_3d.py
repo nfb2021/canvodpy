@@ -648,14 +648,18 @@ class HemisphereVisualizer3D:
                         continue
 
         elif grid_type == "healpix":
+            # Pre-declared as Any so ty doesn't narrow hp's type from the
+            # successful-import branch alone -- that narrowing is what
+            # made a plain `except ImportError: hp = None` flip between a
+            # real invalid-assignment error (healpy installed, ty resolves
+            # the module type) and an unused-ignore-comment error (healpy
+            # absent, ty can't resolve the import) depending on the
+            # environment ty runs in, rather than the code itself.
+            hp: Any = None
             try:
                 import healpy as hp
             except ImportError:
-                # ty infers hp's declared type from the successful-import
-                # branch (the healpy module) and flags this fallback as
-                # incompatible; the `if hp is not None` guard below makes
-                # it safe at runtime regardless.
-                hp = None  # ty: ignore[invalid-assignment]
+                pass
             if hp is not None and "healpix_ipix" in grid_df.columns:
                 nside = int(grid_df["healpix_nside"][0])
                 for row in grid_df.iter_rows(named=True):
