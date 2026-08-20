@@ -22,6 +22,7 @@ Classes:
 
 import hashlib
 import json
+import warnings
 from collections import Counter
 from datetime import UTC, datetime
 from itertools import pairwise
@@ -1507,7 +1508,25 @@ def _normalize_sv(sv_str: str) -> str:
 
 
 def _register_factory() -> None:
-    """Register Rnxv2Obs with ReaderFactory on module import."""
+    """Dead code, kept only to emit a deprecation notice before removal.
+
+    ``canvod.readers.base`` has no ``ReaderFactory`` -- the import below
+    always raises ``ImportError`` and is silently swallowed, so this has
+    never actually registered anything. ``Rnxv2Obs`` is registered for
+    real by ``canvodpy``'s own ``_register_builtin_components()`` under
+    the name ``"rinex2"`` (not ``"rinex_v2"``); canvod-readers cannot
+    import ``canvodpy.factories.ReaderFactory`` directly since canvodpy
+    depends on canvod-readers, not the other way around.
+    """
+    warnings.warn(
+        "Rnxv2Obs._register_factory() is dead code: canvod.readers.base "
+        "has no ReaderFactory, so this has always silently registered "
+        "nothing. Rnxv2Obs is actually registered as 'rinex2' via "
+        "canvodpy's _register_builtin_components(). This function will "
+        "be removed in a future release.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     import contextlib
 
     with contextlib.suppress(ImportError):
