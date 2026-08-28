@@ -95,7 +95,11 @@ class ProcessingParams(_StrictModel):
         1,
         ge=1,
         le=30,
-        description="Number of DOYs pooled per loky wave (1 = one day at a time)",
+        description=(
+            "Number of DOYs pooled per loky wave (1 = one day at a time). "
+            "Raising this too high may cause connection issues with the "
+            "ephemeris download server."
+        ),
     )
     max_memory_gb: float | None = Field(
         None,

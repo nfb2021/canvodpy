@@ -842,7 +842,7 @@ class PipelineOrchestrator:
             ] = {}
             task_descriptors_by_date: dict[str, list[tuple]] = {}
 
-            phase1_workers = min(len(batch), 4)
+            phase1_workers = len(batch)
             batch_receivers_by_date = dict(batch)
             with ThreadPoolExecutor(max_workers=phase1_workers) as tp:
                 futures = {
