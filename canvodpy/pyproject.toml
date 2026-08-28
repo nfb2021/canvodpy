@@ -5,7 +5,7 @@ description = "Python ecosystem for GNSS-Transmissometry canopy VOD retrievals"
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [
-    { name = "Nicolas François Bader", email = "nicolas.bader@tuwien.ac.at" },
+    { name = "Nicolas François Bader", email = "support@canvodpy.eu" },
 ]
 keywords = ["GNSS", "VOD", "vegetation", "remote sensing", "geodesy"]
 classifiers = [

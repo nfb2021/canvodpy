@@ -13,7 +13,7 @@ abstract: >
 authors:
   - family-names: Bader
     given-names: Nicolas François
-    email: nicolas.bader@tuwien.ac.at
+    email: support@canvodpy.eu
     affiliation: "TU Wien, Department of Geodesy and Geoinformation, Climate and Environmental Remote Sensing CLIMERS Research Unit"
     orcid: "https://orcid.org/0000-0002-9932-1925"
 repository-code: "https://github.com/nfb2021/canvodpy"
