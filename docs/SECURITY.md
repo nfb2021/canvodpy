@@ -44,13 +44,9 @@ Please include as much of the following information as possible:
 
 ### 4. Response Timeline
 
-- **Initial Response:** Within 48 hours of report
-- **Confirmation:** Within 7 days (whether we accept or decline the report)
-- **Fix Timeline:** Depends on severity
-  - Critical: 7 days
-  - High: 30 days
-  - Medium: 60 days
-  - Low: 90 days
+canvodpy is a small, community-maintained project. We aim to respond and
+confirm reports as promptly as we can, and prioritize fixes by severity, but
+we do not guarantee specific response or fix timelines.
 
 ### 5. Disclosure Process
 
@@ -80,7 +76,7 @@ Please include as much of the following information as possible:
 
 - **Never commit credentials** to version control
 - Use environment variables or secure credential stores for:
-  - Icechunk storage credentials (S3, Azure, GCS)
+  - API tokens and other service credentials
   - Ephemeris download credentials (if applicable)
   - Database connection strings
 
@@ -98,19 +94,13 @@ canvodpy parses binary formats (SBF, RINEX). While we use robust parsing librari
 - **Risk:** Maliciously crafted files could potentially cause crashes or unexpected behavior
 - **Mitigation:** Always validate input files from untrusted sources
 
-### 2. Cloud Storage
-
-canvodpy can write to cloud storage (S3, Azure, GCS):
-- **Risk:** Misconfigured credentials could expose data
-- **Mitigation:** Use least-privilege IAM roles, enable encryption at rest
-
-### 3. Dependency Chain
+### 2. Dependency Chain
 
 canvodpy depends on scientific Python packages (NumPy, SciPy, xarray, Zarr):
 - **Risk:** Vulnerabilities in dependencies could affect canvodpy
 - **Mitigation:** We monitor Dependabot alerts and update dependencies regularly
 
-### 4. Code Execution
+### 3. Code Execution
 
 canvodpy loads Python configuration files:
 - **Risk:** Configuration files can execute arbitrary Python code
@@ -166,4 +156,4 @@ For general questions (non-security), please use:
 
 ---
 
-**Last Updated:** March 30, 2026
+**Last Updated:** August 28, 2026

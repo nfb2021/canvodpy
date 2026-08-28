@@ -8,10 +8,6 @@ canvodpy is currently in **beta** (pre-1.0 release). Security updates are provid
 | ------- | ------------------ |
 | 0.x.x   | :white_check_mark: |
 
-Once canvodpy reaches v1.0.0, we will provide security updates for:
-- The latest major version
-- The previous major version (for 6 months after new major release)
-
 ## Reporting a Vulnerability
 
 We take the security of canvodpy seriously. If you discover a security vulnerability, please follow these steps:
@@ -30,7 +26,7 @@ Report security vulnerabilities via one of these methods:
 - Fill in the details
 
 **Alternative:** Email the maintainer directly:
-- Email: nicolas.bader@tuwien.ac.at
+- Email: support@canvodpy.eu
 - Include "SECURITY" in the subject line
 - Provide a detailed description of the vulnerability
 
@@ -48,13 +44,9 @@ Please include as much of the following information as possible:
 
 ### 4. Response Timeline
 
-- **Initial Response:** Within 48 hours of report
-- **Confirmation:** Within 7 days (whether we accept or decline the report)
-- **Fix Timeline:** Depends on severity
-  - Critical: 7 days
-  - High: 30 days
-  - Medium: 60 days
-  - Low: 90 days
+canvodpy is a small, community-maintained project. We aim to respond and
+confirm reports as promptly as we can, and prioritize fixes by severity, but
+we do not guarantee specific response or fix timelines.
 
 ### 5. Disclosure Process
 
@@ -84,7 +76,7 @@ Please include as much of the following information as possible:
 
 - **Never commit credentials** to version control
 - Use environment variables or secure credential stores for:
-  - Icechunk storage credentials (S3, Azure, GCS)
+  - API tokens and other service credentials
   - Ephemeris download credentials (if applicable)
   - Database connection strings
 
@@ -102,19 +94,13 @@ canvodpy parses binary formats (SBF, RINEX). While we use robust parsing librari
 - **Risk:** Maliciously crafted files could potentially cause crashes or unexpected behavior
 - **Mitigation:** Always validate input files from untrusted sources
 
-### 2. Cloud Storage
-
-canvodpy can write to cloud storage (S3, Azure, GCS):
-- **Risk:** Misconfigured credentials could expose data
-- **Mitigation:** Use least-privilege IAM roles, enable encryption at rest
-
-### 3. Dependency Chain
+### 2. Dependency Chain
 
 canvodpy depends on scientific Python packages (NumPy, SciPy, xarray, Zarr):
 - **Risk:** Vulnerabilities in dependencies could affect canvodpy
 - **Mitigation:** We monitor Dependabot alerts and update dependencies regularly
 
-### 4. Code Execution
+### 3. Code Execution
 
 canvodpy loads Python configuration files:
 - **Risk:** Configuration files can execute arbitrary Python code
@@ -134,13 +120,7 @@ canvodpy loads Python configuration files:
 - ✅ Static analysis (ruff with 50+ rule sets)
 - ✅ Type checking (ty with type budget enforcement)
 - ✅ Dynamic analysis (pytest test suite with coverage tracking)
-
-### Planned Enhancements
-
-- [ ] Input validation framework for GNSS data files
-- [ ] Sandboxed configuration loading
-- [ ] Formal security audit before v1.0 release
-- [ ] Supply chain security (SLSA provenance)
+- ✅ Input validation framework for GNSS data files
 
 ## Vulnerability Disclosure Policy
 
@@ -166,7 +146,7 @@ We would like to thank the following individuals for responsibly disclosing secu
 
 For security-related questions or concerns:
 - **Maintainer:** Nicolas François Bader
-- **Email:** nicolas.bader@tuwien.ac.at
+- **Email:** support@canvodpy.eu
 - **Affiliation:** Climate and Environmental Remote Sensing (CLIMERS), TU Wien
 
 For general questions (non-security), please use:
@@ -175,4 +155,4 @@ For general questions (non-security), please use:
 
 ---
 
-**Last Updated:** March 30, 2026
+**Last Updated:** August 28, 2026
