@@ -217,7 +217,7 @@ Store metadata draws from two config sections:
 processing:
   metadata:
     author: "Nicolas Bader"
-    email: "nicolas.bader@geo.tuwien.ac.at"
+    email: "support@canvodpy.eu"
     orcid: "0000-0002-1234-5678"          # optional
     institution: "TU Wien"
     institution_ror: "https://ror.org/04d836q62"  # optional

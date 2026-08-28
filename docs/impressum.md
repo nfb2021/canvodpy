@@ -3,11 +3,6 @@ title: Impressum
 description: Legal notice and responsible parties for canVODpy
 ---
 
-# Impressum
-
-In accordance with Austrian law (E-Commerce-Gesetz, ECG; Mediengesetz, MedienG).
-
----
 
 ## Responsible for content
 
@@ -19,7 +14,7 @@ TU Wien — Vienna University of Technology
 Wiedner Hauptstraße 8/E120.8
 1040 Wien, Austria
 
-:fontawesome-solid-envelope: &nbsp; [nicolas.bader@geo.tuwien.ac.at](mailto:nicolas.bader@geo.tuwien.ac.at)
+:fontawesome-solid-envelope: &nbsp; [support@canvodpy.eu](mailto:support@canvodpy.eu)
 :fontawesome-brands-github: &nbsp; [github.com/nfb2021](https://github.com/nfb2021)
 :fontawesome-solid-globe: &nbsp; [tuwien.at/en/mg/geo/climers](https://www.tuwien.at/en/mg/geo/climers)
 
@@ -30,8 +25,6 @@ Wiedner Hauptstraße 8/E120.8
 This software is developed at the [Climate and Environmental Remote Sensing Research
 Unit (CLIMERS)](https://www.tuwien.at/en/mg/geo/climers), Department of Geodesy and
 Geoinformation, TU Wien.
-
-TU Wien is a public university under Austrian law (Universitätsgesetz 2002, UG).
 
 ---
 
@@ -77,8 +70,7 @@ of AI-based tools, specifically [Claude Code](https://claude.ai/) by
 - Test case generation
 - Diagram and schema design
 
-AI-generated output is reviewed before inclusion. However, no individual contributor
-— including the original author — assumes personal liability for the correctness of
+AI-generated output is reviewed before inclusion. However, no individual contributor (including the original author) assumes personal liability for the correctness of
 any AI-assisted or community-contributed content. AI tools do not hold authorship or
 intellectual property rights over any part of this work.
 

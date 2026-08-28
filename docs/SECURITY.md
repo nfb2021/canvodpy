@@ -8,10 +8,6 @@ canvodpy is currently in **beta** (pre-1.0 release). Security updates are provid
 | ------- | ------------------ |
 | 0.x.x   | :white_check_mark: |
 
-Once canvodpy reaches v1.0.0, we will provide security updates for:
-- The latest major version
-- The previous major version (for 6 months after new major release)
-
 ## Reporting a Vulnerability
 
 We take the security of canvodpy seriously. If you discover a security vulnerability, please follow these steps:
@@ -30,7 +26,7 @@ Report security vulnerabilities via one of these methods:
 - Fill in the details
 
 **Alternative:** Email the maintainer directly:
-- Email: nicolas.bader@tuwien.ac.at
+- Email: support@canvodpy.eu
 - Include "SECURITY" in the subject line
 - Provide a detailed description of the vulnerability
 
@@ -134,13 +130,8 @@ canvodpy loads Python configuration files:
 - ✅ Static analysis (ruff with 50+ rule sets)
 - ✅ Type checking (ty with type budget enforcement)
 - ✅ Dynamic analysis (pytest test suite with coverage tracking)
+- ✅ Input validation framework for GNSS data files
 
-### Planned Enhancements
-
-- [ ] Input validation framework for GNSS data files
-- [ ] Sandboxed configuration loading
-- [ ] Formal security audit before v1.0 release
-- [ ] Supply chain security (SLSA provenance)
 
 ## Vulnerability Disclosure Policy
 
@@ -166,7 +157,7 @@ We would like to thank the following individuals for responsibly disclosing secu
 
 For security-related questions or concerns:
 - **Maintainer:** Nicolas François Bader
-- **Email:** nicolas.bader@tuwien.ac.at
+- **Email:** support@canvodpy.eu
 - **Affiliation:** Climate and Environmental Remote Sensing (CLIMERS), TU Wien
 
 For general questions (non-security), please use:
