@@ -3,10 +3,10 @@ name = "canvod-store"
 version = "0.2.3"
 description = "Icechunk storage for GNSS-T observations and VOD"
 authors = [
-    {name = "Nicolas François Bader", email = "nicolas.bader@geo.tuwien.ac.at"},
+    {name = "Nicolas François Bader", email = "support@canvodpy.eu"},
 ]
 maintainers = [
-    {name = "Climate and Environmental Remote Sensing (CLIMERS)", email = "nicolas.bader@geo.tuwien.ac.at"},
+    {name = "Climate and Environmental Remote Sensing (CLIMERS)", email = "support@canvodpy.eu"},
 ]
 readme = "README.md"
 requires-python = ">=3.14"

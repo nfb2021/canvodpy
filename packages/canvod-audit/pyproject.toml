@@ -5,7 +5,7 @@ description = "Internal verification and regression testing suite for canVODpy p
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [
-    {name = "Nicolas François Bader", email = "nicolas.bader@geo.tuwien.ac.at"}
+    {name = "Nicolas François Bader", email = "support@canvodpy.eu"}
 ]
 license = {text = "Apache-2.0"}
 

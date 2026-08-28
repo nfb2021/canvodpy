@@ -66,5 +66,5 @@ Apache License 2.0
 Climate and Environmental Remote Sensing Research Unit (CLIMERS)
 Department of Geodesy and Geoinformation
 TU Wien (Vienna University of Technology)
-Email: nicolas.bader@geo.tuwien.ac.at
+Email: support@canvodpy.eu
 [https://www.tuwien.at/en/mg/geo/climers](https://www.tuwien.at/en/mg/geo/climers)

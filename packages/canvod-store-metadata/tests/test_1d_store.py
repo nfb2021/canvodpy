@@ -107,7 +107,7 @@ def _build_store_and_metadata(
         ),
         creator=Creator(
             name="Nicolas François Bader",
-            email="nicolas.bader@tuwien.ac.at",
+            email="support@canvodpy.eu",
             institution="TU Wien",
             institution_ror="https://ror.org/04d836q62",
             department="Geodesy and Geoinformation",

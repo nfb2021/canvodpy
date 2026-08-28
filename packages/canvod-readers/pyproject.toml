@@ -5,10 +5,10 @@ description = "Collection of GNSS data readers for GNSS-Transmissometry"
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [
-    {name = "Nicolas François Bader", email = "nicolas.bader@geo.tuwien.ac.at"},
+    {name = "Nicolas François Bader", email = "support@canvodpy.eu"},
 ]
 maintainers = [
-    {name = "Climate and Environmental Remote Sensing (CLIMERS)", email = "nicolas.bader@geo.tuwien.ac.at"},
+    {name = "Climate and Environmental Remote Sensing (CLIMERS)", email = "support@canvodpy.eu"},
 ]
 keywords = ["GNSS", "RINEX", "GPS", "geodesy", "remote sensing"]
 classifiers = [

@@ -5,7 +5,7 @@ description = "Shared utilities and diagnostics for canVODpy"
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [
-    {name = "Nicolas François Bader", email = "nicolas.bader@geo.tuwien.ac.at"}
+    {name = "Nicolas François Bader", email = "support@canvodpy.eu"}
 ]
 license = {text = "Apache-2.0"}
 
