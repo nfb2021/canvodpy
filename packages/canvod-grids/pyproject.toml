@@ -52,8 +52,8 @@ Issues = "https://github.com/nfb2021/canvodpy/issues"
 requires = ["uv_build>=0.9.17,<0.10.0"]
 build-backend = "uv_build"
 
-[tool.ty]
-extend-exclude = [
+[tool.ty.src]
+exclude = [
     "**/docs/*.ipynb",
 ]
 

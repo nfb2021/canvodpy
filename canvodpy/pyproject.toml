@@ -91,8 +91,8 @@ canvod-viz = { workspace = true }
 canvod-vod = { workspace = true }
 canvod-ops = { workspace = true }
 
-[tool.ty]
-extend-exclude = [
+[tool.ty.src]
+exclude = [
     "**/docs/*.ipynb",
     "**/docs/notebooks/*.py",
 ]
