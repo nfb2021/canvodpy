@@ -13,7 +13,7 @@ travel, branching/tagging, and deduplication on cloud object storage (S3, GCS,
 Azure) or local filesystems. Apply this skill when working with Icechunk repos,
 sessions, stores, version control, or xarray/Zarr integration on Icechunk.
 
-**Icechunk 1.0 API** — the examples below use the current stable API.
+**Icechunk 2.x API** — the examples below use the current stable API.
 
 ## Quick Start
 
@@ -188,6 +188,12 @@ repo.list_tags()
 repo.delete_tag("v1.0")
 ```
 
+**Tag deletion is permanent and logical, not physical**: deleting a tag
+writes a `.deleted` marker next to it — the tag name can **never be
+reused**, even after deletion (design doc `006-tag-delete.md`). Plan tag
+names accordingly (e.g. don't expect to re-create `v1.0` later with
+different contents).
+
 ### Time Travel
 
 ```python
@@ -208,12 +214,11 @@ from icechunk import RepositoryConfig, CompressionConfig, CachingConfig, Manifes
 
 config = RepositoryConfig(
     inline_chunk_threshold_bytes=512,      # chunks smaller than this go in manifest
-    unsafe_overwrite_refs=False,           # NEVER set True in production
-    compression=CompressionConfig(algorithm="zstd", level=5),
+    compression=CompressionConfig(algorithm="zstd", level=3),
     caching=CachingConfig(
-        num_snapshot_nodes=0,              # LRU cache for snapshot nodes
-        num_manifest_nodes=0,              # LRU cache for manifest nodes
-        num_transaction_changes_nodes=0,
+        num_snapshot_nodes=500_000,        # LRU cache for snapshot nodes (default)
+        num_chunk_refs=15_000_000,         # LRU cache for chunk references (default)
+        num_transaction_changes=0,
         num_bytes_attributes=0,
         num_bytes_chunks=0,
     ),
@@ -222,7 +227,7 @@ config = RepositoryConfig(
         splitting=ManifestSplittingConfig(...),
     ),
     storage=StorageSettings(
-        concurrency=StorageConcurrency(
+        concurrency=StorageConcurrencySettings(
             max_concurrent_requests_for_object=10,  # per-object parallelism
             ideal_concurrent_request_size=8_388_608, # 8 MiB per request part
         ),
@@ -231,6 +236,9 @@ config = RepositoryConfig(
 repo = icechunk.Repository.create(storage, config=config)
 ```
 
+Note: `unsafe_overwrite_refs` (present in Icechunk 1.x) was **removed** from
+`RepositoryConfig` in 2.x — don't reference it.
+
 ### Compression
 
 Icechunk uses internal compression (separate from Zarr codec compression) for
@@ -238,18 +246,30 @@ manifests, attributes, and transaction logs:
 
 | Setting | Default | Description |
 |---|---|---|
-| `compression_algorithm` | `zstd` | `zstd`, `lz4`, or `gzip` |
-| `compression_level` | `5` | 1=fast, 22=max (for zstd) |
+| `algorithm` | `zstd` | `zstd`, `lz4`, or `gzip` |
+| `level` | `3` | 1=fast, 22=max (for zstd) |
 
 ### Caching
 
-LRU caches for snapshot/manifest nodes and attribute/chunk bytes. All default to
-0 (disabled). Enable for read-heavy workloads:
+`CachingConfig` fields are `num_snapshot_nodes`, `num_chunk_refs`,
+`num_transaction_changes`, `num_bytes_attributes`, `num_bytes_chunks` — **not**
+`num_manifest_nodes`/`num_transaction_changes_nodes` (don't exist). Caching is
+**not** all-disabled by default — snapshot-node and chunk-ref caching are on
+with large limits out of the box; only the byte-based attribute/chunk caches
+default to off:
+
+| Field | Default |
+|---|---|
+| `num_snapshot_nodes` | 500,000 |
+| `num_chunk_refs` | 15,000,000 |
+| `num_transaction_changes` | 0 |
+| `num_bytes_attributes` | 0 |
+| `num_bytes_chunks` | 0 |
+
+Enable the byte-based caches for read-heavy workloads:
 
 ```python
 caching=CachingConfig(
-    num_snapshot_nodes=100,
-    num_manifest_nodes=100,
     num_bytes_attributes=10_000_000,   # 10 MB for attrs
     num_bytes_chunks=100_000_000,      # 100 MB for chunks
 )
@@ -262,28 +282,38 @@ optionally by dimension coordinate ranges:
 
 ```python
 from icechunk import (
-    ManifestSplittingConfig, ManifestSplitCondition,
-    ManifestSplitDimCondition,
+    ManifestConfig, ManifestSplittingConfig,
+    ManifestSplitCondition, ManifestSplitDimCondition,
 )
 
-manifest=ManifestSplittingConfig(
-    split_conditions=[
-        # Split when a manifest has >1000 chunk refs for an array
-        ManifestSplitCondition(
-            array_name_regex=".*",
-            num_chunk_refs=1000,
-        ),
-        # Split along "epoch" dim every 34560 indices (one day of 2.5s GNSS data)
-        ManifestSplitCondition(
-            array_name_regex="obs|snr",
-            num_chunk_refs=500,
-            dim_conditions=[
-                ManifestSplitDimCondition(dimension=0, max_range=34560),
-            ],
-        ),
-    ],
+# ManifestSplittingConfig.from_dict maps:
+#   condition → {dim_condition → max_chunk_refs_per_sub_manifest}
+splitting = ManifestSplittingConfig.from_dict({
+    # Split any array when a sub-manifest exceeds 1000 chunk refs
+    ManifestSplitCondition.name_matches(".*"): {
+        ManifestSplitDimCondition.Any(): 1000,
+    },
+    # Also split obs/snr along axis 0 (epoch) every 34560 indices
+    ManifestSplitCondition.name_matches("obs|snr"): {
+        ManifestSplitDimCondition.Axis(0): 34560,
+    },
+})
+
+# Wrap in ManifestConfig when assigning to RepositoryConfig
+config = RepositoryConfig(
+    manifest=ManifestConfig(splitting=splitting),
 )
 ```
+
+**Conditions:**
+- `ManifestSplitCondition.name_matches(regex)` — match by array name
+- `ManifestSplitCondition.path_matches(regex)` — match by full array path
+- Combine with `&` (AND) or `|` (OR) operators
+
+**Dimension conditions:**
+- `ManifestSplitDimCondition.Any()` — split along any dimension
+- `ManifestSplitDimCondition.Axis(n)` — split along the nth axis
+- `ManifestSplitDimCondition.DimensionName(name)` — split along a named dim
 
 **When to split:** Repos with >100k chunks per array. Splitting makes commits
 faster (only modified sub-manifests are rewritten) and reads faster (only
@@ -294,21 +324,32 @@ relevant sub-manifests are fetched).
 Preload chunk manifests into memory at session open for faster first reads:
 
 ```python
-from icechunk import ManifestPreloadConfig, ManifestPreloadCondition
+from icechunk import (
+    ManifestConfig, ManifestPreloadConfig, ManifestPreloadCondition,
+)
 
-manifest=ManifestPreloadConfig(
-    max_total_refs=100_000_000,         # safety cap on total refs loaded
-    max_arrays_to_scan=1000,            # max arrays to evaluate conditions on
-    preload_if=ManifestPreloadCondition(
-        # Combinators: .and_(other), .or_(other), .not_()
-        # Leaf conditions:
-        #   ManifestPreloadCondition.array_name("regex")
-        #   ManifestPreloadCondition.num_chunk_refs(max_refs)
-        ManifestPreloadCondition.array_name("obs|snr|epoch")
-            .and_(ManifestPreloadCondition.num_chunk_refs(50_000))
+preload = ManifestPreloadConfig(
+    max_total_refs=100_000_000,     # safety cap on total refs loaded
+    max_arrays_to_scan=1000,        # max arrays to evaluate conditions on
+    preload_if=(
+        # Preload arrays matching name AND with refs in [0, 50_000]
+        ManifestPreloadCondition.name_matches("obs|snr|epoch")
+        & ManifestPreloadCondition.num_refs(0, 50_000)
     ),
 )
+
+# Wrap in ManifestConfig when assigning to RepositoryConfig
+config = RepositoryConfig(
+    manifest=ManifestConfig(preload=preload),
+)
 ```
+
+**Conditions:**
+- `ManifestPreloadCondition.name_matches(regex)` — match by array name
+- `ManifestPreloadCondition.path_matches(regex)` — match by full path
+- `ManifestPreloadCondition.num_refs(from, to)` — match by chunk-ref count range
+- `ManifestPreloadCondition.true` / `.false` — unconditional preload / skip
+- Combine with `&` (AND) or `|` (OR) operators
 
 **When to preload:** Read-heavy workloads accessing known arrays repeatedly.
 Increases memory use but eliminates per-read manifest fetches.
@@ -334,10 +375,10 @@ Two independent concurrency knobs:
    ```
 
 2. **Icechunk max concurrent requests** — global limit on simultaneous HTTP
-   requests to object storage:
+   requests to object storage. There is no module-level
+   `icechunk.set_max_concurrent_requests()` function — set it on the config:
    ```python
-   import icechunk
-   icechunk.set_max_concurrent_requests(50)  # default: varies by platform
+   config = icechunk.RepositoryConfig(max_concurrent_requests=50)
    ```
 
 For cloud storage, increase both. For local filesystem, defaults are usually
@@ -365,13 +406,229 @@ to_icechunk(dask_ds, session)
 session.commit("parallel write")
 ```
 
+**The only backend-agnostic way to safely parallelize *multiple independent
+writers* (e.g. one worker per receiver-group) is fork/merge into one shared
+session, ending in a single `commit()`** — not concurrent `commit()` calls
+(see Conflict Resolution below for why that's unsafe on LocalFileSystem).
+`Session.fork()` internally does an anonymous flush-only commit (persists
+content-addressed snapshot/manifest objects, never touches the branch ref);
+`Session.merge()` is pure in-memory changeset merging, zero I/O. Neither
+touches the racy ref-update path, so this pattern is genuinely safe on every
+backend, including LocalFileSystem — confirmed 2026-07-21 by reading
+`session.rs`'s `fork()`/`merge()` implementations directly, not inferred from
+behavior:
+
+```python
+base_session = repo.writable_session("main")
+forks = [base_session.fork() for _ in workers]
+# ... each worker writes into its own fork, in parallel ...
+base_session.merge(*[w.result() for w in workers])  # in-memory, no I/O
+base_session.commit("multi-group write")            # the only real ref write
+```
+
+canvodpy has this wired **within** one receiver-group's file-level writes
+(`processor.py`'s per-group fork-per-file dispatch, one `merge()` + one
+`commit()` per group) but not yet **across** receiver-groups — each group
+still gets its own sequential session+commit today. Extending the same
+primitive across groups is architecturally sound; the open blocker is dedup
+timing (hash/temporal-overlap checks must run before fork dispatch, since
+each fork writes directly with no chance to veto after the fact) — unresolved
+even for the existing intra-group case, not a new problem introduced by
+widening the scope.
+
+**Also matters on shared/network mounts**: fanning write *preparation* out to
+real concurrent worker processes multiplies concurrent I/O against the mount
+(N workers × each one's own `zarr_async_concurrency` cap, since that cap is
+per-process, not global) — the connection-abort risk that knob was built to
+manage doesn't shrink itself just because the fan-out is otherwise safe. On
+CIFS/NFS, prefer forking for parallel *compute* while still funneling the
+actual chunk-write I/O through one path, or divide the cap by expected worker
+count and validate against the real mount before rollout.
+
 ### Conflict Resolution
 
-If two writers commit to the same branch concurrently, the second commit will
-fail with a conflict error. Solutions:
+If two writers commit to the same branch concurrently **on an object-store
+backend with real conditional/CAS writes (S3, GCS, Azure)**, the second
+commit fails with a detectable conflict error. Solutions:
 1. Retry the transaction (re-read, re-apply changes, re-commit)
 2. Use separate branches and merge later
-3. Use optimistic concurrency with snapshot IDs
+3. Use `session.commit(message, rebase_with=solver, rebase_tries=N)` — automatic
+   rebase-and-retry against a conflict solver, instead of a hand-rolled retry loop
+4. Use optimistic concurrency with snapshot IDs
+
+**None of this applies on LocalFileSystem storage — concurrent commits there
+don't raise a conflict at all, they can silently lose one.** Confirmed
+2026-07-21 against the actual source (not just the `tracing::warn!` visible
+at runtime), two layers deep:
+- `ObjectStorage::get_put_mode()` (`icechunk-arrow-object-store/src/lib.rs`)
+  returns `PutMode::Overwrite` (a blind write), never `PutMode::Update` (a
+  conditional/CAS write), whenever `unsafe_use_conditional_update` is `false`
+  — the hard-coded default for `LocalFileSystemObjectStoreBackend`.
+- This isn't a conservative default you can safely flip to `true`: the
+  underlying `object_store` crate's `LocalFileSystem::put_opts` rejects
+  `PutMode::Update` outright with `Error::NotImplemented`. Local plain
+  filesystems have no atomic conditional-write primitive for `object_store`
+  to use — this is a capability gap in the storage layer itself, not an
+  Icechunk policy choice, and there is no config escape hatch.
+- v1's `refs.rs::update_branch` does a read-then-write existence check before
+  writing — a TOCTOU race, not a CAS. v2's `write_repo_info` retry loop
+  (keyed on a `RepoInfoUpdated` error) is real optimistic-concurrency code,
+  but it can only fire if `put_object` ever returns `NotOnLatestVersion` —
+  which requires a conditional put, which LocalFileSystem never attempts. The
+  retry apparatus is unreachable dead code on this backend.
+- Net effect: **`rebase_with=`/`ConflictSolver` cannot help on LocalFileSystem
+  storage** — not because conflicts don't happen, but because the mechanism
+  that would need to detect a conflict to trigger rebase never fires one.
+  The two commits race purely on wall-clock timing; the loser's ref update is
+  silently overwritten rather than rejected.
+
+**Practical rule for LocalFileSystem-backed stores (canvodpy's only
+deployment target — local SSD or CIFS/NFS, never S3/GCS/Azure): never call
+`commit()` from more than one process/thread against the same branch at the
+same time, full stop.** Use the fork/merge-into-one-session pattern above
+instead of trying to parallelize `commit()` itself.
+
+`commit()` also accepts `metadata=` (arbitrary dict attached to the snapshot,
+queryable later via `ancestry()`/`lookup_snapshot()` without opening the
+dataset) and `allow_empty=` (permit a commit with no changes). `readonly_session()`
+additionally accepts `as_of=datetime` — resolve a branch to the latest snapshot
+at or before a given time, without knowing its snapshot ID.
+
+## Maintenance: Expiration & Garbage Collection
+
+Icechunk keeps **every** snapshot ever written, forever, by default — nothing
+is deleted automatically. For any repo under sustained daily/hourly writes
+(exactly canvodpy's shape), snapshot/manifest count grows unbounded unless
+maintenance is run deliberately. This is a two-stage, explicitly separate
+process — don't conflate them:
+
+### Stage 1: Expiration (metadata-only, reversible in effect until GC)
+
+```python
+expired_ids = repo.expire_snapshots(
+    older_than=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    delete_expired_branches=False,   # keep branches whose tip is now expired
+    delete_expired_tags=False,       # keep tags whose tip is now expired
+)
+```
+
+- Operates **only on `written_at`** (write-time) — there is no notion of "the
+  data's own date." If you need retention keyed to the data's own time range
+  rather than when it was committed, you must select snapshots yourself (e.g.
+  via `commit(metadata={...})` written at write time, read back through
+  `ancestry()`) and expire/tag around that — Icechunk doesn't do it natively.
+- **No objects are deleted at this stage** — `expire_snapshots` rewrites the
+  ancestry chain (an existing snapshot's `parent_id` is edited in place to
+  skip the expired run, git-squash-style) so expired snapshots become
+  unreachable from any surviving branch/tag. Manifests, chunks, and snapshot
+  files on disk/object-store are untouched until GC actually runs.
+- The **root snapshot and each branch's tip are never expired**. A tag or
+  branch whose tip snapshot would otherwise be expired stays reachable
+  (protecting it) unless `delete_expired_*=True`, in which case that tag/
+  branch itself gets deleted (not the snapshot — deleting the ref just makes
+  the snapshot unreachable so GC *can* collect it).
+- **Only one expiration or GC operation should run at a time** — concurrent
+  history-rewrite operations have undefined behavior (not just "risky", the
+  design doc says undefined). IC2 does have self-protection against races
+  with *new* commits arriving during the operation (see below), but not
+  against two expire/GC runs overlapping each other.
+- Treat this as an **administrative operation run when the repo isn't
+  actively being written to** — not something to trigger casually mid-
+  pipeline-run. Use a generous `older_than` margin (weeks to months, not
+  hours) so it can never touch anything from an in-flight write session.
+
+### Stage 2: Garbage collection (physically deletes)
+
+```python
+summary = repo.garbage_collect(
+    delete_object_older_than=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    dry_run=True,   # report what WOULD be deleted, delete nothing — run this first
+)
+```
+
+- Deletes any manifest/chunk/snapshot object no longer reachable from any
+  branch or tag — i.e. only what Stage 1 already made unreachable.
+- **Self-protecting against concurrent writes** (IC2 design): GC first
+  collects its deletable-object list, then does a conditional update. If a
+  new branch/tag/snapshot appears pointing at an about-to-be-deleted object
+  during that window, GC **restarts** (bounded retries) instead of deleting
+  something a concurrent writer needs. This is real protection, not just
+  operator discipline — but the generous-margin practice above is still the
+  right default; don't rely on the retry mechanism as your only safety net.
+- Always run `dry_run=True` first on a repo you haven't GC'd before,
+  especially one with a large accumulated backlog — there's no documented
+  cost model for GC time/memory at scale (tens of thousands of manifests),
+  so a first-ever run's duration is unknown until measured.
+- **Recommended cadence** (operational guidance, not in the reference docs):
+  expire every 1-2 months, GC every 15-30 days — running more frequently
+  yields marginal storage savings for real operational risk. Not something
+  to run every pipeline batch or every day.
+
+### Scheduling maintenance in canvodpy
+
+Everything above works, but nothing in canvodpy ever calls it automatically
+— it's a human running `canvodpy store maintain <site> --execute` by hand
+(and that command itself requires an interactive confirmation, so it can't
+be scheduled unattended as-is). `canvodpy store maintain-due` is the
+cron/systemd-timer-safe counterpart: never prompts, does nothing unless
+`processing.storage.maintenance.enabled: true` in canvod-settings.yaml, no
+pipeline run is currently active on the host (checked via a same-host PID
+file, see `canvodpy.orchestrator.resources.PipelineRunLock`), and the
+store's own ops log shows expiration/GC are actually due (per
+`maintenance.expire_interval_days`/`.gc_delay_days`) — `MyIcechunkStore.
+maintenance_due()` reads `ExpirationRan`/`GCRan` ops-log entries as the
+source of truth rather than a separate marker file, since Icechunk writes
+those atomically as part of the operation itself. `maintenance.
+dry_run_until_confirmed` (default `true`) gates the very first automated
+touch to report-only, matching `garbage_collect(dry_run=True)`'s own
+recommended first-run practice.
+
+Example cron entry (personal-machine deployment):
+```
+0 3 * * * cd /path/to/canvodpy && uv run canvodpy store maintain-due --all-sites >> ~/.canvodpy_maintenance.log 2>&1
+```
+Does **not** protect against a second host writing to the same store on a
+network-mounted (CIFS/NFS) deployment — that case is a documented
+operational constraint (keep the maintenance window and pipeline-run
+windows apart by convention), not something this locking mechanism covers.
+
+`maintain-due` also schedules manifest compaction (`MyIcechunkStore.
+compact_manifests()`, below), gated separately by
+`maintenance.manifests_enabled` since it's a different risk profile than
+expire/GC (an ordinary commit, no history rewrite or physical deletion —
+see below). Due-ness is measured directly from
+`dir_entry_counts()['manifests']` vs `maintenance.manifest_count_threshold`
+(default 3000), not a time interval — `rewrite_manifests()` logs as an
+ordinary `NewCommit` in the ops log, indistinguishable from a data-ingest
+commit, so there's no `ExpirationRan`/`GCRan`-style entry to check
+instead. **Compaction alone doesn't shrink on-disk manifest count** —
+confirmed empirically (2026-07-20, throwaway store, 300 commits): it adds
+a new consolidated manifest set but leaves the old fragmented ones on
+disk until the next expire+GC cycle reclaims them (399 → 401 manifests
+right after compacting, → 2 after a subsequent expire/GC). Also validated
+against the real production rosalia RINEX store on a throwaway branch
+(deleted afterward, `main` untouched): 0.08s, data read back bit-identical
+before/after.
+
+### `rewrite_manifests()` — manifest compaction without expiring anything
+
+```python
+new_snapshot = repo.rewrite_manifests(
+    "compact manifests",
+    branch="main",
+    commit_method="new_commit",   # or "amend" (spec v2 only) to not grow history
+)
+```
+
+Consolidates all of an array's fragmented manifests back to the currently
+configured splitting config, in one operation — useful when a write pattern
+creates many small manifests over time (e.g. one `to_icechunk()` call per
+file rather than one per batch — each such call triggers its own internal
+flush, which pushes touched chunks into a **new** manifest; see "Write cost
+model" below). It's an ordinary commit under the hood (starts a writable
+session, computes the rewrite, commits) — ordinary conflict semantics apply,
+not a special unsafe operation. `commit_method="amend"` avoids adding a new
+commit to history entirely (spec version 2 repos only).
 
 ## Performance Tips
 
@@ -386,6 +643,51 @@ Choose chunks based on access patterns:
 #   sid: -1 (all signals together)
 ds.to_zarr(store, encoding={"obs": {"chunks": (34560, -1)}})
 ```
+
+### Write Cost Model — why many small `to_icechunk()` calls get expensive
+
+Two distinct mechanisms, both real, at different scales:
+
+1. **Per-flush manifest creation.** During `flush` (every `to_icechunk()`
+   call, not just every `commit()`), touched chunks are streamed into a
+   **new manifest**. Without manifest splitting configured, this is the
+   *entire* array's manifest rewritten from scratch every time — "appending
+   a small amount of data to a large array requires downloading and
+   rewriting the entire manifest" (Icechunk's own performance guide). With
+   splitting configured, the rewrite scope narrows to the *closure* of the
+   modified arrays' manifest set — every array sharing a manifest with a
+   touched array, not the whole store, but still not just the touched array
+   alone if others are packed with it. **Practical implication**: one
+   `to_icechunk()` call per file in a 96-file daily batch creates ~96
+   manifests for that one commit; batching files into fewer, larger
+   `to_icechunk()` calls (or periodic `rewrite_manifests()` compaction)
+   directly reduces this.
+2. **Per-commit repo-info rewrite.** IC2 keeps a single flatbuffer object at
+   the repo root holding every ref (tags/branches) and every snapshot's
+   metadata (~256 bytes/snapshot, including up to a 200-byte commit
+   message), fetched at repo open and rewritten on every commit. This is
+   **sharded**, not unbounded within one file — `RepositoryConfig.
+   num_updates_per_repo_info_file` (default 1,000) caps how many updates
+   live in a single repo-info file before a new one starts; lower values
+   mean smaller per-write payloads but more object fetches to reconstruct
+   history. `RepositoryConfig.repo_update_retries` controls retry backoff
+   for repo-info update conflicts (default: 100 tries, 50ms initial
+   backoff, 30s max backoff). Both are now exposed in canvodpy as opt-in
+   `IcechunkConfig` fields (`num_updates_per_repo_info_file`,
+   `repo_update_max_tries`, `repo_update_initial_backoff_ms`,
+   `repo_update_max_backoff_ms` — see `docs/packages/store/icechunk.md`),
+   threaded through in `MyIcechunkStore.__init__`; unset (`null`) leaves
+   icechunk's own defaults above untouched. For a store with sustained high commit
+   frequency, tuning `num_updates_per_repo_info_file` down is worth
+   experimenting with if commit latency (not manifest-flush latency) is the
+   bottleneck — profile which one first, they have different fixes.
+
+Mitigations for mechanism 1: batch writes into fewer `to_icechunk()` calls
+per commit; tune manifest-set assignment (`ManifestSplittingConfig` rules)
+so co-written variables share sets and unrelated ones don't; periodic
+`rewrite_manifests()`. Mitigations for mechanism 2: `num_updates_per_repo_
+info_file` tuning; periodic expiration to shrink total ancestry length
+snapshots need to reconstruct from.
 
 ### Best Practices
 
@@ -404,18 +706,23 @@ ds.to_zarr(store, encoding={"obs": {"chunks": (34560, -1)}})
 | Writing after commit | `session.commit()` makes session read-only | Create new `repo.writable_session()` |
 | Missing `consolidated=False` | xarray tries to read consolidated metadata | Always pass `consolidated=False` to `open_zarr` |
 | Using `to_zarr` for parallel writes | Distributed writes may not be captured | Use `to_icechunk` from `icechunk.xarray` |
-| Concurrent branch writes | Second commit conflicts | Retry, use separate branches, or use `transaction` |
+| Concurrent branch writes on S3/GCS/Azure | Second commit conflicts (detectable) | Retry, use separate branches, or use `transaction` |
+| Concurrent branch writes on LocalFileSystem | Second commit **silently clobbers the first — no conflict raised** (no CAS support in this backend, see Conflict Resolution) | Never call `commit()` concurrently on this backend; fork/merge into one session + one `commit()` instead |
 | Large inline threshold | Too many small chunks in manifest | Keep `inline_chunk_threshold_bytes` at 512 (default) |
 | Forgetting `zarr_format=3` | Zarr Python defaults may differ | Pass `zarr_format=3` when using `to_zarr` directly |
+| One `to_icechunk()` call per file | Each flush creates a new manifest — N files/batch = N manifests/commit | Batch files into fewer, larger `to_icechunk()` calls; periodic `rewrite_manifests()` |
+| `expire_snapshots(delete_expired_tags=True)` on a keeper-tag scheme | Deletes tags you meant to keep permanently | Default is `False` — only flip it if you've confirmed which tags are disposable |
+| Running expiration/GC every batch or every day | Real but avoidable operational risk for marginal storage savings | Separate scheduled job, weeks-to-months cadence, not inside the pipeline's own write loop |
+| Assuming caching is off by default | `num_snapshot_nodes`/`num_chunk_refs` default to 500k/15M (on); only byte-based caches default to 0 | Check `CachingConfig` defaults before assuming a memory budget |
 
 ## Storage Backends
 
 | Backend | Function | Use Case |
 |---|---|---|
-| Local filesystem | `icechunk.local_filesystem_storage(path)` | Development, testing |
+| Local filesystem | `icechunk.local_filesystem_storage(path)` | Development, testing, and (canvodpy's actual deployment) local SSD/CIFS/NFS single-writer production — **cannot safely take concurrent `commit()` calls at all** (no CAS support in this backend; see Conflict Resolution). Icechunk's own docs describe it as not intended for production, but it's canvodpy's only backend in practice |
 | AWS S3 | `icechunk.s3_storage(bucket, prefix)` | Production cloud |
 | Google Cloud Storage | `icechunk.gcs_storage(bucket, prefix)` | Production cloud |
-| Azure Blob | `icechunk.azure_storage(container, prefix)` | Production cloud |
+| Azure Blob | `icechunk.azure_storage(account=, container=, prefix=)` | Production cloud (`account` is required, keyword-only) |
 | In-memory | `icechunk.in_memory_storage()` | Unit tests |
 
 ## API Quick Reference
@@ -435,18 +742,30 @@ ds.to_zarr(store, encoding={"obs": {"chunks": (34560, -1)}})
 | `repo.create_branch(name, snapshot_id=)` | Create branch |
 | `repo.delete_branch(name)` | Delete branch |
 | `repo.reset_branch(name, snapshot_id=)` | Reset branch tip |
-| `repo.lookup_branch(name)` | Get branch tip snapshot ID |
+| `repo.lookup_branch(name)` | Get branch tip snapshot ID (O(1)) |
+| `repo.lookup_snapshot(snapshot_id)` | Get snapshot info object with `.id`, `.message`, `.written_at`, `.parent_id`, `.metadata` (O(1)) |
 | `repo.list_tags()` | List all tags |
 | `repo.create_tag(name, snapshot_id=)` | Create immutable tag |
-| `repo.delete_tag(name)` | Delete tag |
+| `repo.delete_tag(name)` | Delete tag — logical/permanent, name can never be reused |
+| `repo.expire_snapshots(older_than, delete_expired_branches=False, delete_expired_tags=False)` | Soft-delete: rewrite ancestry, no objects removed yet. Write-time only |
+| `repo.garbage_collect(delete_object_older_than, dry_run=False)` | Physically delete unreachable objects. Run `dry_run=True` first |
+| `repo.rewrite_manifests(message, branch=, commit_method="new_commit"\|"amend")` | Consolidate fragmented manifests to current splitting config |
+| `repo.save_config()` | Persist repository config to the repo itself |
+| `repo.ops_log()` | Iterate the operations log (maintenance/admin op history) |
+| `repo.total_chunks_storage()` | Aggregate chunk storage size |
+| `repo.spec_version()` / `repo.fetch_spec_version(storage)` | Repo's on-disk format version |
 
 ### Session
 
 | Method | Description |
 |---|---|
 | `session.store` | Access `zarr.Store` |
-| `session.commit(message)` | Commit changes, returns snapshot ID |
+| `session.commit(message, metadata=None, rebase_with=None, rebase_tries=None, allow_empty=False)` | Commit changes, advance branch tip, return snapshot ID |
+| `session.flush(message, metadata=None)` | Create anonymous snapshot without advancing branch (for checkpoints); session becomes read-only after call |
+| `session.amend(message, metadata=None, allow_empty=False)` | Replace the immediately preceding snapshot with updated content. Cannot amend a repo's very first commit |
+| `session.rebase(solver)` | Rebase this session's changes onto the current branch tip using a conflict solver |
 | `session.has_uncommitted_changes` | Check for pending changes |
+| `session.snapshot_id` | ID of the snapshot this session is based on |
 
 ### Xarray
 

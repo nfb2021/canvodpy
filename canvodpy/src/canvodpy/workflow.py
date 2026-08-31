@@ -1,6 +1,14 @@
 """
 VOD workflow orchestration using component factories.
 
+.. deprecated::
+    ``VODWorkflow`` is deprecated and its ``_augment_data`` step is a
+    no-op stub — it never applies ephemeris augmentation, so VOD
+    computed through this class uses un-augmented angles. Use
+    ``Site(site).pipeline()`` for configured pipeline runs, or
+    ``canvodpy.functional`` for component-level scripting/analysis.
+    ``VODWorkflow`` emits a ``DeprecationWarning`` on instantiation.
+
 Provides high-level workflow coordination with structured logging and
 extensibility through factory pattern.
 
@@ -9,13 +17,13 @@ Examples
 Basic workflow:
 
     >>> from canvodpy import VODWorkflow
-    >>> workflow = VODWorkflow(site="Rosalia")
+    >>> workflow = VODWorkflow(site="ExampleSite")
     >>> result = workflow.process_date("2025001")
 
 With custom components:
 
     >>> workflow = VODWorkflow(
-    ...     site="Rosalia",
+    ...     site="ExampleSite",
     ...     grid="equal_area",
     ...     grid_params={"angular_resolution": 5.0},
     ... )
@@ -23,8 +31,8 @@ With custom components:
 
 Debug logging:
 
-    >>> workflow = VODWorkflow(site="Rosalia", log_level="DEBUG")
-    >>> # All logs include site="Rosalia" context
+    >>> workflow = VODWorkflow(site="ExampleSite", log_level="DEBUG")
+    >>> # All logs include site="ExampleSite" context
 """
 
 from __future__ import annotations
@@ -34,6 +42,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import xarray as xr
 
+from canvodpy._deprecation import deprecated
 from canvodpy.api import Site
 from canvodpy.factories import GridFactory, ReaderFactory, VODFactory
 from canvodpy.logging import get_logger
@@ -42,6 +51,12 @@ if TYPE_CHECKING:
     from structlog.stdlib import BoundLogger
 
 
+@deprecated(
+    "VODWorkflow is deprecated (its augmentation step is a no-op stub — "
+    "VOD computed through it uses un-augmented angles). Use "
+    "Site(site).pipeline() for configured pipeline runs, or "
+    "canvodpy.functional for component-level scripting."
+)
 class VODWorkflow:
     """
     Orchestrate complete VOD analysis workflow.
@@ -79,7 +94,7 @@ class VODWorkflow:
     --------
     Process one date:
 
-        >>> workflow = VODWorkflow(site="Rosalia")
+        >>> workflow = VODWorkflow(site="ExampleSite")
         >>> data = workflow.process_date("2025001")
         >>> print(data.keys())
         dict_keys(['canopy_01', 'reference_01'])
@@ -95,7 +110,7 @@ class VODWorkflow:
     Custom grid:
 
         >>> workflow = VODWorkflow(
-        ...     site="Rosalia",
+        ...     site="ExampleSite",
         ...     grid="equal_area",
         ...     grid_params={"angular_resolution": 5.0},
         ... )
@@ -129,9 +144,9 @@ class VODWorkflow:
         self.grid_name = grid
         self.vod_calculator_name = vod_calculator
         if keep_vars is None:
-            from canvod.utils.config import load_config
+            from canvod.config import load_config
 
-            keep_vars = load_config().processing.processing.keep_rnx_vars
+            keep_vars = load_config().processing.params.keep_gnss_observables
         self.keep_vars = keep_vars
 
         # Create grid using factory (cached for workflow)
@@ -172,7 +187,7 @@ class VODWorkflow:
 
         Examples
         --------
-        >>> workflow = VODWorkflow("Rosalia")
+        >>> workflow = VODWorkflow("ExampleSite")
         >>> data = workflow.process_date("2025001")
         >>> canopy = data["canopy_01"]
         >>> print(canopy.sizes)
@@ -256,7 +271,7 @@ class VODWorkflow:
 
         Examples
         --------
-        >>> workflow = VODWorkflow("Rosalia")
+        >>> workflow = VODWorkflow("ExampleSite")
         >>> vod = workflow.calculate_vod(
         ...     "canopy_01", "reference_01", "2025001"
         ... )

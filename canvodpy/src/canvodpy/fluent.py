@@ -1,5 +1,10 @@
 """Fluent workflow API with deferred execution.
 
+.. deprecated::
+    Use ``Site(site).pipeline()`` for configured pipeline runs, or
+    ``canvodpy.functional`` for component-level scripting/analysis.
+    ``FluentWorkflow`` emits a ``DeprecationWarning`` on instantiation.
+
 Provides a chainable, lazy pipeline where steps are recorded and
 executed only when a terminal method is called.
 
@@ -8,7 +13,7 @@ Examples
 Process RINEX data and compute VOD:
 
     >>> import canvodpy
-    >>> result = (canvodpy.workflow("Rosalia")
+    >>> result = (canvodpy.workflow("ExampleSite")
     ...     .read("2025001")
     ...     .preprocess(agency="COD")
     ...     .grid("equal_area", angular_resolution=5.0)
@@ -17,7 +22,7 @@ Process RINEX data and compute VOD:
 
 Preview the execution plan without running it:
 
-    >>> plan = (canvodpy.workflow("Rosalia")
+    >>> plan = (canvodpy.workflow("ExampleSite")
     ...     .read("2025001")
     ...     .preprocess()
     ...     .grid()
@@ -31,12 +36,54 @@ from __future__ import annotations
 from functools import wraps
 from typing import TYPE_CHECKING, Any
 
+from canvodpy._deprecation import deprecated
 from canvodpy.api import Site
 from canvodpy.factories import GridFactory, ReaderFactory, VODFactory
 from canvodpy.logging import get_logger
 
 if TYPE_CHECKING:
     import xarray as xr
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _concat_epoch_datasets(datasets: list) -> Any:
+    """Concatenate xarray Datasets along 'epoch' without xr.concat overhead.
+
+    Direct numpy concatenation bypasses xarray's alignment checks and
+    intermediate copies. Safe when all datasets share the same 'sid' axis,
+    which is guaranteed after pad_to_global_sid=True (the default).
+    """
+    import numpy as np
+    import xarray as xr
+
+    if len(datasets) == 1:
+        return datasets[0]
+
+    first = datasets[0]
+    merged_vars: dict = {}
+    for var in first.data_vars:
+        epoch_ax = list(first[var].dims).index("epoch")
+        merged_vars[var] = (
+            first[var].dims,
+            np.concatenate([ds[var].values for ds in datasets], axis=epoch_ax),
+        )
+
+    coords: dict = {}
+    for k, coord in first.coords.items():
+        if "epoch" in coord.dims:
+            ax = list(coord.dims).index("epoch")
+            coords[k] = (
+                coord.dims,
+                np.concatenate([ds.coords[k].values for ds in datasets], axis=ax),
+            )
+        else:
+            coords[k] = coord
+
+    return xr.Dataset(merged_vars, coords=coords, attrs=first.attrs)
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +130,11 @@ def terminal(method):
 # ---------------------------------------------------------------------------
 
 
+@deprecated(
+    "FluentWorkflow is deprecated. Use Site(site).pipeline() for "
+    "configured pipeline runs, or canvodpy.functional for "
+    "component-level scripting."
+)
 class FluentWorkflow:
     """Chainable, deferred-execution workflow for VOD analysis.
 
@@ -122,9 +174,9 @@ class FluentWorkflow:
         self._grid_type = grid_type
         self._vod_calculator_name = vod_calculator
         if keep_vars is None:
-            from canvod.utils.config import load_config
+            from canvod.config import load_config
 
-            keep_vars = load_config().processing.processing.keep_rnx_vars
+            keep_vars = load_config().processing.params.keep_gnss_observables
         self._keep_vars = keep_vars
 
         self.log = get_logger(__name__).bind(site=self._site.name)
@@ -137,7 +189,7 @@ class FluentWorkflow:
     def read(self, date: str, receivers: list[str] | None = None) -> FluentWorkflow:
         """Load RINEX observations for *date*.
 
-        Uses :class:`~canvod.virtualiconvname.FilenameMapper` for file
+        Uses :class:`~canvod.filemap.FilenameMapper` for file
         discovery when naming config is available, preventing duplicate
         files (e.g. daily + sub-daily) from being concatenated.  Falls
         back to naive glob when naming config is missing.
@@ -156,9 +208,7 @@ class FluentWorkflow:
 
         from pathlib import Path
 
-        import xarray as xr
-
-        from canvod.utils.config import load_config
+        from canvod.config import load_config
 
         config = load_config()
         site_cfg = config.sites.sites[self._site.name]
@@ -197,7 +247,7 @@ class FluentWorkflow:
                 datasets_for_recv.append(ds)
 
             if datasets_for_recv:
-                self._datasets[name] = xr.concat(datasets_for_recv, dim="epoch")
+                self._datasets[name] = _concat_epoch_datasets(datasets_for_recv)
                 log.info("read_complete", receiver=name, files=len(datasets_for_recv))
 
         return self  # never reached (decorator returns self), but aids type checkers
@@ -217,7 +267,7 @@ class FluentWorkflow:
         # Try FilenameMapper when naming config is available
         if site_cfg.naming and recv_cfg.naming:
             try:
-                from canvod.virtualiconvname import (
+                from canvod.filemap import (
                     FilenameMapper,
                     ReceiverNamingConfig,
                     SiteNamingConfig,
@@ -329,7 +379,7 @@ class FluentWorkflow:
         from canvod.auxiliary.ephemeris.provider import (
             AgencyEphemerisProvider,
         )
-        from canvod.utils.config import load_config
+        from canvod.config import load_config
 
         log = self.log.bind(source=source, agency=agency)
 
@@ -439,7 +489,7 @@ class FluentWorkflow:
         else:
             for name, ds in self._datasets.items():
                 self.log.info("to_store_dataset", receiver=name)
-                self._site.rinex_store.write_or_append_group(ds, name)
+                self._site.gnss_store.write_or_append_group(ds, name)
         return self
 
     @terminal

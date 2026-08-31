@@ -38,7 +38,7 @@ Two tools must be installed outside `uv`:
 just check-dev-tools   # verify both are present
 ```
 
-[:octicons-arrow-right-24: Full installation guide](getting-started.md)
+[:octicons-arrow-right-24: Full installation guide](contributor-setup.md)
 
 ---
 
@@ -46,21 +46,21 @@ just check-dev-tools   # verify both are present
 
 canVODpy uses three YAML files in `config/`:
 
-| File | Purpose |
-|------|---------|
-| `sites.yaml` | Research sites, receiver definitions, data root paths, VOD analysis pairs |
-| `processing.yaml` | Processing parameters, NASA Earthdata credentials, storage strategies, Icechunk config |
-| `sids.yaml` | Signal ID filtering — `all`, a named `preset`, or `custom` list |
+| Section | Purpose |
+|---------|---------|
+| `processing:` | Processing parameters, NASA Earthdata credentials, storage strategies, Icechunk config |
+| `sites:` | Research sites, receiver definitions, data root paths, VOD analysis pairs |
+| `sids:` | Signal ID filtering — `all`, a named `preset`, or `custom` list |
 
-Each file has a `.example` template in the same directory.
+All three sections live in a single `config/canvod-settings.yaml`. Template: `config/canvod-settings.yaml.example`.
 
 === "First-time setup"
 
     ```bash
-    just config-init        # copy .example templates → YAML files
-    # edit config/sites.yaml and config/processing.yaml
-    just config-validate    # check for errors
-    just config-show        # print resolved config
+    canvodpy config init                # scaffold canvod-settings.yaml from template
+    # edit config/canvod-settings.yaml (or: canvodpy config init --interactive)
+    canvodpy config validate            # check for errors
+    canvodpy config show                # print resolved config
     ```
 
 === "Daily use"
@@ -68,6 +68,7 @@ Each file has a `.example` template in the same directory.
     ```bash
     just config-validate    # after editing
     just config-show        # inspect current values
+    canvodpy doctor         # environment + config diagnostics when something's off
     ```
 
 ---
@@ -99,6 +100,93 @@ just check-format   # ruff formatting only
 | **ty** | Type checking (replaces mypy) |
 | **pytest** | Testing with coverage |
 
+### Type checking (ty)
+
+`ty check` must pass with zero diagnostics — it blocks `git push` (local
+pre-push hook) and runs again in CI (`type_consistency` job). There's no
+budget or ratchet; if you introduce a diagnostic, fix it before pushing.
+
+Most real diagnostics mean the annotation is actually wrong — fix the
+annotation, not the checker. Suppress with a targeted comment only when the
+code is correct and ty's limitation is the real issue (e.g. a runtime-built
+`enum.StrEnum`, a deliberately dynamic attribute set on a function object, a
+third-party stub that's too strict for a legitimately partial dict):
+
+```python
+_excepthook._logger_holder = logger_holder  # ty: ignore[unresolved-attribute]
+```
+
+Always include the specific rule name in brackets (`uv run ty check` prints
+it in the diagnostic, e.g. `error[invalid-return-type]`) — a bare `# type:
+ignore` (mypy syntax) does not suppress ty diagnostics, since ty matches on
+its own rule codes.
+
+---
+
+## Logging — add it generously
+
+canvodpy runs unattended on remote machines. When something goes wrong
+there, whatever you logged is the *only* evidence that will ever exist —
+there's no attaching a debugger to a cron job after the fact. Log more than
+feels necessary, especially around: file I/O, external calls (downloads,
+Icechunk writes), anything with a fallback/degraded path, and any place a
+silent skip could hide data loss. See `docs/guides/diagnostics.md` for the
+full picture (two-track logging, `run_id`, crash handling, `stage_timer`,
+the performance dashboard) — this section is the short "how do I add a log
+line" version.
+
+**Which logger to use:**
+
+```python
+# Inside the canvodpy package itself:
+from canvodpy.logging import get_logger
+log = get_logger(__name__)
+
+# Inside a lower-level package that must not depend on canvodpy
+# (canvod-vod, canvod-grids, canvod-ops, ...):
+import structlog
+log = structlog.get_logger(__name__)
+```
+
+Both are equivalent at runtime — `canvodpy.logging.get_logger` is a
+one-line passthrough to `structlog.get_logger`, kept only as the documented
+entry point for canvodpy's own code. `configure_logging()` installs
+structlog's processor chain *globally*, so **any** `structlog.get_logger()`
+call anywhere in the process — regardless of which package it's in —
+automatically gets routed through the two-track logging setup (human/agent
+files) with `run_id` injected, with zero per-call-site wiring. Never
+reach for `print()` or stdlib `logging` directly.
+
+**Event style:** first positional arg is a short `snake_case` event name,
+everything else is a structured keyword, not string interpolation:
+
+```python
+# Good
+log.info("rinex_preprocessing_started", file=str(rnx_file.name), site=site_name)
+log.warning("sids_dropped_no_ephemeris", count=len(dropped), sids=sorted(dropped))
+
+# Avoid — loses structure, can't be grepped/filtered on a field
+log.info(f"Started preprocessing {rnx_file.name} for {site_name}")
+```
+
+**Timing:** use `stage_timer()`/`timed_stage()` from `canvodpy.logging`
+rather than hand-rolling `t0 = time.perf_counter(); ...; duration = ...` —
+it emits the canonical `stage_timing` event the performance dashboard
+reads, and still emits (with `status="error"`) if the block raises.
+
+```python
+from canvodpy.logging import stage_timer
+
+with stage_timer("icechunk.write", group=group_name, size_mb=size_mb):
+    to_icechunk(dataset, session, group=group_name)
+```
+
+Only reach for a manual timing pattern when a block already has several
+distinct sequential checkpoints worth logging individually with their own
+rich context (see `_preprocess_aux_data_with_hermite` in `processor.py` for
+an example) — those specific, well-named events are more useful than
+forcing everything through one generic name.
+
 ---
 
 ## Keeping Your Fork in Sync
@@ -122,7 +210,7 @@ If `upstream` is not configured, add it once:
 git remote add upstream git@github.com:nfb2021/canvodpy.git
 ```
 
-[:octicons-arrow-right-24: Detailed fork sync guide](getting-started.md#12-keeping-your-fork-up-to-date)
+[:octicons-arrow-right-24: Detailed fork sync guide](contributor-setup.md#12-keeping-your-fork-up-to-date)
 
 ---
 
@@ -158,7 +246,7 @@ git commit -m "type(scope): description"
 uv sync && git add uv.lock && git commit -m "feat(readers): your message"
 ```
 
-[:octicons-arrow-right-24: Full troubleshooting guide](getting-started.md#14-pre-commit-hooks-and-why-your-commit-may-be-rejected)
+[:octicons-arrow-right-24: Full troubleshooting guide](contributor-setup.md#14-pre-commit-hooks-and-why-your-commit-may-be-rejected)
 
 ---
 
@@ -278,9 +366,14 @@ just test                # run all tests
 just sync                # install/update dependencies
 just clean               # remove build artifacts
 just hooks               # install pre-commit hooks
-just config-init         # initialize config files
+canvodpy config init     # scaffold canvod-settings.yaml from template
+just config-init-interactive  # scaffold canvod-settings.yaml via guided wizard
 just config-validate     # validate configuration
 just config-show         # view resolved configuration
+just doctor              # environment + config diagnostics
+just store-list          # list every site's gnss/vod stores + status
+just store-info SITE     # branches/groups/stats for one site's store
+just store-log SITE      # commit history graph for one site's store
 just docs                # preview documentation (localhost:3000)
 just build-all           # build all packages
 just deps-report         # dependency metrics report
@@ -295,7 +388,7 @@ just deps-graph          # mermaid dependency graph
     Run `uv sync` to install/reinstall packages in editable mode.
 
 ??? failure "`Command not found: just`"
-    Install just: `brew install just` (macOS) or see [getting-started](getting-started.md).
+    Install just: `brew install just` (macOS) or see [contributor-setup](contributor-setup.md).
 
 ??? failure "Tests fail after dependency changes"
     ```bash

@@ -1,0 +1,688 @@
+/* =========================================================
+   canVODpy Nordic — marimo theme
+   Mirrors the zensical docs design language
+   5-color Nordic Green palette + Space Grotesk / Fira Code
+   ========================================================= */
+
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Fira+Code:wght@300..700&display=swap");
+
+/* ---------- Palette tokens (always available) ---------- */
+:root {
+  --g1: #E1E6B9;
+  --g2: #C4D7A4;
+  --g3: #ABC8A4;
+  --g4: #375D3B;
+  --g5: #183128;
+
+  --monospace-font: "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --text-font: "Space Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --heading-font: "Space Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --radius: 12px;
+}
+
+/* ==========================================================
+   LIGHT MODE
+   Match marimo's own selector specificity: .light,.light-theme,:root
+   ========================================================== */
+.light, .light-theme, :root {
+  --background:            var(--g1);
+  --foreground:            var(--g5);
+  --muted:                 var(--g2);
+  --muted-foreground:      var(--g4);
+  --popover:               var(--g1);
+  --popover-foreground:    var(--g5);
+  --card:                  var(--g2);
+  --card-foreground:       var(--g5);
+  --border:                #96B07A;
+  --input:                 #96B07A;
+  --primary:               var(--g4);
+  --primary-foreground:    var(--g1);
+  --secondary:             var(--g2);
+  --secondary-foreground:  var(--g5);
+  --accent:                var(--g3);
+  --accent-foreground:     var(--g5);
+  --ring:                  var(--g3);
+
+  --destructive:           #8B3A3A;
+  --destructive-foreground: var(--g1);
+  --error:                 #8B3A3A;
+  --error-foreground:      var(--g1);
+  --success:               var(--g4);
+  --success-foreground:    var(--g1);
+
+  --action:                var(--g2);
+  --action-hover:          var(--g3);
+  --action-foreground:     var(--g5);
+
+  --link:                  var(--g4);
+  --link-visited:          var(--g4);
+  --stale:                 hsla(90, 30%, 60%, 0.25);
+
+  --base-shadow:           hsla(80, 20%, 50%, 0.15);
+  --base-shadow-darker:    hsla(80, 30%, 40%, 0.2);
+  --base-shadow-opacity:   8%;
+
+  /* -- Radix gray → green-tinted cream (higher contrast) -- */
+  --gray-1:  #E4E8B8;
+  --gray-2:  #CBD4A0;
+  --gray-3:  #BFCA96;
+  --gray-4:  #C4CC9C;
+  --gray-5:  #B8C490;
+  --gray-6:  #ABC886;
+  --gray-7:  #96B07A;
+  --gray-8:  #7D9568;
+  --gray-9:  #5A7A4A;
+  --gray-10: #4D6B3F;
+  --gray-11: #375D3B;
+  --gray-12: #183128;
+
+  /* -- Radix slate → same as gray -- */
+  --slate-1:  #E8ECBF;
+  --slate-2:  #D6DDB0;
+  --slate-3:  #CDD5A6;
+  --slate-4:  #C4CC9C;
+  --slate-5:  #B8C490;
+  --slate-6:  #ABC886;
+  --slate-7:  #96B07A;
+  --slate-8:  #7D9568;
+  --slate-9:  #5A7A4A;
+  --slate-10: #4D6B3F;
+  --slate-11: #375D3B;
+  --slate-12: #183128;
+
+  /* -- Radix sage → same as gray -- */
+  --sage-1:  #E8ECBF;
+  --sage-2:  #D6DDB0;
+  --sage-3:  #CDD5A6;
+  --sage-4:  #C4CC9C;
+  --sage-5:  #B8C490;
+  --sage-6:  #ABC886;
+  --sage-7:  #96B07A;
+  --sage-8:  #7D9568;
+  --sage-9:  #5A7A4A;
+  --sage-10: #4D6B3F;
+  --sage-11: #375D3B;
+  --sage-12: #183128;
+
+  /* -- Radix amber → green (kill yellow) -- */
+  --amber-1:  #EAECCC;
+  --amber-2:  #DDE2B8;
+  --amber-3:  #D0D8A8;
+  --amber-4:  #C0CC96;
+  --amber-5:  #B0C084;
+  --amber-6:  #9DB474;
+  --amber-7:  #88A262;
+  --amber-8:  #6E8A4E;
+  --amber-9:  #5A7A3E;
+  --amber-10: #4D6B34;
+  --amber-11: #3D5A2A;
+  --amber-12: #D4DCAC;
+
+  /* -- Radix yellow → green (kill yellow) -- */
+  --yellow-1:  #EAECCC;
+  --yellow-2:  #DDE2B8;
+  --yellow-3:  #D0D8A8;
+  --yellow-4:  #C0CC96;
+  --yellow-5:  #B0C084;
+  --yellow-6:  #9DB474;
+  --yellow-7:  #88A262;
+  --yellow-8:  #6E8A4E;
+  --yellow-9:  #5A7A3E;
+  --yellow-10: #4D6B34;
+  --yellow-11: #3D5A2A;
+  --yellow-12: #D4DCAC;
+
+  /* -- Radix orange → green (kill orange) -- */
+  --orange-1:  #EAECCC;
+  --orange-2:  #DDE2B8;
+  --orange-3:  #D0D8A8;
+  --orange-4:  #C0CC96;
+  --orange-5:  #B0C084;
+  --orange-6:  #9DB474;
+  --orange-7:  #88A262;
+  --orange-8:  #6E8A4E;
+  --orange-9:  #5A7A3E;
+  --orange-10: #4D6B34;
+  --orange-11: #3D5A2A;
+  --orange-12: #D4DCAC;
+
+  /* -- Radix lime → Nordic green (table odd rows use --lime-2) -- */
+  --lime-1:  #E8ECBF;
+  --lime-2:  #D6DDB0;
+  --lime-3:  #CDD5A6;
+  --lime-4:  #C0CC96;
+  --lime-5:  #B0C084;
+  --lime-6:  #9DB474;
+  --lime-7:  #88A262;
+  --lime-8:  #6E8A4E;
+  --lime-9:  #5A7A3E;
+  --lime-10: #4D6B34;
+  --lime-11: #3D5A2A;
+  --lime-12: #2A4020;
+
+  /* -- Radix grass → Nordic green (success backgrounds) -- */
+  --grass-1:  #E8ECBF;
+  --grass-2:  #D6DDB0;
+  --grass-3:  #CDD5A6;
+  --grass-4:  #C0CC96;
+  --grass-5:  #B0C084;
+  --grass-6:  #9DB474;
+  --grass-7:  #88A262;
+  --grass-8:  #6E8A4E;
+  --grass-9:  #5A7A3E;
+  --grass-10: #4D6B34;
+  --grass-11: #3D5A2A;
+  --grass-12: #2A4020;
+
+  /* -- Radix green → Nordic green -- */
+  --green-1:  #E8ECBF;
+  --green-2:  #D6DDB0;
+  --green-3:  #CDD5A6;
+  --green-4:  #C0CC96;
+  --green-5:  #B0C084;
+  --green-6:  #9DB474;
+  --green-7:  #88A262;
+  --green-8:  #6E8A4E;
+  --green-9:  #5A7A3E;
+  --green-10: #4D6B34;
+  --green-11: #3D5A2A;
+  --green-12: #2A4020;
+}
+
+/* ========== LIGHT-MODE element overrides ========== */
+
+.cm-editor {
+  background-color: var(--gray-2) !important;
+}
+.cm-gutters {
+  background-color: var(--gray-2) !important;
+  border-right-color: var(--gray-4) !important;
+}
+.cm-activeLine {
+  background-color: hsla(90, 40%, 55%, 0.12) !important;
+}
+.cm-activeLineGutter {
+  background-color: hsla(90, 40%, 55%, 0.18) !important;
+}
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground,
+::selection {
+  background-color: hsla(100, 50%, 45%, 0.25) !important;
+}
+.marimo-cell {
+  border-color: var(--gray-5) !important;
+}
+.marimo-cell:hover {
+  border-color: var(--gray-7) !important;
+}
+
+/* Matching brackets — green */
+.cm-editor.cm-focused .cm-matchingBracket {
+  background-color: hsla(90, 50%, 50%, 0.25) !important;
+  outline: 1px solid hsla(90, 50%, 50%, 0.35) !important;
+}
+.cm-editor .cm-searchMatch {
+  background-color: hsla(90, 60%, 50%, 0.3) !important;
+  outline: 1px solid hsla(90, 60%, 50%, 0.4) !important;
+}
+.cm-editor .cm-selectionMatch {
+  background-color: hsla(90, 40%, 50%, 0.15) !important;
+}
+
+/* Markdown output — transparent, not white */
+[data-cell-id] > div,
+.output-area {
+  background-color: transparent !important;
+}
+
+/* Tables */
+table, th, td {
+  border-color: var(--gray-5) !important;
+}
+th {
+  background-color: var(--gray-4) !important;
+}
+
+/* Code blocks in rendered markdown */
+pre, code {
+  background-color: var(--gray-2) !important;
+}
+
+/* Table row striping — force green palette */
+table tbody tr:nth-child(odd),
+table.dataframe tbody tr:nth-child(odd) {
+  background-color: var(--gray-2) !important;
+}
+table tbody tr:nth-child(even),
+table.dataframe tbody tr:nth-child(even) {
+  background-color: var(--gray-1) !important;
+}
+table tbody tr:hover {
+  background-color: var(--gray-3) !important;
+}
+
+/* ==========================================================
+   DARK MODE
+   ========================================================== */
+.dark, .dark-theme, body.dark-theme {
+  --background:            #0d0d0d;
+  --foreground:            var(--g1);
+  --muted:                 #3a3a3a;
+  --muted-foreground:      var(--g2);
+  --popover:               #2a2a2a;
+  --popover-foreground:    var(--g1);
+  --card:                  #2a2a2a;
+  --card-foreground:       var(--g1);
+  --border:                #444444;
+  --input:                 #444444;
+  --primary:               var(--g3);
+  --primary-foreground:    #0d0d0d;
+  --secondary:             #3a3a3a;
+  --secondary-foreground:  var(--g1);
+  --accent:                #3a3a3a;
+  --accent-foreground:     var(--g1);
+  --ring:                  #444444;
+
+  --destructive:           #C47070;
+  --destructive-foreground: var(--g5);
+  --error:                 #C47070;
+  --error-foreground:      var(--g5);
+  --success:               var(--g3);
+  --success-foreground:    #0d0d0d;
+
+  --action:                #2d4a2d;
+  --action-hover:          #3a5a3a;
+  --action-foreground:     var(--g1);
+
+  --link:                  var(--g3);
+  --link-visited:          var(--g2);
+  --stale:                 #3a3a3a;
+
+  --base-shadow:           hsla(0, 0%, 0%, 0.3);
+  --base-shadow-darker:    hsla(0, 0%, 0%, 0.5);
+  --base-shadow-opacity:   5%;
+
+  /* -- Radix gray (dark) -- */
+  --gray-1:  #111111;
+  --gray-2:  #1a1a1a;
+  --gray-3:  #222222;
+  --gray-4:  #2a2a2a;
+  --gray-5:  #333333;
+  --gray-6:  #3a3a3a;
+  --gray-7:  #484848;
+  --gray-8:  #555555;
+  --gray-9:  #6e6e6e;
+  --gray-10: #7b7b7b;
+  --gray-11: #C4D7A4;
+  --gray-12: #E1E6B9;
+
+  /* -- Radix slate (dark) -- */
+  --slate-1:  #111111;
+  --slate-2:  #1a1a1a;
+  --slate-3:  #222222;
+  --slate-4:  #2a2a2a;
+  --slate-5:  #333333;
+  --slate-6:  #3a3a3a;
+  --slate-7:  #484848;
+  --slate-8:  #555555;
+  --slate-9:  #6e6e6e;
+  --slate-10: #7b7b7b;
+  --slate-11: #C4D7A4;
+  --slate-12: #E1E6B9;
+
+  /* -- Radix sage (dark) -- */
+  --sage-1:  #111111;
+  --sage-2:  #1a1a1a;
+  --sage-3:  #222222;
+  --sage-4:  #2a2a2a;
+  --sage-5:  #333333;
+  --sage-6:  #3a3a3a;
+  --sage-7:  #484848;
+  --sage-8:  #555555;
+  --sage-9:  #6e6e6e;
+  --sage-10: #7b7b7b;
+  --sage-11: #C4D7A4;
+  --sage-12: #E1E6B9;
+
+  /* -- Radix amber (dark) — kill yellow -- */
+  --amber-1:  #111510;
+  --amber-2:  #1a2018;
+  --amber-3:  #223020;
+  --amber-4:  #2a3a28;
+  --amber-5:  #334530;
+  --amber-6:  #3d5038;
+  --amber-7:  #4a6044;
+  --amber-8:  #5a7550;
+  --amber-9:  #6e8a5e;
+  --amber-10: #7d9B6e;
+  --amber-11: #ABC8A4;
+  --amber-12: #E1E6B9;
+
+  /* -- Radix yellow (dark) — kill yellow -- */
+  --yellow-1:  #111510;
+  --yellow-2:  #1a2018;
+  --yellow-3:  #223020;
+  --yellow-4:  #2a3a28;
+  --yellow-5:  #334530;
+  --yellow-6:  #3d5038;
+  --yellow-7:  #4a6044;
+  --yellow-8:  #5a7550;
+  --yellow-9:  #6e8a5e;
+  --yellow-10: #7d9B6e;
+  --yellow-11: #ABC8A4;
+  --yellow-12: #E1E6B9;
+
+  /* -- Radix orange (dark) — kill orange -- */
+  --orange-1:  #111510;
+  --orange-2:  #1a2018;
+  --orange-3:  #223020;
+  --orange-4:  #2a3a28;
+  --orange-5:  #334530;
+  --orange-6:  #3d5038;
+  --orange-7:  #4a6044;
+  --orange-8:  #5a7550;
+  --orange-9:  #6e8a5e;
+  --orange-10: #7d9B6e;
+  --orange-11: #ABC8A4;
+  --orange-12: #E1E6B9;
+
+  /* -- Radix lime (dark) -- */
+  --lime-1:  #111511;
+  --lime-2:  #1a201a;
+  --lime-3:  #223022;
+  --lime-4:  #2a3a2a;
+  --lime-5:  #334533;
+  --lime-6:  #3d503d;
+  --lime-7:  #4a604a;
+  --lime-8:  #5a755a;
+  --lime-9:  #6e8a6e;
+  --lime-10: #7d9B7d;
+  --lime-11: #ABC8A4;
+  --lime-12: #E1E6B9;
+
+  /* -- Radix grass (dark) -- */
+  --grass-1:  #111511;
+  --grass-2:  #1a201a;
+  --grass-3:  #223022;
+  --grass-4:  #2a3a2a;
+  --grass-5:  #334533;
+  --grass-6:  #3d503d;
+  --grass-7:  #4a604a;
+  --grass-8:  #5a755a;
+  --grass-9:  #6e8a6e;
+  --grass-10: #7d9B7d;
+  --grass-11: #ABC8A4;
+  --grass-12: #E1E6B9;
+
+  /* -- Radix green (dark) -- */
+  --green-1:  #111511;
+  --green-2:  #1a201a;
+  --green-3:  #223022;
+  --green-4:  #2a3a2a;
+  --green-5:  #334533;
+  --green-6:  #3d503d;
+  --green-7:  #4a604a;
+  --green-8:  #5a755a;
+  --green-9:  #6e8a6e;
+  --green-10: #7d9B7d;
+  --green-11: #ABC8A4;
+  --green-12: #E1E6B9;
+}
+
+/* Dark-mode — fix bold/heading text in markdown output only */
+body.dark-theme .markdown h1,
+body.dark-theme .markdown h2,
+body.dark-theme .markdown h3,
+body.dark-theme .markdown h4,
+body.dark-theme .markdown h5,
+body.dark-theme .markdown h6,
+body.dark-theme .markdown strong,
+body.dark-theme .markdown b,
+.dark .markdown h1,
+.dark .markdown h2,
+.dark .markdown h3,
+.dark .markdown h4,
+.dark .markdown h5,
+.dark .markdown h6,
+.dark .markdown strong,
+.dark .markdown b {
+  color: var(--g1) !important;
+}
+
+/* Dark-mode element overrides */
+
+/* Override One Dark syntax theme — cream tones instead of bright white/gray */
+body.dark-theme .cm-editor .cm-content,
+.dark .cm-editor .cm-content {
+  color: #D0D6A8 !important;  /* muted cream, not #abb2bf gray */
+  caret-color: var(--g3) !important;
+}
+
+/* Matching brackets — green tint instead of blue */
+body.dark-theme .cm-editor.cm-focused .cm-matchingBracket,
+.dark .cm-editor.cm-focused .cm-matchingBracket {
+  background-color: hsla(90, 40%, 40%, 0.3) !important;
+  outline: 1px solid hsla(90, 40%, 50%, 0.4) !important;
+}
+
+/* Search match — green instead of blue */
+body.dark-theme .cm-editor .cm-searchMatch,
+.dark .cm-editor .cm-searchMatch {
+  background-color: hsla(90, 50%, 40%, 0.35) !important;
+  outline: 1px solid hsla(90, 50%, 50%, 0.5) !important;
+}
+
+/* Selection match — subtle green */
+body.dark-theme .cm-editor .cm-selectionMatch,
+.dark .cm-editor .cm-selectionMatch {
+  background-color: hsla(90, 40%, 40%, 0.15) !important;
+}
+
+/* Fold placeholder */
+body.dark-theme .cm-editor .cm-foldPlaceholder,
+.dark .cm-editor .cm-foldPlaceholder {
+  color: var(--g3) !important;
+}
+
+/* Tooltip / autocomplete */
+body.dark-theme .cm-editor .cm-tooltip,
+.dark .cm-editor .cm-tooltip {
+  background-color: #222 !important;
+  border-color: #444 !important;
+  color: var(--g1) !important;
+}
+
+body.dark-theme .cm-editor .cm-tooltip-autocomplete ul li[aria-selected],
+.dark .cm-editor .cm-tooltip-autocomplete ul li[aria-selected] {
+  background-color: hsla(90, 30%, 35%, 0.4) !important;
+}
+
+/* Line numbers — muted */
+body.dark-theme .cm-editor .cm-lineNumbers .cm-gutterElement,
+.dark .cm-editor .cm-lineNumbers .cm-gutterElement {
+  color: #555 !important;
+}
+
+body.dark-theme .cm-editor,
+.dark .cm-editor {
+  background-color: #1a1a1a !important;
+}
+body.dark-theme .cm-gutters,
+.dark .cm-gutters {
+  background-color: #1a1a1a !important;
+  border-right-color: #333 !important;
+}
+body.dark-theme .cm-activeLine,
+.dark .cm-activeLine {
+  background-color: hsla(90, 30%, 40%, 0.1) !important;
+}
+body.dark-theme .cm-activeLineGutter,
+.dark .cm-activeLineGutter {
+  background-color: hsla(90, 30%, 40%, 0.14) !important;
+}
+body.dark-theme .cm-editor .cm-selectionBackground,
+body.dark-theme .cm-editor.cm-focused .cm-selectionBackground,
+.dark .cm-editor .cm-selectionBackground,
+.dark .cm-editor.cm-focused .cm-selectionBackground {
+  background-color: hsla(100, 40%, 35%, 0.3) !important;
+}
+body.dark-theme .marimo-cell,
+.dark .marimo-cell {
+  border-color: #333 !important;
+}
+body.dark-theme .marimo-cell:hover,
+.dark .marimo-cell:hover {
+  border-color: #555 !important;
+}
+body.dark-theme pre,
+body.dark-theme code,
+.dark pre,
+.dark code {
+  background-color: #1a1a1a !important;
+}
+body.dark-theme th,
+.dark th {
+  background-color: #2a2a2a !important;
+}
+body.dark-theme table,
+body.dark-theme th,
+body.dark-theme td,
+.dark table,
+.dark th,
+.dark td {
+  border-color: #444 !important;
+}
+body.dark-theme table tbody tr:nth-child(odd),
+body.dark-theme table.dataframe tbody tr:nth-child(odd),
+.dark table tbody tr:nth-child(odd),
+.dark table.dataframe tbody tr:nth-child(odd) {
+  background-color: #1a1a1a !important;
+}
+body.dark-theme table tbody tr:nth-child(even),
+body.dark-theme table.dataframe tbody tr:nth-child(even),
+.dark table tbody tr:nth-child(even),
+.dark table.dataframe tbody tr:nth-child(even) {
+  background-color: #151515 !important;
+}
+body.dark-theme table tbody tr:hover,
+.dark table tbody tr:hover {
+  background-color: #222 !important;
+}
+
+/* =========================================================
+   xarray repr dark-mode fixes
+   ========================================================= */
+body.dark-theme .xr-wrap,
+.dark .xr-wrap {
+  --xr-font-color0: rgba(255, 255, 255, 1);
+  --xr-font-color2: rgba(255, 255, 255, 0.7);
+  --xr-font-color3: rgba(255, 255, 255, 0.45);
+  --xr-border-color: rgba(255, 255, 255, 0.18);
+  --xr-disabled-color: rgba(255, 255, 255, 0.35);
+  --xr-background-color: transparent;
+  --xr-background-color-row-even: rgba(255, 255, 255, 0.05);
+  --xr-background-color-row-odd: rgba(255, 255, 255, 0.08);
+}
+
+body.dark-theme .xr-wrap,
+body.dark-theme .xr-wrap .xr-var-name,
+body.dark-theme .xr-wrap .xr-var-dims,
+body.dark-theme .xr-wrap .xr-var-dtype,
+.dark .xr-wrap,
+.dark .xr-wrap .xr-var-name,
+.dark .xr-wrap .xr-var-dims,
+.dark .xr-wrap .xr-var-dtype {
+  color: inherit !important;
+}
+
+body.dark-theme .xr-wrap :focus,
+.dark .xr-wrap :focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+body.dark-theme .xr-wrap .xr-section-item input + label,
+body.dark-theme .xr-wrap .xr-var-attrs-in + label,
+body.dark-theme .xr-wrap .xr-var-data-in + label,
+body.dark-theme .xr-wrap .xr-index-data-in + label,
+.dark .xr-wrap .xr-section-item input + label,
+.dark .xr-wrap .xr-var-attrs-in + label,
+.dark .xr-wrap .xr-var-data-in + label,
+.dark .xr-wrap .xr-index-data-in + label {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+body.dark-theme .xr-wrap .xr-header,
+.dark .xr-wrap .xr-header {
+  border-bottom: 1px solid var(--xr-border-color) !important;
+}
+
+body.dark-theme .xr-wrap table,
+body.dark-theme .xr-wrap th,
+body.dark-theme .xr-wrap td,
+body.dark-theme .xr-wrap pre,
+body.dark-theme .xr-wrap .xr-var-data > pre,
+body.dark-theme .xr-wrap .xr-index-data > pre,
+body.dark-theme .xr-wrap .xr-var-data > table > tbody > tr,
+.dark .xr-wrap table,
+.dark .xr-wrap th,
+.dark .xr-wrap td,
+.dark .xr-wrap pre,
+.dark .xr-wrap .xr-var-data > pre,
+.dark .xr-wrap .xr-index-data > pre,
+.dark .xr-wrap .xr-var-data > table > tbody > tr {
+  background-color: transparent !important;
+}
+
+body.dark-theme .xr-wrap .xr-var-item > .xr-var-name span,
+.dark .xr-wrap .xr-var-item > .xr-var-name span {
+  background-color: transparent !important;
+}
+
+body.dark-theme .xr-wrap .xr-icon-database,
+body.dark-theme .xr-wrap .xr-icon-file-text2,
+.dark .xr-wrap .xr-icon-database,
+.dark .xr-wrap .xr-icon-file-text2 {
+  opacity: 0.5;
+}
+
+body.dark-theme .xr-wrap .xr-var-attrs-in:checked + label > .xr-icon-file-text2,
+body.dark-theme .xr-wrap .xr-var-data-in:checked + label > .xr-icon-database,
+body.dark-theme .xr-wrap .xr-index-data-in:checked + label > .xr-icon-database,
+.dark .xr-wrap .xr-var-attrs-in:checked + label > .xr-icon-file-text2,
+.dark .xr-wrap .xr-var-data-in:checked + label > .xr-icon-database,
+.dark .xr-wrap .xr-index-data-in:checked + label > .xr-icon-database {
+  opacity: 0.7;
+  filter: none;
+}
+
+body.dark-theme .xr-wrap .xr-section-summary-in,
+body.dark-theme .xr-wrap .xr-var-attrs-in,
+body.dark-theme .xr-wrap .xr-var-data-in,
+body.dark-theme .xr-wrap .xr-index-data-in,
+.dark .xr-wrap .xr-section-summary-in,
+.dark .xr-wrap .xr-var-attrs-in,
+.dark .xr-wrap .xr-var-data-in,
+.dark .xr-wrap .xr-index-data-in {
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+/* =========================================================
+   Accessibility: reduced motion
+   ========================================================= */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

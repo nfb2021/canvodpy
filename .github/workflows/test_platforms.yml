@@ -46,15 +46,26 @@ jobs:
               if: github.actor == 'dependabot[bot]'
               run: uv lock
             - name: Install the Project
+              # healpy (canvod-grids' HEALPix grid builder, canvod-grids'
+              # `optional` group) ships no Windows wheels on PyPI, so it's
+              # only installable on Linux/macOS -- HEALPix-dependent tests
+              # skip on Windows, same as a local dev machine without it.
+              if: matrix.os != 'windows-latest'
+              run: uv sync --locked --dev --group optional
+            - name: Install the Project (Windows, no healpy)
+              if: matrix.os == 'windows-latest'
               run: uv sync --locked --dev
             - name: Run Tests
               run: |
                   uv run pytest canvodpy/tests/ --verbose --color=yes
                   uv run pytest packages/canvod-auxiliary/tests/ --verbose --color=yes
+                  uv run pytest packages/canvod-config/tests/ --verbose --color=yes
                   uv run pytest packages/canvod-readers/tests/ --verbose --color=yes
                   uv run pytest packages/canvod-store/tests/ --verbose --color=yes
+                  uv run pytest packages/canvod-store-metadata/tests/ --verbose --color=yes
                   uv run pytest packages/canvod-grids/tests/ --verbose --color=yes
                   uv run pytest packages/canvod-viz/tests/ --verbose --color=yes
-                  uv run pytest packages/canvod-virtualiconvname/tests/ --verbose --color=yes
+                  uv run pytest packages/canvod-preflight/tests/ --verbose --color=yes
                   uv run pytest packages/canvod-vod/tests/ --verbose --color=yes
                   uv run pytest packages/canvod-ops/tests/ --verbose --color=yes
+                  uv run pytest packages/canvod-audit/tests/ --verbose --color=yes

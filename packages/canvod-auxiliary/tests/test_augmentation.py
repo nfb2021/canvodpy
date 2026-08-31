@@ -182,8 +182,11 @@ class TestClockCorrectionAugmentation:
         assert step.name == "ClockCorrection"
 
     def test_required_aux_files(self):
+        """Empty on purpose: clock is optional (fetch_clock config flag),
+        and augment() already handles its absence gracefully — see §28,
+        dev/todo_later.md."""
         step = ClockCorrectionAugmentation()
-        assert step.get_required_aux_files() == ["clock"]
+        assert step.get_required_aux_files() == []
 
     def test_augment_returns_unchanged(self):
         """Placeholder step returns dataset unchanged."""

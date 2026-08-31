@@ -31,7 +31,10 @@ jobs:
               if: github.actor == 'dependabot[bot]'
               run: uv lock
             - name: Install the Project
-              run: uv sync --locked --dev
+              # --group optional pulls in healpy (canvod-grids' HEALPix grid
+              # builder) so HEALPix-dependent tests actually run in CI
+              # instead of silently skipping.
+              run: uv sync --locked --dev --group optional
 
             - name: Run Tests with Coverage
               run: uv run pytest

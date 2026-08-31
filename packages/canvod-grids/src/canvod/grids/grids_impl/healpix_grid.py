@@ -217,7 +217,7 @@ class HEALPixBuilder(BaseGridBuilder):
                 pl.col("healpix_ipix").cast(pl.Int64),
                 pl.col("healpix_nside").cast(pl.Int64),
             ]
-        )
+        ).with_columns(pl.int_range(0, pl.len()).alias("cell_id"))
 
         theta_unique = sorted(grid["theta"].unique())
         n_theta_bands = len(theta_unique)

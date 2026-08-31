@@ -86,7 +86,7 @@ def collect_uv_version() -> str | None:
 def _find_monorepo_root() -> Path | None:
     """Walk up from this file to find pyproject.toml with workspace."""
     try:
-        from canvod.utils.config.loader import find_monorepo_root
+        from canvod.config.loader import find_monorepo_root
 
         return find_monorepo_root()
     except Exception:
@@ -170,7 +170,7 @@ def collect_config_snapshot(config: Any) -> ConfigSnapshot:
         "processing",
         "preprocessing",
         "aux_data",
-        "compression",
+        "netcdf_compression",
         "icechunk",
         "sids",
     )
@@ -198,7 +198,7 @@ def collect_config_snapshot(config: Any) -> ConfigSnapshot:
         processing=sections.get("processing"),
         preprocessing=sections.get("preprocessing"),
         aux_data=sections.get("aux_data"),
-        compression=sections.get("compression"),
+        compression=sections.get("netcdf_compression"),
         icechunk=sections.get("icechunk"),
         sids=sections.get("sids"),
         config_hash=config_hash,
@@ -280,7 +280,7 @@ def collect_processing_provenance(
         software=collect_software_versions(),
         python=collect_python_info(),
         uv_version=collect_uv_version(),
-        level="L1" if store_type == "rinex_store" else "L2",
+        level="L1" if store_type == "gnss_store" else "L2",
         lineage=f"Raw {source_format} data ingested into Icechunk store",
         facility=socket.gethostname(),
         datetime=now,

@@ -5,7 +5,7 @@ description = "Python ecosystem for GNSS-Transmissometry canopy VOD retrievals"
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [
-    { name = "Nicolas François Bader", email = "nicolas.bader@tuwien.ac.at" },
+    { name = "Nicolas François Bader", email = "support@canvodpy.eu" },
 ]
 keywords = ["GNSS", "VOD", "vegetation", "remote sensing", "geodesy"]
 classifiers = [
@@ -25,18 +25,36 @@ dependencies = [
     "canvod-store",
     "canvod-store-metadata",
     "canvod-utils",
+    "canvod-config",
     "canvod-viz",
     "canvod-vod",
     "canvod-ops",
-    "canvod-virtualiconvname",
     "matplotlib>=3.8.0",
     "pint>=0.20",
     "structlog>=23.0",
     "pydantic>=2.0",
     "tqdm>=4.65",
     "natsort>=8.0.0",
-    "dask[distributed]>=2026.1.1",
+    "loky>=3.5.6",
+    "mystmd>=1.8.0",
+    "docker>=7.1.0",
+    "howfairis>=0.13.0",
+    "pyarrow>=23.0.1",
+    "palettable>=3.3.3",
+    "altair>=6.0.0",
+    "tabulate>=0.10.0",
+    "sqlglot>=29.0.1",
+    "icechunk>=2.0.1",
+    "typer>=0.9",
+    "rich>=13.0",
+    "marimo>=0.23.13",
 ]
+
+# Optional slot-in extensions (github.com/nfb2021/canvodpy-extensions).
+# canvodpy works without these — file discovery falls back to canonical
+# canVOD-only glob patterns (*.rnx, *.sbf) when absent.
+[project.optional-dependencies]
+filemap = ["canvod-filemap"]
 
 [dependency-groups]
 dev = [
@@ -45,6 +63,9 @@ dev = [
     "ruff>=0.14",
     "ty>=0.0.9",
 ]
+
+[project.scripts]
+canvodpy = "canvodpy.cli.app:main"
 
 [project.urls]
 Homepage = "https://github.com/nfb2021/canvodpy"
@@ -65,13 +86,13 @@ canvod-grids = { workspace = true }
 canvod-store = { workspace = true }
 canvod-store-metadata = { workspace = true }
 canvod-utils = { workspace = true }
+canvod-config = { workspace = true }
 canvod-viz = { workspace = true }
 canvod-vod = { workspace = true }
 canvod-ops = { workspace = true }
-canvod-virtualiconvname = { workspace = true }
 
-[tool.ty]
-extend-exclude = [
+[tool.ty.src]
+exclude = [
     "**/docs/*.ipynb",
     "**/docs/notebooks/*.py",
 ]

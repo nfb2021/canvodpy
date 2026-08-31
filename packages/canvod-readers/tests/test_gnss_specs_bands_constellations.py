@@ -128,20 +128,6 @@ class TestGLONASS:
         ch = glo.get_channel_used_by_SV("R01")
         assert isinstance(ch, int)
 
-    def test_band_g1_equation(self):
-        glo = GLONASS()
-        freq = glo.band_G1_equation("R01")
-        assert isinstance(freq.magnitude, float)
-        # Should be in the L1 range (1602 ± ~8 MHz)
-        assert 1594 < freq.to(UREG.MHz).magnitude < 1610
-
-    def test_band_g2_equation(self):
-        glo = GLONASS()
-        freq = glo.band_G2_equation("R01")
-        assert isinstance(freq.magnitude, float)
-        # Should be in the L2 range (1246 ± ~7 MHz)
-        assert 1239 < freq.to(UREG.MHz).magnitude < 1253
-
     def test_glonass_slots_channels(self):
         glo = GLONASS()
         sc = glo.glonass_slots_channels

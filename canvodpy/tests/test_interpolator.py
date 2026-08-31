@@ -175,6 +175,39 @@ class TestSp3InterpolationStrategy:
         assert attrs["interpolator_type"] == "Sp3InterpolationStrategy"
         assert "config" in attrs
 
+    def test_interpolate_all_nan_satellite(self):
+        """All-NaN satellite must produce NaN output, not uninitialized
+        memory. Regression test: coords/vels arrays are pre-allocated with
+        np.empty() (garbage, not zeros/NaN); _interpolate_sv's all-NaN skip
+        branches must explicitly write NaN before continuing, or a skipped
+        satellite's entire column silently keeps whatever was already in
+        that memory -- which then gets treated downstream as a real ECEF
+        position (canvodpy #geometry-augmentation-bug, 2026-08).
+        """
+        ds = _make_sp3_ds(n_epochs=10, n_sids=3)
+        for var in ["X", "Y", "Z", "Vx", "Vy", "Vz"]:
+            data = ds[var].values.copy()
+            data[:, 0] = np.nan
+            ds[var] = (["epoch", "sid"], data)
+
+        config = Sp3Config(use_velocities=True)
+        interp = Sp3InterpolationStrategy(config=config)
+
+        target = np.array(
+            [
+                np.datetime64("2024-10-29T00:07:30") + np.timedelta64(i * 900, "s")
+                for i in range(5)
+            ]
+        )
+
+        result = interp.interpolate(ds, target)
+        for var in ["X", "Y", "Z", "Vx", "Vy", "Vz"]:
+            assert np.all(np.isnan(result[var].values[:, 0])), (
+                f"{var}: all-NaN satellite produced non-NaN (garbage) output"
+            )
+        # Untouched satellites still interpolate normally.
+        assert np.all(np.isfinite(result["X"].values[:, 1]))
+
 
 # ---------------------------------------------------------------------------
 # ClockInterpolationStrategy

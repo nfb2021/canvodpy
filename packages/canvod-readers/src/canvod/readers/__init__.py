@@ -31,7 +31,7 @@ Directory Matching:
 from canvod.readers import DataDirMatcher
 
 # Find dates with RINEX files in both receivers
-matcher = DataDirMatcher(root=Path("/data/01_Rosalia"))
+matcher = DataDirMatcher(root=Path("/data/01_ExampleSite"))
 for matched_dirs in matcher:
     print(matched_dirs.yyyydoy)
     # Load RINEX files from matched_dirs.canopy_data_dir

@@ -5,10 +5,10 @@ description = "Collection of GNSS data readers for GNSS-Transmissometry"
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [
-    {name = "Nicolas François Bader", email = "nicolas.bader@geo.tuwien.ac.at"},
+    {name = "Nicolas François Bader", email = "support@canvodpy.eu"},
 ]
 maintainers = [
-    {name = "Climate and Environmental Remote Sensing (CLIMERS)", email = "nicolas.bader@geo.tuwien.ac.at"},
+    {name = "Climate and Environmental Remote Sensing (CLIMERS)", email = "support@canvodpy.eu"},
 ]
 keywords = ["GNSS", "RINEX", "GPS", "geodesy", "remote sensing"]
 classifiers = [
@@ -31,7 +31,8 @@ dependencies = [
     "sbf-parser>=1.0.3",
     "structlog>=24.1.0",
     "canvod-utils>=0.1.0",
-    "canvod-virtualiconvname>=0.1.0",
+    "canvod-config>=0.1.0",
+    "pymap3d>=3.0.0",
 ]
 
 [dependency-groups]
@@ -53,15 +54,15 @@ Issues = "https://github.com/nfb2021/canvodpy/issues"
 requires = ["uv_build>=0.9.17,<0.10.0"]
 build-backend = "uv_build"
 
-[tool.ty]
-extend-exclude = [
+[tool.ty.src]
+exclude = [
     "**/docs/*.ipynb",
     "**/docs/examples.py",
 ]
 
 [tool.uv.sources]
 canvod-utils = { workspace = true }
-canvod-virtualiconvname = { workspace = true }
+canvod-config = { workspace = true }
 
 [tool.uv.build-backend]
 module-name = "canvod.readers"

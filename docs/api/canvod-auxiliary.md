@@ -31,6 +31,9 @@ transformations, and the GNSS product registry.
 
 ## Clock (CLK)
 
+Optional — gated by `aux_data.fetch_clock` (default `true`); unused by the
+VOD formula. Disable to skip CLK download/parsing/interpolation entirely.
+
 ::: canvod.auxiliary.clock
 
 ## Position and Coordinates

@@ -10,6 +10,17 @@ validates, and catalogs metadata aligned with **DataCite 4.5**, **ACDD 1.3**, an
 uv add canvod-store-metadata
 ```
 
+## Configuration (optional)
+
+`collect_metadata()` uses `canvod-config`'s `find_monorepo_root()` (wrapped
+in a fallback — a missing/unresolvable config doesn't block metadata
+collection) to help identify the environment a store was written in. In a
+standalone install outside a canvodpy monorepo checkout, point it at a
+settings file with:
+
+- `CANVOD_CONFIG_DIR` — directory containing `canvod-settings.yaml`
+- `CANVOD_CONFIG_FILE` — an overlay YAML file merged on top
+
 ## Naming: "store metadata" vs "file registry"
 
 canvod has two distinct concepts that both involve "metadata":
@@ -78,7 +89,7 @@ Identifies the store and enables discovery in catalogs.
 
 | Field | Type | Description | Standard |
 |---|---|---|---|
-| `id` | str | Unique store identifier, e.g. `Rosalia/rinex_store` | DataCite, STAC |
+| `id` | str | Unique store identifier, e.g. `ExampleSite/rinex_store` | DataCite, STAC |
 | `title` | str | Human-readable title | DataCite, ACDD, STAC |
 | `description` | str? | Free-text description | ACDD, STAC |
 | `store_type` | str | `rinex_store`, `vod_store`, etc. | DataCite (resourceType) |
@@ -138,7 +149,7 @@ Geographic location of the GNSS site.
 
 | Field | Type | Description | Standard |
 |---|---|---|---|
-| `site.name` | str | Site name, e.g. `Rosalia` | — |
+| `site.name` | str | Site name, e.g. `ExampleSite` | — |
 | `site.description` | str? | Site description | — |
 | `site.country` | str? | ISO 3166-1 alpha-2, e.g. `AT` | — |
 | `geospatial_lat` | float? | WGS84 latitude (degrees) | ACDD |
@@ -332,13 +343,13 @@ Scan a directory tree for all Icechunk stores and build a Polars DataFrame catal
 ```python
 from canvod.store_metadata import scan_stores
 
-df = scan_stores(Path("/Volumes/ExtremePro/stores/Rosalia/"))
+df = scan_stores(Path("/Volumes/ExtremePro/stores/ExampleSite/"))
 print(df)
 # ┌─────────────────────┬───────────────┬─────────┬─────────────┐
 # │ id                  ┆ store_type    ┆ site    ┆ total_epochs│
 # ╞═════════════════════╪═══════════════╪═════════╪═════════════╡
-# │ Rosalia/rinex_store ┆ rinex_store   ┆ Rosalia ┆ 86400       │
-# │ Rosalia/sbf_store   ┆ sbf_store     ┆ Rosalia ┆ 86400       │
+# │ ExampleSite/rinex_store ┆ rinex_store   ┆ ExampleSite ┆ 86400       │
+# │ ExampleSite/sbf_store   ┆ sbf_store     ┆ ExampleSite ┆ 86400       │
 # └─────────────────────┴───────────────┴─────────┴─────────────┘
 ```
 

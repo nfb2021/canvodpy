@@ -87,7 +87,7 @@ The `canvod-vod` package implements vegetation optical depth (VOD) estimation fr
 
 ## Multi-Receiver SCS Expansion
 
-When a single reference receiver serves multiple canopy positions, satellite geometry must be recomputed relative to each canopy location. The `scs_from` configuration in `sites.yaml` drives this expansion.
+When a single reference receiver serves multiple canopy positions, satellite geometry must be recomputed relative to each canopy location. The `scs_from` field in `canvod-settings.yaml` (`sites.<name>.receivers.<ref>.scs_from`) drives this expansion.
 
 ```mermaid
 flowchart TD
@@ -129,7 +129,7 @@ flowchart TD
 !!! note "Configuration"
 
     ```yaml
-    # config/sites.yaml
+    # config/canvod-settings.yaml (sites.<name>.receivers)
     receivers:
       reference_01:
         type: reference
@@ -143,3 +143,9 @@ flowchart TD
 ## References
 
 Humphrey, V. and Frankenberg, C. (2022). GNSS-transmissometry: A new approach for vegetation optical depth estimation. *Remote Sensing of Environment*.
+
+---
+
+!!! example "Try it"
+    [07 — VOD Retrieval](../../notebooks/_build/07_vod_retrieval.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/07_vod_retrieval.py)

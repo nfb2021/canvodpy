@@ -323,3 +323,9 @@ print(catalog.summary())
 - [IGS Satellite Metadata SINEX](https://files.igs.org/pub/station/general/igs_satellite_metadata.snx)
 - Steigenberger, P., et al. (2023). "GNSS satellite transmit power and its impact on orbit determination." *Journal of Geodesy*, 97(4).
 - IGS SINEX format specification v2.02
+
+---
+
+!!! example "Try it"
+    [03 — Satellite Catalog](../../notebooks/_build/03_satellite_catalog.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/03_satellite_catalog.py)

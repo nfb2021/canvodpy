@@ -3,10 +3,10 @@ name = "canvod-auxiliary"
 version = "0.2.3"
 description = "Ephemeris and auxiliary data handling for GNSS-Transmissometry"
 authors = [
-    {name = "Nicolas François Bader", email = "nicolas.bader@geo.tuwien.ac.at"}
+    {name = "Nicolas François Bader", email = "support@canvodpy.eu"}
 ]
 maintainers = [
-    {name = "Climate and Environmental Remote Sensing (CLIMERS)", email = "nicolas.bader@geo.tuwien.ac.at"}
+    {name = "Climate and Environmental Remote Sensing (CLIMERS)", email = "support@canvodpy.eu"}
 ]
 readme = "README.md"
 requires-python = ">=3.14"
@@ -22,6 +22,7 @@ classifiers = [
 dependencies = [
     "canvod-readers>=0.1.0",
     "canvod-utils>=0.1.0",
+    "canvod-config>=0.1.0",
     "scipy>=1.15.0",
     "numpy>=1.24.0",
     "xarray>=2023.12.0",
@@ -47,6 +48,7 @@ dev = [
 [tool.uv.sources]
 canvod-readers = { workspace = true }
 canvod-utils = { workspace = true }
+canvod-config = { workspace = true }
 
 [project.urls]
 Homepage = "https://github.com/nfb2021/canvodpy"

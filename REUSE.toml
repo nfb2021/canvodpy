@@ -1,6 +1,6 @@
 version = 1
 SPDX-PackageName = "canvodpy"
-SPDX-PackageSupplier = "Nicolas François Bader <nicolas.bader@tuwien.ac.at>"
+SPDX-PackageSupplier = "Nicolas François Bader <support@canvodpy.eu>"
 SPDX-PackageDownloadLocation = "https://github.com/nfb2021/canvodpy"
 
 [[annotations]]

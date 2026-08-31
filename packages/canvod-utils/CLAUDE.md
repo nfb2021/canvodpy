@@ -1,30 +1,21 @@
 # canvod-utils
 
-Configuration, date parsing, diagnostics, and shared utilities.
+Date parsing and shared utilities. Configuration models and loading now
+live in [[canvod-config]] (`canvod.config`), not here.
 
 ## Key modules
 
 | Module | Purpose |
 |---|---|
-| `config/` | 40+ Pydantic models: `CanvodConfig`, `SiteConfig`, `ProcessingParams`, `StorageConfig`, `MetadataConfig`, `LoggingConfig` |
-| `config/loader.py` | `ConfigLoader` — YAML/JSON/TOML config loading |
-| `tools/` | `YYYYDOY`, `YYDOY` date parsing, `file_hash()` |
-| `diagnostics/` | `TaskMetrics`, `track_memory`, `track_time`, `BatchTracker`, `DatasetReport` |
+| `tools/` | `YYYYDOY`, `YYDOY` date parsing, `file_hash()`, `isfloat`, `get_version_from_pyproject` |
 
-## Config hierarchy
-
-User config files (NEVER committed):
-- `config/processing.yaml` — processing parameters
-- `config/sites.yaml` — site definitions
-- `config/sids.yaml` — SID filters
-
-Templates (committed): `config/*.example`
-
-## Pydantic conventions
-
-- All models use `frozen=False` with `@cached_property` for lazy computation
-- `ProcessingParams.file_pairing`: `"complete"` (all receivers) or `"paired"` (matched pairs)
-- Config additions for metadata: `orcid`, `institution_ror`, `license`, `publisher`, etc.
+Removed 2026-07-14: the `diagnostics/` module (`TaskMetrics`, `track_memory`,
+`track_time`, `BatchTracker`, `DatasetReport`, `retry`, SQLite-backed
+storage) was a fully dead chain — zero real callers anywhere in the
+pipeline, only re-exported through `canvodpy.utils.perf` /
+`canvodpy.utils.__init__`, neither of which anything imported from either.
+Superseded by the live OpenTelemetry-based tracing in
+`canvodpy.utils.telemetry`.
 
 ## Testing
 

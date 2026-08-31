@@ -611,7 +611,7 @@ def _compare_vod(
     # Convert gnssvod VOD DataFrame to xarray
     ds_gnssvod_vod = gnssvod_df_to_xarray(gnssvod_vod_df)
     print(f"  gnssvod VOD xarray: {dict(ds_gnssvod_vod.sizes)}")
-    print(f"    vars: {sorted(ds_gnssvod_vod.data_vars)}")
+    print(f"    vars: {sorted(str(v) for v in ds_gnssvod_vod.data_vars)}")
 
     # canvodpy has one VOD variable; gnssvod has VOD_L1, VOD_L2 per band.
     # Both the gnssvod VOD output and canvodpy store have Elevation/theta

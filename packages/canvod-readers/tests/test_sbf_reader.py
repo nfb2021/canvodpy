@@ -16,7 +16,7 @@ from canvod.readers.base import (
     validate_dataset,
 )
 from canvod.readers.sbf.models import SbfHeader
-from canvod.readers.sbf.reader import SbfReader
+from canvod.readers.sbf.reader import SbfReader, _snr_dbhz_to_ssi
 
 # ---------------------------------------------------------------------------
 # Test data location
@@ -74,6 +74,48 @@ def combined_result(
 # ---------------------------------------------------------------------------
 # Test classes
 # ---------------------------------------------------------------------------
+
+
+class TestSnrDbhzToSsi:
+    """RINEX 3.04 §5.7 CN0-to-SSI banding, applied where SBF has no native SSI."""
+
+    def test_no_observation_stays_sentinel(self) -> None:
+        ssi = _snr_dbhz_to_ssi(np.array([np.nan]))
+        assert ssi[0] == -1
+
+    def test_band_boundaries(self) -> None:
+        # (snr_dbhz, expected_ssi) at and around each RINEX band edge.
+        cases = [
+            (0.0, 1),
+            (11.9, 1),
+            (12.0, 2),
+            (17.9, 2),
+            (18.0, 3),
+            (23.9, 3),
+            (24.0, 4),
+            (29.9, 4),
+            (30.0, 5),
+            (35.9, 5),
+            (36.0, 6),
+            (41.9, 6),
+            (42.0, 7),
+            (47.9, 7),
+            (48.0, 8),
+            (53.9, 8),
+            (54.0, 9),
+            (100.0, 9),  # clamps, doesn't overflow past 9
+        ]
+        snr = np.array([c[0] for c in cases])
+        expected = np.array([c[1] for c in cases])
+        ssi = _snr_dbhz_to_ssi(snr)
+        np.testing.assert_array_equal(ssi, expected)
+
+    def test_mixed_valid_and_missing(self) -> None:
+        ssi = _snr_dbhz_to_ssi(np.array([np.nan, 32.25, np.nan, 44.5]))
+        np.testing.assert_array_equal(ssi, [-1, 5, -1, 7])
+
+    def test_dtype_is_int8(self) -> None:
+        assert _snr_dbhz_to_ssi(np.array([42.0])).dtype == np.int8
 
 
 class TestSbfReaderInit:
@@ -247,11 +289,26 @@ class TestToDs:
     def test_to_ds_ssi_present(self, obs_ds: xr.Dataset) -> None:
         assert "SSI" in obs_ds.data_vars, "SSI data var must be present"
 
-    def test_to_ds_ssi_always_minus_one(self, obs_ds: xr.Dataset) -> None:
-        """SBF has no RINEX SSI concept — every cell must be the fill value -1."""
+    def test_to_ds_ssi_derived_from_snr(self, obs_ds: xr.Dataset) -> None:
+        """SBF has no native RINEX SSI field — it must be banded from CN0.
+
+        Regression test: SSI used to stay at its -1 "no data" sentinel for
+        every epoch/sid regardless of what the receiver reported, because
+        the fill loop only ever populated SNR/Pseudorange/Phase/Doppler/
+        Smoothing/HalfCycle, never SSI.
+        """
         ssi = obs_ds["SSI"].values
-        assert np.all(ssi == -1), (
-            f"SSI must be uniformly -1 for SBF; got unique={np.unique(ssi)}"
+        snr = obs_ds["SNR"].values
+        assert set(np.unique(ssi[np.isfinite(ssi)])) != {-1}, (
+            "SSI must vary with signal strength, not stay uniformly at -1"
+        )
+
+        valid = np.isfinite(snr)
+        assert np.all(ssi[valid] >= 1) and np.all(ssi[valid] <= 9), (
+            "SSI must be in RINEX's 1-9 range wherever SNR is valid"
+        )
+        assert np.all(ssi[~valid] == -1), (
+            "SSI must stay at the -1 sentinel wherever there is no observation"
         )
 
     def test_to_ds_global_attrs(self, obs_ds: xr.Dataset) -> None:

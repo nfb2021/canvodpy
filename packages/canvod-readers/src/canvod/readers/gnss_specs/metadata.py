@@ -250,11 +250,21 @@ def get_global_attrs() -> dict[str, str]:
     -------
     dict[str, str]
         Global attributes dict suitable for xarray Dataset attrs.
+        Falls back to ``{"Software": "canVODpy", "Institution": "Unknown"}``
+        when no config is available (e.g. standalone ``canvod-readers``
+        install without a ``canvod-settings.yaml``) — "Unknown" satisfies
+        ``REQUIRED_ATTRS`` (``base.py``) while remaining a recognizable
+        placeholder rather than a real institution name, so it can't be
+        mistaken for genuine FAIR/DataCite metadata downstream.
     """
-    from canvod.utils.config import load_config
+    from canvod.config import load_config
 
-    cfg = load_config()
-    meta = cfg.processing.metadata
+    try:
+        cfg = load_config()
+        meta = cfg.processing.metadata
+    except Exception:
+        return {"Software": "canVODpy", "Institution": "Unknown"}
+
     attrs: dict[str, str] = {
         "Author": meta.author,
         "Email": meta.email,

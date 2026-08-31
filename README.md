@@ -13,8 +13,8 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18496233.svg)](https://doi.org/10.5281/zenodo.18496233)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![CLIMERS @ TU Wien](https://img.shields.io/badge/CLIMERS-TU_Wien-006699)](https://www.tuwien.at/en/mg/geo/climers)
-[![VODnet](https://img.shields.io/badge/-VODnet-2d6a4f?labelColor=555555&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAAXNSR0IArs4c6QAAAHhlWElmTU0AKgAAAAgABAEaAAUAAAABAAAAPgEbAAUAAAABAAAARgEoAAMAAAABAAIAAIdpAAQAAAABAAAATgAAAAAAAABIAAAAAQAAAEgAAAABAAOgAQADAAAAAQABAACgAgAEAAAAAQAAAA6gAwAEAAAAAQAAAA4AAAAAjn8NzQAAAAlwSFlzAAALEwAACxMBAJqcGAAAAflJREFUKBWtUEtoE1EUPe+9SczHiam/aixtqi1E7aai4kK0CAVBDFZwrQs3xp2KIriYtiKuav3QRVxYKIjFVihWrCBIaaWioKidQBsxi3SwYmMmkxidYWaemYEEKUgRPHDhXu4575x3gf+NKfVD3UQ2u/Zv7wrLF8mPfV2ZH1ZCNIM7xUCAHHjyfN6wQ8mZo3vvE4Av57tzOjfd/WZpivfJSW5wkzvomnzFe2SFTyyU+iFJtCpk1eaRfOIw84TuRsN7kEkVMDzyEjPvUtga2YiDTRFM5+m+F8XYHMZuzDqaWlQf8yVMpmJ0/DUu9g6hVNQAy8au3W04NHAV85oFRulZS+LDkIjtWmcyHT6vQHYoXwrouTWKkv4LLOAHE4N4K6dxZ2AISl4DpawVDVrYcXSFZtTPGSV8IatjUVErJ+Cwbdstx3Vw8CG+pmQIHg+HUVlWo7aSp/qz9Kn3W5p5S/x4DJ8/lfGt4kAow7bmBpQ9fuQ3RUFtM4Uz61Qk/vijbpLbgtc61n05zjQ1hCvXHmB9fT3OnT8NOWfi+uxP0IJxE4S4jrXzxrffm1xlb75Aud/cEFmD9vYW6KaNUoUmCpS3BblUPNk45sR0UBM6Qzx2qd9LVnfqujGS+64puaX8olEuj4uMHHnc2dTrcFZGtCOMxv11KxP/kfEbTTzNcyb5ar0AAAAASUVORK5CYII=&logoColor=white)](https://vodnet.netlify.app)
-<!-- [![VODnet](https://img.shields.io/badge/VODnet-GNSS--T%20network-2d6a4f?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAAXNSR0IArs4c6QAAAHhlWElmTU0AKgAAAAgABAEaAAUAAAABAAAAPgEbAAUAAAABAAAARgEoAAMAAAABAAIAAIdpAAQAAAABAAAATgAAAAAAAABIAAAAAQAAAEgAAAABAAOgAQADAAAAAQABAACgAgAEAAAAAQAAAA6gAwAEAAAAAQAAAA4AAAAAjn8NzQAAAAlwSFlzAAALEwAACxMBAJqcGAAAAflJREFUKBWtUEtoE1EUPe+9SczHiam/aixtqi1E7aai4kK0CAVBDFZwrQs3xp2KIriYtiKuav3QRVxYKIjFVihWrCBIaaWioKidQBsxi3SwYmMmkxidYWaemYEEKUgRPHDhXu4575x3gf+NKfVD3UQ2u/Zv7wrLF8mPfV2ZH1ZCNIM7xUCAHHjyfN6wQ8mZo3vvE4Av57tzOjfd/WZpivfJSW5wkzvomnzFe2SFTyyU+iFJtCpk1eaRfOIw84TuRsN7kEkVMDzyEjPvUtga2YiDTRFM5+m+F8XYHMZuzDqaWlQf8yVMpmJ0/DUu9g6hVNQAy8au3W04NHAV85oFRulZS+LDkIjtWmcyHT6vQHYoXwrouTWKkv4LLOAHE4N4K6dxZ2AISl4DpawVDVrYcXSFZtTPGSV8IatjUVErJ+Cwbdstx3Vw8CG+pmQIHg+HUVlWo7aSp/qz9Kn3W5p5S/x4DJ8/lfGt4kAow7bmBpQ9fuQ3RUFtM4Uz61Qk/vijbpLbgtc61n05zjQ1hCvXHmB9fT3OnT8NOWfi+uxP0IJxE4S4jrXzxrffm1xlb75Aud/cEFmD9vYW6KaNUoUmCpS3BblUPNk45sR0UBM6Qzx2qd9LVnfqujGS+64puaX8olEuj4uMHHnc2dTrcFZGtCOMxv11KxP/kfEbTTzNcyb5ar0AAAAASUVORK5CYII=&logoColor=white)](https://vodnet.netlify.app) -->
+[![VODnet](https://img.shields.io/badge/-VODnet-2d6a4f?labelColor=555555&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAAXNSR0IArs4c6QAAAHhlWElmTU0AKgAAAAgABAEaAAUAAAABAAAAPgEbAAUAAAABAAAARgEoAAMAAAABAAIAAIdpAAQAAAABAAAATgAAAAAAAABIAAAAAQAAAEgAAAABAAOgAQADAAAAAQABAACgAgAEAAAAAQAAAA6gAwAEAAAAAQAAAA4AAAAAjn8NzQAAAAlwSFlzAAALEwAACxMBAJqcGAAAAflJREFUKBWtUEtoE1EUPe+9SczHiam/aixtqi1E7aai4kK0CAVBDFZwrQs3xp2KIriYtiKuav3QRVxYKIjFVihWrCBIaaWioKidQBsxi3SwYmMmkxidYWaemYEEKUgRPHDhXu4575x3gf+NKfVD3UQ2u/Zv7wrLF8mPfV2ZH1ZCNIM7xUCAHHjyfN6wQ8mZo3vvE4Av57tzOjfd/WZpivfJSW5wkzvomnzFe2SFTyyU+iFJtCpk1eaRfOIw84TuRsN7kEkVMDzyEjPvUtga2YiDTRFM5+m+F8XYHMZuzDqaWlQf8yVMpmJ0/DUu9g6hVNQAy8au3W04NHAV85oFRulZS+LDkIjtWmcyHT6vQHYoXwrouTWKkv4LLOAHE4N4K6dxZ2AISl4DpawVDVrYcXSFZtTPGSV8IatjUVErJ+Cwbdstx3Vw8CG+pmQIHg+HUVlWo7aSp/qz9Kn3W5p5S/x4DJ8/lfGt4kAow7bmBpQ9fuQ3RUFtM4Uz61Qk/vijbpLbgtc61n05zjQ1hCvXHmB9fT3OnT8NOWfi+uxP0IJxE4S4jrXzxrffm1xlb75Aud/cEFmD9vYW6KaNUoUmCpS3BblUPNk45sR0UBM6Qzx2qd9LVnfqujGS+64puaX8olEuj4uMHHnc2dTrcFZGtCOMxv11KxP/kfEbTTzNcyb5ar0AAAAASUVORK5CYII=&logoColor=white)](https://www.gfz.de/en/section/remote-sensing-and-geoinformatics/projects/vodnet)
+<!-- [![VODnet](https://img.shields.io/badge/VODnet-GNSS--T%20network-2d6a4f?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAAXNSR0IArs4c6QAAAHhlWElmTU0AKgAAAAgABAEaAAUAAAABAAAAPgEbAAUAAAABAAAARgEoAAMAAAABAAIAAIdpAAQAAAABAAAATgAAAAAAAABIAAAAAQAAAEgAAAABAAOgAQADAAAAAQABAACgAgAEAAAAAQAAAA6gAwAEAAAAAQAAAA4AAAAAjn8NzQAAAAlwSFlzAAALEwAACxMBAJqcGAAAAflJREFUKBWtUEtoE1EUPe+9SczHiam/aixtqi1E7aai4kK0CAVBDFZwrQs3xp2KIriYtiKuav3QRVxYKIjFVihWrCBIaaWioKidQBsxi3SwYmMmkxidYWaemYEEKUgRPHDhXu4575x3gf+NKfVD3UQ2u/Zv7wrLF8mPfV2ZH1ZCNIM7xUCAHHjyfN6wQ8mZo3vvE4Av57tzOjfd/WZpivfJSW5wkzvomnzFe2SFTyyU+iFJtCpk1eaRfOIw84TuRsN7kEkVMDzyEjPvUtga2YiDTRFM5+m+F8XYHMZuzDqaWlQf8yVMpmJ0/DUu9g6hVNQAy8au3W04NHAV85oFRulZS+LDkIjtWmcyHT6vQHYoXwrouTWKkv4LLOAHE4N4K6dxZ2AISl4DpawVDVrYcXSFZtTPGSV8IatjUVErJ+Cwbdstx3Vw8CG+pmQIHg+HUVlWo7aSp/qz9Kn3W5p5S/x4DJ8/lfGt4kAow7bmBpQ9fuQ3RUFtM4Uz61Qk/vijbpLbgtc61n05zjQ1hCvXHmB9fT3OnT8NOWfi+uxP0IJxE4S4jrXzxrffm1xlb75Aud/cEFmD9vYW6KaNUoUmCpS3BblUPNk45sR0UBM6Qzx2qd9LVnfqujGS+64puaX8olEuj4uMHHnc2dTrcFZGtCOMxv11KxP/kfEbTTzNcyb5ar0AAAAASUVORK5CYII=&logoColor=white)](https://www.gfz.de/en/section/remote-sensing-and-geoinformatics/projects/vodnet) -->
 
 <!-- Trust & FAIR -->
 [![fair-software.eu](https://img.shields.io/badge/fair--software.eu-%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8F-green)](https://fair-software.eu)
@@ -29,7 +29,7 @@ An open Python ecosystem for GNSS-Transmissometry (GNSS-T) canopy VOD retrievals
 | Toolchain                                                                                                                                                                                                                                                                                                                                                                                                                            | Scientific Stack                                                                                                                                                                                                                                                                                                                                                | Standards                                                                                                                                                                                                                           | Notebooks                                                                                  | AI                                                                                                                                           |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff) [![ty](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json)](https://github.com/astral-sh/ty)[![Just](https://img.shields.io/badge/%F0%9F%A4%96-Just-2d6a4f?labelColor=6c757d)](https://github.com/casey/just) | [![xarray](https://img.shields.io/badge/xarray-N--D%20arrays-4c78a8)](https://xarray.dev/) [![Dask](https://img.shields.io/badge/Dask-Parallel-FDA061?logo=dask&logoColor=white)](https://www.dask.org/) [![Polars](https://img.shields.io/badge/Polars-Tabular-CD792C?logo=polars&logoColor=white)](https://pola.rs/)                                          | [![DataCite 4.5](https://img.shields.io/badge/DataCite-4.5-3F51B5)](https://schema.datacite.org/) [![ACDD 1.3](https://img.shields.io/badge/ACDD-1.3-4CAF50)](https://wiki.esipfed.org/Attribute_Convention_for_Data_Discovery_1-3) | [![marimo](https://marimo.io/shield.svg)](https://molab.marimo.io/github/nfb2021/canvodpy) | [![Claude Code](https://img.shields.io/badge/Claude_Code-AI_Assisted-cc785c?logo=anthropic&logoColor=white)](https://claude.com/claude-code) |
-| [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://conventionalcommits.org)                                                                                                                                                                                                                                                             | [![Apache Airflow](https://img.shields.io/badge/Apache%20Airflow-017CEE?logo=apacheairflow&logoColor=white)](https://airflow.apache.org/) [![Pydantic v2](https://img.shields.io/badge/Pydantic-v2-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/) [![Icechunk](https://img.shields.io/badge/Icechunk-Storage-00A3E0)](https://icechunk.io/) | [![STAC 1.1](https://img.shields.io/badge/STAC-1.1-FF9800)](https://stacspec.org/) [![REUSE](https://img.shields.io/badge/REUSE-3.3-blue)](https://reuse.software/)                                                                 |                                                                                            |                                                                                                                                              |
+| [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://conventionalcommits.org)                                                                                                                                                                                                                                                             | [![Pydantic v2](https://img.shields.io/badge/Pydantic-v2-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/) [![Icechunk](https://img.shields.io/badge/Icechunk-Storage-00A3E0)](https://icechunk.io/) | [![STAC 1.1](https://img.shields.io/badge/STAC-1.1-FF9800)](https://stacspec.org/) [![REUSE](https://img.shields.io/badge/REUSE-3.3-blue)](https://reuse.software/)                                                                 |                                                                                            |                                                                                                                                              |
 
 ---
 
@@ -59,7 +59,8 @@ graph TB
         Aux["📡 canvod-auxiliary<br/>SP3/CLK/Position"]
         Store["💾 canvod-store<br/>Icechunk Storage"]
         StoreMeta["📋 canvod-store-metadata<br/>Provenance & Standards"]
-        Utils["🛠️ canvod-utils<br/>Config & Tools"]
+        CanvodConfig["⚙️ canvod-config<br/>Settings & Validation"]
+        Utils["🛠️ canvod-utils<br/>Date & Diagnostics"]
     end
 
     subgraph AnalysisPkg[Analysis and Output Packages]
@@ -70,8 +71,12 @@ graph TB
 
     subgraph InfraPkg[Infrastructure Packages]
         Ops["⚙️ canvod-ops<br/>Preprocessing Pipeline"]
-        Naming["🏷️ canvod-virtualiconvname<br/>File Naming & Discovery"]
+        Preflight["🚦 canvod-preflight<br/>Naming Convention & Validation"]
         Audit["🔍 canvod-audit<br/>Verification Suite"]
+    end
+
+    subgraph ExtPkg["Optional Extensions (canvodpy-extensions repo)"]
+        Filemap["🏷️ canvod-filemap<br/>Non-canonical Filename Mapping"]
     end
 
     Config --> Canvodpy
@@ -79,12 +84,14 @@ graph TB
     Canvodpy --> Aux
     Canvodpy --> Store
     Canvodpy --> StoreMeta
+    Canvodpy --> CanvodConfig
     Canvodpy --> VOD
     Canvodpy --> Grids
     Canvodpy --> Viz
     Canvodpy --> Ops
-    Canvodpy --> Naming
+    Canvodpy --> Preflight
     Canvodpy --> Audit
+    Canvodpy -.optional.-> Filemap
 
     Aux --> Readers
     Store --> Grids
@@ -132,7 +139,7 @@ flowchart TD
 
     subgraph Analysis[📊 Analysis]
         VODCalc["VodComputer<br/>Tau-Omega model · canopy vs reference"]
-        GridAssign["Hemispheric Grid Assignment<br/>Equal-area / HEALPix / geodesic"]
+        GridAssign["Hemispheric Grid Assignment<br/>Equal-area / Equal-angle / ..."]
         Aggregate["Aggregation<br/>Per-cell statistics"]
     end
 
@@ -182,51 +189,45 @@ uv add canvod-readers canvod-grids
 
 ## Quick Start
 
-```python
-from canvodpy import process_date, calculate_vod
-
-# Process one day: read + augment + write to Icechunk store
-process_date("Rosalia", "2025001")
-
-# Compute VOD from stored data
-vod = calculate_vod("Rosalia", "canopy_01", "reference_01", "2025001")
+```bash
+# Run the pipeline — resumes from the last processed date when --start is omitted
+uv run canvodpy run --site ExampleSite --start 2025001 --end 2025007
 ```
 
-Four API levels are available — from one-liners to Airflow-ready stateless functions:
+Or from Python, when you need to script a run (looping over sites, embedding
+in a notebook):
+
+```python
+from canvodpy import Site
+
+site = Site("ExampleSite")
+
+with site.pipeline(n_workers=8) as pipeline:
+    for date_key, datasets in pipeline.process_range("2025001", "2025007"):
+        site.vod.compute_day(datasets, "canopy_01_vs_reference_01")
+```
+
+Two supported Python surfaces, plus the CLI on top of one of them:
 
 ```mermaid
 flowchart TD
-    subgraph L1["Level 1: Convenience"]
-        L1A["process_date('Rosalia', '2025001')"]
-        L1A --> L1B["Pipeline (internal)"]
-        L1B --> L1C["PipelineOrchestrator"]
-        L1C --> L1D["Dask Workers"]
+    subgraph CLI_["CLI — recommended"]
+        CLI["canvodpy run --site ... --start ... --end ..."]
     end
 
-    subgraph L2["Level 2: Fluent"]
-        L2A[".workflow('Rosalia')"]
-        L2A --> L2B[".read('2025001')"]
-        L2B --> L2C[".augment(source='final')"]
-        L2C --> L2E[".grid(grid_type='equal_area')"]
-        L2E --> L2F[".vod(canopy, ref)"]
-        L2F --> L2D[".result()"]
-    end
-
-    subgraph L3["Level 3: Site + Pipeline"]
-        L3A["Site('Rosalia')"]
+    subgraph L3["Site.pipeline() — Python-native scripting"]
+        L3A["Site('ExampleSite')"]
         L3A --> L3B[".pipeline(n_workers=8)"]
-        L3B --> L3C[".process_range(...)"]
-        L3C --> L3D["Reusable Dask Cluster"]
-        L3A --> L3E["site.vod.compute_bulk(date_range)"]
+        L3B --> L3C[".process_range(start, end)"]
+        L3A --> L3E["site.vod.compute_bulk(...)"]
     end
 
-    subgraph L4["Level 4: Functional"]
+    subgraph L4["canvodpy.functional — stateless components"]
         L4A["read_rinex('file.rnx')"]
         L4A --> L4B["augment_with_ephemeris(ds)"]
         L4B --> L4G["assign_grid_cells(ds)"]
         L4G --> L4C["calculate_vod(canopy, ref)"]
         L4C --> L4H["write_to_store(ds, group)"]
-        L4H --> L4D["XCom / NetCDF path"]
     end
 
     subgraph Shared["Shared Components"]
@@ -237,16 +238,7 @@ flowchart TD
         VOD["VodComputer"]
     end
 
-    L1C --> FM
-    L1C --> EP
-    L1C --> READER
-    L1C --> STORE
-
-    L2B --> FM
-    L2B --> READER
-    L2C --> EP
-    L2F --> VOD
-    L2D --> STORE
+    CLI -.wraps.-> L3A
 
     L3C --> FM
     L3C --> EP
@@ -259,7 +251,14 @@ flowchart TD
     L4H --> STORE
 ```
 
-See the [API Levels guide](https://nfb2021.github.io/canvodpy/guides/api-levels/) for details.
+The optional `canvod-airflow` extension builds its DAGs on
+`canvodpy.workflows.tasks`, a dedicated set of Airflow-compatible task
+functions — not `canvodpy.functional` directly. `FluentWorkflow`, the flat `process_date()` /
+`calculate_vod()` / `preview_processing()` functions, and `VODWorkflow` are
+deprecated (`DeprecationWarning` on use) — kept working, no longer taught;
+`VODWorkflow` additionally has a broken augmentation step and shouldn't be
+used regardless. See the
+[API Levels guide](https://nfb2021.github.io/canvodpy/guides/api-levels/) for details.
 
 ## Development Setup
 
@@ -320,8 +319,9 @@ canvodpy/                       # Monorepo root
 │   ├── canvod-store-metadata/  #   Store provenance & compliance
 │   ├── canvod-viz/             #   Visualisation
 │   ├── canvod-ops/             #   Preprocessing pipeline
-│   ├── canvod-utils/           #   Configuration & utilities
-│   ├── canvod-virtualiconvname/#   Filename mapping
+│   ├── canvod-config/          #   Configuration management
+│   ├── canvod-utils/           #   Date/time utilities & diagnostics
+│   ├── canvod-preflight/       #   Naming convention & pre-flight validation
 │   └── canvod-audit/           #   Three-tier verification suite
 ├── canvodpy/                   # Umbrella package + orchestrator
 ├── demo/                       # marimo notebooks (submodule)
@@ -333,7 +333,24 @@ canvodpy/                       # Monorepo root
 └── LICENSE                     # Apache License 2.0
 ```
 
+Two optional packages — `canvod-filemap` (non-canonical filename mapping)
+and `canvod-airflow` (Airflow DAG definitions) — are developed separately in
+[canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions), not
+in this repo's `packages/`. `canvod-filemap` installs as an extra
+(`uv sync --extra filemap`); `canvod-airflow` is GitHub-only today (not yet
+published to PyPI).
+
 </details>
+
+## Related repositories
+
+canvodpy spans a few separate repositories, each with a distinct purpose:
+
+| Repository | Purpose | Relationship to this repo |
+| --- | --- | --- |
+| [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions) | Optional, GitHub-only packages: `canvod-filemap` (non-canonical filename mapping) and `canvod-airflow` (Airflow DAG definitions) | Independent repo, installed as an optional extra when needed — not a submodule |
+| [canvodpy-demo](https://github.com/nfb2021/canvodpy-demo) | marimo notebook walkthroughs of the pipeline | Git submodule at `demo/` |
+| [canvodpy-test-data](https://github.com/nfb2021/canvodpy-test-data) | Real RINEX/SBF fixtures used by the test suite | Git submodule at `packages/canvod-readers/tests/test_data/` |
 
 ## AI-Assisted Development
 
@@ -366,3 +383,5 @@ Founded by **Nicolas François Bader**
 
 [Climate and Environmental Remote Sensing Research Unit (CLIMERS)](https://www.tuwien.at/en/mg/geo/climers)
 Department of Geodesy and Geoinformation, TU Wien
+
+Email: support@canvodpy.eu

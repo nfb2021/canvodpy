@@ -13,13 +13,25 @@ for GNSS-T is the **equal-area** grid, where each 2° band is divided into cells
 of equal solid angle.
 
 Seven grid types are available: `equal_area`, `equal_angle`, `equirectangular`,
-`htm`, `geodesic`, `healpix`, and `fibonacci`.
+`htm`, `geodesic`, `fibonacci`, and `healpix`. All seven pass a dedicated
+correctness test suite (solid-angle sum, no below-horizon cells, no seam
+artifacts, structural invariants) — but `equal_area` remains the only type
+recommended for production VOD analysis; `equal_angle`/`equirectangular` are
+zenith-biased by design, and the others trade strict equal-area for other
+properties (see the [package docs](https://nfb2021.github.io/canvodpy/packages/grids/overview/)
+for the per-type tradeoffs).
 
 ## Installation
 
 ```bash
 uv pip install canvod-grids
 ```
+
+`healpix` additionally requires [`healpy`](https://healpy.readthedocs.io/),
+which is **not** installed by the above (no Windows wheels on PyPI, so it
+isn't a hard dependency of this package): `pip install healpy` /
+`uv pip install healpy` separately. `create_hemigrid("healpix", ...)` raises
+`ImportError` with the same instructions if it's missing.
 
 ## Quick Start
 
@@ -54,5 +66,5 @@ Apache License 2.0
 Climate and Environmental Remote Sensing Research Unit (CLIMERS)
 Department of Geodesy and Geoinformation
 TU Wien (Vienna University of Technology)
-Email: nicolas.bader@geo.tuwien.ac.at
+Email: support@canvodpy.eu
 [https://www.tuwien.at/en/mg/geo/climers](https://www.tuwien.at/en/mg/geo/climers)

@@ -36,3 +36,11 @@ grid = create_hemigrid(grid_type=GridType.EQUAL_AREA, resolution=2.0)
 ```bash
 uv run pytest packages/canvod-grids/tests/
 ```
+
+`HEALPixBuilder` requires `healpy`, which is **not** installed by
+`uv sync --dev` — it lives in this package's own `optional` dependency
+group (no Windows wheels on PyPI, which is why it isn't a hard
+dependency). Install it with `uv sync --dev --group optional` to run the
+HEALPix-dependent cases in `test_grid_correctness_all_types.py`; without
+it they skip cleanly (this is also what CI's Windows leg does — Linux/macOS
+CI installs the `optional` group, Windows doesn't).

@@ -36,98 +36,98 @@ extra_javascript = [
 # Paths are relative to docs_dir (default: "docs/").
 nav = [
   { "Home" = "index.md" },
-  { "Conventions & Defaults" = "principles.md" },
 
-  { "Architecture" = [
-    { "Monorepo Structure" = "architecture.md" },
-    { "Namespace Packages" = "namespace-packages.md" },
-    { "Package Dependencies" = "dependencies.md" },
+  { "Usage" = [
+    { "Get Started" = "users/index.md" },
+    { "CLI Quickstart" = "users/cli.md" },
+    { "Python Quickstart" = "users/python.md" },
+    { "Configuration" = "guides/configuration.md" },
+    { "Optional Extensions" = "guides/extensions.md" },
+    { "API Levels" = "guides/api-levels.md" },
+    { "Parallel Processing" = "guides/parallel-processing.md" },
+    { "Diagnostics & Monitoring" = "guides/diagnostics.md" },
+    { "Notebooks" = "notebooks/index.md" },
+    { "Packages" = [
+      { "canvod-readers" = [
+        { "Overview" = "packages/readers/overview.md" },
+        { "RINEX v3.04 Format" = "packages/readers/rinex-format.md" },
+        { "SBF Reader" = "packages/readers/sbf.md" },
+        { "SBF Field Decoding" = "packages/readers/sbf-decoding.md" },
+        { "Ephemeris Sources" = "packages/readers/ephemeris-sources.md" },
+        { "Satellite Catalog (IGS SINEX)" = "packages/readers/satellite-catalog.md" },
+        { "Reader Architecture" = "packages/readers/architecture.md" },
+        { "Extending Readers" = "packages/readers/extending.md" },
+      ]},
+      { "canvod-auxiliary" = [
+        { "Overview" = "packages/auxiliary/overview.md" },
+        { "Preprocessing Pipeline" = "packages/auxiliary/preprocessing.md" },
+        { "Interpolation Methods" = "packages/auxiliary/interpolation.md" },
+        { "Coordinate Systems" = "packages/auxiliary/coordinates.md" },
+        { "Product Registry" = "packages/auxiliary/products.md" },
+      ]},
+      { "canvod-grids" = [
+        { "Overview" = "packages/grids/overview.md" },
+      ]},
+      { "canvod-vod" = [
+        { "Overview" = "packages/vod/overview.md" },
+      ]},
+      { "canvod-store" = [
+        { "Overview" = "packages/store/overview.md" },
+        { "Icechunk Storage" = "packages/store/icechunk.md" },
+        { "Storage Strategies" = "packages/store/storage-strategies.md" },
+      ]},
+      { "canvod-store-metadata" = [
+        { "Overview" = "packages/store-metadata/overview.md" },
+      ]},
+      { "canvod-viz" = [
+        { "Overview" = "packages/viz/overview.md" },
+      ]},
+      { "canvod-config" = [
+        { "Overview" = "packages/config/overview.md" },
+      ]},
+      { "canvod-utils" = [
+        { "Overview" = "packages/utils/overview.md" },
+      ]},
+      { "canvod-ops" = [
+        { "Overview" = "packages/ops/overview.md" },
+      ]},
+      { "canvod-preflight" = [
+        { "Naming Convention & Validation" = "packages/naming/overview.md" },
+      ]},
+      { "canvod-audit" = [
+        { "Overview" = "packages/audit/overview.md" },
+      ]},
+    ]},
   ]},
-
-  { "Packages" = [
-    { "canvod-readers" = [
-      { "Overview" = "packages/readers/overview.md" },
-      { "RINEX v3.04 Format" = "packages/readers/rinex-format.md" },
-      { "SBF Reader" = "packages/readers/sbf.md" },
-      { "SBF Field Decoding" = "packages/readers/sbf-decoding.md" },
-      { "Ephemeris Sources" = "packages/readers/ephemeris-sources.md" },
-      { "Satellite Catalog (IGS SINEX)" = "packages/readers/satellite-catalog.md" },
-      { "Reader Architecture" = "packages/readers/architecture.md" },
-      { "Extending Readers" = "packages/readers/extending.md" },
-    ]},
-    { "canvod-auxiliary" = [
-      { "Overview" = "packages/auxiliary/overview.md" },
-      { "Preprocessing Pipeline" = "packages/auxiliary/preprocessing.md" },
-      { "Interpolation Methods" = "packages/auxiliary/interpolation.md" },
-      { "Coordinate Systems" = "packages/auxiliary/coordinates.md" },
-      { "Product Registry" = "packages/auxiliary/products.md" },
-    ]},
-    { "canvod-grids" = [
-      { "Overview" = "packages/grids/overview.md" },
-    ]},
-    { "canvod-vod" = [
-      { "Overview" = "packages/vod/overview.md" },
-    ]},
-    { "canvod-store" = [
-      { "Overview" = "packages/store/overview.md" },
-      { "Icechunk Storage" = "packages/store/icechunk.md" },
-      { "Storage Strategies" = "packages/store/storage-strategies.md" },
-    ]},
-    { "canvod-store-metadata" = [
-      { "Overview" = "packages/store-metadata/overview.md" },
-    ]},
-    { "canvod-viz" = [
-      { "Overview" = "packages/viz/overview.md" },
-    ]},
-    { "canvod-utils" = [
-      { "Overview" = "packages/utils/overview.md" },
-    ]},
-    { "canvod-ops" = [
-      { "Overview" = "packages/ops/overview.md" },
-    ]},
-    { "canvod-virtualiconvname" = [
-      { "Overview" = "packages/naming/overview.md" },
-    ]},
-    { "canvod-audit" = [
-      { "Overview" = "packages/audit/overview.md" },
-    ]},
-  ]},
-
-  { "Notebooks" = "notebooks/index.md" },
 
   { "Development" = [
-    { "Getting Started" = "guides/getting-started.md" },
     { "Contributing" = "CONTRIBUTING.md" },
+    { "Contributor Setup" = "guides/contributor-setup.md" },
     { "Development Guide" = "guides/DEVELOPMENT.md" },
     { "Architecture & Design Patterns" = "guides/architecture-design.md" },
     { "Developing with Claude Code" = "guides/ai-development.md" },
     { "Build System" = "build-system.md" },
     { "Tooling" = "tooling.md" },
-    { "Configuration Guide" = "guides/configuration.md" },
-    { "Dask & Resource Management" = "guides/dask-resources.md" },
-    { "API Levels" = "guides/api-levels.md" },
-    { "Airflow Integration" = "guides/airflow.md" },
-    { "Diagnostics & Monitoring" = "guides/diagnostics.md" },
-  ]},
-
-  { "Release & Publishing" = [
-    { "Versioning" = "VERSIONING.md" },
-    { "Release Process" = "RELEASING.md" },
-    { "PyPI Setup" = "guides/PYPI_SETUP.md" },
-    { "Zenodo DOI" = "guides/ZENODO_SETUP.md" },
-    { "OIDC Authentication" = "guides/OIDC_EXPLAINED.md" },
-    { "Release Internals" = "guides/HOW_RELEASE_WORKS.md" },
-  ]},
-
-  { "Quality & Compliance" = [
-    { "FOSS Principles" = "FOSS_PRINCIPLES.md" },
-    { "FAIR Software Compliance" = "FAIR_IMPLEMENTATION_SUMMARY.md" },
-    { "OpenSSF Best Practices" = "OPENSSF_BADGE_GUIDE.md" },
-    { "Security Policy" = "../SECURITY.md" },
-  ]},
-
-  { "Legal" = [
-    { "Impressum & AI Disclosure" = "impressum.md" },
+    { "Conventions & Defaults" = "principles.md" },
+    { "Architecture" = [
+      { "Monorepo Structure" = "architecture.md" },
+      { "Namespace Packages" = "namespace-packages.md" },
+      { "Package Dependencies" = "dependencies.md" },
+    ]},
+    { "Release & Publishing" = [
+      { "Versioning" = "VERSIONING.md" },
+      { "Release Process" = "RELEASING.md" },
+      { "PyPI Setup" = "guides/PYPI_SETUP.md" },
+      { "Zenodo DOI" = "guides/ZENODO_SETUP.md" },
+      { "OIDC Authentication" = "guides/OIDC_EXPLAINED.md" },
+      { "Release Internals" = "guides/HOW_RELEASE_WORKS.md" },
+    ]},
+    { "Quality & Compliance" = [
+      { "FOSS Principles" = "FOSS_PRINCIPLES.md" },
+      { "FAIR Software Compliance" = "FAIR_IMPLEMENTATION_SUMMARY.md" },
+      { "OpenSSF Best Practices" = "OPENSSF_BADGE_GUIDE.md" },
+      { "Security Policy" = "../SECURITY.md" },
+    ]},
   ]},
 
   { "API Reference" = [
@@ -139,10 +139,14 @@ nav = [
     { "canvod.store" = "api/canvod-store.md" },
     { "canvod.store_metadata" = "api/canvod-store-metadata.md" },
     { "canvod.viz" = "api/canvod-viz.md" },
+    { "canvod.config" = "api/canvod-config.md" },
     { "canvod.utils" = "api/canvod-utils.md" },
     { "canvod.ops" = "api/canvod-ops.md" },
-    { "canvod.virtualiconvname" = "api/canvod-virtualiconvname.md" },
     { "canvod.audit" = "api/canvod-audit.md" },
+  ]},
+
+  { "Legal" = [
+    { "Impressum & AI Disclosure" = "impressum.md" },
   ]},
 ]
 

@@ -8,7 +8,7 @@ ical data.
 
 ### 2D Visualization (matplotlib)
 - **Publication-quality polar plots** with full control over styling
-- **Multiple grid type support**: equal-area, HTM, geodesic, HEALPix, Fibonacci
+- **Multiple grid type support**: equal-area, equal-angle, HTM, geodesic, Fibonacci
 - **Flexible colormaps** and styling options
 - **High-resolution export** for papers and presentations
 
@@ -137,7 +137,7 @@ fig, ax = viz.plot_2d(data=data, style=custom_style)
 # Use preset publication style
 fig, ax = viz.create_publication_figure(
     data=data,
-    title="VOD Distribution Over Rosalia Site",
+    title="VOD Distribution Over ExampleSite Site",
     save_path="paper_figure_3.png",
     dpi=600,
     colorbar_label='VOD'
@@ -221,9 +221,9 @@ fig = viz.plot_3d(data=data)
 ## Supported Grid Types
 
 - **Equal Area**: Latitude bands with equal solid angle
+- **Equal Angle**: Regular θ/φ spacing
 - **HTM**: Hierarchical Triangular Mesh
 - **Geodesic**: Subdivided icosahedron
-- **HEALPix**: Hierarchical Equal Area isoLatitude Pixelization
 - **Fibonacci**: Spiral point distribution
 
 ## API Reference
@@ -341,7 +341,7 @@ Climate and Environmental Remote Sensing Research Unit (CLIMERS)
 Department of Geodesy and Geoinformation
 TU Wien (Vienna University of Technology)
 
-Email: nicolas.bader@geo.tuwien.ac.at
+Email: support@canvodpy.eu
 Web: [https://www.tuwien.at/en/mg/geo/climers](https://www.tuwien.at/en/mg/geo/climers)
 
 ## Citation

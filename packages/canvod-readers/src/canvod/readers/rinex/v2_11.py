@@ -22,6 +22,7 @@ Classes:
 
 import hashlib
 import json
+import warnings
 from collections import Counter
 from datetime import UTC, datetime
 from itertools import pairwise
@@ -583,6 +584,11 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
     @model_validator(mode="after")
     def _post_init(self) -> Self:
         """Initialize derived state after validation."""
+        # PrivateAttr()-declared attributes are mutable even on frozen=True
+        # Pydantic models -- only public fields are frozen. ty's pydantic
+        # support doesn't model this and treats the assignment inside the
+        # validator that first sets them as establishing a read-only
+        # "property".
         self._header = Rnxv2Header.from_file(self.fpath)  # ty: ignore[invalid-assignment]
         self._signal_mapper = SignalIDMapper(  # ty: ignore[invalid-assignment]
             aggregate_glonass_fdma=self.aggregate_glonass_fdma,
@@ -616,7 +622,8 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
             lines = data.decode("utf-8", errors="replace").splitlines()
         self._file_hash = h.hexdigest()[:16]  # ty: ignore[invalid-assignment]
 
-        # Find line after END OF HEADER
+        # Find line after END OF HEADER (PrivateAttr, mutable despite
+        # frozen=True -- see _post_init's comment above)
         self._header_end_line = 0  # ty: ignore[invalid-assignment]
         for i, line in enumerate(lines):
             if "END OF HEADER" in line:
@@ -1317,9 +1324,9 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
         keep_sids = cast(list[str] | None, kwargs.pop("keep_sids", None))
 
         if keep_data_vars is None:
-            from canvod.utils.config import load_config
+            from canvod.config import load_config
 
-            keep_data_vars = load_config().processing.processing.keep_rnx_vars
+            keep_data_vars = load_config().processing.params.keep_gnss_observables
 
         ds = self.create_rinex_netcdf_with_signal_id()
 
@@ -1351,9 +1358,9 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
                 ds[name] = ds[name].astype(object)
 
         if outname:
-            from canvod.utils.config import load_config as _load_config
+            from canvod.config import load_config as _load_config
 
-            comp = _load_config().processing.compression
+            comp = _load_config().processing.netcdf_compression
             encoding = {
                 var: {"zlib": comp.zlib, "complevel": comp.complevel}
                 for var in ds.data_vars
@@ -1503,7 +1510,25 @@ def _normalize_sv(sv_str: str) -> str:
 
 
 def _register_factory() -> None:
-    """Register Rnxv2Obs with ReaderFactory on module import."""
+    """Dead code, kept only to emit a deprecation notice before removal.
+
+    ``canvod.readers.base`` has no ``ReaderFactory`` -- the import below
+    always raises ``ImportError`` and is silently swallowed, so this has
+    never actually registered anything. ``Rnxv2Obs`` is registered for
+    real by ``canvodpy``'s own ``_register_builtin_components()`` under
+    the name ``"rinex2"`` (not ``"rinex_v2"``); canvod-readers cannot
+    import ``canvodpy.factories.ReaderFactory`` directly since canvodpy
+    depends on canvod-readers, not the other way around.
+    """
+    warnings.warn(
+        "Rnxv2Obs._register_factory() is dead code: canvod.readers.base "
+        "has no ReaderFactory, so this has always silently registered "
+        "nothing. Rnxv2Obs is actually registered as 'rinex2' via "
+        "canvodpy's _register_builtin_components(). This function will "
+        "be removed in a future release.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     import contextlib
 
     with contextlib.suppress(ImportError):

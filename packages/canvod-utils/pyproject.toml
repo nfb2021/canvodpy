@@ -1,27 +1,17 @@
 [project]
 name = "canvod-utils"
 version = "0.3.0"
-description = "Configuration models and shared utilities for canVODpy"
+description = "Shared utilities and diagnostics for canVODpy"
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [
-    {name = "Nicolas François Bader", email = "nicolas.bader@geo.tuwien.ac.at"}
+    {name = "Nicolas François Bader", email = "support@canvodpy.eu"}
 ]
 license = {text = "Apache-2.0"}
 
 dependencies = [
     "pydantic>=2.0",
-    "pydantic-settings>=2.0",
-    "pyyaml>=6.0",
-    "typer>=0.9",
-    "rich>=13.0",
-    "email-validator>=2.0",
-    "tenacity>=8.2.0",
-    "structlog>=24.1.0",
 ]
-
-[project.scripts]
-canvodpy = "canvod.utils.config.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/nfb2021/canvodpy"

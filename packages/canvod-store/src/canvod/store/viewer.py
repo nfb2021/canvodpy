@@ -379,12 +379,12 @@ class IcechunkStoreViewer:
         Resolution order:
         1. ``source_format`` root attr (set by GNSSReader via orchestrator)
         2. Presence of ``metadata/sbf_obs`` group (legacy detection)
-        3. Default: "RINEX v3.04" for rinex_store, "VOD" for vod_store
+        3. Default: "RINEX v3.04" for gnss_store, "VOD" for vod_store
         """
         store_type = self.store.store_type
         if store_type == "vod_store":
             return "VOD"
-        if store_type == "rinex_store":
+        if store_type == "gnss_store":
             # 1. Check root-level source_format attr
             fmt = self.store.source_format
             if fmt:
@@ -427,6 +427,12 @@ class IcechunkStoreViewer:
         if group_name == "grids":
             return self._build_grids_section(branch)
 
+        # VOD stores nest as {model}/{analysis_name} — the top-level group
+        # is a calculator model with no dataset of its own, only nested
+        # analysis groups. Same pattern as _build_grids_section above.
+        if self.store.store_type == "vod_store":
+            return self._build_vod_model_section(branch, group_name)
+
         group_id = f"group-{uuid.uuid4()}"
 
         # Get dimensions info
@@ -456,6 +462,74 @@ class IcechunkStoreViewer:
             </label>
             <div class="group-content">
                 {self._render_group_content(branch, group_name)}
+            </div>
+        </div>
+        """
+
+    def _build_vod_model_section(self, branch: str, model_name: str) -> str:
+        """Build HTML for a VOD calculator model, enumerating its analyses.
+
+        A model group (e.g. ``tau_omega_zeroth_order``) has no dataset of
+        its own — only nested ``{analysis_name}`` groups, each of which
+        does have a direct dataset + metadata table. Mirrors
+        ``_build_grids_section``'s one-level-deeper enumeration.
+        """
+        model_id = f"group-{uuid.uuid4()}"
+
+        analysis_names: list[str] = []
+        try:
+            with self.store.readonly_session(branch) as session:
+                import zarr
+
+                root = cast(Any, zarr.open_group(session.store, mode="r"))
+                if model_name in root:
+                    analysis_names = list(root[model_name].group_keys())
+        except Exception:
+            pass
+
+        if not analysis_names:
+            return f"""
+            <div class="group-section">
+                <input id="{model_id}" type="checkbox" />
+                <label for="{model_id}" class="group-toggle">
+                    🧮 <strong>{escape(model_name)}</strong>
+                    <span class="count-badge">(empty)</span>
+                </label>
+                <div class="group-content">
+                    <div class="icechunk-empty">No analyses stored</div>
+                </div>
+            </div>
+            """
+
+        analysis_label = "analysis" if len(analysis_names) == 1 else "analyses"
+
+        analysis_sections = []
+        for name in sorted(analysis_names):
+            analysis_id = f"group-{uuid.uuid4()}"
+            full_group = f"{model_name}/{name}"
+            analysis_sections.append(f"""
+            <div class="group-section">
+                <input id="{analysis_id}" type="checkbox" />
+                <label for="{analysis_id}" class="group-toggle">
+                    📁 <strong>{escape(name)}</strong>
+                </label>
+                <div class="group-content">
+                    {self._render_group_content(branch, full_group)}
+                </div>
+            </div>
+            """)
+
+        return f"""
+        <div class="group-section">
+            <input id="{model_id}" type="checkbox" />
+            <label for="{model_id}" class="group-toggle">
+                🧮 <strong>{escape(model_name)}</strong>
+                <span class="count-badge">
+                    ({len(analysis_names)} {analysis_label})
+                </span>
+            </label>
+            <div class="group-content">
+                {"".join(analysis_sections)}
             </div>
         </div>
         """
@@ -784,18 +858,23 @@ class IcechunkStoreViewer:
                 self._build_group_section(branch, group) for group in groups
             )
 
+            is_vod = self.store.store_type == "vod_store"
+            noun_singular = "model" if is_vod else "receiver"
+            noun_plural = "models" if is_vod else "receivers"
+
             if not groups:
                 groups_html = (
-                    '<div class="icechunk-empty">📭 No receivers in this branch</div>'
+                    f'<div class="icechunk-empty">'
+                    f"📭 No {noun_plural} in this branch</div>"
                 )
 
             # Default to checked for "main" branch
             checked = " checked" if branch == "main" else ""
 
-            # Separate receivers from grids for the count badge
+            # Separate receivers/models from grids for the count badge
             has_grids = "grids" in groups
             receiver_count = len(groups) - (1 if has_grids else 0)
-            receiver_label = "receiver" if receiver_count == 1 else "receivers"
+            receiver_label = noun_singular if receiver_count == 1 else noun_plural
 
             badge_parts = []
             if receiver_count > 0:
@@ -867,7 +946,12 @@ class IcechunkStoreViewer:
             site_name = self.store.site_name
 
             branch_label = "branch" if summary["branches"] == 1 else "branches"
-            receiver_label = "receiver" if summary["groups"] == 1 else "receivers"
+            is_vod = self.store.store_type == "vod_store"
+            receiver_label = (
+                ("model" if is_vod else "receiver")
+                if summary["groups"] == 1
+                else ("models" if is_vod else "receivers")
+            )
 
             display_type = summary.get("display_type", summary["store_type"])
             header = f"""

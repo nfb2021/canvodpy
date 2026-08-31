@@ -1,21 +1,16 @@
-"""Resource management for pipeline processing.
-
-Provides Dask LocalCluster lifecycle management, per-worker resource
-initialization via a WorkerPlugin, and advisory memory monitoring.
-"""
+"""Resource monitoring for pipeline processing."""
 
 from __future__ import annotations
 
 import os
-import platform
-from typing import TYPE_CHECKING, Any, cast
+import threading
+import time
+from pathlib import Path
 
 import psutil
 
 from canvodpy.logging import get_logger
-
-if TYPE_CHECKING:
-    from dask.distributed import Client
+from canvodpy.logging.run_context import get_run_id, set_run_id
 
 logger = get_logger(__name__)
 
@@ -24,7 +19,7 @@ class MemoryMonitor:
     """Monitor system memory and log advisory snapshots.
 
     Used by ``PipelineOrchestrator`` for batch-level memory logging.
-    Actual memory enforcement is handled by Dask's nanny process.
+    Enforcement is advisory only; worker processes are not memory-capped.
 
     Parameters
     ----------
@@ -63,240 +58,169 @@ class MemoryMonitor:
         )
 
 
-try:
-    from dask.distributed import Client, LocalCluster
-    from distributed.diagnostics.plugin import WorkerPlugin
+class ResourceSampler:
+    """Periodic background sampler for memory/CPU/disk I/O.
 
-    _HAS_DISTRIBUTED = True
-except ImportError:  # pragma: no cover
-    _HAS_DISTRIBUTED = False
-
-
-class ResourceInitPlugin:
-    """Dask WorkerPlugin that applies CPU affinity and nice priority.
-
-    Automatically re-applied when a worker is restarted by the nanny
-    (e.g. after an OOM kill).
+    ``MemoryMonitor.log_memory_stats`` only snapshots once per batch. This
+    runs as a daemon thread emitting one ``resource_sample`` event every
+    ``interval_seconds`` for the whole run (including time spent outside
+    batch boundaries, e.g. aux data fetch/interpolation), so a wall-clock
+    slowdown seen in stage_timing events can be correlated against actual
+    resource pressure instead of assumed (dev/todo_later.md
+    perf-degradation investigation, 2026-07-14).
 
     Parameters
     ----------
-    cpu_affinity : list[int] | None
-        CPU core IDs to pin workers to. None means no restriction.
-    nice_value : int
-        Process nice value (0=normal, 19=lowest priority).
-
+    interval_seconds : float
+        Seconds between samples.
     """
 
-    name = "resource-init"
+    def __init__(self, interval_seconds: float = 30.0) -> None:
+        self.interval_seconds = interval_seconds
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._run_id = get_run_id()
 
-    def __init__(
-        self,
-        cpu_affinity: list[int] | None = None,
-        nice_value: int = 0,
-    ) -> None:
-        self.cpu_affinity = cpu_affinity
-        self.nice_value = nice_value
+    def start(self) -> None:
+        """Start sampling in a daemon thread. Safe to call once per run."""
+        self._run_id = get_run_id()
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=self._run_loop, name="resource-sampler", daemon=True
+        )
+        self._thread.start()
 
-    def setup(self, worker: object) -> None:
-        """Called when a worker starts (or restarts after nanny kill)."""
-        from canvodpy.logging import get_logger
+    def stop(self, timeout: float = 5.0) -> None:
+        """Signal the sampler thread to stop and wait for it to exit."""
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=timeout)
+            self._thread = None
 
-        log = get_logger(__name__)
+    def _run_loop(self) -> None:
+        # Contextvars don't cross thread boundaries automatically -- carry
+        # run_id in explicitly, matching _worker_init_with_run_id's pattern
+        # for loky workers (pipeline.py).
+        if self._run_id:
+            set_run_id(self._run_id)
 
-        if self.cpu_affinity is not None:
-            if platform.system() == "Linux":
-                sched_setaffinity = getattr(os, "sched_setaffinity", None)
-                if callable(sched_setaffinity):
-                    sched_setaffinity(0, self.cpu_affinity)
-                    log.info(
-                        "CPU affinity set to %s on worker %s",
-                        self.cpu_affinity,
-                        getattr(worker, "name", "unknown"),
-                    )
-                else:
-                    log.warning("sched_setaffinity unavailable on this platform build")
-            else:
-                log.warning(
-                    "cpu_affinity is only supported on Linux, skipping on %s",
-                    platform.system(),
-                )
+        proc = psutil.Process()
+        try:
+            prev_io = psutil.disk_io_counters()
+        except Exception:
+            prev_io = None
+        sample_index = 0
 
-        if self.nice_value > 0:
+        while not self._stop.wait(self.interval_seconds):
+            sample_index += 1
+            t0 = time.perf_counter()
             try:
-                os.setpriority(os.PRIO_PROCESS, 0, self.nice_value)
-                log.info(
-                    "Nice priority set to %d on worker %s",
-                    self.nice_value,
-                    getattr(worker, "name", "unknown"),
+                mem = psutil.virtual_memory()
+                main_rss_gb = proc.memory_info().rss / (1024**3)
+
+                children_rss_gb = 0.0
+                try:
+                    for child in proc.children(recursive=True):
+                        try:
+                            children_rss_gb += child.memory_info().rss / (1024**3)
+                        except psutil.NoSuchProcess, psutil.AccessDenied:
+                            continue
+                except Exception:
+                    pass
+
+                read_mb = write_mb = None
+                try:
+                    io = psutil.disk_io_counters()
+                    if io is not None and prev_io is not None:
+                        read_mb = (io.read_bytes - prev_io.read_bytes) / (1024**2)
+                        write_mb = (io.write_bytes - prev_io.write_bytes) / (1024**2)
+                    prev_io = io
+                except Exception:
+                    pass
+
+                logger.info(
+                    "resource_sample",
+                    duration_seconds=round(time.perf_counter() - t0, 4),
+                    sample_index=sample_index,
+                    available_gb=round(mem.available / (1024**3), 2),
+                    used_percent=round(mem.percent, 1),
+                    main_rss_gb=round(main_rss_gb, 3),
+                    children_rss_gb=round(children_rss_gb, 3),
+                    cpu_percent=psutil.cpu_percent(interval=None),
+                    disk_read_mb=round(read_mb, 2) if read_mb is not None else None,
+                    disk_write_mb=round(write_mb, 2) if write_mb is not None else None,
                 )
-            except (OSError, PermissionError) as e:
-                log.warning(
-                    "Failed to set nice priority to %d: %s",
-                    self.nice_value,
-                    e,
-                )
+            except Exception:
+                logger.debug("resource_sample_failed", exc_info=True)
 
 
-if _HAS_DISTRIBUTED:
-    # Register as a proper WorkerPlugin subclass at runtime so that the
-    # class still loads when distributed is not installed.
-    _ResourceInitPluginClass = type(
-        "ResourceInitPlugin",
-        (WorkerPlugin, ResourceInitPlugin),
-        dict(ResourceInitPlugin.__dict__),
-    )
-else:
-    _ResourceInitPluginClass = ResourceInitPlugin
+# Anchored to the user's home directory, not Path.cwd() -- `canvodpy run`
+# and `canvodpy store maintain-due` are typically launched from different
+# contexts (interactive shell vs. cron/systemd, each with its own working
+# directory), and a cwd-relative default would silently produce two
+# different paths, defeating the same-host concurrency check with no
+# error. Same-user, same-host is still required (see is_pipeline_running's
+# docstring for the network-mounted-store caveat this doesn't cover).
+DEFAULT_RUN_PID_FILE = Path.home() / ".cache" / "canvodpy" / "run.pid"
 
 
-class DaskClusterManager:
-    """Manages a Dask ``LocalCluster`` and ``Client`` lifecycle.
+def is_pipeline_running(pid_file: Path = DEFAULT_RUN_PID_FILE) -> bool:
+    """Check whether a `canvodpy run` process is currently active.
+
+    Used by ``canvodpy store maintain-due`` (a cron-safe, non-interactive
+    entry point for scheduled Icechunk expiration/GC) to defend against
+    running maintenance concurrently with an active pipeline write -- both
+    are explicitly documented as unsafe to overlap (see
+    ``MyIcechunkStore.maintenance()``'s docstring). Same-host only: this
+    cannot see a pipeline run on a different host writing to the same
+    network-mounted (CIFS/NFS) store -- that case must be kept apart by
+    the operator (e.g. scheduling maintenance in a known-idle window).
+
+    Liveness is checked via the recorded PID, not just the file's
+    existence, so a stale file left behind by a hard crash (SIGKILL, OOM)
+    correctly reads as "not running" without needing separate stale-lock
+    cleanup.
 
     Parameters
     ----------
-    n_workers : int | None
-        Number of worker processes. ``None`` lets Dask auto-detect
-        (defaults to ``os.cpu_count()``).
-    memory_limit_per_worker : str | float
-        Per-worker memory limit. ``"auto"`` lets Dask choose
-        (system RAM / n_workers). A float is interpreted as bytes.
-    cpu_affinity : list[int] | None
-        CPU core IDs to pin workers to.
-    nice_priority : int
-        Process nice value for workers.
-    threads_per_worker : int | None
-        Threads per Dask worker process. ``None`` defaults to 1.
+    pid_file : Path
+        Location written by :class:`PipelineRunLock`.
 
+    Returns
+    -------
+    bool
+        True if the recorded PID belongs to a live process.
+    """
+    if not pid_file.exists():
+        return False
+    try:
+        pid = int(pid_file.read_text().strip())
+    except ValueError, OSError:
+        return False
+    return psutil.pid_exists(pid)
+
+
+class PipelineRunLock:
+    """Context manager marking a `canvodpy run` invocation as active.
+
+    Writes this process's PID to ``pid_file`` on entry, removes it on
+    clean exit. Does not prevent concurrent pipeline runs (loky/dask
+    already have their own resource contention if that's attempted) --
+    it exists solely as a same-host signal for
+    :func:`is_pipeline_running`, so a scheduled maintenance job can skip
+    itself while a pipeline write is in progress.
     """
 
-    def __init__(
-        self,
-        n_workers: int | None = None,
-        memory_limit_per_worker: str | float = "auto",
-        cpu_affinity: list[int] | None = None,
-        nice_priority: int = 0,
-        threads_per_worker: int | None = None,
-        scheduler_address: str | None = None,
-    ) -> None:
-        if not _HAS_DISTRIBUTED:
-            msg = (
-                "dask.distributed is required for DaskClusterManager. "
-                "Install with: pip install 'dask[distributed]'"
-            )
-            raise ImportError(msg)
+    def __init__(self, pid_file: Path = DEFAULT_RUN_PID_FILE) -> None:
+        self.pid_file = pid_file
 
-        self._scheduler_address = scheduler_address
-
-        # Cap BLAS/OpenMP thread counts before starting workers so that
-        # worker subprocesses inherit the env vars.  Without this, numpy/
-        # scipy can spawn os.cpu_count() threads per worker, multiplying
-        # actual CPU use by (n_workers × blas_threads).
-        _effective_threads = threads_per_worker if threads_per_worker is not None else 1
-        _thread_str = str(_effective_threads)
-        for _var in (
-            "OMP_NUM_THREADS",
-            "MKL_NUM_THREADS",
-            "OPENBLAS_NUM_THREADS",
-            "NUMEXPR_NUM_THREADS",
-            "VECLIB_MAXIMUM_THREADS",
-        ):
-            if _var not in os.environ:
-                os.environ[_var] = _thread_str
-
-        if scheduler_address is not None:
-            # Connect to an existing scheduler — do NOT create a LocalCluster.
-            # Resource caps (n_workers, memory, affinity) are properties of the
-            # remote cluster, not configurable from here.
-            self._cluster = None
-            self._client = Client(address=scheduler_address)
-            logger.info(
-                "dask_cluster_remote",
-                scheduler_address=scheduler_address,
-            )
-        else:
-            cluster_kwargs: dict = {
-                "threads_per_worker": threads_per_worker
-                if threads_per_worker is not None
-                else 1,
-                "memory_limit": memory_limit_per_worker,
-                "dashboard_address": ":0",
-            }
-            if n_workers is not None:
-                cluster_kwargs["n_workers"] = n_workers
-
-            self._cluster = LocalCluster(**cluster_kwargs)
-            self._client = Client(self._cluster)
-
-            # Ensure the local cluster is shut down when the process exits
-            # (covers SIGTERM, uncaught exceptions, and Airflow task timeouts
-            # that bypass __exit__).  atexit handlers run before interpreter
-            # shutdown — workers are terminated cleanly instead of becoming
-            # orphans that linger until Dask's idle timeout (~30 min).
-            import atexit
-
-            atexit.register(self.close)
-
-            # Only register resource init plugin if affinity or nice is set
-            if cpu_affinity is not None or nice_priority > 0:
-                plugin_cls = cast(Any, _ResourceInitPluginClass)
-                plugin = plugin_cls(
-                    cpu_affinity=cpu_affinity,
-                    nice_value=nice_priority,
-                )
-                self._client.register_plugin(plugin)
-
-        self._closed = False
-        self.log_cluster_info(threads_per_worker=threads_per_worker)
-
-    @property
-    def client(self) -> Client:
-        """The Dask distributed client."""
-        return self._client
-
-    def log_cluster_info(self, threads_per_worker: int | None = None) -> None:
-        """Log cluster configuration details."""
-        info = self._client.scheduler_info()
-        workers = info.get("workers", {})
-        n_workers = len(workers)
-
-        # Get memory limit from first worker (all workers have same limit)
-        mem_limit = "unknown"
-        if workers:
-            first_worker = next(iter(workers.values()))
-            mem_bytes = first_worker.get("memory_limit", 0)
-            if mem_bytes:
-                mem_limit = f"{mem_bytes / (1024**3):.1f} GB"
-
-        dashboard = (
-            self._cluster.dashboard_link
-            if self._cluster is not None
-            else "n/a (remote)"
-        )
-        logger.info(
-            "dask_cluster_started",
-            cluster_type="remote" if self._scheduler_address else "local",
-            scheduler_address=self._scheduler_address or "auto",
-            n_workers=n_workers,
-            threads_per_worker=threads_per_worker
-            if threads_per_worker is not None
-            else 1,
-            memory_limit_per_worker=mem_limit,
-            dashboard_url=dashboard,
-        )
-
-    def close(self) -> None:
-        """Shut down client and cluster."""
-        if self._closed:
-            return
-        self._closed = True
-        logger.info("dask_cluster_shutting_down")
-        self._client.close()
-        if self._cluster is not None:
-            self._cluster.close()
-        logger.info("dask_cluster_stopped")
-
-    def __enter__(self) -> DaskClusterManager:
+    def __enter__(self) -> PipelineRunLock:
+        self.pid_file.parent.mkdir(parents=True, exist_ok=True)
+        self.pid_file.write_text(str(os.getpid()))
         return self
 
-    def __exit__(self, *exc: object) -> None:
-        self.close()
+    def __exit__(self, *exc_info: object) -> None:
+        try:
+            self.pid_file.unlink()
+        except FileNotFoundError:
+            pass

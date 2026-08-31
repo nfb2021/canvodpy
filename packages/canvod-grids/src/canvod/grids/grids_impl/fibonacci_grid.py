@@ -5,6 +5,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 
+from canvod.grids._internal import phi_bbox
 from canvod.grids.core.grid_builder import BaseGridBuilder
 from canvod.grids.core.grid_types import GridType
 
@@ -61,15 +62,23 @@ class FibonacciBuilder(BaseGridBuilder):
 
        where ``N = 2 × n_points`` and ``φ_golden = (1+√5)/2``.  The
        ``+0.5`` offset avoids placing points exactly at the poles.
-    2. **Hemisphere filter** – points with ``θ > π/2 − cutoff_theta``
-       are discarded.
-    3. **Spherical Voronoi tessellation** –
-       ``scipy.spatial.SphericalVoronoi`` computes the Voronoi diagram
-       on the unit sphere.  Regions are sorted so that vertices appear
-       in counter-clockwise order around each cell.
+    2. **Spherical Voronoi tessellation** –
+       ``scipy.spatial.SphericalVoronoi`` computes the Voronoi diagram on
+       the *full* sphere (both hemispheres). Regions are sorted so that
+       vertices appear in counter-clockwise order around each cell.
+       Tessellating the full sphere (rather than hemisphere-only points)
+       is required for correctness: with no sites in the southern
+       hemisphere, cells along the horizon would have no southern
+       neighbour to bound them and would balloon out to cover the entire
+       (empty) opposite hemisphere.
+    3. **Hemisphere filter** – of the resulting cells, only those whose
+       *generating point* has ``θ ≤ π/2 − cutoff_theta`` are kept.
     4. **Bounding boxes** – axis-aligned bounding boxes in (phi, theta)
-       are computed from the Voronoi vertex coordinates.  These are
-       approximations only (see caveat above).
+       are computed from the Voronoi vertex coordinates, using a
+       seam-aware min/max so cells straddling ``phi = 0/2π`` get their
+       true (narrow) angular extent instead of a near-full-circle span.
+       These bounding boxes are still approximations only (see caveat
+       above).
 
     Parameters
     ----------
@@ -169,29 +178,26 @@ class FibonacciBuilder(BaseGridBuilder):
             ``(n_points, 3)``).
 
         """
-        points_xyz = self._generate_fibonacci_sphere(self.n_points * 2)
+        points_xyz_full = self._generate_fibonacci_sphere(self.n_points * 2)
 
         # Convert to spherical
-        x, y, z = points_xyz[:, 0], points_xyz[:, 1], points_xyz[:, 2]
-        theta = np.arccos(np.clip(z, -1, 1))
-        phi = np.arctan2(y, x)
-        phi = np.mod(phi, 2 * np.pi)
+        x, y, z = points_xyz_full[:, 0], points_xyz_full[:, 1], points_xyz_full[:, 2]
+        theta_full = np.arccos(np.clip(z, -1, 1))
+        phi_full = np.mod(np.arctan2(y, x), 2 * np.pi)
 
-        # Filter to northern hemisphere
-        mask = (theta <= (np.pi / 2 - self.cutoff_theta_rad)) & (theta >= 0)
-
-        phi = phi[mask]
-        theta = theta[mask]
-        points_xyz = points_xyz[mask]
-
-        if len(points_xyz) < 4:
-            raise ValueError("Not enough points in hemisphere for Voronoi tessellation")
-
-        # Compute spherical Voronoi tessellation
+        # Tessellate the FULL sphere point set, not just the hemisphere.
+        # SphericalVoronoi always tessellates the whole unit sphere; seeding
+        # it with hemisphere-only points leaves no sites in the southern
+        # hemisphere, so the boundary ring's cells extend uncontested all
+        # the way to the south pole (solid angles then sum to 4*pi instead
+        # of 2*pi). Keeping the real southern-hemisphere lattice points as
+        # Voronoi sites bounds the near-horizon cells correctly -- only
+        # which CELLS to keep is filtered by hemisphere, after
+        # tessellation, not which points seed the diagram.
         try:
             from scipy.spatial import SphericalVoronoi
 
-            sv = SphericalVoronoi(points_xyz, radius=1, threshold=1e-10)
+            sv = SphericalVoronoi(points_xyz_full, radius=1, threshold=1e-10)
             sv.sort_vertices_of_regions()
 
         except ImportError as e:
@@ -199,14 +205,20 @@ class FibonacciBuilder(BaseGridBuilder):
                 "scipy required for Fibonacci grid. Install: pip install scipy"
             ) from e
 
+        mask = theta_full <= (np.pi / 2 - self.cutoff_theta_rad)
+        kept_indices = np.nonzero(mask)[0]
+
+        if len(kept_indices) < 4:
+            raise ValueError("Not enough points in hemisphere for Voronoi tessellation")
+
+        phi = phi_full[mask]
+        theta = theta_full[mask]
+        points_xyz = points_xyz_full[mask]
+
         # Create cells
         cells = []
-        for point_idx, (p_phi, p_theta) in enumerate(zip(phi, theta)):
+        for point_idx, p_phi, p_theta in zip(kept_indices, phi, theta):
             region_vertices = sv.regions[point_idx]
-
-            if -1 in region_vertices:
-                continue
-
             region_coords = sv.vertices[region_vertices]
 
             # Convert region vertices to spherical
@@ -217,14 +229,15 @@ class FibonacciBuilder(BaseGridBuilder):
             )
             rv_theta = np.arccos(np.clip(rv_z, -1, 1))
             rv_phi = np.arctan2(rv_y, rv_x)
-            rv_phi = np.mod(rv_phi, 2 * np.pi)
+
+            phi_min, phi_max = phi_bbox(rv_phi)
 
             cells.append(
                 {
                     "phi": p_phi,
                     "theta": p_theta,
-                    "phi_min": np.min(rv_phi),
-                    "phi_max": np.max(rv_phi),
+                    "phi_min": phi_min,
+                    "phi_max": phi_max,
                     "theta_min": np.min(rv_theta),
                     "theta_max": np.max(rv_theta),
                     "voronoi_region": (

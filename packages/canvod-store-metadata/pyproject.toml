@@ -3,10 +3,10 @@ name = "canvod-store-metadata"
 version = "0.3.0"
 description = "FAIR-compliant metadata management for canVODpy stores"
 authors = [
-    {name = "Nicolas François Bader", email = "nicolas.bader@geo.tuwien.ac.at"},
+    {name = "Nicolas François Bader", email = "support@canvodpy.eu"},
 ]
 maintainers = [
-    {name = "Climate and Environmental Remote Sensing (CLIMERS)", email = "nicolas.bader@geo.tuwien.ac.at"},
+    {name = "Climate and Environmental Remote Sensing (CLIMERS)", email = "support@canvodpy.eu"},
 ]
 readme = "README.md"
 requires-python = ">=3.14"
@@ -21,10 +21,10 @@ classifiers = [
 
 dependencies = [
     "pydantic>=2.0",
-    "icechunk>=1.1.5",
+    "icechunk>=2.0.0",
     "zarr>=3.1.2",
     "polars>=1.0.0",
-    "canvod-utils>=0.1.0",
+    "canvod-config>=0.1.0",
 ]
 
 [dependency-groups]
@@ -36,7 +36,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-canvod-utils = { workspace = true }
+canvod-config = { workspace = true }
 
 [project.urls]
 Homepage = "https://github.com/nfb2021/canvodpy"

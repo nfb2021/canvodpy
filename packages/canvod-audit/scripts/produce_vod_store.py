@@ -10,7 +10,7 @@ obs store and the desired vod store name, e.g.::
 
     storage:
       stores_root_dir: /Volumes/ExtremePro/canvod_audit_output/tier0_rinex
-      rinex_store_name: canvodpy_RINEX_store
+      gnss_store_name: canvodpy_RINEX_store
       vod_store_name: canvodpy_VOD_store
 
 The obs store must already exist (run the appropriate produce_*_store.py
@@ -35,8 +35,8 @@ DATE = "2025001"
 if __name__ == "__main__":
     site = Site(SITE)
 
-    canopy_data = site.rinex_store.read_group(CANOPY, date=DATE)
-    ref_data = site.rinex_store.read_group(REFERENCE, date=DATE)
+    canopy_data = site.gnss_store.read_group(CANOPY, date=DATE)
+    ref_data = site.gnss_store.read_group(REFERENCE, date=DATE)
 
     vod_results = TauOmegaZerothOrder.from_datasets(canopy_data, ref_data)
 

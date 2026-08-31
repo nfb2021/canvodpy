@@ -2,12 +2,11 @@
 
 This module contains only true physical/technical constants that should
 never change. User-configurable settings have been moved to the configuration
-system (canvod.utils.config).
+system (canvod.config).
 
 Removed and moved to config:
-- KEEP_RNX_VARS → processing.keep_rnx_vars
+- KEEP_RNX_VARS → processing.keep_gnss_observables
 - COMPRESSION → compression.{zlib, complevel}
-- AGGREGATE_GLONASS_FDMA → processing.aggregate_glonass_fdma
 - AUTHOR, EMAIL, etc. → metadata.{author, email, ...}
 - SOFTWARE → canvod.utils._meta.SOFTWARE_ATTRS
 """
@@ -25,7 +24,7 @@ UREG: pint.UnitRegistry = pint.get_application_registry()
 if "dBHz" not in UREG:
     UREG.define("dBHz = 10 * log10(hertz)")
 
-# DEPRECATED: Use canvod.virtualiconvname.patterns.BUILTIN_PATTERNS instead.
+# DEPRECATED: Use canvod.filemap.patterns.BUILTIN_PATTERNS instead.
 # These are kept only for backward compatibility with DataDirMatcher.
 FORMAT_GLOB_PATTERNS: dict[str, tuple[str, ...]] = {
     "rinex3": ("*.[0-9][0-9]o", "*.O", "*.rnx"),

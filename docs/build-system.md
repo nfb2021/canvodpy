@@ -77,7 +77,7 @@ version         = "0.1.0"
 description     = "GNSS data format readers for canVODpy"
 readme          = "README.md"
 license         = {text = "Apache-2.0"}
-authors         = [{name = "Nicolas Bader", email = "nicolas.bader@geo.tuwien.ac.at"}]
+authors         = [{name = "Nicolas Bader", email = "support@canvodpy.eu"}]
 requires-python = ">=3.14"
 keywords        = ["gnss", "rinex", "geodesy", "vod"]
 

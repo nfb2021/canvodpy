@@ -47,6 +47,79 @@ if TYPE_CHECKING:
     from canvodpy.api import Site
 
 
+def ensure_vod_store_metadata(site: Site, calculator_name: str) -> None:
+    """Write or update rich store metadata for a site's VOD store.
+
+    VOD writes never called ``collect_metadata()``/``write_metadata()``
+    before this — every VOD store showed "No metadata found" (see
+    ``canvod.store_metadata``). Wired the same way ``processor.py`` does
+    for RINEX stores (write once on first use; on later calls, re-snapshot
+    the config and record drift rather than silently freezing the config
+    section at whatever was true on the very first write). Best-effort:
+    swallows failures so a metadata problem never blocks the actual VOD
+    write. See dev/todo_later.md §29 item 4.
+    """
+    log = get_logger(__name__).bind(site=site.name, calculator=calculator_name)
+    try:
+        from canvod.config import load_config
+        from canvod.store_metadata import (
+            collect_config_snapshot,
+            collect_metadata,
+            metadata_exists,
+            read_metadata,
+            update_metadata,
+            write_metadata,
+        )
+
+        config = load_config()
+        site_cfg = config.sites.sites.get(site.name)
+        if site_cfg is None:
+            return
+
+        store_path = site._site.vod_store.store_path
+
+        if not metadata_exists(store_path):
+            meta = collect_metadata(
+                config=config,
+                site_name=site.name,
+                site_config=site_cfg,
+                store_type="vod_store",
+                source_format=calculator_name,
+                store_path=store_path,
+            )
+            write_metadata(store_path, meta)
+            log.info("vod_store_metadata_written")
+        else:
+            from datetime import UTC
+            from datetime import datetime as _datetime
+
+            now = _datetime.now(UTC).isoformat()
+            existing_meta = read_metadata(store_path)
+            new_snapshot = collect_config_snapshot(config)
+
+            history_entries = [f"{now}: VOD write ({calculator_name})"]
+            updates: dict[str, object] = {"temporal.updated": now}
+
+            drifted = new_snapshot.config_hash != existing_meta.config.config_hash
+            if drifted:
+                old_hash = (existing_meta.config.config_hash or "unknown")[:12]
+                new_hash = (new_snapshot.config_hash or "unknown")[:12]
+                history_entries.append(
+                    f"{now}: Config changed ({old_hash} -> {new_hash})"
+                )
+                updates["config"] = new_snapshot.model_dump(mode="json")
+
+            updates["summaries.history"] = [
+                *existing_meta.summaries.history,
+                *history_entries,
+            ]
+
+            update_metadata(store_path, updates)
+            log.info("vod_store_metadata_updated", config_drift_detected=drifted)
+    except Exception:
+        log.debug("vod_store_metadata_write_failed", exc_info=True)
+
+
 class VodComputer:
     """Helper for VOD computation with explicit inline and bulk strategies.
 
@@ -59,7 +132,7 @@ class VodComputer:
         Future calculators register via ``VODFactory.register()``.
     rechunk : dict, optional
         Chunk specification for VOD output before writing.
-        Default: ``{"epoch": 34560, "sid": -1}``.
+        Default: ``{"epoch": 17280, "sid": -1}``.
     """
 
     def __init__(
@@ -70,7 +143,7 @@ class VodComputer:
     ) -> None:
         self._site = site
         self._calculator_name = calculator
-        self._rechunk = rechunk or {"epoch": 34560, "sid": -1}
+        self._rechunk = rechunk or {"epoch": 17280, "sid": -1}
         self.log = get_logger(__name__).bind(site=site.name, calculator=calculator)
 
     def compute_day(
@@ -162,7 +235,7 @@ class VodComputer:
         canopy_name = analysis_cfg.canopy_receiver
         ref_name = analysis_cfg.reference_receiver
 
-        store = self._site.rinex_store
+        store = self._site.gnss_store
 
         with store.readonly_session() as session:
             canopy_ds = xr.open_zarr(
@@ -248,7 +321,7 @@ class VodComputer:
         )
 
         if write:
-            self._write_to_store(vod_ds, analysis_name)
+            self._write_to_store(vod_ds, analysis_name, canopy_ds, sky_ds)
 
         return vod_ds
 
@@ -256,6 +329,8 @@ class VodComputer:
         self,
         vod_ds: xr.Dataset,
         analysis_name: str,
+        canopy_ds: xr.Dataset,
+        sky_ds: xr.Dataset,
     ) -> None:
         """Write VOD dataset to the site's VOD store."""
         # Clear encodings that may conflict with Zarr write
@@ -264,15 +339,39 @@ class VodComputer:
         for coord in vod_ds.coords:
             vod_ds[coord].encoding.clear()
 
+        # numpy 2.x promotes string arrays to StringDType (kind='T') during
+        # alignment/concat; Zarr stores strings as object and rejects the mismatch.
+        for coord in list(vod_ds.coords):
+            if getattr(vod_ds[coord].dtype, "kind", None) == "T":
+                vod_ds = vod_ds.assign_coords({coord: vod_ds[coord].astype(object)})
+
         # Rechunk for efficient storage
         vod_ds = vod_ds.chunk(self._rechunk)
+
+        analysis_cfg = self._get_analysis_config(analysis_name)
+        canopy_name = analysis_cfg.canopy_receiver
+        ref_name = analysis_cfg.reference_receiver
+        gnss_store_path = str(self._site._site.gnss_store.store_path)
+
+        ensure_vod_store_metadata(self._site, self._calculator_name)
 
         self._site._site.store_vod_analysis(
             vod_dataset=vod_ds,
             analysis_name=analysis_name,
+            calculator_name=self._calculator_name,
+            source_file_hashes={
+                canopy_name: canopy_ds.attrs.get("File Hash", "unknown"),
+                ref_name: sky_ds.attrs.get("File Hash", "unknown"),
+            },
+            source_gnss_stores={
+                canopy_name: gnss_store_path,
+                ref_name: gnss_store_path,
+            },
         )
 
-        self.log.info("vod_written_to_store", analysis=analysis_name)
+        self.log.info(
+            "vod_written_to_store", analysis=analysis_name, model=self._calculator_name
+        )
 
     # ------------------------------------------------------------------
     # Helpers

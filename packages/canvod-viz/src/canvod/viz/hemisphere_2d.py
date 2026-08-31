@@ -24,6 +24,23 @@ if TYPE_CHECKING:
     from canvod.grids import HemiGrid
 
 
+def _theta_to_rho(theta: np.ndarray, projection: str) -> np.ndarray:
+    """Map zenith angle theta (radians, 0 at zenith, pi/2 at horizon) to plot radius rho.
+
+    orthographic : rho = sin(theta) -- a straight-down view of the 3D
+        hemisphere; cells compress toward the horizon at the rim.
+    equidistant : rho = theta / (pi/2) -- a true polar plot with elevation
+        rings evenly spaced (the conventional GNSS skyplot convention).
+    """
+    if projection == "orthographic":
+        return np.sin(theta)
+    elif projection == "equidistant":
+        return theta / (np.pi / 2)
+    raise ValueError(
+        f"Unknown projection: {projection!r}. Use 'orthographic' or 'equidistant'."
+    )
+
+
 class HemisphereVisualizer2D:
     """2D hemisphere visualization using matplotlib.
 
@@ -59,6 +76,7 @@ class HemisphereVisualizer2D:
         self.grid = grid
         self._patches_cache: list[Polygon] | None = None
         self._cell_indices_cache: np.ndarray | None = None
+        self._patches_cache_projection: str | None = None
 
     def plot_grid_patches(
         self,
@@ -119,7 +137,7 @@ class HemisphereVisualizer2D:
         ax_polar = cast("PolarAxes", ax)
 
         # Get patches for grid
-        patches, cell_indices = self._extract_grid_patches()
+        patches, cell_indices = self._extract_grid_patches(style.projection)
 
         # Map data to patches
         patch_data = self._map_data_to_patches(data, cell_indices)
@@ -172,8 +190,16 @@ class HemisphereVisualizer2D:
 
         return fig, ax
 
-    def _extract_grid_patches(self) -> tuple[list[Polygon], np.ndarray]:
+    def _extract_grid_patches(
+        self, projection: str = "orthographic"
+    ) -> tuple[list[Polygon], np.ndarray]:
         """Extract 2D polygon patches from hemispherical grid.
+
+        Parameters
+        ----------
+        projection : {'orthographic', 'equidistant'}, default 'orthographic'
+            Radial mapping from zenith angle to plot radius (see
+            ``PolarPlotStyle.projection``).
 
         Returns
         -------
@@ -183,33 +209,50 @@ class HemisphereVisualizer2D:
             Corresponding cell indices in grid
 
         """
-        # Use cache if available
-        if self._patches_cache is not None and self._cell_indices_cache is not None:
+        if projection not in ("orthographic", "equidistant"):
+            # Validated up front rather than inside _theta_to_rho: several
+            # per-cell extraction loops below wrap their body in a broad
+            # `except (..., ValueError)` and would otherwise silently
+            # swallow an invalid projection name instead of raising it.
+            raise ValueError(
+                f"Unknown projection: {projection!r}. "
+                "Use 'orthographic' or 'equidistant'."
+            )
+
+        # Use cache if available and built for the same projection
+        if (
+            self._patches_cache is not None
+            and self._cell_indices_cache is not None
+            and self._patches_cache_projection == projection
+        ):
             return self._patches_cache, self._cell_indices_cache
 
         grid_type = self.grid.grid_type.lower()
 
         _rectangular_types = {"equal_area", "equal_angle", "equirectangular"}
         if grid_type in _rectangular_types:
-            patches, indices = self._extract_rectangular_patches()
+            patches, indices = self._extract_rectangular_patches(projection)
         elif grid_type == "htm":
-            patches, indices = self._extract_htm_patches()
+            patches, indices = self._extract_htm_patches(projection)
         elif grid_type == "geodesic":
-            patches, indices = self._extract_geodesic_patches()
+            patches, indices = self._extract_geodesic_patches(projection)
         elif grid_type == "healpix":
-            patches, indices = self._extract_healpix_patches()
+            patches, indices = self._extract_healpix_patches(projection)
         elif grid_type == "fibonacci":
-            patches, indices = self._extract_fibonacci_patches()
+            patches, indices = self._extract_fibonacci_patches(projection)
         else:
             raise ValueError(f"Unsupported grid type: {grid_type}")
 
         # Cache results
         self._patches_cache = patches
         self._cell_indices_cache = indices
+        self._patches_cache_projection = projection
 
         return patches, indices
 
-    def _extract_rectangular_patches(self) -> tuple[list[Polygon], np.ndarray]:
+    def _extract_rectangular_patches(
+        self, projection: str = "orthographic"
+    ) -> tuple[list[Polygon], np.ndarray]:
         """Extract patches from rectangular/equal-area grid."""
         patches = []
         cell_indices = []
@@ -227,9 +270,8 @@ class HemisphereVisualizer2D:
             if theta_min > np.pi / 2:
                 continue
 
-            # Convert to polar coordinates (rho = sin(theta))
-            rho_min = np.sin(theta_min)
-            rho_max = np.sin(theta_max)
+            rho_min = _theta_to_rho(theta_min, projection)
+            rho_max = _theta_to_rho(theta_max, projection)
 
             # Create rectangular patch in polar coordinates
             vertices = np.array(
@@ -246,7 +288,9 @@ class HemisphereVisualizer2D:
 
         return patches, np.array(cell_indices)
 
-    def _extract_htm_patches(self) -> tuple[list[Polygon], np.ndarray]:
+    def _extract_htm_patches(
+        self, projection: str = "orthographic"
+    ) -> tuple[list[Polygon], np.ndarray]:
         """Extract triangular patches from HTM grid."""
         patches = []
         cell_indices = []
@@ -272,15 +316,17 @@ class HemisphereVisualizer2D:
                 # Convert to spherical coordinates
                 r = np.sqrt(x**2 + y**2 + z**2)
                 theta = np.arccos(np.clip(z / r, -1, 1))
-                phi = np.arctan2(y, x)
-                phi = np.mod(phi, 2 * np.pi)
+                # unwrap (not mod 2*pi) so a triangle straddling the
+                # phi=0/2*pi seam gets contiguous polygon vertices instead
+                # of two clustered near 0 and one near 2*pi, which would
+                # otherwise draw an edge streaking across the whole plot.
+                phi = np.unwrap(np.arctan2(y, x))
 
                 # Skip if beyond hemisphere
                 if np.all(theta > np.pi / 2):
                     continue
 
-                # Convert to polar coordinates (rho = sin(theta))
-                rho = np.sin(theta)
+                rho = _theta_to_rho(theta, projection)
                 vertices_2d = np.column_stack([phi, rho])
 
                 patches.append(Polygon(vertices_2d, closed=True))
@@ -292,7 +338,9 @@ class HemisphereVisualizer2D:
 
         return patches, np.array(cell_indices)
 
-    def _extract_geodesic_patches(self) -> tuple[list[Polygon], np.ndarray]:
+    def _extract_geodesic_patches(
+        self, projection: str = "orthographic"
+    ) -> tuple[list[Polygon], np.ndarray]:
         """Extract triangular patches from geodesic grid.
 
         The ``geodesic_vertices`` column stores vertex **indices** into the
@@ -306,7 +354,7 @@ class HemisphereVisualizer2D:
 
         if shared_vertices is None or "geodesic_vertices" not in grid_df.columns:
             # No vertex data — fall back to bounding-box rectangles
-            return self._extract_rectangular_patches()
+            return self._extract_rectangular_patches(projection)
 
         for idx, row in enumerate(grid_df.iter_rows(named=True)):
             try:
@@ -320,13 +368,14 @@ class HemisphereVisualizer2D:
 
                 r = np.sqrt(x**2 + y**2 + z**2)
                 theta = np.arccos(np.clip(z / r, -1, 1))
-                phi = np.arctan2(y, x)
-                phi = np.mod(phi, 2 * np.pi)
+                # See _extract_htm_patches: unwrap keeps seam-straddling
+                # triangles contiguous instead of streaking across the plot.
+                phi = np.unwrap(np.arctan2(y, x))
 
                 if np.all(theta > np.pi / 2):
                     continue
 
-                rho = np.sin(theta)
+                rho = _theta_to_rho(theta, projection)
                 vertices_2d = np.column_stack([phi, rho])
                 patches.append(Polygon(vertices_2d, closed=True))
                 cell_indices.append(idx)
@@ -336,7 +385,9 @@ class HemisphereVisualizer2D:
 
         return patches, np.array(cell_indices)
 
-    def _extract_healpix_patches(self) -> tuple[list[Polygon], np.ndarray]:
+    def _extract_healpix_patches(
+        self, projection: str = "orthographic"
+    ) -> tuple[list[Polygon], np.ndarray]:
         """Extract patches from HEALPix grid via ``healpy.boundaries``."""
         try:
             import healpy as hp
@@ -363,22 +414,25 @@ class HemisphereVisualizer2D:
 
             r = np.sqrt(x**2 + y**2 + z**2)
             theta = np.arccos(np.clip(z / r, -1, 1))
-            phi = np.arctan2(y, x)
-            phi = np.mod(phi, 2 * np.pi)
+            # See _extract_htm_patches: unwrap keeps seam-straddling pixels
+            # contiguous instead of streaking across the plot.
+            phi = np.unwrap(np.arctan2(y, x))
 
             # Keep only vertices in upper hemisphere
             mask = theta <= np.pi / 2 + 0.01
             if not np.any(mask):
                 continue
 
-            rho = np.sin(theta)
+            rho = _theta_to_rho(theta, projection)
             vertices_2d = np.column_stack([phi, rho])
             patches.append(Polygon(vertices_2d, closed=True))
             cell_indices.append(idx)
 
         return patches, np.array(cell_indices)
 
-    def _extract_fibonacci_patches(self) -> tuple[list[Polygon], np.ndarray]:
+    def _extract_fibonacci_patches(
+        self, projection: str = "orthographic"
+    ) -> tuple[list[Polygon], np.ndarray]:
         """Extract patches from Fibonacci grid using Voronoi regions."""
         patches = []
         cell_indices = []
@@ -387,7 +441,7 @@ class HemisphereVisualizer2D:
 
         if voronoi is None or "voronoi_region" not in grid_df.columns:
             # No Voronoi data — fall back to bounding-box rectangles
-            return self._extract_rectangular_patches()
+            return self._extract_rectangular_patches(projection)
 
         for idx, row in enumerate(grid_df.iter_rows(named=True)):
             try:
@@ -404,12 +458,13 @@ class HemisphereVisualizer2D:
 
                 r = np.sqrt(x**2 + y**2 + z**2)
                 theta = np.arccos(np.clip(z / r, -1, 1))
-                phi = np.arctan2(y, x)
-                phi = np.mod(phi, 2 * np.pi)
+                # See _extract_htm_patches: unwrap keeps seam-straddling
+                # cells contiguous instead of streaking across the plot.
+                phi = np.unwrap(np.arctan2(y, x))
 
                 # Vertices are already in polygon winding order from
                 # sort_vertices_of_regions() — use directly.
-                rho = np.sin(theta)
+                rho = _theta_to_rho(theta, projection)
                 vertices_2d = np.column_stack([phi, rho])
                 patches.append(Polygon(vertices_2d, closed=True))
                 cell_indices.append(idx)
@@ -469,7 +524,9 @@ class HemisphereVisualizer2D:
         # Add degree labels on radial axis
         if style.show_degree_labels:
             theta_labels = style.theta_labels
-            rho_ticks = [np.sin(np.radians(t)) for t in theta_labels]
+            rho_ticks = [
+                _theta_to_rho(np.radians(t), style.projection) for t in theta_labels
+            ]
             ax.set_yticks(rho_ticks)
             ax.set_yticklabels([f"{t}°" for t in theta_labels])
 
@@ -541,6 +598,7 @@ def add_tissot_indicatrix(
     alpha: float = 0.6,
     edgecolor: str = "black",
     linewidth: float = 0.5,
+    projection: str = "orthographic",
 ) -> Axes:
     """Add Tissot's indicatrix circles to existing polar plot.
 
@@ -567,6 +625,10 @@ def add_tissot_indicatrix(
         Edge color for circles
     linewidth : float, default 0.5
         Edge line width
+    projection : {'orthographic', 'equidistant'}, default 'orthographic'
+        Must match the projection used for the underlying ``ax`` (see
+        ``PolarPlotStyle.projection``), otherwise circles will be
+        misaligned with the grid patches.
 
     Returns
     -------
@@ -580,8 +642,6 @@ def add_tissot_indicatrix(
     >>> plt.savefig("vod_with_tissot.png")
 
     """
-    from matplotlib.patches import Ellipse
-
     # Auto-calculate radius if not provided
     if radius_deg is None:
         if hasattr(grid, "angular_resolution"):
@@ -600,104 +660,96 @@ def add_tissot_indicatrix(
     cell_count = 0
     grid_df = grid.grid
 
-    # Different handling for triangular vs rectangular grids
-    if grid.grid_type in ["htm", "geodesic"]:
-        # For triangular grids: create circles on sphere surface and project
-        for i, row in enumerate(grid_df.iter_rows(named=True)):
-            if n_sample is not None and i % n_sample != 0:
-                continue
+    # Every grid type gets a true spherical circle constructed in 3D and
+    # projected -- exact under whichever theta->rho projection is used here.
+    # Rectangular grids (equal_area, equal_angle, equirectangular) used to
+    # take a separate ellipse-approximation path (an axis-aligned ellipse in
+    # (phi, rho), locally linearized around each cell center). That
+    # approximation breaks down badly near the pole: as theta_center -> 0,
+    # its azimuthal width term (2*radius_rad/sin(theta_center)) blows up
+    # well before reaching the "true circle wraps the whole azimuth" regime,
+    # rendering near-pole cells as a streak across the entire plot instead
+    # of a small circle. The 3D construct-and-project approach below has no
+    # such singularity -- it degenerates gracefully into a genuine
+    # near-full-revolution polygon exactly when the physical circle actually
+    # is that large relative to its distance from the pole.
+    for i, row in enumerate(grid_df.iter_rows(named=True)):
+        if n_sample is not None and i % n_sample != 0:
+            continue
 
-            phi_center = row["phi"]
-            theta_center = row["theta"]
+        phi_center = row["phi"]
+        theta_center = row["theta"]
 
-            if theta_center > np.pi / 2:
-                continue
+        if theta_center > np.pi / 2:
+            continue
 
-            # Convert cell center to 3D Cartesian
-            x_c = np.sin(theta_center) * np.cos(phi_center)
-            y_c = np.sin(theta_center) * np.sin(phi_center)
-            z_c = np.cos(theta_center)
-            center_3d = np.array([x_c, y_c, z_c])
+        # Convert cell center to 3D Cartesian
+        x_c = np.sin(theta_center) * np.cos(phi_center)
+        y_c = np.sin(theta_center) * np.sin(phi_center)
+        z_c = np.cos(theta_center)
+        center_3d = np.array([x_c, y_c, z_c])
 
-            # Create tangent vectors
-            if theta_center < 0.01:
-                tangent_1 = np.array([1, 0, 0])
-                tangent_2 = np.array([0, 1, 0])
-            else:
-                tangent_phi = np.array([-np.sin(phi_center), np.cos(phi_center), 0])
-                tangent_phi = tangent_phi / np.linalg.norm(tangent_phi)
+        # Create tangent vectors
+        if theta_center < 0.01:
+            tangent_1 = np.array([1, 0, 0])
+            tangent_2 = np.array([0, 1, 0])
+        else:
+            tangent_phi = np.array([-np.sin(phi_center), np.cos(phi_center), 0])
+            tangent_phi = tangent_phi / np.linalg.norm(tangent_phi)
 
-                tangent_theta = np.array(
-                    [
-                        np.cos(theta_center) * np.cos(phi_center),
-                        np.cos(theta_center) * np.sin(phi_center),
-                        -np.sin(theta_center),
-                    ]
-                )
-                tangent_theta = tangent_theta / np.linalg.norm(tangent_theta)
-
-                tangent_1 = tangent_phi
-                tangent_2 = tangent_theta
-
-            # Create circle on sphere surface
-            circle_3d = []
-            for angle in circle_angles:
-                offset = radius_rad * (
-                    np.cos(angle) * tangent_1 + np.sin(angle) * tangent_2
-                )
-                point_3d = center_3d + offset
-                norm = np.linalg.norm(point_3d)
-                if norm > 1e-10:
-                    point_3d = point_3d / norm
-                circle_3d.append(point_3d)
-
-            circle_3d = np.array(circle_3d)
-
-            # Project to 2D polar coordinates
-            x_2d, y_2d, z_2d = circle_3d[:, 0], circle_3d[:, 1], circle_3d[:, 2]
-            theta_2d = np.arccos(np.clip(z_2d, -1, 1))
-            phi_2d = np.arctan2(y_2d, x_2d)
-
-            # Convert to polar plot coordinates (rho = sin(theta))
-            rho_2d = np.sin(theta_2d)
-            angle_2d = phi_2d
-
-            vertices_2d = np.column_stack([angle_2d, rho_2d])
-
-            poly = Polygon(
-                vertices_2d,
-                facecolor=facecolor,
-                alpha=alpha,
-                edgecolor=edgecolor,
-                linewidth=linewidth,
+            tangent_theta = np.array(
+                [
+                    np.cos(theta_center) * np.cos(phi_center),
+                    np.cos(theta_center) * np.sin(phi_center),
+                    -np.sin(theta_center),
+                ]
             )
-            ax.add_patch(poly)
-            cell_count += 1
+            tangent_theta = tangent_theta / np.linalg.norm(tangent_theta)
 
-    else:
-        # Rectangular grids: use simple ellipses at grid centers
-        for i, row in enumerate(grid_df.iter_rows(named=True)):
-            if n_sample is not None and i % n_sample != 0:
-                continue
+            tangent_1 = tangent_phi
+            tangent_2 = tangent_theta
 
-            phi_center = row["phi"]
-            theta_center = row["theta"]
+        # Create circle on sphere surface
+        circle_3d = []
+        for angle in circle_angles:
+            offset = radius_rad * (
+                np.cos(angle) * tangent_1 + np.sin(angle) * tangent_2
+            )
+            point_3d = center_3d + offset
+            norm = np.linalg.norm(point_3d)
+            if norm > 1e-10:
+                point_3d = point_3d / norm
+            circle_3d.append(point_3d)
 
-            if theta_center <= np.pi / 2:
-                # Convert to polar plot coordinates
-                rho_center = np.sin(theta_center)
+        circle_3d = np.array(circle_3d)
 
-                ell = Ellipse(
-                    (phi_center, rho_center),
-                    width=2 * radius_rad,
-                    height=2 * radius_rad * np.sin(theta_center),  # Scale by projection
-                    facecolor=facecolor,
-                    alpha=alpha,
-                    edgecolor=edgecolor,
-                    linewidth=linewidth,
-                )
-                ax.add_patch(ell)
-                cell_count += 1
+        # Project to 2D polar coordinates
+        x_2d, y_2d, z_2d = circle_3d[:, 0], circle_3d[:, 1], circle_3d[:, 2]
+        theta_2d = np.arccos(np.clip(z_2d, -1, 1))
+        # arctan2's branch cut at +/-pi would otherwise split a circle
+        # straddling that seam into vertices ~2*pi apart, drawing a
+        # streak across the whole plot when connected into a polygon.
+        # circle_angles walks the loop in order, so unwrap stitches the
+        # projected sequence back into a contiguous span (and correctly
+        # leaves a genuine full revolution around a near-pole cell
+        # untouched, since that's a real 2*pi sweep, not a seam jump).
+        phi_2d = np.unwrap(np.arctan2(y_2d, x_2d))
+
+        # Convert to polar plot coordinates
+        rho_2d = _theta_to_rho(theta_2d, projection)
+        angle_2d = phi_2d
+
+        vertices_2d = np.column_stack([angle_2d, rho_2d])
+
+        poly = Polygon(
+            vertices_2d,
+            facecolor=facecolor,
+            alpha=alpha,
+            edgecolor=edgecolor,
+            linewidth=linewidth,
+        )
+        ax.add_patch(poly)
+        cell_count += 1
 
     # Update title
     current_title = ax.get_title()

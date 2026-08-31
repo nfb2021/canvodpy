@@ -14,7 +14,7 @@ questions become unanswerable:
 - **Reproducibility** — which software version, config, and ephemeris source
   produced this store? The `ProcessingProvenance` and `ConfigSnapshot` sections
   capture the full environment (down to Python version, uv lockfile hash, and
-  Dask scheduler config) so any store can be reproduced from scratch.
+  worker configuration) so any store can be reproduced from scratch.
 - **DOI registration** — TU Wien Repositum and Zenodo require DataCite 4.5
   metadata (creator, title, identifier, rights). Rather than filling these
   manually at publication time, canvodpy collects them automatically during
@@ -71,7 +71,7 @@ Pydantic `BaseModel`:
 | 5. Spatial Extent & Site | `SpatialExtent` | site name/country, lat/lon/alt (WGS84), bounding box | Geographic coverage |
 | 6. Instruments | `Instruments` | platform, per-receiver: type, directory, format, epochs, SIDs | Hardware provenance |
 | 7. Software Provenance | `ProcessingProvenance` | software versions, Python, uv, processing level, lineage | Software environment |
-| 8. Environment | `Environment` | hostname, OS, arch, CPU count, memory, disk, Dask config | Compute environment |
+| 8. Environment | `Environment` | hostname, OS, arch, CPU count, memory, disk, worker config | Compute environment |
 | 9. Config Snapshot | `ConfigSnapshot` | processing params, preprocessing, compression, config hash | Reproducibility |
 | 10. References | `References` | repository, documentation, publications, funding | Related resources |
 | 11. Summaries | `Summaries` | total_epochs, total_sids, constellations, variables, history | Aggregate statistics |
@@ -88,7 +88,7 @@ from canvod.store_metadata import collect_metadata, write_metadata
 # Collect metadata from the current environment and config
 metadata = collect_metadata(
     config=config,
-    site_name="Rosalia",
+    site_name="ExampleSite",
     site_config=site_config,
     store_type="rinex_store",
     source_format="rinex3",
@@ -211,13 +211,13 @@ No user action is required — metadata collection is a side effect of the stand
 
 Store metadata draws from two config sections:
 
-### `processing.yaml` — Creator and publisher
+### `canvod-settings.yaml` — Creator and publisher (`processing.metadata:`)
 
 ```yaml
 processing:
   metadata:
     author: "Nicolas Bader"
-    email: "nicolas.bader@geo.tuwien.ac.at"
+    email: "support@canvodpy.eu"
     orcid: "0000-0002-1234-5678"          # optional
     institution: "TU Wien"
     institution_ror: "https://ror.org/04d836q62"  # optional
@@ -227,12 +227,12 @@ processing:
     naming_authority: "at.ac.tuwien.geo"
 ```
 
-### `sites.yaml` — Spatial extent
+### `canvod-settings.yaml` — Spatial extent (`sites.<name>:`)
 
 ```yaml
 sites:
-  Rosalia:
-    description: "Rosalia GNSS-T research site"
+  ExampleSite:
+    description: "ExampleSite GNSS-T research site"
     country: "Austria"
     latitude: 47.702
     longitude: 16.299
@@ -241,3 +241,9 @@ sites:
       canopy_01:
         # ...
 ```
+
+---
+
+!!! example "Try it"
+    [09 — Store Metadata](../../notebooks/_build/09_store_metadata.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/09_store_metadata.py)

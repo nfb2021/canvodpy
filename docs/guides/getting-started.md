@@ -1,6 +1,18 @@
 # Getting Started
 
-This guide walks you through everything you need — from creating a GitHub account to running your first test — so you can start contributing to canVODpy even if you have never used Git, GitHub, or Python tooling before.
+This guide walks you through everything you need, from creating a GitHub account to running your first test, so you can start contributing to canVODpy even if you have never used Git, GitHub, or Python tooling before.
+
+!!! tip "Just want to *use* canVODpy, not contribute?"
+
+    Install it like any other Python package and head straight to the
+    [Users guide](../users/index.md) instead of this page.
+
+    ```bash
+    uv add canvodpy    # or: pip install canvodpy
+    ```
+
+    (`uv` is a fast Python package manager — see [step 6](#6-install-development-tools).
+    Plain `pip` works too.)
 
 <div class="grid cards" markdown>
 
@@ -16,11 +28,11 @@ This guide walks you through everything you need — from creating a GitHub acco
 
     [Install `uv` + `just`](#6-install-development-tools) · [Fork + clone](#7-fork-and-clone-the-repository) · [Submodules](#8-initialize-submodules) · [Dev environment](#9-set-up-the-development-environment)
 
--   :fontawesome-solid-sliders: &nbsp; **[Step 10](#10-configure-the-project)** &nbsp; Configuration
+-   :fontawesome-solid-sliders: &nbsp; **[Step 10](#10-configure-and-process-your-first-day-of-data)** &nbsp; Configuration + First Run
 
     ---
 
-    [Initialize YAML config files](#10-configure-the-project) · Set paths and credentials · Validate
+    [Configure and process your first day](#10-configure-and-process-your-first-day-of-data) — via the [Users guide](../users/index.md)
 
 -   :fontawesome-solid-circle-check: &nbsp; **[Steps 11–13](#11-verify-everything-works)** &nbsp; Verify + Contribute
 
@@ -335,33 +347,15 @@ just hooks
 
 ---
 
-## 10. Configure the project
+## 10. Configure and process your first day of data
 
-canVODpy uses three YAML configuration files in the `config/` directory:
+Configuring `canvod-settings.yaml` and running the pipeline for the first
+time works identically whether you're contributing or just using canVODpy —
+see the [Users guide](../users/index.md), which covers configuration and
+both the [CLI](../users/cli.md#1-configure-the-project) and
+[Python](../users/python.md#1-configure-the-project) paths in full.
 
-| File | Purpose |
-|------|---------|
-| `sites.yaml` | Defines research sites: data root paths, receiver definitions (name, type, directory), and VOD analysis pairs. Each receiver's `directory` is the full relative path from the site data root to the raw RINEX date folders (e.g. `01_reference/01_GNSS/01_raw`). |
-| `processing.yaml` | Processing parameters: metadata, credentials (NASA Earthdata), auxiliary data settings (agency, product type), time aggregation, compression, Icechunk storage, and store strategies. |
-| `sids.yaml` | Signal ID (SID) filtering: choose `all`, a named `preset` (e.g. `gps_galileo`), or list `custom` SIDs to keep. |
-
-Each file has a corresponding `.example` template. To initialize them:
-
-```bash
-just config-init
-```
-
-After editing, validate your configuration:
-
-```bash
-just config-validate
-```
-
-To view the resolved configuration:
-
-```bash
-just config-show
-```
+Come back here once your first day of data has processed successfully.
 
 ---
 
@@ -498,7 +492,7 @@ main
 └── develop/sprint-2026              ← integration branch (shared by all teams)
     ├── team-grids/                  ← Team A
     │   ├── (direct commits)         ← Workflow A
-    │   └── team-grids/add-healpix   ← Workflow B feature branches
+    │   └── team-grids/add-new-grid   ← Workflow B feature branches
     ├── team-readers/                ← Team B
     └── team-vod/                    ← Team C
 ```
@@ -550,15 +544,15 @@ From here, choose the workflow that fits your team:
 
     ```bash
     git checkout team-grids
-    git checkout -b team-grids/add-healpix
+    git checkout -b team-grids/add-new-grid
     ```
 
     Work, commit, and push your feature branch:
 
     ```bash
     git add <files you changed>
-    git commit -m "feat(grids): add HEALPix support"
-    git push -u origin team-grids/add-healpix
+    git commit -m "feat(grids): add new grid tessellation"
+    git push -u origin team-grids/add-new-grid
     ```
 
     Then open a pull request on GitHub targeting `team-grids`.
@@ -568,7 +562,7 @@ From here, choose the workflow that fits your team:
     ```bash
     git checkout team-grids
     git pull origin team-grids
-    git checkout team-grids/add-healpix
+    git checkout team-grids/add-new-grid
     git rebase team-grids
     ```
 
@@ -623,16 +617,16 @@ This is intentional: it prevents code that does not meet the project's quality s
 
 The following checks execute automatically in sequence. If any one fails, the commit is rejected.
 
-| Hook | When it runs | What it checks | Typical failure reason |
-|------|-------------|----------------|----------------------|
-| **ruff check** | `pre-commit` (before commit is created) | Python linting — unused imports, undefined names, style violations, type annotation issues | You have an unused import or a linting rule violation |
-| **ruff format** | `pre-commit` | Python formatting — consistent code style (indentation, line length, quote style, trailing commas) | Your code is not formatted according to the project style |
-| **uv-lock** | `pre-commit` | Lockfile consistency — verifies `uv.lock` matches `pyproject.toml` | You changed a dependency in `pyproject.toml` but did not run `uv sync` |
-| **trailing-whitespace** | `pre-commit` | Removes trailing whitespace from all files | A line ends with invisible spaces or tabs |
-| **check-added-large-files** | `pre-commit` | Blocks files larger than the threshold from being committed | You are trying to commit a large binary, dataset, or log file |
-| **detect-private-key** | `pre-commit` | Scans for accidentally staged private keys (SSH, PGP) | You are about to commit a secret — **do not override this** |
-| **end-of-file-fixer** | `pre-commit` | Ensures every file ends with exactly one newline | A file is missing its final newline or has extra blank lines at the end |
-| **commitizen** | `commit-msg` (after you write the message) | Validates that your commit message follows the [Conventional Commits](https://www.conventionalcommits.org/) specification | Your message does not match the `type(scope): subject` format |
+| Hook                        | When it runs                               | What it checks                                                                                                            | Typical failure reason                                                  |
+| --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **ruff check**              | `pre-commit` (before commit is created)    | Python linting — unused imports, undefined names, style violations, type annotation issues                                | You have an unused import or a linting rule violation                   |
+| **ruff format**             | `pre-commit`                               | Python formatting — consistent code style (indentation, line length, quote style, trailing commas)                        | Your code is not formatted according to the project style               |
+| **uv-lock**                 | `pre-commit`                               | Lockfile consistency — verifies `uv.lock` matches `pyproject.toml`                                                        | You changed a dependency in `pyproject.toml` but did not run `uv sync`  |
+| **trailing-whitespace**     | `pre-commit`                               | Removes trailing whitespace from all files                                                                                | A line ends with invisible spaces or tabs                               |
+| **check-added-large-files** | `pre-commit`                               | Blocks files larger than the threshold from being committed                                                               | You are trying to commit a large binary, dataset, or log file           |
+| **detect-private-key**      | `pre-commit`                               | Scans for accidentally staged private keys (SSH, PGP)                                                                     | You are about to commit a secret — **do not override this**             |
+| **end-of-file-fixer**       | `pre-commit`                               | Ensures every file ends with exactly one newline                                                                          | A file is missing its final newline or has extra blank lines at the end |
+| **commitizen**              | `commit-msg` (after you write the message) | Validates that your commit message follows the [Conventional Commits](https://www.conventionalcommits.org/) specification | Your message does not match the `type(scope): subject` format           |
 
 ### How to fix a rejected commit
 
@@ -736,12 +730,12 @@ Every push to a branch and every pull request triggers automated checks on GitHu
 
 ### CI pipelines
 
-| Workflow | Trigger | What it does |
-|----------|---------|-------------|
-| **Code Quality** | Every push | Checks lockfile consistency, runs ruff linting, checks formatting, runs type checking with ty |
+| Workflow               | Trigger                    | What it does                                                                                                                           |
+| ---------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Code Quality**       | Every push                 | Checks lockfile consistency, runs ruff linting, checks formatting, runs type checking with ty                                          |
 | **Test with Coverage** | Push to `main` and all PRs | Runs `just test-coverage` (pytest with coverage measurement), uploads results to Coveralls, posts a coverage summary comment on the PR |
-| **Platform Tests** | PRs | Runs the test suite across multiple operating systems and Python versions |
-| **Deploy Docs** | Push to `main` | Builds and deploys the documentation site |
+| **Platform Tests**     | PRs                        | Runs the test suite across multiple operating systems and Python versions                                                              |
+| **Deploy Docs**        | Push to `main`             | Builds and deploys the documentation site                                                                                              |
 
 ### Test coverage with Coveralls
 
@@ -766,19 +760,20 @@ just test-coverage
 
 !!! tip "Print this"
 
-    | Command                | What it does                                      |
-    | ---------------------- | ------------------------------------------------- |
-    | `just test`            | Run all tests                                     |
-    | `just check`           | Lint, format, and type-check all code             |
-    | `just hooks`           | Install pre-commit hooks                          |
-    | `just check-dev-tools` | Verify uv, just, and python3 are installed        |
-    | `just config-init`     | Initialize configuration files from templates     |
-    | `just config-validate` | Validate the current configuration                |
-    | `just config-show`     | Show the resolved configuration                   |
-    | `just docs`            | Preview documentation locally                     |
-    | `just test-coverage`   | Run tests with coverage report                    |
-    | `just clean`           | Remove build artifacts and caches                 |
-    | `uv sync`              | Install/update Python dependencies                |
+    | Command                           | What it does                                   |
+    | --------------------------------- | ---------------------------------------------- |
+    | `just test`                       | Run all tests                                  |
+    | `just check`                      | Lint, format, and type-check all code          |
+    | `just hooks`                      | Install pre-commit hooks                       |
+    | `just check-dev-tools`            | Verify uv, just, and python3 are installed     |
+    | `just config-init`                | Scaffold `canvod-settings.yaml` from template           |
+    | `just config-validate`            | Validate the current configuration             |
+    | `just config-show`                | Show the resolved configuration                |
+    | `canvod-preflight validate <dir>` | Check data files against the naming convention |
+    | `just docs`                       | Preview documentation locally                  |
+    | `just test-coverage`              | Run tests with coverage report                 |
+    | `just clean`                      | Remove build artifacts and caches              |
+    | `uv sync`                         | Install/update Python dependencies             |
 
 ---
 
@@ -835,4 +830,4 @@ just test-coverage
 
 ---
 
-**Next in the trail:** [Audit Suite](../packages/audit/overview.md) · [API Levels](api-levels.md) · [Architecture](../architecture.md) · [AI Development](ai-development.md)
+**Next in the trail:** [Configuration Guide](configuration.md) · [API Levels](api-levels.md) · [Architecture](../architecture.md) · [Audit Suite](../packages/audit/overview.md) · [AI Development](ai-development.md)

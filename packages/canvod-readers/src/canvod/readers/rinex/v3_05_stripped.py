@@ -68,7 +68,9 @@ class Rnxv3StrippedObs(Rnxv3Obs):
             )
         return self
 
-    def _create_dataset_single_pass(self) -> xr.Dataset:
+    def _create_dataset_single_pass(
+        self, keep_data_vars: frozenset[str] | None = None
+    ) -> xr.Dataset:
         lines = self._load_file()
         epoch_batches = self.get_epoch_record_batches()
         n_epochs = len(epoch_batches)
@@ -250,9 +252,9 @@ class Rnxv3StrippedObs(Rnxv3Obs):
         ds.attrs.update(self._build_attrs())
 
         if outname:
-            from canvod.utils.config import load_config as _load_config
+            from canvod.config import load_config as _load_config
 
-            comp = _load_config().processing.compression
+            comp = _load_config().processing.netcdf_compression
             encoding = {
                 var: {"zlib": comp.zlib, "complevel": comp.complevel}
                 for var in ds.data_vars

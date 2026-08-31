@@ -223,20 +223,6 @@ class TestConstellations:
         assert glonass.svs[0].startswith("R")
         assert glonass.aggregate_fdma is True
 
-    def test_glonass_fdma_equations(self):
-        """Test GLONASS FDMA frequency equations."""
-        glonass = GLONASS(aggregate_fdma=True)
-
-        # Test G1 frequency calculation
-        freq_g1 = glonass.band_G1_equation("R01")
-        assert freq_g1 is not None
-        assert hasattr(freq_g1, "magnitude")
-
-        # Test G2 frequency calculation
-        freq_g2 = glonass.band_G2_equation("R01")
-        assert freq_g2 is not None
-        assert hasattr(freq_g2, "magnitude")
-
     def test_beidou_initialization(self):
         """Test BeiDou constellation can be initialized."""
         beidou = BEIDOU()

@@ -4,7 +4,17 @@
 
 [tool.uv.workspace]
 members = ["packages/*", "canvodpy"]
-exclude = ["packages/canvod-streamstats"]
+exclude = ["packages/canvod-filemap"]
+
+# canvod-filemap and canvod-adapters live in the separate canvodpy-extensions
+# repo (https://github.com/nfb2021/canvodpy-extensions), not in this
+# monorepo's workspace. Point uv at the public repo directly — a local
+# sibling-path source would break `uv run`/`uv sync` on any machine without
+# that repo cloned alongside canvodpy, since uv resolves optional-dependency-
+# group sources even when the extra isn't requested.
+[tool.uv.sources]
+canvod-filemap = { git = "https://github.com/nfb2021/canvodpy-extensions.git", subdirectory = "packages/canvod-filemap", tag = "v0.1.0" }
+canvod-adapters = { git = "https://github.com/nfb2021/canvodpy-extensions.git", subdirectory = "packages/canvod-adapters", tag = "v0.1.0" }
 
 # ============================================================================
 # Development Dependencies (Workspace-wide)
@@ -16,10 +26,12 @@ dev = [
     "commitizen>=4.16.5",
     "hypothesis>=6.160.0",
     "ipykernel>=7.3.0",
+    "loky>=3.5.6",
     "marimo>=0.23.14",
     "mkdocstrings-python>=2.0.5",
     "mystmd>=1.10.1",
     "pre-commit>=4.6.1",
+    "psutil>=7.2.2",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "pytest-mock>=3.15.1",
@@ -111,13 +123,14 @@ unresolved-import = "ignore"
 
 [tool.ty.src]
 # Tests use assert, magic numbers and intentional patterns — skip entirely.
-# Demo notebooks and DAGs are not production code.
+# Demo notebooks are not production code.
 # The two store files below have deep icechunk/xarray generics that need
 # dedicated refactoring before ty can analyse them cleanly.
 exclude = [
     "**/tests/**",
     "demo/**",
-    "dags/**",
+    "dev/**",
+    "prototypes/**",
     "packages/canvod-store/src/canvod/store/grid_adapters/grid_storage.py",
     "packages/canvod-store/src/canvod/store/store.py",
 ]
@@ -130,11 +143,12 @@ exclude = [
 testpaths = [
     "canvodpy/tests",
     "packages/canvod-auxiliary/tests",
+    "packages/canvod-config/tests",
     "packages/canvod-grids/tests",
+    "packages/canvod-preflight/tests",
     "packages/canvod-readers/tests",
     "packages/canvod-store/tests",
     "packages/canvod-store-metadata/tests",
-    "packages/canvod-virtualiconvname/tests",
     "packages/canvod-utils/tests",
     "packages/canvod-viz/tests",
     "packages/canvod-vod/tests",
@@ -151,11 +165,12 @@ relative_files = true
 source = [
     "canvodpy/src",
     "packages/canvod-auxiliary/src",
+    "packages/canvod-config/src",
     "packages/canvod-grids/src",
+    "packages/canvod-preflight/src",
     "packages/canvod-readers/src",
     "packages/canvod-store/src",
     "packages/canvod-store-metadata/src",
-    "packages/canvod-virtualiconvname/src",
     "packages/canvod-utils/src",
     "packages/canvod-viz/src",
     "packages/canvod-vod/src",
@@ -174,13 +189,14 @@ version_files = [
     "canvodpy/pyproject.toml:version",
     "packages/canvod-readers/pyproject.toml:version",
     "packages/canvod-auxiliary/pyproject.toml:version",
+    "packages/canvod-config/pyproject.toml:version",
     "packages/canvod-grids/pyproject.toml:version",
+    "packages/canvod-preflight/pyproject.toml:version",
     "packages/canvod-vod/pyproject.toml:version",
     "packages/canvod-store/pyproject.toml:version",
     "packages/canvod-store-metadata/pyproject.toml:version",
     "packages/canvod-viz/pyproject.toml:version",
     "packages/canvod-utils/pyproject.toml:version",
-    "packages/canvod-virtualiconvname/pyproject.toml:version",
     "packages/canvod-ops/pyproject.toml:version",
     "packages/canvod-audit/pyproject.toml:version",
 ]
@@ -194,6 +210,7 @@ annotated_tag = true
 scopes = [
     "readers",
     "aux",
+    "config",
     "grids",
     "vod",
     "store",

@@ -98,7 +98,7 @@ def _delete_paths(paths: list[tuple[str, Path]]) -> None:
 
 
 def _load_config():
-    from canvod.utils.config import load_config
+    from canvod.config import load_config
 
     return load_config()
 
@@ -167,7 +167,7 @@ def cmd_delete_store(args: argparse.Namespace) -> None:
     store_type = args.store
 
     if store_type == "rinex":
-        store_path = storage.get_rinex_store_path(site)
+        store_path = storage.get_gnss_store_path(site)
     elif store_type == "vod":
         store_path = storage.get_vod_store_path(site)
     else:
@@ -198,7 +198,7 @@ def cmd_delete_all_stores(args: argparse.Namespace) -> None:
     storage = config.processing.storage
     site = args.site
 
-    rinex_path = storage.get_rinex_store_path(site)
+    rinex_path = storage.get_gnss_store_path(site)
     vod_path = storage.get_vod_store_path(site)
 
     paths = [
@@ -239,11 +239,11 @@ def main() -> None:
     sub.add_parser("delete-aux", help="Delete auxiliary data (SP3, CLK, Zarr caches)")
 
     p_store = sub.add_parser("delete-store", help="Delete a specific Icechunk store")
-    p_store.add_argument("site", help="Site name (e.g. rosalia)")
+    p_store.add_argument("site", help="Site name (e.g. examplesite)")
     p_store.add_argument("store", choices=["rinex", "vod"], help="Store type")
 
     p_all = sub.add_parser("delete-all-stores", help="Delete ALL stores for a site")
-    p_all.add_argument("site", help="Site name (e.g. rosalia)")
+    p_all.add_argument("site", help="Site name (e.g. examplesite)")
 
     args = parser.parse_args()
 

@@ -102,9 +102,10 @@ class SbfSignalObs(BaseModel):
         Septentrio signal label (e.g. ``"L1CA"``, ``"E5a"``).
     rx_channel : int
         Receiver tracking channel index.
-    lock_time_ms : int
-        Phase lock time. Type1: milliseconds (``u2``).
-        Type2: units of 100 ms (``u1``; 255 means ≥ 25.4 s).
+    lock_time_s : int
+        Duration of continuous carrier-phase lock in seconds (1 s/LSB,
+        raw value). Type1: ``u2``, clipped at 65534 s, 65535 = Do-Not-Use.
+        Type2: ``u1``, clipped at 254 s, 255 = Do-Not-Use.
     cn0 : pint.Quantity or None
         C/N0 in ``dBHz``. ``None`` if Do-Not-Use (raw == 0).
     pseudorange : pint.Quantity or None
@@ -132,7 +133,7 @@ class SbfSignalObs(BaseModel):
     signal_num: int
     signal_type: str
     rx_channel: int
-    lock_time_ms: int
+    lock_time_s: int
     cn0: pint.Quantity | None
     pseudorange: pint.Quantity | None
     doppler: pint.Quantity | None

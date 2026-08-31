@@ -193,3 +193,9 @@ uv run marimo edit demo/20_grid_exploration.py
 
     Neither backend is a hard dependency of `canvod-viz` itself; import errors are
     raised only when the corresponding visualizer is instantiated.
+
+---
+
+!!! example "Try it"
+    [10 — Visualization](../../notebooks/_build/10_visualization.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/10_visualization.py)

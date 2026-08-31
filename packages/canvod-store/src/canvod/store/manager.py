@@ -9,21 +9,25 @@ Module: src/gnssvodpy/icechunk_manager/manager.py
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import xarray as xr
+import zarr
 
 if TYPE_CHECKING:
     from canvod.vod import VODCalculator
 
-from canvod.utils.config.models import VodAnalysisConfig
+from canvod.config.models import VodAnalysisConfig
 from canvodpy.logging import get_logger
 
 from canvod.store.store import (
-    create_rinex_store,
+    VodWriteItem,
+    VodWriteResult,
+    create_gnss_store,
     create_vod_store,
 )
 
@@ -65,7 +69,7 @@ class GnssResearchSite:
         site_name : str
             Name of the research site.
         """
-        from canvod.utils.config import load_config
+        from canvod.config import load_config
 
         config = load_config()
         sites = config.sites.sites
@@ -81,16 +85,16 @@ class GnssResearchSite:
         self._site_config = sites[site_name]
         self._logger = get_logger(__name__).bind(site=site_name)
 
-        rinex_store_path = config.processing.storage.get_rinex_store_path(site_name)
+        gnss_store_path = config.processing.storage.get_gnss_store_path(site_name)
         vod_store_path = config.processing.storage.get_vod_store_path(site_name)
 
         # Initialize stores using paths from processing.yaml
-        self.rinex_store = create_rinex_store(rinex_store_path)
+        self.gnss_store = create_gnss_store(gnss_store_path)
         self.vod_store = create_vod_store(vod_store_path)
 
         self._logger.info(
             f"Initialized GNSS research site: {site_name}",
-            rinex_store=str(rinex_store_path),
+            gnss_store=str(gnss_store_path),
             vod_store=str(vod_store_path),
         )
 
@@ -159,16 +163,16 @@ class GnssResearchSite:
         return cfg.metadata
 
     @classmethod
-    def from_rinex_store_path(
+    def from_gnss_store_path(
         cls,
-        rinex_store_path: Path,
+        gnss_store_path: Path,
     ) -> GnssResearchSite:
         """
         Create a GnssResearchSite instance from a RINEX store path.
 
         Parameters
         ----------
-        rinex_store_path : Path
+        gnss_store_path : Path
             Path to the RINEX Icechunk store.
 
         Returns
@@ -182,18 +186,18 @@ class GnssResearchSite:
             If no matching site is found for the given path.
         """
         # Load config to get store paths
-        from canvod.utils.config import load_config
+        from canvod.config import load_config
 
         config = load_config()
 
         # Try to match against each site's expected rinex store path
         for site_name in config.sites.sites.keys():
-            expected_path = config.processing.storage.get_rinex_store_path(site_name)
-            if expected_path == rinex_store_path:
+            expected_path = config.processing.storage.get_gnss_store_path(site_name)
+            if expected_path == gnss_store_path:
                 return cls(site_name)
 
         raise ValueError(
-            f"No research site found for RINEX store path: {rinex_store_path}"
+            f"No research site found for RINEX store path: {gnss_store_path}"
         )
 
     def get_reference_canopy_pairs(self) -> list[tuple[str, str]]:
@@ -289,18 +293,38 @@ class GnssResearchSite:
         list[str]
             Existing receiver group names.
         """
-        return self.rinex_store.list_groups()
+        return self.gnss_store.list_groups()
 
     def get_vod_analysis_groups(self) -> list[str]:
         """
-        Get list of VOD analysis groups that exist in the VOD store.
+        Get list of VOD result groups in the VOD store.
+
+        The VOD store nests results as ``{model}/{analysis_name}`` (one
+        model per registered ``VODFactory`` calculator, disambiguating
+        results from different calculators over the same analysis pair —
+        see dev/todo_later.md §29). Top-level ``list_groups()`` only
+        returns model names, so this walks one level deeper.
 
         Returns
         -------
         list[str]
-            Existing VOD analysis group names.
+            ``"{model}/{analysis_name}"`` strings for every existing result.
         """
-        return self.vod_store.list_groups()
+        models = self.vod_store.list_groups()
+        if not models:
+            return []
+
+        try:
+            with self.vod_store.readonly_session() as session:
+                root = zarr.open_group(session.store, mode="r")
+                return [
+                    f"{model}/{analysis}"
+                    for model in models
+                    if model in root
+                    for analysis in root[model].group_keys()  # ty: ignore[unresolved-attribute]
+                ]
+        except Exception:
+            return []
 
     def ingest_receiver_data(
         self, dataset: xr.Dataset, receiver_name: str, commit_message: str | None = None
@@ -345,7 +369,7 @@ class GnssResearchSite:
 
         self._logger.info(f"Ingesting RINEX data for receiver '{receiver_name}'")
 
-        self.rinex_store.write_or_append_group(
+        self.gnss_store.write_or_append_group(
             dataset=dataset, group_name=receiver_name, commit_message=commit_message
         )
 
@@ -374,7 +398,7 @@ class GnssResearchSite:
         ValueError
             If the receiver group does not exist.
         """
-        if not self.rinex_store.group_exists(receiver_name):
+        if not self.gnss_store.group_exists(receiver_name):
             available_groups = self.get_receiver_groups()
             raise ValueError(
                 f"No data found for receiver '{receiver_name}'. "
@@ -383,10 +407,10 @@ class GnssResearchSite:
 
         self._logger.info(f"Reading data for receiver '{receiver_name}'")
 
-        if self.rinex_store._rinex_store_strategy == "append":
-            ds = self.rinex_store.read_group_deduplicated(receiver_name, keep="last")
+        if self.gnss_store._gnss_store_strategy == "unsafe_append":
+            ds = self.gnss_store.read_group_deduplicated(receiver_name, keep="last")
         else:
-            ds = self.rinex_store.read_group(receiver_name)
+            ds = self.gnss_store.read_group(receiver_name)
 
         # Apply time filtering if specified
         if time_range is not None:
@@ -405,10 +429,18 @@ class GnssResearchSite:
         self,
         vod_dataset: xr.Dataset,
         analysis_name: str,
+        calculator_name: str,
+        source_file_hashes: dict[str, str],
+        source_gnss_stores: dict[str, str],
         commit_message: str | None = None,
-    ) -> None:
+        dedup: bool = True,
+    ) -> bool:
         """
-        Store VOD analysis results.
+        Store VOD analysis results under ``{calculator_name}/{analysis_name}``.
+
+        The model layer disambiguates results from different VOD
+        calculators computed over the same analysis pair (see
+        dev/todo_later.md §29).
 
         Parameters
         ----------
@@ -416,8 +448,26 @@ class GnssResearchSite:
             Dataset containing VOD analysis results.
         analysis_name : str
             Name of the analysis (must be configured).
+        calculator_name : str
+            Registered ``VODFactory`` name that produced ``vod_dataset``
+            (e.g. ``"tau_omega"``).
+        source_file_hashes : dict[str, str]
+            ``{receiver_name: "File Hash"}`` for every receiver the
+            computation read from — used as the dedup key (no single hash
+            exists for a two-receiver computation).
+        source_gnss_stores : dict[str, str]
+            ``{receiver_name: gnss_store_path}`` — provenance back to the
+            GNSS store(s) the inputs came from.
         commit_message : str, optional
             Commit message to store with the results.
+        dedup : bool, default True
+            Skip the write if this exact source-hash combination was
+            already written, or the epoch range overlaps an existing row.
+
+        Returns
+        -------
+        bool
+            ``True`` if written, ``False`` if skipped as a duplicate.
 
         Raises
         ------
@@ -431,24 +481,97 @@ class GnssResearchSite:
                 f"Available: {available_analyses}"
             )
 
-        self._logger.info(f"Storing VOD analysis results: '{analysis_name}'")
+        group_name = f"{calculator_name}/{analysis_name}"
+        self._logger.info(f"Storing VOD analysis results: '{group_name}'")
 
-        self.vod_store.write_or_append_group(
-            dataset=vod_dataset, group_name=analysis_name, commit_message=commit_message
+        written = self.vod_store.write_or_append_vod_group(
+            dataset=vod_dataset,
+            group_name=group_name,
+            source_file_hashes=source_file_hashes,
+            source_gnss_stores=source_gnss_stores,
+            calculator_name=calculator_name,
+            commit_message=commit_message,
+            dedup=dedup,
         )
 
-        self._logger.info(f"Successfully stored VOD analysis: '{analysis_name}'")
+        if written:
+            self._logger.info(f"Successfully stored VOD analysis: '{group_name}'")
+        return written
+
+    def store_vod_analyses_batch(
+        self,
+        items: Sequence[dict[str, Any]],
+    ) -> dict[str, VodWriteResult]:
+        """Store multiple VOD analysis results in one fork/merge batch write.
+
+        Same cross-group parallelization `RinexDataProcessor` uses for GNSS
+        receiver groups, applied to VOD analysis pairs: each pair writes
+        into its own fork concurrently, then one shared commit lands them
+        all at once, instead of one full session-open/write/commit cycle
+        per analysis pair in sequence.
+
+        Parameters
+        ----------
+        items : Sequence[dict]
+            Each dict needs: ``vod_dataset``, ``analysis_name``,
+            ``calculator_name``, ``source_file_hashes``,
+            ``source_gnss_stores``, and optionally ``commit_message``.
+
+        Returns
+        -------
+        dict[str, VodWriteResult]
+            Keyed by ``{calculator_name}/{analysis_name}`` group name.
+
+        Raises
+        ------
+        ValueError
+            If any ``analysis_name`` is not configured.
+        """
+        write_items: list[VodWriteItem] = []
+        for entry in items:
+            analysis_name = entry["analysis_name"]
+            if analysis_name not in self.vod_analyses:
+                available_analyses = list(self.vod_analyses.keys())
+                raise ValueError(
+                    f"VOD analysis '{analysis_name}' not configured. "
+                    f"Available: {available_analyses}"
+                )
+            calculator_name = entry["calculator_name"]
+            group_name = f"{calculator_name}/{analysis_name}"
+            self._logger.info(f"Storing VOD analysis results: '{group_name}'")
+            write_items.append(
+                VodWriteItem(
+                    group_name=group_name,
+                    dataset=entry["vod_dataset"],
+                    source_file_hashes=entry["source_file_hashes"],
+                    source_gnss_stores=entry["source_gnss_stores"],
+                    calculator_name=calculator_name,
+                    commit_message=entry.get("commit_message"),
+                )
+            )
+
+        results = self.vod_store.write_or_append_vod_groups_batch(write_items)
+
+        for group_name, result in results.items():
+            if result.written:
+                self._logger.info(f"Successfully stored VOD analysis: '{group_name}'")
+        return results
 
     def read_vod_analysis(
-        self, analysis_name: str, time_range: tuple[datetime, datetime] | None = None
+        self,
+        analysis_name: str,
+        calculator_name: str,
+        time_range: tuple[datetime, datetime] | None = None,
     ) -> xr.Dataset:
         """
-        Read VOD analysis results.
+        Read VOD analysis results for one calculator model.
 
         Parameters
         ----------
         analysis_name : str
             Name of the analysis.
+        calculator_name : str
+            Registered ``VODFactory`` name the results were computed with.
         time_range : tuple of datetime, optional
             (start_time, end_time) for filtering the results.
 
@@ -462,16 +585,17 @@ class GnssResearchSite:
         ValueError
             If the analysis group does not exist.
         """
-        if not self.vod_store.group_exists(analysis_name):
+        group_name = f"{calculator_name}/{analysis_name}"
+        if not self.vod_store.group_exists(group_name):
             available_groups = self.get_vod_analysis_groups()
             raise ValueError(
-                f"No VOD results found for analysis '{analysis_name}'. "
+                f"No VOD results found for '{group_name}'. "
                 f"Available: {available_groups}"
             )
 
-        self._logger.info(f"Reading VOD analysis: '{analysis_name}'")
+        self._logger.info(f"Reading VOD analysis: '{group_name}'")
 
-        ds = self.vod_store.read_group(analysis_name)
+        ds = self.vod_store.read_group(group_name)
 
         # Apply time filtering if specified
         if time_range is not None:
@@ -538,6 +662,7 @@ class GnssResearchSite:
         analysis_name: str,
         calculator_class: type[VODCalculator] | None = None,
         time_range: tuple[datetime, datetime] | None = None,
+        processing_params=None,
     ) -> xr.Dataset:
         """
         Calculate VOD for a configured analysis pair.
@@ -550,6 +675,9 @@ class GnssResearchSite:
             VOD calculator class to use. If None, uses TauOmegaZerothOrder.
         time_range : tuple of datetime, optional
             (start_time, end_time) for filtering the data
+        processing_params : ProcessingParams, optional
+            Processing parameters controlling derived quantities. If None,
+            falls back to loading from the global config (deprecated path).
 
         Returns
         -------
@@ -585,9 +713,12 @@ class GnssResearchSite:
         )
 
         # Apply config-gated derived quantities
-        from canvod.utils.config import load_config as _load_config
+        if processing_params is None:
+            from canvod.config import load_config as _load_config
 
-        _params = _load_config().processing.processing
+            processing_params = _load_config().processing.params
+
+        _params = processing_params
 
         if not _params.store_delta_snr:
             vod_ds = vod_ds.drop_vars("delta_snr", errors="ignore")
@@ -705,7 +836,7 @@ class GnssResearchSite:
                 "vod_groups": vod_groups,
             },
             "stores": {
-                "rinex_store_path": str(self.rinex_store.store_path),
+                "gnss_store_path": str(self.gnss_store.store_path),
                 "vod_store_path": str(self.vod_store.store_path),
             },
         }
@@ -722,7 +853,7 @@ class GnssResearchSite:
 
             if has_data:
                 try:
-                    info = self.rinex_store.get_group_info(receiver_name)
+                    info = self.gnss_store.get_group_info(receiver_name)
                     summary["receivers"][receiver_name]["data_info"] = {
                         "dimensions": info["dimensions"],
                         "variables": len(info["variables"]),
@@ -731,29 +862,39 @@ class GnssResearchSite:
                 except Exception as e:
                     self._logger.warning(f"Failed to get info for {receiver_name}: {e}")
 
-        # Add VOD analysis details
+        # Add VOD analysis details. vod_groups holds "{model}/{analysis_name}"
+        # strings — one analysis can have results from multiple calculator
+        # models, so this reports per-model info rather than a single flag.
         summary["vod_analyses"] = {}
         for analysis_name, analysis_config in self.active_vod_analyses.items():
-            has_results = analysis_name in vod_groups
+            models_with_results = [
+                group.split("/", 1)[0]
+                for group in vod_groups
+                if group.endswith(f"/{analysis_name}")
+            ]
             summary["vod_analyses"][analysis_name] = {
                 "canopy_receiver": analysis_config.canopy_receiver,
                 "reference_receiver": analysis_config.reference_receiver,
                 "description": analysis_config.description,
-                "has_results": has_results,
+                "has_results": bool(models_with_results),
+                "models_with_results": models_with_results,
             }
 
-            if has_results:
-                try:
-                    info = self.vod_store.get_group_info(analysis_name)
-                    summary["vod_analyses"][analysis_name]["results_info"] = {
-                        "dimensions": info["dimensions"],
-                        "variables": len(info["variables"]),
-                        "temporal_info": info.get("temporal_info", {}),
-                    }
-                except Exception as e:
-                    self._logger.warning(
-                        f"Failed to get VOD info for {analysis_name}: {e}"
-                    )
+            if models_with_results:
+                results_info: dict[str, Any] = {}
+                for model in models_with_results:
+                    try:
+                        info = self.vod_store.get_group_info(f"{model}/{analysis_name}")
+                        results_info[model] = {
+                            "dimensions": info["dimensions"],
+                            "variables": len(info["variables"]),
+                            "temporal_info": info.get("temporal_info", {}),
+                        }
+                    except Exception as e:
+                        self._logger.warning(
+                            f"Failed to get VOD info for {model}/{analysis_name}: {e}"
+                        )
+                summary["vod_analyses"][analysis_name]["results_info"] = results_info
 
         return summary
 
@@ -879,6 +1020,12 @@ def create_default_site() -> GnssResearchSite:
     GnssResearchSite
         Instance for the ``DEFAULT_RESEARCH_SITE``.
     """
-    from canvod.utils.config import load_config
+    from canvod.config import load_config
 
-    return GnssResearchSite(next(iter(load_config().sites.sites)))
+    _sites = load_config().sites.sites
+    if not _sites:
+        raise ValueError(
+            "No sites configured — create canvod-settings.yaml "
+            "or pass site_name explicitly."
+        )
+    return GnssResearchSite(next(iter(_sites)))

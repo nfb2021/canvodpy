@@ -8,14 +8,12 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import structlog
 
-from canvod.readers.gnss_specs.constants import FREQ_UNIT, UREG
+from canvod.readers.gnss_specs.constants import UREG
 
 _log = structlog.get_logger(__name__)
 
 if TYPE_CHECKING:
     from datetime import date
-
-    import pint
 
 
 # ================================================================
@@ -105,7 +103,7 @@ class GALILEO(ConstellationBase):
     - Band numbers and codes from RINEX v3.04 Guide:
       http://acc.igs.org/misc/rinex304.pdf (Table 6).
     - Band frequencies and bandwidths from Galileo ICD:
-      https://galileognss.eu/wp-content/uploads/2021/01/Galileo_OS_SIS_ICD_v2.0.pdf
+      https://www.gsc-europa.eu/sites/default/files/sites/all/files/Galileo_OS_SIS_ICD_v2.1.pdf
       (Tables 2 & 3).
 
     Might need adaptation for future Galileo signals and RINEX versions.
@@ -178,11 +176,11 @@ class GPS(ConstellationBase):
     - Band numbers and codes from RINEX v3.04 Guide:
       http://acc.igs.org/misc/rinex304.pdf (Table 4).
     - L1/L2 frequencies and bandwidths from GPS L1/L2 ICD:
-      https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf (3.3.1.1 Frequency
-      Plan).
+      https://www.gps.gov/sites/default/files/2025-07/IS-GPS-200N.pdf
+      (3.3.1.1 Frequency Plan).
     - L5 frequency and bandwidth from GPS L5 ICD:
-      https://www.gps.gov/technical/icwg/IS-GPS-705J.pdf (3.3.1.1 Frequency
-      Plan).
+      https://www.gps.gov/sites/default/files/2025-07/IS-GPS-705J.pdf
+      (3.3.1.1 Frequency Plan).
 
     Note:
     ----
@@ -338,10 +336,17 @@ class GLONASS(ConstellationBase):
       - GLONASS channel assignment from: see included channel file.
 
     G1/G2 is treated as a single band here, although it consists of sub-bands
-    according to FDMA (see `GLONASS.band_G1_equation()`). The center frequency
-    is the average of all sub-band frequencies. The bandwidth spans all
-    sub-band widths, so the center frequency differs slightly from the FDMA
-    base value.
+    according to FDMA. The aggregate center frequency and bandwidth are
+    derived from the current in-force GLONASS FDMA channel plan, channel
+    numbers ``n`` in ``[-7, 6]`` (see channel file):
+
+        freq(n)   = base_freq + n * spacing
+        center    = (freq(n_min) + freq(n_max)) / 2
+        bandwidth = freq(n_max) - freq(n_min) + subband_bandwidth
+
+    where ``subband_bandwidth`` is 1.022 MHz (twice the GLONASS C/A chip
+    rate) for both G1 and G2. So the aggregate center frequency differs
+    slightly from the FDMA base value.
 
     Attributes
     ----------
@@ -396,20 +401,21 @@ class GLONASS(ConstellationBase):
         "G2": ["C", "P"],
     }
 
+    # n_min=-7, n_max=6 (see Note on G1 & G2 above):
+    #   G1: freq(n) = 1602 + n*9/16   -> center=1601.71875, bandwidth=8.3345
+    #   G2: freq(n) = 1246 + n*7/16   -> center=1245.78125, bandwidth=6.7095
     AGGR_G1_G2_BAND_PROPERTIES: ClassVar[dict[str, dict[str, Any]]] = {
         "G1": {
-            "freq": 1602.28125 * UREG.MHz,  # see Note on G1 & G2
+            "freq": 1601.71875 * UREG.MHz,  # see Note on G1 & G2
             "bandwidth": 8.3345 * UREG.MHz,  # see Note on G1 & G2
             "system": "R",
         },
         "G2": {
-            "freq": 1246.21875 * UREG.MHz,  # see Note on G1 & G2
+            "freq": 1245.78125 * UREG.MHz,  # see Note on G1 & G2
             "bandwidth": 6.7095 * UREG.MHz,  # see Note on G1 & G2
             "system": "R",
         },
     }
-
-    G1_G2_subband_bandwidth: ClassVar[pint.Quantity] = 1.022 * UREG.MHz
 
     def __init__(
         self,
@@ -508,18 +514,6 @@ class GLONASS(ConstellationBase):
                             slot_channel_dict[int(slot.strip())] = int(channel.strip())
         return slot_channel_dict
 
-    def band_G1_equation(self, sv: str) -> pint.Quantity:
-        """Compute L1 frequency for a given SV."""
-        return ((1602 + self.get_channel_used_by_SV(sv) * 9 / 16) * UREG.MHz).to(
-            FREQ_UNIT
-        )
-
-    def band_G2_equation(self, sv: str) -> pint.Quantity:
-        """Compute L2 frequency for a given SV."""
-        return ((1246 + self.get_channel_used_by_SV(sv) * 7 / 16) * UREG.MHz).to(
-            FREQ_UNIT
-        )
-
 
 # ================================================================
 # ----------- 2. Satellite-based Augmentation Systems  -----------
@@ -532,11 +526,11 @@ class SBAS(ConstellationBase):
     - Band numbers and codes from RINEX v3.04 Guide:
       http://acc.igs.org/misc/rinex304.pdf (Table 7).
     - L5 frequency and bandwidth from GPS L5 ICD:
-      https://www.gps.gov/technical/icwg/IS-GPS-705J.pdf (3.3.1.1 Frequency
-      Plan).
+      https://www.gps.gov/sites/default/files/2025-07/IS-GPS-705J.pdf
+      (3.3.1.1 Frequency Plan).
     - L1 frequency and bandwidth from GPS L1/L2 ICD:
-      https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf (3.3.1.1 Frequency
-      Plan).
+      https://www.gps.gov/sites/default/files/2025-07/IS-GPS-200N.pdf
+      (3.3.1.1 Frequency Plan).
 
     Notes
     -----

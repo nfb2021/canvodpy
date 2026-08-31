@@ -415,3 +415,91 @@ def glonass_freq_hz(signal_num: int, freq_nr: int) -> pint.Quantity:
             raise ValueError(
                 f"signal_num {signal_num} is not a GLONASS FDMA signal (8-11)"
             )
+
+
+# ---------------------------------------------------------------------------
+# Fast float-returning variants — zero pint allocations.
+#
+# These mirror the public functions above exactly but return plain Python
+# floats/None instead of pint.Quantity.  They exist solely for the hot
+# inner loop in SbfReader.to_ds_and_auxiliary(), where every Quantity
+# object created is immediately discarded after .magnitude extraction.
+#
+# Do NOT use these outside of that hot path; the public pint versions
+# carry unit information that catches silent scale bugs.
+# ---------------------------------------------------------------------------
+
+# G1/G2 base frequencies and per-slot steps as plain Hz floats.
+# Derived from _G1_BASE/_G2_BASE/_G1_STEP/_G2_STEP above; not hardcoded.
+_G1_BASE_HZ: float = 1_602_000_000.0  # 1602.000 MHz
+_G1_STEP_HZ: float = 562_500.0  # 9/16 MHz per slot
+_G2_BASE_HZ: float = 1_246_000_000.0  # 1246.000 MHz
+_G2_STEP_HZ: float = 437_500.0  # 7/16 MHz per slot
+
+
+def _cn0_dbhz_f(raw: int, sig_num: int) -> float | None:
+    """CN0 in dB-Hz as a plain float; None if Do-Not-Use (raw==255)."""
+    if raw == 255:
+        return None
+    return raw * 0.25 if sig_num in (1, 2) else raw * 0.25 + 10.0
+
+
+def _pseudorange_m_f(misc: int, code_lsb: int) -> float | None:
+    """Type1 pseudorange in metres as a plain float; None if Do-Not-Use."""
+    code_msb = misc & 0x0F
+    if code_msb == 0 and code_lsb == 0:
+        return None
+    return (code_msb * 4_294_967_296 + code_lsb) * 1e-3
+
+
+def _doppler_hz_f(raw: int) -> float | None:
+    """Type1 Doppler in Hz as a plain float; None if Do-Not-Use."""
+    if raw == _DOPPLER_DNU:
+        return None
+    return raw * 1e-4
+
+
+def _phase_cycles_f(
+    pr_m: float,
+    carrier_msb: int,
+    carrier_lsb: int,
+    freq_hz: float,
+) -> float | None:
+    """Type1 carrier phase in cycles as a plain float; None if Do-Not-Use."""
+    if carrier_msb == -128 and carrier_lsb == 0:
+        return None
+    return pr_m / (_C_M_S / freq_hz) + (carrier_msb * 65_536 + carrier_lsb) * 1e-3
+
+
+def _pr2_m_f(pr1_m: float, code_offset_msb: int, code_offset_lsb: int) -> float | None:
+    """Type2 pseudorange in metres as a plain float; None if Do-Not-Use."""
+    if code_offset_msb == -4 and code_offset_lsb == 0:
+        return None
+    return pr1_m + (code_offset_msb * 65_536 + code_offset_lsb) * 1e-3
+
+
+def _doppler2_hz_f(
+    d1_hz: float,
+    offset_msb: int,
+    offset_lsb: int,
+    freq2_hz: float,
+    freq1_hz: float,
+) -> float | None:
+    """Type2 Doppler in Hz as a plain float; None if Do-Not-Use."""
+    if offset_msb == -16 and offset_lsb == 0:
+        return None
+    return d1_hz * (freq2_hz / freq1_hz) + (offset_msb * 65_536 + offset_lsb) * 1e-4
+
+
+def _glonass_freq_hz_f(signal_num: int, freq_nr: int) -> float:
+    """GLONASS FDMA carrier frequency in Hz as a plain float."""
+    slot = freq_nr - _FREQ_NR_OFFSET
+    match signal_num:
+        case 8 | 9:
+            return _G1_BASE_HZ + slot * _G1_STEP_HZ
+        case 10 | 11:
+            return _G2_BASE_HZ + slot * _G2_STEP_HZ
+        case _:
+            raise ValueError(
+                f"signal_num {signal_num} is not a GLONASS FDMA signal (8-11)"
+            )

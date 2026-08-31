@@ -47,6 +47,7 @@ jobs:
           for pkg in \
             packages/canvod-readers \
             packages/canvod-auxiliary \
+            packages/canvod-config \
             packages/canvod-grids \
             packages/canvod-store \
             packages/canvod-store-metadata \
@@ -54,7 +55,7 @@ jobs:
             packages/canvod-viz \
             packages/canvod-vod \
             packages/canvod-ops \
-            packages/canvod-virtualiconvname \
+            packages/canvod-preflight \
             packages/canvod-audit \
             canvodpy; do
             echo "Building $pkg..."

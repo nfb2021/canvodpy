@@ -46,6 +46,7 @@ class AuxFile(ABC):
     file_type: list[str] = Field(default_factory=list)
     fpath: Path | None = None
     user_email: str | None = None
+    ftp_timeout_s: int = 30
     downloader: FileDownloader | None = None
     _data: xr.Dataset | None = Field(default=None, init=False)
 
@@ -60,7 +61,9 @@ class AuxFile(ABC):
         self.local_dir.mkdir(parents=True, exist_ok=True)
 
         if self.downloader is None:
-            self.downloader = FtpDownloader(user_email=self.user_email)
+            self.downloader = FtpDownloader(
+                user_email=self.user_email, timeout_s=self.ftp_timeout_s
+            )
 
         self.fpath = self.check_file_exists()
 
@@ -232,8 +235,8 @@ class AuxFile(ABC):
             raise RuntimeError(
                 f"No FTP servers available for {product_spec.prefix}.\n"
                 f"All servers require authentication: {server_names}\n"
-                f"Set nasa_earthdata_acc_mail in config/processing.yaml to "
-                f"enable NASA CDDIS access.\n"
+                f"Set CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL "
+                f"in config/.env to enable NASA CDDIS access.\n"
                 f"Register at: https://urs.earthdata.nasa.gov/users/new"
             )
 
@@ -276,8 +279,8 @@ class AuxFile(ABC):
             )
             auth_hint = (
                 f"\n\nSkipped servers (no credentials):\n{skip_detail}\n"
-                f"Set nasa_earthdata_acc_mail in config/processing.yaml "
-                f"to enable these servers."
+                f"Set CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL "
+                f"in config/.env to enable these servers."
             )
         else:
             auth_hint = ""

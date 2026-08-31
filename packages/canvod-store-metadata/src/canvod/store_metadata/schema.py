@@ -16,7 +16,7 @@ class StoreIdentity(BaseModel):
     id: str = Field(..., description="Unique store identifier (site/store_type)")
     title: str = Field(..., description="Human-readable store title")
     description: str | None = Field(None, description="Store description")
-    store_type: str = Field(..., description="Store type: rinex_store, vod_store")
+    store_type: str = Field(..., description="Store type: gnss_store, vod_store")
     source_format: str = Field(
         ..., description="Data source format: rinex3, rinex2, sbf"
     )

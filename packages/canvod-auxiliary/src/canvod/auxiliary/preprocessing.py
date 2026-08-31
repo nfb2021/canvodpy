@@ -57,6 +57,23 @@ def flush_sid_accumulators() -> dict[str, list[str]]:
     return result
 
 
+def reset_sid_accumulators() -> None:
+    """Clear the module-level SID-issue accumulators without reading them.
+
+    Call at the start of a file-processing unit (before any
+    ``pad_to_global_sid()`` calls it will make), not just at the end via
+    ``flush_sid_accumulators()``. The accumulators are only ever drained by
+    whichever caller happens to flush next -- a step that itself calls
+    ``pad_to_global_sid()`` without a matching flush (e.g. aux/ephemeris
+    padding during Phase 1) leaves its entries to bleed into that later,
+    unrelated flush. Resetting on entry makes each unit's result depend
+    only on its own work, regardless of what an earlier unit left behind.
+    """
+    global _accumulated_not_in_global_space, _accumulated_dropped_by_filter
+    _accumulated_not_in_global_space = set()
+    _accumulated_dropped_by_filter = set()
+
+
 def create_sv_to_sid_mapping(
     svs: list[str], aggregate_glonass_fdma: bool = True
 ) -> dict[str, list[str]]:

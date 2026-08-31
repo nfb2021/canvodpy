@@ -87,15 +87,20 @@ type = "final"
 prefix = "COD0MGXFIN"
 sampling = "05M"
 duration = "01D"
-description = "CODE final multi-GNSS (NASA only)"
+description = "CODE final multi-GNSS"
 formats = ["SP3", "CLK"]
 ftp_path = "/gnss/products/{gps_week}/{file}"
 
 [[products.ftp_servers]]
-url = "ftps://gdc.cddis.eosdis.nasa.gov"
+url = "ftp://gssc.esa.int"
 priority = 1
+description = "ESA primary"
+
+[[products.ftp_servers]]
+url = "ftps://gdc.cddis.eosdis.nasa.gov"
+priority = 2
 requires_auth = true
-description = "NASA CDDIS (final products)"
+description = "NASA CDDIS fallback"
 
 # ----------------------------------------------------------------------------
 # GFZ (GeoForschungsZentrum Potsdam)

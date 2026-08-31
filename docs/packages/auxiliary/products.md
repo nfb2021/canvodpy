@@ -90,7 +90,7 @@ The product registry provides declarative configuration for 37 SP3 and CLK produ
     # ds.data_vars: X, Y, Z, Vx, Vy, Vz
     ```
 
-=== "Configuration (processing.yaml)"
+=== "Configuration (canvod-settings.yaml)"
 
     ```yaml
     auxiliary:

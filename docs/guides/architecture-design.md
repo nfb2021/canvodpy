@@ -47,7 +47,7 @@ canVODpy applies the engineering concept of *Sollbruchstellen* (predetermined br
 ```
 Foundation (0 inter-package dependencies):
   canvod-readers, canvod-grids, canvod-vod, canvod-utils,
-  canvod-virtualiconvname
+  canvod-filemap
 
 Consumer (1–2 dependencies each):
   canvod-auxiliary      → canvod-readers
@@ -84,7 +84,7 @@ flowchart TD
     subgraph BUILTIN["Built-in"]
         RINEX3["Rnxv3Obs"]
         EA["EqualAreaBuilder"]
-        HP["HEALPixBuilder"]
+        HP["EqualAngleBuilder"]
         TO["TauOmegaZerothOrder"]
     end
 
@@ -143,46 +143,42 @@ ds = reader.to_ds()
 
 ## Unified API Surface
 
-canvodpy exposes four API levels — all backed by the same packages:
+canvodpy exposes two supported surfaces, plus the CLI on top of one of them —
+all backed by the same packages. See [API Levels](api-levels.md) for full
+detail; `FluentWorkflow`, the flat `process_date()`/`calculate_vod()`/
+`preview_processing()` functions, and `VODWorkflow` are deprecated.
 
-=== "Level 1 — Convenience Functions"
+=== "CLI — Running the Pipeline"
 
-    ```python
-    from canvodpy import process_date, calculate_vod
-
-    data = process_date("Rosalia", "2025001")
-    vod  = calculate_vod("Rosalia", "canopy_01", "reference_01", "2025001")
+    ```bash
+    canvodpy run --site ExampleSite --start 2025001 --end 2025007
     ```
 
-=== "Level 2 — Fluent Workflow"
-
-    Steps are recorded but not executed until a terminal method is called.
+=== "Site.pipeline() — Python-native"
 
     ```python
-    import canvodpy
+    from canvodpy import Site
 
-    result = (canvodpy.workflow("Rosalia")
-        .read("2025001")
-        .preprocess()
-        .grid("equal_area", angular_resolution=5.0)
-        .vod("canopy_01", "reference_01")
-        .result())
-
-    # Preview without executing
-    plan = canvodpy.workflow("Rosalia").read("2025001").preprocess().explain()
+    site = Site("ExampleSite")
+    with site.pipeline(n_workers=8) as pipeline:
+        for date_key, datasets in pipeline.process_range("2025001", "2025007"):
+            site.vod.compute_day(datasets, "canopy_01_vs_reference_01")
     ```
 
-=== "Level 3 — VODWorkflow"
+=== "Functional — Component-level scripting"
 
     ```python
-    from canvodpy import VODWorkflow
+    from canvodpy.functional import read_rinex, augment_with_ephemeris, calculate_vod
 
-    wf       = VODWorkflow(site="Rosalia", grid="equal_area")
-    datasets = wf.process_date("2025001")
-    vod      = wf.calculate_vod("canopy_01", "reference_01", "2025001")
+    ds = read_rinex("ROSA01TUW_R_20250010000_15M_05S_AA.rnx")
+    ds = augment_with_ephemeris(ds, rx_pos, source="final", date="2025001", site_config=cfg)
+    vod_ds = calculate_vod(canopy_ds, reference_ds)
     ```
 
-=== "Level 4 — Direct Package Access"
+=== "Direct Package Access — lowest level"
+
+    Bypassing the orchestrator entirely; used internally by all three surfaces
+    above.
 
     ```python
     from canvod.readers import Rnxv3Obs
@@ -199,10 +195,9 @@ canvodpy exposes four API levels — all backed by the same packages:
 
 ```mermaid
 flowchart TD
-    subgraph FILES["YAML Files"]
-        PROC["processing.yaml"]
-        SITES["sites.yaml"]
-        SIDS["sids.yaml"]
+    subgraph FILES["Config Sources"]
+        YAML["canvod-settings.yaml"]
+        ENV[".env / env vars"]
         DEF["Package defaults"]
     end
 
@@ -218,12 +213,12 @@ flowchart TD
         SIC["SidsConfig"]
     end
 
-    PROC & SITES & SIDS & DEF --> MERGE --> PYDANTIC
+    YAML & ENV & DEF --> MERGE --> PYDANTIC
     PYDANTIC --> PC & SC & SIC
 ```
 
 ```python
-from canvod.utils.config import load_config
+from canvod.config import load_config
 
 cfg = load_config()
 cfg.processing.aux_data.nasa_earthdata_acc_mail
@@ -231,9 +226,9 @@ cfg.processing.storage.stores_root_dir
 ```
 
 ```bash
-just config-init      # Create config files from templates
-just config-validate  # Validate current config
-just config-show      # Print resolved config
+canvodpy config init      # Scaffold canvod-settings.yaml from template
+canvodpy config validate  # Validate current config
+canvodpy config show      # Print resolved config
 ```
 
 ---

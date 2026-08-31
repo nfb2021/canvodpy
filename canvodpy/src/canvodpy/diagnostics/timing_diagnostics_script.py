@@ -12,8 +12,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from canvod.config import load_config
 from canvod.store import GnssResearchSite
-from canvod.utils.config import load_config
 from canvodpy.orchestrator import PipelineOrchestrator
 
 
@@ -117,10 +117,10 @@ def diagnose_processing(
     print("=" * 80)
     print(f"Start time: {datetime.now()}")
     cfg = load_config()
-    keep_vars = cfg.processing.processing.keep_rnx_vars
-    rinex_store_strategy = cfg.processing.storage.rinex_store_strategy
-    print(f"rinex_store_strategy: {rinex_store_strategy}")
-    print(f"keep_rnx_vars: {keep_vars}")
+    keep_vars = cfg.processing.params.keep_gnss_observables
+    gnss_store_strategy = cfg.processing.storage.gnss_store_strategy
+    print(f"gnss_store_strategy: {gnss_store_strategy}")
+    print(f"keep_gnss_observables: {keep_vars}")
     if start_from:
         print(f"Starting from: {start_from}")
     if end_at:
@@ -128,7 +128,7 @@ def diagnose_processing(
     print()
 
     # Initialize site and orchestrator
-    site = GnssResearchSite(site_name="Rosalia")
+    site = GnssResearchSite(site_name="ExampleSite")
     proc = cfg.processing.processing
     # Get all configured receivers
     all_receivers = sorted(site.active_receivers.keys())
@@ -139,14 +139,14 @@ def diagnose_processing(
     days_since_rechunk = 0
 
     # Main processing loop
-    # Context manager ensures Dask cluster is shut down on exit
+    # Context manager ensures orchestrator resources are released on exit
     # All params from config — no hardcoded defaults
     resources = proc.resolve_resources()
     with PipelineOrchestrator(
         site=site,
         dry_run=False,
         n_max_workers=resources["n_workers"],
-        batch_hours=proc.batch_hours,
+        days_per_batch=proc.days_per_batch,
         max_memory_gb=resources["max_memory_gb"],
         cpu_affinity=resources["cpu_affinity"],
         nice_priority=resources["nice_priority"],

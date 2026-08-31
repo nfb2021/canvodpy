@@ -22,7 +22,7 @@ def _has_rinex_files(directory: Path) -> bool:
     """Check if directory exists and contains GNSS observation files.
 
     Checks for RINEX and SBF files using all builtin patterns from
-    ``canvod.virtualiconvname.patterns``.
+    ``canvod.filemap.patterns``.
 
     Parameters
     ----------
@@ -42,13 +42,16 @@ def _has_rinex_files(directory: Path) -> bool:
     if any(f for pattern in RINEX_OBS_GLOB_PATTERNS for f in directory.glob(pattern)):
         return True
 
-    # Also check SBF and other formats via BUILTIN_PATTERNS
-    from canvod.virtualiconvname.patterns import BUILTIN_PATTERNS, auto_match_order
+    # Also check SBF and other formats via BUILTIN_PATTERNS (optional package)
+    try:
+        from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
 
-    for name in auto_match_order():
-        for glob_pat in BUILTIN_PATTERNS[name].file_globs:
-            if any(directory.glob(glob_pat)):
-                return True
+        for name in auto_match_order():
+            for glob_pat in BUILTIN_PATTERNS[name].file_globs:
+                if any(directory.glob(glob_pat)):
+                    return True
+    except ImportError:
+        pass
 
     return False
 
@@ -74,7 +77,7 @@ class DataDirMatcher:
     --------
     >>> from pathlib import Path
     >>> matcher = DataDirMatcher(
-    ...     root=Path("/data/01_Rosalia"),
+    ...     root=Path("/data/01_ExampleSite"),
     ...     reference_pattern=Path("01_reference/01_GNSS/01_raw"),
     ...     canopy_pattern=Path("02_canopy/01_GNSS/01_raw")
     ... )
@@ -101,7 +104,7 @@ class DataDirMatcher:
         import warnings
 
         warnings.warn(
-            "DataDirMatcher is deprecated. Use canvod.virtualiconvname.FilenameMapper "
+            "DataDirMatcher is deprecated. Use canvod.filemap.FilenameMapper "
             "with DataDirectoryValidator instead.",
             DeprecationWarning,
             stacklevel=2,
@@ -262,7 +265,7 @@ class PairDataDirMatcher:
     ... }
     >>>
     >>> matcher = PairDataDirMatcher(
-    ...     base_dir=Path("/data/01_Rosalia"),
+    ...     base_dir=Path("/data/01_ExampleSite"),
     ...     receivers=receivers,
     ...     analysis_pairs=pairs
     ... )
@@ -284,7 +287,7 @@ class PairDataDirMatcher:
         import warnings
 
         warnings.warn(
-            "PairDataDirMatcher is deprecated. Use canvod.virtualiconvname.FilenameMapper "
+            "PairDataDirMatcher is deprecated. Use canvod.filemap.FilenameMapper "
             "with DataDirectoryValidator instead.",
             DeprecationWarning,
             stacklevel=2,

@@ -42,8 +42,9 @@ class EquirectangularBuilder(BaseGridBuilder):
 
     Mathematical construction
     -------------------------
-    1. Theta edges are placed at ``cutoff_theta``, ``cutoff_theta + Δθ``,
-       ``cutoff_theta + 2Δθ``, … up to π/2.
+    1. Theta edges are placed at ``0``, ``Δθ``, ``2Δθ``, … up to
+       ``π/2 − cutoff_theta`` (the last edge is clamped exactly to
+       ``π/2 − cutoff_theta`` rather than overshooting it).
     2. Phi edges are placed at 0, Δθ, 2Δθ, … up to 2π.
     3. Every (theta_band, phi_sector) combination produces one cell.  The
        cell centre is the midpoint of the rectangle.
@@ -91,13 +92,19 @@ class EquirectangularBuilder(BaseGridBuilder):
             Cell-id arrays, one per band.
 
         """
-        max_theta = np.pi / 2
+        # Elevation mask: keep bands from the zenith (theta=0) out to
+        # (pi/2 - cutoff_theta), i.e. drop the near-horizon band(s) --
+        # matching EqualAreaBuilder/EqualAngleBuilder convention. Anchor the
+        # last edge exactly at max_theta (rather than letting arange's step
+        # overshoot it) so no band extends past the horizon or past the
+        # cutoff when angular_resolution doesn't evenly divide it.
+        max_theta = np.pi / 2 - self.cutoff_theta_rad
 
-        theta_edges = np.arange(
-            self.cutoff_theta_rad,
-            max_theta + self.angular_resolution_rad,
-            self.angular_resolution_rad,
-        )
+        theta_edges = np.arange(0, max_theta, self.angular_resolution_rad)
+        theta_edges = np.append(theta_edges, max_theta)
+        if len(theta_edges) > 1 and np.isclose(theta_edges[-1], theta_edges[-2]):
+            theta_edges = theta_edges[:-1]
+
         phi_edges = np.arange(
             0, 2 * np.pi + self.angular_resolution_rad, self.angular_resolution_rad
         )
@@ -125,7 +132,7 @@ class EquirectangularBuilder(BaseGridBuilder):
             pl.int_range(0, pl.len()).alias("cell_id")
         )
 
-        theta_lims = theta_edges[:-1]
+        theta_lims = theta_edges[1:]
         phi_lims = [phi_edges[:-1] for _ in range(len(theta_edges) - 1)]
         cell_ids_list = [
             np.arange(i * (len(phi_edges) - 1), (i + 1) * (len(phi_edges) - 1))

@@ -4,10 +4,10 @@ version = "0.2.3"
 description = "Equal-area hemispheric grid operations for GNSS-Transmissometry"
 readme = "README.md"
 authors = [
-    {name = "Nicolas François Bader", email = "nicolas.bader@geo.tuwien.ac.at"},
+    {name = "Nicolas François Bader", email = "support@canvodpy.eu"},
 ]
 maintainers = [
-    {name = "Climate and Environmental Remote Sensing (CLIMERS)", email = "nicolas.bader@geo.tuwien.ac.at"},
+    {name = "Climate and Environmental Remote Sensing (CLIMERS)", email = "support@canvodpy.eu"},
 ]
 requires-python = ">=3.14"
 classifiers = [
@@ -52,8 +52,8 @@ Issues = "https://github.com/nfb2021/canvodpy/issues"
 requires = ["uv_build>=0.9.17,<0.10.0"]
 build-backend = "uv_build"
 
-[tool.ty]
-extend-exclude = [
+[tool.ty.src]
+exclude = [
     "**/docs/*.ipynb",
 ]
 

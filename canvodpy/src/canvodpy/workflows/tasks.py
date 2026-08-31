@@ -26,8 +26,8 @@ import xarray as xr
 
 from canvod.auxiliary.pipeline import AuxDataPipeline
 from canvod.auxiliary.position import ECEFPosition
+from canvod.config import load_config
 from canvod.readers import MatchedDirs
-from canvod.utils.config import load_config
 from canvod.utils.tools import YYYYDOY
 from canvodpy.orchestrator.interpolator import (
     ClockConfig,
@@ -60,14 +60,19 @@ def _cap_blas_threads(n: int = 1) -> None:
             os.environ[var] = s
 
 
-# GNSS file glob patterns — sourced from canvod-virtualiconvname BUILTIN_PATTERNS
+# GNSS file glob patterns — sourced from canvod-filemap BUILTIN_PATTERNS
+# when that optional package is installed. Falls back to canonical
+# canVOD-only names (*.rnx, *.sbf) otherwise.
 def _get_gnss_globs() -> list[str]:
-    from canvod.virtualiconvname.patterns import BUILTIN_PATTERNS, auto_match_order
+    try:
+        from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
 
-    globs: set[str] = set()
-    for name in auto_match_order():
-        globs.update(BUILTIN_PATTERNS[name].file_globs)
-    return sorted(globs)
+        globs: set[str] = set()
+        for name in auto_match_order():
+            globs.update(BUILTIN_PATTERNS[name].file_globs)
+        return sorted(globs)
+    except ImportError:
+        return sorted({"*.rnx", "*.RNX", "*.sbf", "*.SBF"})
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +158,7 @@ def _discover_files_for_date(
     # Prefer FilenameMapper when naming config is available
     if site_cfg.naming and rcfg.naming:
         try:
-            from canvod.virtualiconvname import (
+            from canvod.filemap import (
                 FilenameMapper,
                 ReceiverNamingConfig,
                 SiteNamingConfig,
@@ -335,7 +340,7 @@ def _resolve_recipe(recipe_name: str) -> Path:
 
     Searches ``config/recipes/`` relative to the monorepo root.
     """
-    from canvod.utils.config.loader import find_monorepo_root
+    from canvod.config.loader import find_monorepo_root
 
     recipe_path = find_monorepo_root() / "config" / "recipes" / f"{recipe_name}.yaml"
     if not recipe_path.exists():
@@ -359,7 +364,7 @@ def _validate_receiver_with_recipe(
     """
     from natsort import natsorted
 
-    from canvod.virtualiconvname.recipe import NamingRecipe
+    from canvod.filemap.recipe import NamingRecipe
 
     recipe_path = _resolve_recipe(recipe_name)
     recipe = NamingRecipe.load(recipe_path)
@@ -505,7 +510,7 @@ def validate_data_dirs(site: str) -> dict:
 
         # Legacy naming-dict validation
         if rcfg.naming:
-            from canvod.virtualiconvname import (
+            from canvod.filemap import (
                 DataDirectoryValidator,
                 ReceiverNamingConfig,
                 SiteNamingConfig,
@@ -825,7 +830,7 @@ def process_rinex(
     _cap_blas_threads(config.processing.processing.threads_per_worker or 1)
     site_cfg = config.sites.sites[site]
     date_obj = _resolve_date(yyyydoy)
-    keep_vars = config.processing.processing.keep_rnx_vars
+    keep_vars = config.processing.params.keep_gnss_observables
     keep_sids = config.sids.get_sids()
     base = site_cfg.get_base_path()
     aux_path = Path(aux_zarr_path)
@@ -848,7 +853,7 @@ def process_rinex(
             store_groups = [recv_name]
         else:
             # Reference receivers write to {ref}_{canopy} store groups
-            canopy_names = site_cfg.resolve_scs_from(recv_name)
+            canopy_names = site_cfg.resolve_paired_canopies(recv_name)
             store_groups = [f"{recv_name}_{cn}" for cn in canopy_names]
 
         # Resolve RINEX files
@@ -904,7 +909,7 @@ def process_rinex(
                 # write_or_append_group(dedup=True) repeats this check as the
                 # authoritative store-level gate, covering races and future
                 # refactors that might bypass this pre-check.
-                skip, reason = research_site.rinex_store.should_skip_file(
+                skip, reason = research_site.gnss_store.should_skip_file(
                     group_name=group,
                     file_hash=file_hash,
                     time_start=time_start,
@@ -919,7 +924,7 @@ def process_rinex(
                     )
                     continue
 
-                research_site.rinex_store.write_or_append_group(
+                research_site.gnss_store.write_or_append_group(
                     dataset=augmented_ds,
                     group_name=group,
                     commit_message=f"Airflow ingest {rnx_file.name}",
@@ -996,7 +1001,7 @@ def process_sbf(
     _cap_blas_threads(config.processing.processing.threads_per_worker or 1)
     site_cfg = config.sites.sites[site]
     date_obj = _resolve_date(yyyydoy)
-    keep_vars = config.processing.processing.keep_rnx_vars
+    keep_vars = config.processing.params.keep_gnss_observables
     keep_sids = config.sids.get_sids()
     base = site_cfg.get_base_path()
 
@@ -1017,7 +1022,7 @@ def process_sbf(
         if recv_type == "canopy":
             store_groups = [recv_name]
         else:
-            canopy_names = site_cfg.resolve_scs_from(recv_name)
+            canopy_names = site_cfg.resolve_paired_canopies(recv_name)
             store_groups = [f"{recv_name}_{cn}" for cn in canopy_names]
 
         # Resolve SBF files
@@ -1084,7 +1089,7 @@ def process_sbf(
                 # write_or_append_group(dedup=True) repeats this check as the
                 # authoritative store-level gate, covering races and future
                 # refactors that might bypass this pre-check.
-                skip, reason = research_site.rinex_store.should_skip_file(
+                skip, reason = research_site.gnss_store.should_skip_file(
                     group_name=group,
                     file_hash=file_hash,
                     time_start=time_start,
@@ -1099,7 +1104,7 @@ def process_sbf(
                     )
                     continue
 
-                research_site.rinex_store.write_or_append_group(
+                research_site.gnss_store.write_or_append_group(
                     dataset=augmented_ds,
                     group_name=group,
                     commit_message=f"Airflow SBF ingest {sbf_file.name}",
@@ -1110,8 +1115,8 @@ def process_sbf(
         # Write sbf_obs metadata per receiver — no in-memory concat
         if sbf_obs_parts:
             try:
-                rinex_store_any = cast(Any, research_site.rinex_store)
-                rinex_store_any.append_metadata_datasets(
+                gnss_store_any = cast(Any, research_site.gnss_store)
+                gnss_store_any.append_metadata_datasets(
                     sbf_obs_parts, recv_name, "sbf_obs"
                 )
                 sbf_obs_written = True
@@ -1317,7 +1322,7 @@ def calculate_vod(site: str, yyyydoy: str) -> dict:
     time_range = (start_time, end_time)
 
     analyses_result: dict[str, dict] = {}
-    for analysis_name in research_site.active_vod_analyses:
+    for analysis_name, analysis_cfg in research_site.active_vod_analyses.items():
         logger.info("calculate_vod: running %s for %s", analysis_name, site)
 
         vod_ds = research_site.calculate_vod(
@@ -1325,9 +1330,24 @@ def calculate_vod(site: str, yyyydoy: str) -> dict:
             time_range=time_range,
         )
 
+        calculator_name = vod_ds.attrs.get("calculator", "unknown")
+        gnss_store_path = str(research_site.gnss_store.store_path)
         research_site.store_vod_analysis(
             vod_dataset=vod_ds,
             analysis_name=analysis_name,
+            calculator_name=calculator_name,
+            source_file_hashes={
+                analysis_cfg.canopy_receiver: vod_ds.attrs.get(
+                    "canopy_hash", "unknown"
+                ),
+                analysis_cfg.reference_receiver: vod_ds.attrs.get(
+                    "reference_hash", "unknown"
+                ),
+            },
+            source_gnss_stores={
+                analysis_cfg.canopy_receiver: gnss_store_path,
+                analysis_cfg.reference_receiver: gnss_store_path,
+            },
             commit_message=f"Airflow VOD {analysis_name} {date_obj.to_str()}",
         )
 

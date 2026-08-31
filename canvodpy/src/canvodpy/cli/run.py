@@ -3,86 +3,126 @@
 Usage
 -----
     # Process a specific range
-    uv run python -m canvodpy.cli.run --site Rosalia --start 2025001 --end 2025007
+    uv run canvodpy run --site ExampleSite --start 2025001 --end 2025007
 
     # Process new data only (auto-detect start from store, end = today)
-    uv run python -m canvodpy.cli.run --site Rosalia
+    uv run canvodpy run --site ExampleSite
+
+    # Multiple sites in one invocation (processed sequentially) — repeat the flag
+    uv run canvodpy run --site ExampleSite --site OtherSite
 
     # Cron: run daily, picks up new data automatically
-    # 0 3 * * * cd /path/to/canvodpy && uv run python -m canvodpy.cli.run --site Rosalia
+    # 0 3 * * * cd /path/to/canvodpy && uv run canvodpy run --site ExampleSite
 
     # Observation ingestion only, no VOD
-    uv run python -m canvodpy.cli.run --site Rosalia --no-vod
+    uv run canvodpy run --site ExampleSite --no-vod
 
     # Preview what would be processed
-    uv run python -m canvodpy.cli.run --site Rosalia --dry-run
+    uv run canvodpy run --site ExampleSite --dry-run
+
+    # Launch the performance dashboard alongside the run (reachable at
+    # http://<host>:<port>; its own marimo startup output is redirected to
+    # <log_dir>/machine/dashboard.log so it doesn't clutter run's progress)
+    uv run canvodpy run --site ExampleSite --dashboard --dashboard-host 0.0.0.0
 """
 
 from __future__ import annotations
 
-import argparse
+import enum
+import os
+import socket
+import subprocess
 import sys
 import time
 from datetime import UTC, datetime
+from functools import partial
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Annotated
 
 import numpy as np
 import structlog
+import typer
 import xarray as xr
+
+from canvodpy.logging import emit_run_summary
+from canvodpy.logging.run_context import reset_run_id, set_run_id
+from canvodpy.logging.stage_timer import reset_run_stats
+from canvodpy.orchestrator.resources import ResourceSampler
+from canvodpy.orchestrator.store_retry import call_with_store_retries
 
 log = structlog.get_logger(__name__)
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        prog="canvodpy",
-        description="Process GNSS observations into Icechunk stores and compute VOD.",
+def _pick_free_port(host: str) -> int:
+    """Ask the OS for a free port, bound to the same host the dashboard will use.
+
+    Binding the discovery socket to ``host`` (rather than all interfaces)
+    guarantees the returned port is actually free on the interface the
+    dashboard will bind to next -- discovering on a different interface
+    (e.g. loopback) could return a port already taken on ``host``.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind((host, 0))
+        return s.getsockname()[1]
+
+
+def _start_dashboard(log_dir: Path, host: str, port: int) -> None:
+    """Spawn the marimo performance dashboard as a detached subprocess.
+
+    Its stdout/stderr go to a log file, not the terminal — the whole point
+    is that ``canvodpy run``'s own progress output stays the only thing
+    visible in the foreground. The subprocess outlives this command (no
+    wait/terminate), so the dashboard stays up for reviewing the finished
+    run.
+    """
+    from canvodpy.cli.perf_dashboard import _NOTEBOOK_PATH
+
+    env = os.environ.copy()
+    env["CANVODPY_PERF_LOG_DIR"] = str(log_dir)
+    machine_dir = log_dir / "machine"
+    machine_dir.mkdir(parents=True, exist_ok=True)
+    dash_log = machine_dir / "dashboard.log"
+
+    subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "marimo",
+            "run",
+            str(_NOTEBOOK_PATH),
+            "--host",
+            host,
+            "--port",
+            str(port),
+            "--headless",
+        ],
+        env=env,
+        stdout=open(dash_log, "w"),
+        stderr=subprocess.STDOUT,
     )
-    p.add_argument(
-        "--site",
-        required=True,
-        help="Site name as defined in sites.yaml (e.g. Rosalia)",
-    )
-    p.add_argument(
-        "--start",
-        default=None,
-        help=(
-            "Start date in YYYYDOY format (e.g. 2025001). "
-            "If omitted, resumes from the last processed date in the store."
-        ),
-    )
-    p.add_argument(
-        "--end",
-        default=None,
-        help=(
-            "End date in YYYYDOY format (e.g. 2025007). "
-            "If omitted, processes up to today."
-        ),
-    )
-    p.add_argument(
-        "--no-vod",
-        action="store_true",
-        default=False,
-        help="Skip VOD calculation (only ingest observations)",
-    )
-    p.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Preview processing plan without executing",
-    )
-    p.add_argument(
-        "--workers",
-        type=int,
-        default=None,
-        help="Number of Dask workers (default: from config)",
-    )
-    p.add_argument(
-        "--batch-hours",
-        type=float,
-        default=None,
-        help="Hours per processing batch (default: from config)",
-    )
-    return p
+    print(f"Dashboard: http://{host}:{port}  (output: {dash_log})")
+
+
+def _build_vod_calculator_choice() -> type[enum.StrEnum]:
+    """Build the VOD-calculator choice enum from the live factory registry.
+
+    A dynamic StrEnum: Typer renders it as a restricted choice in --help,
+    while downstream code can keep treating the value as a plain string
+    (calculator_name=args.vod_calculator works unchanged).
+    """
+    from canvodpy.factories import VODFactory
+
+    names = VODFactory.list_available()
+    return enum.StrEnum("VodCalculatorChoice", {name: name for name in names})
+
+
+VodCalculatorChoice = _build_vod_calculator_choice()
+
+
+class EphemerisSourceChoice(enum.StrEnum):
+    final = "final"
+    broadcast = "broadcast"
 
 
 def _last_processed_date(store) -> str | None:
@@ -141,6 +181,23 @@ def _today_yyyydoy() -> str:
     return f"{now.year}{now.timetuple().tm_yday:03d}"
 
 
+def _site_groups(site) -> list[str]:
+    """List receiver-group names as used in the Icechunk store.
+
+    Canopy receivers write under their own name (``canopy_01``); each
+    reference/canopy pair writes under ``{reference}_{canopy}``.
+    """
+    canopy_names = [
+        name
+        for name, cfg in site.active_receivers.items()
+        if cfg.get("type") == "canopy"
+    ]
+    pair_names = [
+        f"{ref}_{canopy}" for ref, canopy in site._site.get_reference_canopy_pairs()
+    ]
+    return canopy_names + pair_names
+
+
 def _resolve_date_range(args, site) -> tuple[str, str]:
     """Resolve start/end from args, store state, and today's date."""
     # End date: explicit or today
@@ -150,7 +207,7 @@ def _resolve_date_range(args, site) -> tuple[str, str]:
     if args.start:
         start = args.start
     else:
-        last = _last_processed_date(site.rinex_store)
+        last = _last_processed_date(site.gnss_store)
         if last is not None:
             # Start from the day after the last processed date
             # (the skip strategy handles overlap, but this avoids
@@ -165,30 +222,14 @@ def _resolve_date_range(args, site) -> tuple[str, str]:
     return start, end
 
 
-def _print_header(args: argparse.Namespace, config, start: str, end: str) -> None:
-    proc = config.processing.processing
-    storage = config.processing.storage
-    print("=" * 72)
-    print(f"canvodpy  site={args.site}  {start} .. {end}")
-    print("=" * 72)
-    print(f"  started        {datetime.now():%Y-%m-%d %H:%M:%S}")
-    print(f"  ephemeris      {proc.ephemeris_source}")
-    print(f"  keep_vars      {proc.keep_rnx_vars}")
-    print(f"  batch_hours    {args.batch_hours or proc.batch_hours}")
-    print(f"  resource_mode  {proc.resource_mode}")
-    print(f"  store_strategy {storage.rinex_store_strategy}")
-    print(f"  rinex_store    {storage.rinex_store_name or 'rinex'}")
-    print(f"  vod_store      {storage.vod_store_name or 'vod'}")
-    print(f"  vod            {'skip' if args.no_vod else 'enabled'}")
-    print()
-
-
 def _compute_vod_for_day(
     datasets: dict[str, xr.Dataset],
     vod_analyses: dict,
-    research_site,
     date_key: str,
-) -> dict[str, xr.Dataset]:
+    reporter=None,
+    calculator_name: str = "tau_omega",
+    gnss_store_path: str = "",
+) -> dict[str, dict]:
     """Compute VOD for all configured analysis pairs.
 
     Parameters
@@ -202,14 +243,21 @@ def _compute_vod_for_day(
         ``GnssResearchSite`` instance (owns the VOD store).
     date_key
         YYYYDOY string for logging.
+    calculator_name
+        Name registered in ``VODFactory`` (e.g. ``"tau_omega"``).
+    gnss_store_path
+        Path to the site's RINEX store, for VOD provenance (both receivers
+        of a site live in the same store).
 
     Returns
     -------
-    dict mapping analysis name to VOD dataset.
+    dict mapping analysis name to a dict with keys ``vod_ds``,
+    ``source_file_hashes``, ``source_gnss_stores`` (see
+    ``write_or_append_vod_group`` / dev/todo_later.md §29).
     """
-    from canvod.vod.calculator import TauOmegaZerothOrder
+    from canvodpy.factories import VODFactory
 
-    results: dict[str, xr.Dataset] = {}
+    results: dict[str, dict] = {}
 
     for analysis_name, analysis_cfg in vod_analyses.items():
         canopy_name = analysis_cfg.canopy_receiver
@@ -240,35 +288,39 @@ def _compute_vod_for_day(
 
         t0 = time.perf_counter()
         try:
-            vod_ds = TauOmegaZerothOrder.from_datasets(
-                canopy_ds=canopy_ds,
-                sky_ds=ref_ds,
-                align=True,
+            canopy_ds, ref_ds = xr.align(canopy_ds, ref_ds, join="inner")
+            calculator = VODFactory.create(
+                calculator_name, canopy_ds=canopy_ds, sky_ds=ref_ds
             )
+            vod_ds = calculator.calculate_vod()
 
             # Rechunk + clear encoding for clean Icechunk writes
-            vod_ds = vod_ds.chunk({"epoch": 34560, "sid": -1})
+            vod_ds = vod_ds.chunk({"epoch": 17280, "sid": -1})
             for var in vod_ds.data_vars:
                 vod_ds[var].encoding = {}
 
             dt = time.perf_counter() - t0
 
-            # Write to VOD store via GnssResearchSite (handles write-or-append)
-            research_site.store_vod_analysis(
-                vod_dataset=vod_ds,
-                analysis_name=analysis_name,
-                commit_message=f"VOD {analysis_name} {date_key}",
-            )
-
             n_valid = int((~vod_ds["VOD"].isnull()).sum())
             n_total = vod_ds["VOD"].size
-            print(
-                f"  VOD {analysis_name}: "
-                f"{n_valid}/{n_total} valid "
-                f"({100 * n_valid / n_total:.0f}%)  "
-                f"{dt:.1f}s"
-            )
-            results[analysis_name] = vod_ds
+            if reporter:
+                reporter.on_vod_result(analysis_name, n_valid, n_total, dt)
+            else:
+                pct = 100 * n_valid / n_total if n_total else 0
+                print(
+                    f"  VOD {analysis_name}: {n_valid}/{n_total} valid ({pct:.0f}%)  {dt:.1f}s"
+                )
+            results[analysis_name] = {
+                "vod_ds": vod_ds,
+                "source_file_hashes": {
+                    canopy_name: canopy_ds.attrs.get("File Hash", "unknown"),
+                    ref_name: ref_ds.attrs.get("File Hash", "unknown"),
+                },
+                "source_gnss_stores": {
+                    canopy_name: gnss_store_path,
+                    ref_name: gnss_store_path,
+                },
+            }
 
         except Exception as e:
             log.error(
@@ -277,90 +329,454 @@ def _compute_vod_for_day(
                 date=date_key,
                 error=str(e),
             )
-            print(f"  VOD {analysis_name}: FAILED — {e}")
+            if reporter:
+                reporter.on_vod_failed(analysis_name, str(e))
+            else:
+                print(f"  VOD {analysis_name}: FAILED — {e}")
 
     return results
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = _build_parser()
-    args = parser.parse_args(argv)
+def _main_impl(args: SimpleNamespace) -> int:
+    from pathlib import Path
 
-    from canvod.utils.config import load_config
+    from canvod.config import load_config
+    from canvod.config.loader import ConfigValidationError, format_validation_error
 
-    config = load_config()
+    config_file: Path | None = None
+    if args.config is not None:
+        config_file = Path(args.config)
+        if not config_file.exists():
+            print(
+                f"Error: overlay config file not found: {config_file}", file=sys.stderr
+            )
+            return 1
+        os.environ["CANVOD_CONFIG_FILE"] = str(config_file.expanduser().resolve())
+
+    try:
+        config = load_config(config_file=config_file)
+    except ConfigValidationError as e:
+        print(format_validation_error(e), file=sys.stderr)
+        return 1
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+    if args.ephemeris_source is not None:
+        config.processing.params.ephemeris_source = args.ephemeris_source
 
     from canvodpy.api import Site
+    from canvodpy.vod_computer import ensure_vod_store_metadata
 
-    site = Site(args.site)
-
-    # Resolve date range (auto-detect from store if not specified)
-    start, end = _resolve_date_range(args, site)
-
-    _print_header(args, config, start, end)
+    site_names: list[str] = args.site
 
     if args.dry_run:
-        with site.pipeline(
-            n_workers=args.workers,
-            batch_hours=args.batch_hours,
-            dry_run=True,
-        ) as pipeline:
-            plan = pipeline.preview()
-            print("Dry-run plan:")
-            for k, v in plan.items():
-                print(f"  {k}: {v}")
+        for site_name in site_names:
+            site = Site(site_name)
+            start, end = _resolve_date_range(args, site)
+            with site.pipeline(
+                n_workers=args.workers,
+                days_per_batch=args.days_per_batch,
+                dry_run=True,
+            ) as pipeline:
+                plan = pipeline.preview(start=start, end=end)
+                print(f"Dry-run plan for {site_name}:")
+                for k, v in plan.items():
+                    print(f"  {k}: {v}")
         return 0
 
-    # Resolve VOD analysis pairs
-    vod_analyses = site.vod_analyses if not args.no_vod else {}
-    if vod_analyses:
-        print(f"VOD analyses: {list(vod_analyses.keys())}")
-        print()
+    if args.dashboard:
+        _start_dashboard(
+            config.processing.logging.get_log_dir(),
+            args.dashboard_host,
+            args.dashboard_port or _pick_free_port(args.dashboard_host),
+        )
 
-    # Access the underlying GnssResearchSite for VOD store writes
-    research_site = site._site
+    from canvodpy.cli.dashboard import day_count, make_reporter
+
+    # Resolve every site upfront: date range + receiver-group rows, so a
+    # multi-site run shows the full picture from the start.
+    site_infos: list[tuple[str, Site, str, str]] = []
+    rows: list[tuple[str, str, int]] = []
+    for site_name in site_names:
+        site = Site(site_name)
+        start, end = _resolve_date_range(args, site)
+        total = day_count(start, end)
+        for group in _site_groups(site):
+            rows.append((site_name, group, total))
+        site_infos.append((site_name, site, start, end))
 
     total_days = 0
     total_vod = 0
     t_total = time.perf_counter()
 
-    with site.pipeline(
-        n_workers=args.workers,
-        batch_hours=args.batch_hours,
-        dry_run=False,
-    ) as pipeline:
-        for date_key, datasets in pipeline.process_range(
-            start=start,
-            end=end,
-        ):
-            total_days += 1
-            t_day = time.perf_counter()
+    from canvodpy.orchestrator.resources import PipelineRunLock
 
-            # Print observation summary
-            print(f"\n--- {date_key} ---")
-            for group, ds in datasets.items():
-                e, s = ds.sizes.get("epoch", 0), ds.sizes.get("sid", 0)
-                print(f"  {group}: {e} epochs x {s} sids")
+    # Marks this process as an active pipeline run for the duration of the
+    # real write loop below (not the dry-run preview above, which returns
+    # before this point) -- lets `canvodpy store maintain-due` (a
+    # cron-safe, unattended Icechunk maintenance entry point) skip itself
+    # instead of racing an in-progress write. Same-host only; see
+    # PipelineRunLock's docstring for the network-mounted-store caveat.
+    with PipelineRunLock(), make_reporter(rows) as reporter:
+        for site_name, site, start, end in site_infos:
+            # One run_id per site: failures are site-scoped, and this keeps
+            # correlation with Icechunk commits (also per-site-store) clean.
+            run_id = f"{site_name}-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
+            run_id_token = set_run_id(run_id)
+            last_good_date_key: str | None = None
+            stage = "site_init"
+            site_days = 0
+            site_vod = 0
 
-            # VOD — datasets are read back from the store after write,
-            # so they're Zarr-backed. Still cheaper than a separate pass
-            # because the data is hot in OS page cache.
-            if vod_analyses:
-                vod_results = _compute_vod_for_day(
-                    datasets, vod_analyses, research_site, date_key
+            # Continuous memory/CPU/disk-I/O visibility for the whole
+            # site run (perf-degradation investigation, 2026-07-14) --
+            # complements the once-per-batch MemoryMonitor snapshot with
+            # samples covering time spent outside batch boundaries too.
+            resource_sampler = ResourceSampler()
+            resource_sampler.start()
+
+            try:
+                reporter.set_current_site(site_name, start, end)
+                reporter.print_header(site_name, start, end, config, args)
+                # First-run/remote-machine visibility: worker-pool startup,
+                # the satellite catalog, and store opening all happen here,
+                # silently, before the first per-day progress line -- without
+                # this it looks hung (see dev/todo_later.md §33).
+                reporter.log(
+                    "  Initializing (worker pool, satellite catalog, store) "
+                    "-- may take a while on a cold cache or first run..."
                 )
-                total_vod += len(vod_results)
 
-            dt_day = time.perf_counter() - t_day
-            print(f"  day total: {dt_day:.1f}s")
+                # Resolve VOD analysis pairs for this site
+                vod_analyses = site.vod_analyses if not args.no_vod else {}
 
-    dt_total = time.perf_counter() - t_total
-    print()
-    print("=" * 72)
-    print(f"Done  {total_days} days  {total_vod} VOD analyses  {dt_total:.0f}s total")
-    print("=" * 72)
+                if vod_analyses:
+                    reporter.log(f"  VOD analyses: {list(vod_analyses.keys())}")
+
+                    # Loud, read-only, non-blocking gap check (dev/todo_
+                    # later.md §43): a prior run's RINEX ingestion can
+                    # complete cleanly while its VOD-store write fails
+                    # afterward, and resume logic only looks at the RINEX
+                    # store, so that gap is otherwise silently permanent.
+                    # Reports here so a human notices; does NOT
+                    # auto-backfill -- auto-retrying inside every future
+                    # run would silently re-absorb a persistent failure
+                    # instead of stopping loudly. Run `canvodpy
+                    # vod-reconcile --execute` explicitly to backfill.
+                    from canvodpy.orchestrator.vod_reconcile import (
+                        find_vod_backfill_gaps,
+                    )
+
+                    for analysis_name in vod_analyses:
+                        try:
+                            gaps = find_vod_backfill_gaps(
+                                site, analysis_name, args.vod_calculator
+                            )
+                        except Exception:
+                            log.warning(
+                                "vod_gap_check_failed",
+                                site=site_name,
+                                analysis=analysis_name,
+                                exc_info=True,
+                            )
+                            continue
+                        if gaps:
+                            reporter.log(
+                                f"  ⚠ {len(gaps)} date(s) have RINEX data "
+                                f"but no VOD for '{analysis_name}' "
+                                f"({gaps[0]}..{gaps[-1]}) -- run 'canvodpy "
+                                f"vod-reconcile --site {site_name} --analysis "
+                                f"{analysis_name} --execute' to backfill"
+                            )
+
+                # Access the underlying GnssResearchSite for VOD store writes
+                research_site = site._site
+
+                def _on_group_written(
+                    group_name: str, _site_name: str = site_name
+                ) -> None:
+                    reporter.advance(_site_name, group_name)
+
+                stage = "pipeline_process"
+                with site.pipeline(
+                    n_workers=args.workers,
+                    days_per_batch=args.days_per_batch,
+                    dry_run=False,
+                    on_group_written=_on_group_written,
+                ) as pipeline:
+                    gen = pipeline.process_range(start=start, end=end)
+                    while True:
+                        t_pipeline = time.perf_counter()
+                        try:
+                            date_key, datasets = next(gen)
+                        except StopIteration:
+                            break
+                        dt_pipeline = time.perf_counter() - t_pipeline
+
+                        total_days += 1
+                        site_days += 1
+                        reporter.on_day_start(date_key)
+                        reporter.on_datasets(datasets)
+
+                        dt_vod = 0.0
+                        dt_vod_store = 0.0
+                        if vod_analyses:
+                            stage = "vod_calc"
+                            t_vod = time.perf_counter()
+                            vod_results = _compute_vod_for_day(
+                                datasets,
+                                vod_analyses,
+                                date_key,
+                                reporter,
+                                calculator_name=args.vod_calculator,
+                                gnss_store_path=str(
+                                    research_site.gnss_store.store_path
+                                ),
+                            )
+                            dt_vod = time.perf_counter() - t_vod
+                            # Additive stage_timing so the performance dashboard
+                            # can distinguish VOD models/analyses (see the
+                            # reading/validating/augmenting/writing events
+                            # emitted in processor.py for the same pattern).
+                            log.info(
+                                "stage_timing",
+                                stage="vod_calc",
+                                duration_seconds=round(dt_vod, 3),
+                                status="ok",
+                                date_key=date_key,
+                                calculator=args.vod_calculator,
+                                n_analyses=len(vod_results),
+                            )
+
+                            stage = "vod_store"
+                            if vod_results:
+                                call_with_store_retries(
+                                    partial(
+                                        ensure_vod_store_metadata,
+                                        site,
+                                        args.vod_calculator,
+                                    ),
+                                    logger=log,
+                                    date=date_key,
+                                    op="vod_metadata_write",
+                                )
+                            t_vod_store = time.perf_counter()
+                            if vod_results:
+                                # One fork/merge batch commit for all of
+                                # today's analysis pairs, instead of one
+                                # full session-open/write/commit cycle per
+                                # pair in sequence -- same cross-group
+                                # parallelization as the RINEX receiver-group
+                                # writes (RinexDataProcessor.
+                                # _write_receiver_batch_forked). Retried as
+                                # one unit: the batch write is all-or-nothing
+                                # (fail-fast, no partial merge -- see
+                                # write_or_append_vod_groups_batch), so a
+                                # retry after a transient error is safe --
+                                # any pre-pass commit for a brand-new group
+                                # that already landed is dedup-visible and
+                                # won't be re-attempted.
+                                batch_results = call_with_store_retries(
+                                    partial(
+                                        research_site.store_vod_analyses_batch,
+                                        items=[
+                                            {
+                                                "vod_dataset": result["vod_ds"],
+                                                "analysis_name": analysis_name,
+                                                "calculator_name": args.vod_calculator,
+                                                "source_file_hashes": result[
+                                                    "source_file_hashes"
+                                                ],
+                                                "source_gnss_stores": result[
+                                                    "source_gnss_stores"
+                                                ],
+                                                "commit_message": (
+                                                    f"VOD {analysis_name} {date_key}"
+                                                ),
+                                            }
+                                            for analysis_name, result in vod_results.items()
+                                        ],
+                                    ),
+                                    logger=log,
+                                    date=date_key,
+                                    op="vod_write_batch",
+                                )
+                                for analysis_name in vod_results:
+                                    group_name = (
+                                        f"{args.vod_calculator}/{analysis_name}"
+                                    )
+                                    group_result = batch_results.get(group_name)
+                                    log.info(
+                                        "stage_timing",
+                                        stage="vod_store",
+                                        duration_seconds=round(
+                                            group_result.duration_seconds
+                                            if group_result is not None
+                                            else 0.0,
+                                            3,
+                                        ),
+                                        status="ok",
+                                        date_key=date_key,
+                                        calculator=args.vod_calculator,
+                                        analysis=analysis_name,
+                                    )
+                            dt_vod_store = time.perf_counter() - t_vod_store
+                            total_vod += len(vod_results)
+                            site_vod += len(vod_results)
+
+                        reporter.on_timing(dt_pipeline, dt_vod, dt_vod_store)
+                        last_good_date_key = date_key
+                        stage = "pipeline_process"
+
+                emit_run_summary(site=site_name, days=site_days, vod_results=site_vod)
+            except Exception:
+                # See module docstring / logging/run_context.py: this runs
+                # unattended on remote machines, so the log at the moment of
+                # failure is the only forensic evidence that will exist.
+                log.error(
+                    "run_crashed",
+                    site=site_name,
+                    stage=stage,
+                    last_good_date_key=last_good_date_key,
+                    exc_info=True,
+                )
+                emit_run_summary(
+                    site=site_name,
+                    days=site_days,
+                    vod_results=site_vod,
+                    crashed=True,
+                )
+                raise
+            finally:
+                resource_sampler.stop()
+                reset_run_stats(run_id)
+                reset_run_id(run_id_token)
+
+        dt_total = time.perf_counter() - t_total
+        reporter.on_done(total_days, total_vod, dt_total)
+
     return 0
 
 
+def run(
+    site: Annotated[
+        list[str],
+        typer.Option(
+            "--site",
+            help=(
+                "Site name as defined in sites.yaml (e.g. ExampleSite). Repeat "
+                "the flag for multiple sites — processed sequentially."
+            ),
+        ),
+    ],
+    start: Annotated[
+        str | None,
+        typer.Option(
+            "--start",
+            help=(
+                "Start date in YYYYDOY format (e.g. 2025001). If omitted, "
+                "resumes from the last processed date in the store."
+            ),
+        ),
+    ] = None,
+    end: Annotated[
+        str | None,
+        typer.Option(
+            "--end",
+            help="End date in YYYYDOY format (e.g. 2025007). If omitted, processes up to today.",
+        ),
+    ] = None,
+    no_vod: Annotated[
+        bool,
+        typer.Option(
+            "--no-vod/--vod",
+            help="Skip VOD calculation (only ingest observations).",
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run/--no-dry-run",
+            help="Preview processing plan without executing.",
+        ),
+    ] = False,
+    workers: Annotated[
+        int | None,
+        typer.Option(
+            "--workers", help="Number of loky worker processes (default: from config)."
+        ),
+    ] = None,
+    days_per_batch: Annotated[
+        int | None,
+        typer.Option(
+            "--days-per-batch",
+            help="Number of DOYs per loky wave (default: from config).",
+        ),
+    ] = None,
+    config: Annotated[
+        str | None,
+        typer.Option(
+            "--config",
+            help="Overlay config YAML applied on top of the main canvod-settings.yaml.",
+        ),
+    ] = None,
+    ephemeris_source: Annotated[
+        EphemerisSourceChoice | None,
+        typer.Option(
+            "--ephemeris-source",
+            help=(
+                "Override the configured ephemeris source ('final' = agency "
+                "SP3/CLK, 'broadcast' = SBF SatVisibility). Default: from "
+                "canvod-settings.yaml."
+            ),
+        ),
+    ] = None,
+    vod_calculator: Annotated[
+        VodCalculatorChoice,  # ty: ignore[invalid-type-form]
+        typer.Option("--vod-calculator", help="VOD calculator to use."),
+    ] = VodCalculatorChoice["tau_omega"],
+    dashboard: Annotated[
+        bool,
+        typer.Option(
+            "--dashboard",
+            help=(
+                "Launch the marimo performance dashboard alongside this run, "
+                "as a detached subprocess (its startup banner is redirected "
+                "to a log file, not printed here)."
+            ),
+        ),
+    ] = False,
+    dashboard_host: Annotated[
+        str,
+        typer.Option("--dashboard-host", help="Host for --dashboard to bind to."),
+    ] = "127.0.0.1",
+    dashboard_port: Annotated[
+        int | None,
+        typer.Option(
+            "--dashboard-port",
+            help="Port for --dashboard to bind to (default: an OS-assigned free port).",
+        ),
+    ] = None,
+) -> None:
+    """Process GNSS observations into Icechunk stores and compute VOD."""
+    args = SimpleNamespace(
+        site=site,
+        start=start,
+        end=end,
+        no_vod=no_vod,
+        dry_run=dry_run,
+        workers=workers,
+        days_per_batch=days_per_batch,
+        config=config,
+        ephemeris_source=ephemeris_source.value if ephemeris_source else None,
+        vod_calculator=vod_calculator.value,
+        dashboard=dashboard,
+        dashboard_host=dashboard_host,
+        dashboard_port=dashboard_port,
+    )
+    raise typer.Exit(code=_main_impl(args))
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    typer.run(run)

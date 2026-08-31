@@ -150,7 +150,7 @@ to dataset attributes via `to_metadata_dict()`.
 
 ## Config-Driven Pipeline
 
-The default pipeline is built from `processing.yaml` configuration:
+The default pipeline is built from `canvod-settings.yaml` configuration (`processing.preprocessing:`):
 
 ```yaml
 preprocessing:

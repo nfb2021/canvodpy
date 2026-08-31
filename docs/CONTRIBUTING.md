@@ -177,7 +177,7 @@ When you run `just hooks`, Git hooks are installed that execute automatically on
     git commit -m "feat(readers): your message"
     ```
 
-[:octicons-arrow-right-24: Full hook troubleshooting](guides/getting-started.md#14-pre-commit-hooks-and-why-your-commit-may-be-rejected)
+[:octicons-arrow-right-24: Full hook troubleshooting](guides/contributor-setup.md#14-pre-commit-hooks-and-why-your-commit-may-be-rejected)
 
 ---
 

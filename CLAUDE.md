@@ -98,21 +98,36 @@ RINEX/SBF files → Reader → xarray.Dataset(epoch, sid)
 | `canvod-vod` | `canvod.vod` | VOD retrieval algorithms |
 | `canvod-grids` | `canvod.grids` | Spatial grid operations (EqualArea hemigrid) |
 | `canvod-auxiliary` | `canvod.auxiliary` | Ephemeris, troposphere, auxiliary data pipeline |
-| `canvod-utils` | `canvod.utils` | Config models (Pydantic), shared utilities |
+| `canvod-config` | `canvod.config` | Configuration management: YAML loading, Pydantic validation |
+| `canvod-utils` | `canvod.utils` | Date/time utilities, processing diagnostics |
 | `canvod-viz` | `canvod.viz` | Visualization and store viewer |
 | `canvod-ops` | `canvod.ops` | Operational pipeline (streaming, monitoring) |
-| `canvod-virtualiconvname` | `canvod.virtualiconvname` | GNSS filename convention parsing and validation |
+| `canvod-preflight` | `canvod.preflight` | Naming convention parsing and pre-pipeline data directory validation |
 | `canvod-audit` | `canvod.audit` | Three-tier verification suite (internal consistency, regression, vs gnssvod) |
 | `canvodpy` | `canvodpy` | Orchestrator, API levels (L1-L4), VodComputer |
 
+Optional, published as separate packages in
+[canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions) (not
+part of this monorepo's workspace):
+
+| Package | Namespace | Role |
+|---|---|---|
+| `canvod-filemap` | `canvod.filemap` | Virtual renaming for non-canonical receiver filenames (recipe-based) |
+| `canvod-airflow` | `canvod.airflow` | Airflow DAG definitions for canvodpy pipelines |
+
 ### API levels
 
-| Level | Style | Entry point | Use case |
-|---|---|---|---|
-| L1 | Convenience | `canvodpy.read()`, `canvodpy.vod()` | Quick exploration, notebooks |
-| L2 | Fluent | `FluentWorkflow().read().augment().grid().vod()` | Scripted workflows |
-| L3 | Site pipeline | `site.process()`, `site.vod` | Full site processing with config |
-| L4 | Functional | `canvodpy.functional.*` | Custom pipelines, testing |
+Two supported surfaces, plus the CLI on top of one of them. The rest are
+deprecated (`DeprecationWarning` on use) — kept working, no longer taught.
+
+| Level | Style | Entry point | Use case | Status |
+|---|---|---|---|---|
+| CLI | Command-line | `canvodpy run --site ... --start ... --end ...` | Running the pipeline — recommended | Active |
+| L3 | Site pipeline (OOP) | `Site(site).pipeline()` | Python-native configured pipeline runs — what the CLI wraps | Active |
+| L4 | Functional | `canvodpy.functional.*` | Component-level scripting/analysis; also used by Airflow (stateless) | Active |
+| L1 | Convenience | `process_date()`, `calculate_vod()`, `preview_processing()` | Superseded by `Site(site).pipeline()` | Deprecated |
+| L2 | Fluent | `FluentWorkflow().read().augment().grid().vod()` | Superseded by `Site.pipeline()` / functional | Deprecated |
+| — | `VODWorkflow` | `VODWorkflow(site=...)` | Broken augmentation step (no-op) — do not use | Deprecated |
 
 ### Data contracts
 
@@ -138,6 +153,23 @@ RINEX/SBF files → Reader → xarray.Dataset(epoch, sid)
 ### Common commands
 
 ```bash
+# Pipeline execution (CLI, recommended — see "Running-the-pipeline rule" below)
+uv run canvodpy run --site rosalia --start 2025087 --end 2025100   # Full RINEX ingest + inline VOD
+uv run canvodpy vod --site rosalia --analysis VOD_lower_antenna --start 2025087 --end 2025087
+                                          # VOD ONLY, straight from an existing RINEX store —
+                                          # skips RINEX ingest entirely. Use this to isolate/
+                                          # reproduce a VOD-store write issue without re-running
+                                          # ingest. --analysis is a site.vod_analyses key (list
+                                          # them: `python -c "from canvodpy.api import Site;
+                                          # print(list(Site('rosalia').vod_analyses))"`).
+                                          # Omit --start/--end for the full available range.
+uv run canvodpy vod-reconcile --site rosalia --analysis VOD_lower_antenna
+                                          # Dry-run report of RINEX-ingested-but-VOD-missing
+                                          # dates (a run that crashed after RINEX succeeded but
+                                          # before VOD wrote never gets silently revisited by
+                                          # `canvodpy run`, which only resumes from the RINEX
+                                          # store's latest date). Add --execute to backfill.
+
 # Quality & testing
 uv sync                                  # Install all workspace deps
 just check                               # Lint + format (all packages) — fast, always passes
@@ -182,19 +214,19 @@ just deps-cross                          # Cross-package dependency graph
 ### What's enforced (blocks commits & PRs)
 - **Linting** (ruff) — undefined names, unused imports, actual bugs
 - **Formatting** (ruff) — auto-fixes, no cognitive load
+- **Type checking** (ty) — blocks on `git push` (local hook) and in CI
+  (`type_consistency` job); currently zero diagnostics. No budget/ratchet —
+  either it's clean or it isn't. Two files (`canvod-store/store.py`,
+  `canvod-store/grid_adapters/grid_storage.py`) have a `[[tool.ty.overrides]]`
+  block in `pyproject.toml` suppressing specific rules where third-party
+  zarr/icechunk stubs are too weak to be worth fighting.
 - **Security** — no private keys, no large files in Git
 - **Commit messages** — conventional commits for automated changelog
 
-### What's informational (tracks progress, doesn't block)
-- **Type checking** (ty) — runs in CI with `continue-on-error: true`
-- Type hints are being added progressively
-- Run `just check-types` to track full diagnostics manually
-- Focus on correctness tests (audit suite) over type bureaucracy
-
-### ty rollout phases (active)
-- **Phase 2 (noise reduction):** file-level ignore on the two worst files while refactors are pending
-- **Phase 3 (enforcement):** `just check-types-budget` is enforced in CI via `TY_MAX_DIAGNOSTICS`
-- Ratchet policy: lower the budget by ~10 diagnostics per PR until target is reached, then remove file ignores
+Run `just check-types` to run ty locally before pushing. Real diagnostics get
+fixed or given a targeted `# ty: ignore[<rule>]` with a one-line reason — see
+`docs/guides/DEVELOPMENT.md` for the convention. Focus on correctness tests
+(audit suite) over type bureaucracy when the two are in tension.
 
 ### Test code exemptions
 Tests can use `assert`, magic numbers, and intentionally weird patterns
@@ -208,7 +240,7 @@ to test edge cases (see `pyproject.toml:90` for ruff exemptions).
 - **VOD formula** (`canvod-vod`) — Tau-Omega radiative transfer model
 - **Coordinate transforms** (`canvod-auxiliary`) — ECEF ↔ spherical, deg/rad conversions
 - **Store dedup logic** (`canvod-store`) — hash + temporal overlap + intra-batch guards
-- **Naming convention parser** (`canvod-virtualiconvname`) — IGS/RINEX standard
+- **Naming convention parser** (`canvod-preflight`) — IGS/RINEX standard
 - **Ephemeris interpolation** (`canvod-auxiliary`) — Hermite spline on SP3 data
 - **SID construction** (`canvod-readers`) — must match across readers and store
 
@@ -225,6 +257,43 @@ rendering Mermaid diagrams to SVG/PNG. Source files live in `docs/diagrams/` (`.
 Do not commit generated images (`*.png`, `*.svg` except `docs/assets/logo.svg`),
 `node_modules/`, or `package*.json`.
 
+## 3D visualization conventions (non-negotiable)
+
+Every 3D hemisphere plot built with `canvod.viz.HemisphereVisualizer3D` (or the
+`visualize_grid_3d()` convenience function) must always include:
+
+1. **Cell boundary wireframes** — `plot_hemisphere_surface(..., show_wireframe=True)`.
+   Without this the underlying `Mesh3d` has no visible edges between cells at all,
+   even with distinct per-cell colours — you cannot judge cell density or shape.
+2. **The E/N/Up reference axes** — `HemisphereVisualizer3D.add_custom_axes(fig)`,
+   with the native Plotly x/y/z axes fully **disabled** (`visible=False` on
+   each scene axis — not just `showbackground=False`, which only hides the
+   background pane and leaves the native axis line, ticks, and raw
+   sin/cos-projected tick values/title rendering right alongside the custom
+   labels). Fixed 2026-07-20 in both `plot_hemisphere_surface` and
+   `plot_cell_mesh`. `add_custom_axes()` then draws artificial but
+   native-looking labelled E/N/Up axis lines in the native axes' place.
+   Without disabling the native ones, a 3D hemisphere plot shows two
+   conflicting, overlapping axis systems at once.
+3. **Elevation rings and meridians** — `HemisphereVisualizer3D.add_spherical_overlays(fig)`,
+   for the same reason: an angular reference grid, since there's no native
+   equivalent to polar-plot gridlines in a bare 3D scene.
+
+A 3D plot missing any of these three is not acceptable for this project —
+treat it the same as a plot with no axis labels. See
+`demo/19_grid_3d_gallery.py` for the reference pattern (a small
+`add_reference_frame(fig, viz)` helper wrapping (2) and (3), called on every
+figure right after `plot_hemisphere_surface(..., show_wireframe=True)`).
+
+`show_wireframe` was a declared-but-unwired no-op parameter in
+`plot_hemisphere_surface` until 2026-07-20 — cell boundaries were silently
+never drawn regardless of its value. Fixed via a new
+`HemisphereVisualizer3D._extract_wireframe_lines()` helper (one
+`Scatter3d` line trace per figure, None-separated per-cell perimeter loops,
+mirroring each grid type's own `_render_*_cells` vertex-extraction logic).
+If you touch `plot_hemisphere_surface` or add a new grid type's render path,
+keep this helper's per-grid-type branches in sync.
+
 ## Key documentation — breadcrumb trail
 
 When you need deeper context than this file provides, read these docs **in order**.
@@ -234,7 +303,7 @@ to package-specific details.
 1. `docs/guides/ai-development.md` — **start here**: Claude Code setup, skills, audit suite, workflows
 2. `docs/architecture.md` — system architecture and data flow
 3. `docs/principles.md` — design principles and philosophy
-4. `docs/guides/api-levels.md` — the four API levels explained
+4. `docs/guides/api-levels.md` — CLI, `Site.pipeline()`, and the functional API explained
 5. `docs/guides/getting-started.md` — setup and first run
 6. `docs/packages/audit/overview.md` — three-tier verification suite
 7. `docs/findings/` — scientific comparison results and findings
@@ -243,6 +312,17 @@ to package-specific details.
 **Onboarding rule:** If a user asks you to explain the project, walk them through
 this trail. If you encounter an unfamiliar package or concept, follow the trail
 to the relevant `overview.md` before answering.
+
+**Running-the-pipeline rule:** If a user asks to run, process, or ingest data
+(not analyze/visualize existing results), recommend the CLI
+(`uv run python -m canvodpy.cli.run --site ... --start ... --end ...`) first —
+it resumes automatically from the last processed date when `--start` is
+omitted. Use `Site(site).pipeline()` only when the user needs Python-native
+scripting (looping over sites, embedding in a notebook). Do not suggest
+`FluentWorkflow`, the flat `process_date()`/`calculate_vod()` functions, or
+`VODWorkflow` — all three are deprecated (see `docs/guides/api-levels.md`).
+For analysis/visualization of already-ingested data, `canvodpy.functional` and
+the viz/analysis packages remain the recommended Python surface.
 
 ## AI-assisted development
 

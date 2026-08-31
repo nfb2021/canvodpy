@@ -3,10 +3,10 @@ name = "canvod-store"
 version = "0.2.3"
 description = "Icechunk storage for GNSS-T observations and VOD"
 authors = [
-    {name = "Nicolas François Bader", email = "nicolas.bader@geo.tuwien.ac.at"},
+    {name = "Nicolas François Bader", email = "support@canvodpy.eu"},
 ]
 maintainers = [
-    {name = "Climate and Environmental Remote Sensing (CLIMERS)", email = "nicolas.bader@geo.tuwien.ac.at"},
+    {name = "Climate and Environmental Remote Sensing (CLIMERS)", email = "support@canvodpy.eu"},
 ]
 readme = "README.md"
 requires-python = ">=3.14"
@@ -22,10 +22,11 @@ classifiers = [
 dependencies = [
     "canvod-grids>=0.1.0",
     "canvod-utils>=0.1.0",
+    "canvod-config>=0.1.0",
     "canvod-vod>=0.1.0",
     "canvod-auxiliary>=0.1.0",
     "canvod-readers>=0.1.0",
-    "icechunk>=1.1.5",
+    "icechunk>=2.0.0",
     "zarr>=3.1.2",
     "xarray>=2023.12.0",
     "polars>=1.0.0",
@@ -44,6 +45,7 @@ dev = [
 [tool.uv.sources]
 canvod-grids = { workspace = true }
 canvod-utils = { workspace = true }
+canvod-config = { workspace = true }
 canvod-vod = { workspace = true }
 canvod-auxiliary = { workspace = true }
 canvod-readers = { workspace = true }

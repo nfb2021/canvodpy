@@ -19,7 +19,7 @@ import zarr
 
 from canvod.store import (
     MyIcechunkStore,
-    create_rinex_store,
+    create_gnss_store,
     create_vod_store,
 )
 
@@ -27,15 +27,15 @@ from canvod.store import (
 class TestStoreCreation:
     """Test store creation and initialization."""
 
-    def test_create_rinex_store(self, tmp_path: Path) -> None:
+    def test_create_gnss_store(self, tmp_path: Path) -> None:
         """Create RINEX store and verify directory structure."""
-        store_path = tmp_path / "test_site" / "rinex_store"
+        store_path = tmp_path / "test_site" / "gnss_store"
 
-        store = create_rinex_store(store_path)
+        store = create_gnss_store(store_path)
 
         assert isinstance(store, MyIcechunkStore)
         assert store.store_path == store_path
-        assert store.store_type == "rinex_store"
+        assert store.store_type == "gnss_store"
         assert store_path.exists()
         assert any(store_path.iterdir())  # Not empty after creation
 

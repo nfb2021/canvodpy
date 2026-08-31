@@ -87,8 +87,10 @@ class FtpDownloader(FileDownloader):
         self,
         alt_servers: list[str] | None = None,
         user_email: str | None = None,
+        timeout_s: int = 30,
     ):
         """Initialize downloader with optional alternate servers."""
+        self.timeout_s = timeout_s
         if alt_servers is None:
             if user_email is not None:
                 # Primary is NASA (set by caller); fallback to ESA
@@ -98,8 +100,9 @@ class FtpDownloader(FileDownloader):
                 self.alt_servers = []
                 print("ℹ Using ESA FTP exclusively")
                 print(
-                    "  To enable NASA CDDIS fallback, set nasa_earthdata_acc_mail "
-                    "in config/processing.yaml"
+                    "  To enable NASA CDDIS fallback, set "
+                    "CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL "
+                    "in config/.env or as an environment variable"
                 )
         else:
             if user_email is None:
@@ -194,7 +197,7 @@ class FtpDownloader(FileDownloader):
                     f"  - File not yet available (product may not be published yet)\n"
                     f"  - Incorrect FTP path for server\n"
                     f"  - Temporary server issue\n"
-                    f"\nTip: Set nasa_earthdata_acc_mail in config/processing.yaml "
+                    f"\nTip: add NASA_EARTHDATA_ACC_MAIL to config/.env "
                     f"to enable NASA CDDIS fallback"
                 ) from e
 
@@ -270,8 +273,9 @@ class FtpDownloader(FileDownloader):
         """Download file from NASA CDDIS server using FTPS."""
         if self.user_email is None:
             raise RuntimeError(
-                "NASA CDDIS requires authentication. Set nasa_earthdata_acc_mail "
-                "in config/processing.yaml.\n"
+                "NASA CDDIS requires authentication. "
+                "Set CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL "
+                "in config/.env.\n"
                 "Register at: https://urs.earthdata.nasa.gov/users/new"
             )
 
@@ -281,7 +285,7 @@ class FtpDownloader(FileDownloader):
         filename = parts[-1]
 
         print(f"Connecting to {host} using FTPS...")
-        ftps = FTP_TLS(host=host, timeout=30)
+        ftps = FTP_TLS(host=host, timeout=self.timeout_s)
         ftps.login(user="anonymous", passwd=self.user_email)
         ftps.prot_p()
 

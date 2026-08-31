@@ -253,6 +253,15 @@ class AuxDataPipeline:
         """Convenience method to get clock dataset."""
         return self.get("clock")
 
+    def source_file_paths(self) -> dict[str, Path | None]:
+        """On-disk source path for every registered aux file handler.
+
+        ``{name: handler.fpath}`` -- lets callers (e.g. a cache
+        fingerprint) key off which raw SP3/CLK files fed this pipeline
+        without reaching into the private ``_registry``.
+        """
+        return {name: entry["handler"].fpath for name, entry in self._registry.items()}
+
     def get_for_time_range(
         self,
         name: str,
@@ -359,13 +368,15 @@ class AuxDataPipeline:
         ftp_server: str | None = None,
         user_email: str | None = None,
         keep_sids: list[str] | None = None,
+        fetch_clock: bool | None = None,
     ) -> AuxDataPipeline:
         """Factory method to create a standard pipeline with ephemerides and
         clock.
 
         This is a convenience method that creates a pipeline and registers
-        the two required auxiliary files (ephemerides and clock) with
-        standard configuration.
+        ephemerides (always) and clock (unless disabled via ``fetch_clock``
+        or ``config.processing.aux_data.fetch_clock``) with standard
+        configuration.
 
         Parameters
         ----------
@@ -383,11 +394,15 @@ class AuxDataPipeline:
             Email for authenticated FTP (nasa_earthdata_acc_mail from config).
         keep_sids : list[str] | None, optional
             List of specific SIDs to keep. If None, keeps all possible SIDs.
+        fetch_clock : bool, optional
+            Whether to also register CLK clock-correction files. If None,
+            uses ``config.processing.aux_data.fetch_clock``.
 
         Returns
         -------
         AuxDataPipeline
-            Configured pipeline with ephemerides and clock registered.
+            Configured pipeline with ephemerides (and, unless disabled,
+            clock) registered.
 
         Examples
         --------
@@ -395,7 +410,7 @@ class AuxDataPipeline:
         >>> pipeline.load_all()
         >>> ephem_ds = pipeline.get_ephemerides()
         """
-        from canvod.utils.config import load_config
+        from canvod.config import load_config
 
         from canvod.auxiliary.clock import ClkFile
         from canvod.auxiliary.ephemeris import Sp3File
@@ -406,6 +421,8 @@ class AuxDataPipeline:
         # Use defaults from config if not provided
         agency = agency or aux_cfg.agency
         product_type = product_type or aux_cfg.product_type
+        ftp_timeout_s = aux_cfg.ftp_timeout_s
+        fetch_clock = aux_cfg.fetch_clock if fetch_clock is None else fetch_clock
         user_email = user_email or cfg.nasa_earthdata_acc_mail
         if ftp_server is None:
             servers = aux_cfg.get_ftp_servers(user_email)
@@ -430,22 +447,28 @@ class AuxDataPipeline:
             ftp_server=ftp_server,
             local_dir=sp3_dir,
             user_email=user_email,
+            ftp_timeout_s=ftp_timeout_s,
         )
         pipeline.register("ephemerides", sp3_file, required=True)
 
-        # Register clock (REQUIRED)
-        clk_file = ClkFile.from_datetime_date(
-            date=date_obj,
-            agency=agency,
-            product_type=product_type,
-            ftp_server=ftp_server,
-            local_dir=clk_dir,
-            user_email=user_email,
-        )
-        pipeline.register("clock", clk_file, required=True)
+        # Register clock, unless disabled via config/fetch_clock
+        if fetch_clock:
+            clk_file = ClkFile.from_datetime_date(
+                date=date_obj,
+                agency=agency,
+                product_type=product_type,
+                ftp_server=ftp_server,
+                local_dir=clk_dir,
+                user_email=user_email,
+                ftp_timeout_s=ftp_timeout_s,
+            )
+            pipeline.register("clock", clk_file, required=True)
+            clock_msg = "ephemerides and clock"
+        else:
+            clock_msg = "ephemerides only (clock fetching disabled)"
 
         pipeline._logger.info(
-            f"Created standard pipeline with ephemerides and clock "
+            f"Created standard pipeline with {clock_msg} "
             f"for {matched_dirs.yyyydoy.to_str()}"
         )
 

@@ -10,7 +10,7 @@ GNSS data format readers producing `xarray.Dataset` with `(epoch, sid)` dims.
 | `builder.py` | Dataset builder (assembles coords, obs, attrs) |
 | `rinex/` | RINEX v2/v3.04 observation reader (`Rnxv3Obs`) |
 | `sbf/` | Septentrio SBF binary reader (`SbfReader`) |
-| `matching/` | `DataDirMatcher`, `PairDataDirMatcher` (deprecated — use `canvod-virtualiconvname`) |
+| `matching/` | `DataDirMatcher`, `PairDataDirMatcher` (deprecated — use `canvod-filemap`) |
 | `gnss_specs/` | Constellation definitions, `SatelliteCatalog`, signal tables |
 
 ## Data contract

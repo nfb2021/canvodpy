@@ -62,6 +62,11 @@ check: check-lint check-format check-types
 test:
     uv run pytest
 
+# run tests for all packages, skipping integration tests that need real
+# credentials/network/test data (e.g. NASA Earthdata for ephemeris downloads)
+test-fast:
+    uv run pytest -m "not integration"
+
 # run tests for all supported Python versions
 testall:
     uv run --python=3.13 pytest
@@ -71,11 +76,12 @@ test-all-packages:
     @echo "Running tests per package to avoid namespace collisions..."
     uv run pytest canvodpy/tests/ --verbose --color=yes
     uv run pytest packages/canvod-auxiliary/tests/ --verbose --color=yes
+    uv run pytest packages/canvod-config/tests/ --verbose --color=yes
     uv run pytest packages/canvod-readers/tests/ --verbose --color=yes
     uv run pytest packages/canvod-store/tests/ --verbose --color=yes
     uv run pytest packages/canvod-grids/tests/ --verbose --color=yes
     uv run pytest packages/canvod-viz/tests/ --verbose --color=yes
-    uv run pytest packages/canvod-virtualiconvname/tests/ --verbose --color=yes
+    uv run pytest packages/canvod-preflight/tests/ --verbose --color=yes
     uv run pytest packages/canvod-vod/tests/ --verbose --color=yes
     uv run pytest packages/canvod-ops/tests/ --verbose --color=yes
     uv run pytest packages/canvod-store-metadata/tests/ --verbose --color=yes
@@ -100,13 +106,34 @@ ci PYTHON="3.13":
 # Configuration
 # ============================================================================
 
-# validate the sites.yaml configuration
+# validate canvod-settings.yaml configuration
 config-validate:
     uv run canvodpy config validate
 
 # validate data directories against naming convention (pre-flight check)
 config-check-data SITE:
     uv run python -c "from canvodpy.workflows.tasks import validate_data_dirs; import json; print(json.dumps(validate_data_dirs('{{ SITE }}'), indent=2))"
+
+# create a naming recipe from the template (for receivers with non-canonical filenames)
+naming-init NAME:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    template="config/recipes/_template.yaml.example"
+    dest="config/recipes/{{ NAME }}.yaml"
+    if [ ! -f "$template" ]; then
+        echo "Template not found: $template"
+        exit 1
+    fi
+    if [ -f "$dest" ]; then
+        echo "Already exists: $dest -- edit it directly, or delete it first to re-scaffold."
+        exit 1
+    fi
+    mkdir -p config/recipes
+    if [[ "{{ NAME }}" == *canopy* ]]; then recv_type="canopy"; else recv_type="reference"; fi
+    sed -e "s/name: CHANGEME/name: {{ NAME }}/" -e "s/receiver_type: reference/receiver_type: $recv_type/" "$template" > "$dest"
+    echo -e "{{ GREEN }}Created $dest{{ NORMAL }}"
+    echo "Next: edit it to match your actual filenames (see the worked examples"
+    echo "in the file), then test with: just config-check-data <site>"
 
 # show the current configuration
 config-show:
@@ -116,9 +143,59 @@ config-show:
 config-init:
     uv run canvodpy config init
 
-# edit a configuration file (processing, sites, sids)
-config-edit FILE:
-    uv run canvodpy config edit {{ FILE }}
+# initialize configuration via guided interactive wizard
+config-init-interactive:
+    uv run canvodpy config init --interactive
+
+# open canvod-settings.yaml in $EDITOR
+config-edit:
+    uv run canvodpy config edit
+
+# report canvodpy's version, environment, and config resolution
+doctor:
+    uv run canvodpy doctor
+
+# delete canvod-settings.yaml (destructive, requires typed confirmation)
+config-delete CONFIG_DIR="config":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target="{{ CONFIG_DIR }}/canvod-settings.yaml"
+    if [ ! -f "$target" ]; then
+        echo "Nothing to delete: $target does not exist."
+        exit 0
+    fi
+    echo -e "{{ BOLD }}This will permanently delete: $target{{ NORMAL }}"
+    read -p "Type 'yes' to confirm: " confirm
+    if [ "$confirm" != "yes" ]; then
+        echo "Aborted -- no changes made."
+        exit 1
+    fi
+    rm -f "$target"
+    echo -e "{{ GREEN }}Deleted $target{{ NORMAL }}"
+
+# ============================================================================
+# Store Inspection
+# ============================================================================
+
+# list every configured site's gnss/vod store paths and status
+store-list:
+    uv run canvodpy store list
+
+# show branches, groups, and stats for one site's store (STORE: gnss|vod)
+store-info SITE STORE="gnss":
+    uv run canvodpy store info {{ SITE }} --store {{ STORE }}
+
+# show a group's full dataset + metadata table for one site's store
+store-info-group SITE GROUP STORE="gnss":
+    uv run canvodpy store info {{ SITE }} --store {{ STORE }} --group {{ GROUP }}
+
+# show commit history as a graph for one site's store (STORE: gnss|vod)
+store-log SITE STORE="gnss":
+    uv run canvodpy store log {{ SITE }} --store {{ STORE }}
+
+# show the ops audit trail for one site's store (STORE: gnss|vod)
+store-ops SITE STORE="gnss":
+    uv run canvodpy store log {{ SITE }} --store {{ STORE }} --ops
 
 # ============================================================================
 # Store Metadata
@@ -240,7 +317,7 @@ build-all:
     uv build --package canvod-store-metadata --out-dir dist/
     uv build --package canvod-utils --out-dir dist/
     uv build --package canvod-viz --out-dir dist/
-    uv build --package canvod-virtualiconvname --out-dir dist/
+    uv build --package canvod-preflight --out-dir dist/
     uv build --package canvod-vod --out-dir dist/
     uv build --package canvod-ops --out-dir dist/
     uv build --package canvod-audit --out-dir dist/
@@ -379,6 +456,18 @@ open-notebook NAME:
 app-notebook NAME:
     uv run marimo run demo/{{ NAME }}
 
+# start the hemisphere API server (run from repo root; see .icechunk_gridding_claude/RUNNING.md)
+hemi-serve:
+    CATALOG=.icechunk_gridding_claude/_out/catalog.json \
+      uv run --with fastapi --with uvicorn --with xpublish \
+      python .icechunk_gridding_claude/serve_hemisphere.py
+
+# open the VOD hemisphere viewer notebook for interactive editing
+hemi-view:
+    uv run --with marimo --with plotly --with wigglystuff --with httpx \
+      --with ipywidgets \
+      marimo edit .icechunk_gridding_claude/view_vod_cube.py
+
 # ============================================================================
 # Documentation
 # ============================================================================
@@ -390,6 +479,11 @@ docs:
 # build the documentation
 docs-build:
     uv run zensical build
+
+# export demo notebooks for embedding in the docs site (live WASM + static HTML)
+docs-export-notebooks:
+    @echo "{{ GREEN }}{{ BOLD }}Exporting demo notebooks into docs/notebooks/_build...{{ NORMAL }}"
+    @bash scripts/export_demo_notebooks.sh
 
 # deploy the documentation via GitHub Actions
 docs-deploy:

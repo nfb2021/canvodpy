@@ -1,25 +1,27 @@
 """High-level public API for canvodpy.
 
 This module provides the user-friendly API that wraps proven gnssvodpy logic.
-Three levels of API:
-1. Convenience functions - process_date(), calculate_vod()
-2. Object-oriented - Site, Pipeline classes
-3. Low-level - Direct access to canvod.* subpackages
+
+Recommended surfaces:
+- Run the pipeline via the ``canvodpy`` CLI (production runs, resumable).
+- Script a configured pipeline run in Python via ``Site.pipeline()``
+  (``Pipeline`` class) — this is what the CLI wraps internally.
+- Component-level scripting/analysis (custom readers, ephemeris source,
+  grid, VOD calculator) via ``canvodpy.functional``.
+
+``process_date()``, ``calculate_vod()``, and ``preview_processing()`` below
+are deprecated convenience wrappers around ``Pipeline`` — use
+``Site.pipeline()`` directly instead.
 
 Examples
 --------
-Level 1 - Simple (one-liners):
-    >>> from canvodpy import process_date, calculate_vod
-    >>> data = process_date("Rosalia", "2025001")
-    >>> vod = calculate_vod("Rosalia", "canopy_01", "reference_01", "2025001")
-
-Level 2 - Object-oriented (more control):
+Object-oriented (recommended for Python-native pipeline runs):
     >>> from canvodpy import Site, Pipeline
-    >>> site = Site("Rosalia")
+    >>> site = Site("ExampleSite")
     >>> pipeline = site.pipeline()
     >>> data = pipeline.process_date("2025001")
 
-Level 3 - Low-level (full control):
+Low-level (full control):
     >>> from canvod.store import GnssResearchSite
     >>> from canvodpy.processor.pipeline_orchestrator import PipelineOrchestrator
     >>> # Direct access to internals
@@ -30,10 +32,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from canvodpy._deprecation import deprecated
+
 # Lazy imports to avoid circular dependencies
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
 
     import xarray as xr
 
@@ -50,7 +54,7 @@ class Site:
     Parameters
     ----------
     name : str
-        Site name from configuration (e.g., "Rosalia")
+        Site name from configuration (e.g., "ExampleSite")
 
     Attributes
     ----------
@@ -62,14 +66,14 @@ class Site:
         Only active receivers
     vod_analyses : dict
         Configured VOD analysis pairs
-    rinex_store
+    gnss_store
         Access to RINEX data store
     vod_store
         Access to VOD results store
 
     Examples
     --------
-    >>> site = Site("Rosalia")
+    >>> site = Site("ExampleSite")
     >>> print(site.receivers)
     {'canopy_01': {...}, 'reference_01': {...}}
 
@@ -77,7 +81,7 @@ class Site:
     >>> pipeline = site.pipeline()
 
     >>> # Access stores
-    >>> site.rinex_store.list_groups()
+    >>> site.gnss_store.list_groups()
 
     """
 
@@ -114,9 +118,9 @@ class Site:
         return self._vod_computer
 
     @property
-    def rinex_store(self) -> MyIcechunkStore:
+    def gnss_store(self) -> MyIcechunkStore:
         """Access RINEX data store."""
-        return self._site.rinex_store
+        return self._site.gnss_store
 
     @property
     def vod_store(self) -> MyIcechunkStore:
@@ -129,11 +133,12 @@ class Site:
         aux_agency: str | None = None,
         n_workers: int | None = None,
         dry_run: bool = False,
-        batch_hours: float | None = None,
+        days_per_batch: int | None = None,
         max_memory_gb: float | None = None,
         cpu_affinity: list[int] | None = None,
         nice_priority: int | None = None,
         threads_per_worker: int | None = None,
+        on_group_written: Callable[[str], None] | None = None,
     ) -> Pipeline:
         """Create a processing pipeline for this site.
 
@@ -151,22 +156,25 @@ class Site:
             Analysis center for auxiliary data (COD, ESA, GFZ, JPL).
             Default: from config.
         n_workers : int, optional
-            Number of parallel Dask workers. Default: from config
-            (``processing.n_max_threads``).
+            Number of parallel workers. Default: from config.
         dry_run : bool, default False
             If True, simulate processing without execution.
-        batch_hours : float, optional
-            Hours of data per processing batch. Default: from config.
+        days_per_batch : int, optional
+            Number of DOYs per loky wave. Default: from config.
         max_memory_gb : float, optional
-            Total RAM budget across all workers. Divided by ``n_workers``
-            for per-worker Dask memory limit. Default: from config.
+            Total RAM budget across all workers. Default: from config.
         cpu_affinity : list[int], optional
             Pin workers to specific CPU core IDs (Linux only).
             Default: from config.
         nice_priority : int, optional
             Process nice value (0=normal, 19=lowest). Default: from config.
         threads_per_worker : int, optional
-            Threads per Dask worker process. Default: from config.
+            Threads per worker process. Default: from config.
+        on_group_written : Callable[[str], None], optional
+            Called with the receiver-group name each time a group's data for
+            one day finishes writing to Icechunk. Lets a caller drive its own
+            progress display (e.g. the CLI's per-site/receiver rows) without
+            this class owning any display itself.
 
         Returns
         -------
@@ -175,7 +183,7 @@ class Site:
 
         Examples
         --------
-        >>> site = Site("Rosalia")
+        >>> site = Site("ExampleSite")
         >>> pipeline = site.pipeline(n_workers=8, max_memory_gb=16)
         >>> data = pipeline.process_date("2025001")
 
@@ -186,11 +194,12 @@ class Site:
             aux_agency=aux_agency,
             n_workers=n_workers,
             dry_run=dry_run,
-            batch_hours=batch_hours,
+            days_per_batch=days_per_batch,
             max_memory_gb=max_memory_gb,
             cpu_affinity=cpu_affinity,
             nice_priority=nice_priority,
             threads_per_worker=threads_per_worker,
+            on_group_written=on_group_written,
         )
 
     def __repr__(self) -> str:
@@ -223,12 +232,12 @@ class Pipeline:
     aux_agency : str, optional
         Analysis center for auxiliary data. Default: from config.
     n_workers : int, optional
-        Number of parallel Dask workers. Default: from config
+        Number of parallel loky worker processes. Default: from config
         (``processing.n_max_threads``).
     dry_run : bool, default False
         If True, simulate without execution.
-    batch_hours : float, optional
-        Hours of data per processing batch. Default: from config.
+    days_per_batch : int, optional
+        Calendar days to pool per processing wave. Default: from config.
     max_memory_gb : float, optional
         Total RAM budget across all workers. Default: from config.
     cpu_affinity : list[int], optional
@@ -236,16 +245,20 @@ class Pipeline:
     nice_priority : int, optional
         Process nice value (0=normal, 19=lowest). Default: from config.
     threads_per_worker : int, optional
-        Threads per Dask worker process. Default: from config.
+        Threads per loky worker process. Default: from config.
+    on_group_written : Callable[[str], None], optional
+        Called with the receiver-group name each time a group's data for one
+        day finishes writing to Icechunk. Lets a caller drive its own
+        progress display without this class owning any display itself.
 
     Examples
     --------
     >>> # From site object
-    >>> site = Site("Rosalia")
+    >>> site = Site("ExampleSite")
     >>> pipeline = Pipeline(site)
 
     >>> # Or directly from name
-    >>> pipeline = Pipeline("Rosalia")
+    >>> pipeline = Pipeline("ExampleSite")
 
     >>> # Process single date
     >>> data = pipeline.process_date("2025001")
@@ -263,11 +276,12 @@ class Pipeline:
         aux_agency: str | None = None,
         n_workers: int | None = None,
         dry_run: bool = False,
-        batch_hours: float | None = None,
+        days_per_batch: int | None = None,
         max_memory_gb: float | None = None,
         cpu_affinity: list[int] | None = None,
         nice_priority: int | None = None,
         threads_per_worker: int | None = None,
+        on_group_written: Callable[[str], None] | None = None,
     ) -> None:
         # Handle both Site object and string
         if isinstance(site, str):
@@ -275,18 +289,18 @@ class Pipeline:
 
         self.site = site
 
-        from canvod.utils.config import load_config
+        from canvod.config import load_config
 
         config = load_config()
-        proc = config.processing.processing
+        proc = config.processing.params
 
         # All params default to config values; explicit values override
         if keep_vars is None:
-            keep_vars = proc.keep_rnx_vars
+            keep_vars = proc.keep_gnss_observables
         if aux_agency is None:
             aux_agency = config.processing.aux_data.agency
-        if batch_hours is None:
-            batch_hours = proc.batch_hours
+        if days_per_batch is None:
+            days_per_batch = proc.days_per_batch
 
         # Resource resolution: explicit n_workers overrides everything,
         # otherwise use resolve_resources() which respects resource_mode.
@@ -317,7 +331,7 @@ class Pipeline:
         self.aux_agency = aux_agency
         self.n_workers = n_workers
         self.dry_run = dry_run
-        self.batch_hours = batch_hours
+        self.days_per_batch = days_per_batch
 
         # Setup logging
         from canvodpy.logging import get_logger
@@ -335,13 +349,12 @@ class Pipeline:
             site=site._site,
             n_max_workers=n_workers,
             dry_run=dry_run,
-            batch_hours=batch_hours,
+            days_per_batch=days_per_batch,
             max_memory_gb=max_memory_gb,
             cpu_affinity=cpu_affinity,
             nice_priority=nice_priority,
             threads_per_worker=threads_per_worker,
-            parallelization_strategy=proc.parallelization_strategy,
-            scheduler_address=proc.scheduler_address,
+            on_group_written=on_group_written,
         )
 
         self.log.info(
@@ -350,14 +363,14 @@ class Pipeline:
             n_workers=n_workers,
             keep_vars=len(self.keep_vars),
             dry_run=dry_run,
-            batch_hours=batch_hours,
+            days_per_batch=days_per_batch,
             max_memory_gb=max_memory_gb,
             nice_priority=nice_priority,
             threads_per_worker=threads_per_worker,
         )
 
     def close(self) -> None:
-        """Shut down the Dask cluster managed by the orchestrator."""
+        """Release orchestrator resources (loky's reusable executor is shared and left running)."""
         self._orchestrator.close()
 
     def __enter__(self) -> Pipeline:
@@ -381,7 +394,7 @@ class Pipeline:
 
         Examples
         --------
-        >>> pipeline = Pipeline("Rosalia")
+        >>> pipeline = Pipeline("ExampleSite")
         >>> data = pipeline.process_date("2025001")
         >>> print(data.keys())
         dict_keys(['canopy_01', 'canopy_02', 'reference_01'])
@@ -432,7 +445,7 @@ class Pipeline:
 
         Examples
         --------
-        >>> pipeline = Pipeline("Rosalia")
+        >>> pipeline = Pipeline("ExampleSite")
         >>> for date, datasets in pipeline.process_range("2025001", "2025007"):
         ...     print(f"Processed {date}: {len(datasets)} receivers")
         Processed 2025001: 3 receivers
@@ -473,7 +486,7 @@ class Pipeline:
 
         Examples
         --------
-        >>> pipeline = Pipeline("Rosalia")
+        >>> pipeline = Pipeline("ExampleSite")
         >>> vod = pipeline.calculate_vod("canopy_01", "reference_01", "2025001")
         >>> print(vod.vod.mean().values)
         0.42
@@ -493,19 +506,19 @@ class Pipeline:
                 raise ValueError(f"Could not parse date from {date!r}")
             _time_slice = slice(str(_d), str(_d + datetime.timedelta(days=1)))
             # Load processed data from stores
-            # canopy_data = self.site.rinex_store.read_group(canopy, date=date)
-            # ref_data = self.site.rinex_store.read_group(reference, date=date)
-            canopy_data = self.site.rinex_store.read_group(
+            # canopy_data = self.site.gnss_store.read_group(canopy, date=date)
+            # ref_data = self.site.gnss_store.read_group(reference, date=date)
+            canopy_data = self.site.gnss_store.read_group(
                 canopy, time_slice=_time_slice
             )
             try:
-                ref_data = self.site.rinex_store.read_group(
+                ref_data = self.site.gnss_store.read_group(
                     reference, time_slice=_time_slice
                 )
             except Exception:
                 paired_name = f"{reference}_{canopy}"
                 log.info("group_fallback", original=reference, paired=paired_name)
-                ref_data = self.site.rinex_store.read_group(
+                ref_data = self.site.gnss_store.read_group(
                     paired_name, time_slice=_time_slice
                 )
 
@@ -537,8 +550,21 @@ class Pipeline:
             )
             raise
 
-    def preview(self) -> dict:
+    def preview(
+        self,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> dict:
         """Preview processing plan without execution.
+
+        Parameters
+        ----------
+        start : str, optional
+            YYYYDOY string to start from (inclusive). ``None`` previews
+            every available date.
+        end : str, optional
+            YYYYDOY string to end at (inclusive). ``None`` previews every
+            available date.
 
         Returns
         -------
@@ -547,27 +573,31 @@ class Pipeline:
 
         Examples
         --------
-        >>> pipeline = Pipeline("Rosalia")
-        >>> plan = pipeline.preview()
+        >>> pipeline = Pipeline("ExampleSite")
+        >>> plan = pipeline.preview(start="2025001", end="2025003")
         >>> print(f"Total files: {plan['total_files']}")
 
         """
-        return self._orchestrator.preview_processing_plan()
+        return self._orchestrator.preview_processing_plan(start, end)
 
     def __repr__(self) -> str:
         return (
             f"Pipeline(site='{self.site.name}', "
             f"keep_vars={len(self.keep_vars)} vars, "
             f"workers={self.n_workers}, "
-            f"batch_hours={self.batch_hours})"
+            f"days_per_batch={self.days_per_batch})"
         )
 
 
 # ============================================================================
-# Level 1 API: Convenience Functions
+# Deprecated convenience functions — use Site.pipeline() instead
 # ============================================================================
 
 
+@deprecated(
+    "process_date() is deprecated. Use Site(site).pipeline().process_date(date) "
+    "instead, or run the pipeline via the `canvodpy` CLI."
+)
 def process_date(
     site: str,
     date: str,
@@ -584,7 +614,7 @@ def process_date(
     Parameters
     ----------
     site : str
-        Site name (e.g., "Rosalia")
+        Site name (e.g., "ExampleSite")
     date : str
         Date in YYYYDOY format (e.g., "2025001")
     keep_vars : list[str], optional
@@ -602,13 +632,13 @@ def process_date(
     Examples
     --------
     >>> from canvodpy import process_date
-    >>> data = process_date("Rosalia", "2025001")
+    >>> data = process_date("ExampleSite", "2025001")
     >>> print(data.keys())
     dict_keys(['canopy_01', 'canopy_02', 'reference_01'])
 
     >>> # With custom settings
     >>> data = process_date(
-    ...     "Rosalia",
+    ...     "ExampleSite",
     ...     "2025001",
     ...     keep_vars=["C1C", "L1C"],
     ...     aux_agency="ESA"
@@ -624,6 +654,11 @@ def process_date(
         return pipeline.process_date(date)
 
 
+@deprecated(
+    "calculate_vod() is deprecated. Use "
+    "Site(site).pipeline().calculate_vod(canopy, reference, date) instead, "
+    "or run the pipeline via the `canvodpy` CLI."
+)
 def calculate_vod(
     site: str,
     canopy: str,
@@ -663,7 +698,7 @@ def calculate_vod(
     --------
     >>> from canvodpy import calculate_vod
     >>> vod = calculate_vod(
-    ...     site="Rosalia",
+    ...     site="ExampleSite",
     ...     canopy="canopy_01",
     ...     reference="reference_01",
     ...     date="2025001"
@@ -682,6 +717,10 @@ def calculate_vod(
         )
 
 
+@deprecated(
+    "preview_processing() is deprecated. Use "
+    "Site(site).pipeline(dry_run=True).preview() instead."
+)
 def preview_processing(site: str) -> dict:
     """Preview processing plan for a site (convenience function).
 
@@ -698,7 +737,7 @@ def preview_processing(site: str) -> dict:
     Examples
     --------
     >>> from canvodpy import preview_processing
-    >>> plan = preview_processing("Rosalia")
+    >>> plan = preview_processing("ExampleSite")
     >>> print(f"Total files: {plan['total_files']}")
     Total files: 8640
 

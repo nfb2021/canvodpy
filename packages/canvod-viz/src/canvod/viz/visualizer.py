@@ -334,7 +334,7 @@ class HemisphereVisualizer:
         --------
         >>> fig, ax = viz.create_publication_figure(
         ...     data=vod_data,
-        ...     title="VOD Distribution Over Rosalia Site",
+        ...     title="VOD Distribution Over ExampleSite Site",
         ...     save_path="paper_figure_3.png",
         ...     dpi=600
         ... )

@@ -197,6 +197,11 @@ tramp
 tmtags
 
 # ============================================================================
+# graphify (knowledge-graph generator) — generated output, not source
+# ============================================================================
+graphify-out/
+
+# ============================================================================
 # Operating Systems
 # ============================================================================
 
@@ -229,7 +234,11 @@ $RECYCLE.BIN/
 # Logs
 *.log
 .logs/
+.logs_*/
 logs/
+
+# Scratch/notes workspace — never shipped to main (see PR history for what's load-bearing)
+dev/
 
 # Data directories
 .data/
@@ -356,11 +365,7 @@ packages/*/config/
 .archive/
 .processing/
 .vscode/
-
-# ============================================================================
-# Private packages (symlinked from external repos, local only)
-# ============================================================================
-packages/canvod-streamstats
+.icechunk_gridding_claude/
 
 # ============================================================================
 # Private audit scripts (gnssvodpy cross-validation, local only)

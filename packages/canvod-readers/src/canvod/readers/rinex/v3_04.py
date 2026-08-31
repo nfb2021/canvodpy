@@ -785,6 +785,11 @@ class Rnxv3Obs(GNSSDataReader):
     @model_validator(mode="after")
     def _post_init(self) -> Self:
         """Initialize derived state after validation."""
+        # PrivateAttr()-declared attributes are mutable even on frozen=True
+        # Pydantic models -- only public fields are frozen. ty's pydantic
+        # support doesn't model this and treats the assignment inside the
+        # validator that first sets them as establishing a read-only
+        # "property".
         # Load header once
         self._header = Rnxv3Header.from_file(self.fpath)  # ty: ignore[invalid-assignment]
 
@@ -960,6 +965,7 @@ class Rnxv3Obs(GNSSDataReader):
             i for i, line in enumerate(lines) if line.startswith(epoch_record_indicator)
         ]
         starts.append(len(lines))  # Add EOF
+        # PrivateAttr, mutable despite frozen=True -- see _post_init's comment.
         self._cached_epoch_batches = [  # ty: ignore[invalid-assignment]
             (start, starts[i + 1])
             for i, start in enumerate(starts)
@@ -1524,7 +1530,9 @@ class Rnxv3Obs(GNSSDataReader):
         sorted_sids = sorted(signal_ids)
         return sorted_sids, {s: sid_properties[s] for s in sorted_sids}
 
-    def _create_dataset_single_pass(self) -> xr.Dataset:
+    def _create_dataset_single_pass(
+        self, keep_data_vars: frozenset[str] | None = None
+    ) -> xr.Dataset:
         """Create xarray Dataset in a single pass over the file.
 
         Pre-allocates arrays using header-derived SID set and epoch count,
@@ -1545,14 +1553,28 @@ class Rnxv3Obs(GNSSDataReader):
         n_sids = len(sorted_sids)
         sid_to_idx = {sid: i for i, sid in enumerate(sorted_sids)}
 
-        # Pre-allocate arrays
+        # Pre-allocate only the arrays that will be kept
+        _all = keep_data_vars is None
+        need_snr = _all or "SNR" in keep_data_vars
+        need_pseudo = _all or "Pseudorange" in keep_data_vars
+        need_phase = _all or "Phase" in keep_data_vars
+        need_doppler = _all or "Doppler" in keep_data_vars
+        need_lli = _all or "LLI" in keep_data_vars
+        need_ssi = _all or "SSI" in keep_data_vars
+
         timestamps = np.empty(n_epochs, dtype="datetime64[ns]")
-        snr = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["SNR"])
-        pseudo = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Pseudorange"])
-        phase = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Phase"])
-        doppler = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Doppler"])
-        lli = np.full((n_epochs, n_sids), -1, dtype=DTYPES["LLI"])
-        ssi = np.full((n_epochs, n_sids), -1, dtype=DTYPES["SSI"])
+        if need_snr:
+            snr = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["SNR"])
+        if need_pseudo:
+            pseudo = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Pseudorange"])
+        if need_phase:
+            phase = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Phase"])
+        if need_doppler:
+            doppler = np.full((n_epochs, n_sids), np.nan, dtype=DTYPES["Doppler"])
+        if need_lli:
+            lli = np.full((n_epochs, n_sids), -1, dtype=DTYPES["LLI"])
+        if need_ssi:
+            ssi = np.full((n_epochs, n_sids), -1, dtype=DTYPES["SSI"])
 
         # Build obs_code → (obs_type, sid_suffix) lookup per system
         mapper = self._signal_mapper
@@ -1632,30 +1654,40 @@ class Rnxv3Obs(GNSSDataReader):
                     if value is None:
                         continue
 
-                    if obs_type == "S":
-                        if value != 0:
-                            snr[t_idx, s_idx] = value
-                    elif obs_type == "C":
-                        pseudo[t_idx, s_idx] = value
-                    elif obs_type == "L":
-                        phase[t_idx, s_idx] = value
-                    elif obs_type == "D":
-                        doppler[t_idx, s_idx] = value
+                    match obs_type:
+                        case "S":
+                            if need_snr and value != 0:
+                                snr[t_idx, s_idx] = value
+                        case "C":
+                            if need_pseudo:
+                                pseudo[t_idx, s_idx] = value
+                        case "L":
+                            if need_phase:
+                                phase[t_idx, s_idx] = value
+                        case "D":
+                            if need_doppler:
+                                doppler[t_idx, s_idx] = value
 
-                    if obs_lli is not None:
+                    if need_lli and obs_lli is not None:
                         lli[t_idx, s_idx] = obs_lli
-                    if obs_ssi is not None:
+                    if need_ssi and obs_ssi is not None:
                         ssi[t_idx, s_idx] = obs_ssi
 
         # Drop epochs that failed to parse
         if not valid_mask.all():
             timestamps = timestamps[valid_mask]
-            snr = snr[valid_mask]
-            pseudo = pseudo[valid_mask]
-            phase = phase[valid_mask]
-            doppler = doppler[valid_mask]
-            lli = lli[valid_mask]
-            ssi = ssi[valid_mask]
+            if need_snr:
+                snr = snr[valid_mask]
+            if need_pseudo:
+                pseudo = pseudo[valid_mask]
+            if need_phase:
+                phase = phase[valid_mask]
+            if need_doppler:
+                doppler = doppler[valid_mask]
+            if need_lli:
+                lli = lli[valid_mask]
+            if need_ssi:
+                ssi = ssi[valid_mask]
 
         # Build coordinate arrays from pre-computed properties
         sv_list = np.array(
@@ -1708,35 +1740,34 @@ class Rnxv3Obs(GNSSDataReader):
         else:
             snr_meta = SNR_METADATA
 
+        _data_vars: dict = {}
+        if need_snr:
+            _data_vars["SNR"] = (["epoch", "sid"], snr, snr_meta)
+        if need_pseudo:
+            _data_vars["Pseudorange"] = (
+                ["epoch", "sid"],
+                pseudo,
+                OBSERVABLES_METADATA["Pseudorange"],
+            )
+        if need_phase:
+            _data_vars["Phase"] = (
+                ["epoch", "sid"],
+                phase,
+                OBSERVABLES_METADATA["Phase"],
+            )
+        if need_doppler:
+            _data_vars["Doppler"] = (
+                ["epoch", "sid"],
+                doppler,
+                OBSERVABLES_METADATA["Doppler"],
+            )
+        if need_lli:
+            _data_vars["LLI"] = (["epoch", "sid"], lli, OBSERVABLES_METADATA["LLI"])
+        if need_ssi:
+            _data_vars["SSI"] = (["epoch", "sid"], ssi, OBSERVABLES_METADATA["SSI"])
+
         ds = xr.Dataset(
-            data_vars={
-                "SNR": (["epoch", "sid"], snr, snr_meta),
-                "Pseudorange": (
-                    ["epoch", "sid"],
-                    pseudo,
-                    OBSERVABLES_METADATA["Pseudorange"],
-                ),
-                "Phase": (
-                    ["epoch", "sid"],
-                    phase,
-                    OBSERVABLES_METADATA["Phase"],
-                ),
-                "Doppler": (
-                    ["epoch", "sid"],
-                    doppler,
-                    OBSERVABLES_METADATA["Doppler"],
-                ),
-                "LLI": (
-                    ["epoch", "sid"],
-                    lli,
-                    OBSERVABLES_METADATA["LLI"],
-                ),
-                "SSI": (
-                    ["epoch", "sid"],
-                    ssi,
-                    OBSERVABLES_METADATA["SSI"],
-                ),
-            },
+            data_vars=_data_vars,
             coords=coords,
             attrs={**self._build_attrs()},
         )
@@ -1815,16 +1846,11 @@ class Rnxv3Obs(GNSSDataReader):
         keep_sids = cast(list[str] | None, kwargs.pop("keep_sids", None))
 
         if keep_data_vars is None:
-            from canvod.utils.config import load_config
+            from canvod.config import load_config
 
-            keep_data_vars = load_config().processing.processing.keep_rnx_vars
+            keep_data_vars = load_config().processing.params.keep_gnss_observables
 
-        ds = self.create_rinex_netcdf_with_signal_id()
-
-        # drop unwanted vars
-        for var in list(ds.data_vars):
-            if var not in keep_data_vars:
-                ds = ds.drop_vars([var])
+        ds = self._create_dataset_single_pass(frozenset(keep_data_vars))
 
         if pad_global_sid:
             from canvod.auxiliary.preprocessing import pad_to_global_sid
@@ -1846,9 +1872,9 @@ class Rnxv3Obs(GNSSDataReader):
         ds.attrs.update(self._build_attrs())
 
         if outname:
-            from canvod.utils.config import load_config as _load_config
+            from canvod.config import load_config as _load_config
 
-            comp = _load_config().processing.compression
+            comp = _load_config().processing.netcdf_compression
             encoding = {
                 var: {"zlib": comp.zlib, "complevel": comp.complevel}
                 for var in ds.data_vars

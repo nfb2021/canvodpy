@@ -50,7 +50,7 @@ def _make_analysis_cfg(canopy: str = "canopy_01", reference: str = "reference_01
 class TestVodComputerInit:
     def test_default_rechunk(self):
         vc = VodComputer(_make_site())
-        assert vc._rechunk == {"epoch": 34560, "sid": -1}
+        assert vc._rechunk == {"epoch": 17280, "sid": -1}
 
     def test_custom_rechunk(self):
         vc = VodComputer(_make_site(), rechunk={"epoch": 1000, "sid": -1})
@@ -196,7 +196,7 @@ class TestVodComputerComputeAndWrite:
             mock_factory_cls.create.return_value.calculate_vod.return_value = mock_vod
             vc._compute_and_write(canopy_ds, sky_ds, "a", write=True)
 
-        mock_write.assert_called_once_with(mock_vod, "a")
+        mock_write.assert_called_once_with(mock_vod, "a", canopy_ds, sky_ds)
 
     def test_write_to_store_clears_encodings(self):
         cfg = _make_analysis_cfg()
@@ -205,8 +205,37 @@ class TestVodComputerComputeAndWrite:
 
         vod_ds = xr.Dataset({"VOD": (["epoch", "sid"], np.zeros((5, 3)))})
         vod_ds["VOD"].encoding["dtype"] = "float32"
+        canopy_ds = _make_ds()
+        sky_ds = _make_ds()
 
-        vc._write_to_store(vod_ds, "a")
+        with unittest.mock.patch("canvodpy.vod_computer.ensure_vod_store_metadata"):
+            vc._write_to_store(vod_ds, "a", canopy_ds, sky_ds)
 
         assert vod_ds["VOD"].encoding == {}
         mock_site._site.store_vod_analysis.assert_called_once()
+
+    def test_write_to_store_casts_string_dtype_to_object(self):
+        if not hasattr(np.dtypes, "StringDType"):
+            pytest.skip("requires numpy >= 2.0")
+
+        cfg = _make_analysis_cfg()
+        mock_site = _make_site({"a": cfg})
+        vc = VodComputer(mock_site)
+
+        sv_values = np.array(["G01", "G02"], dtype=np.dtypes.StringDType())
+        vod_ds = xr.Dataset(
+            {"VOD": (["epoch", "sid"], np.zeros((5, 2)))},
+            coords={"sv": ("sid", sv_values)},
+        )
+        assert vod_ds["sv"].dtype.kind == "T"
+        canopy_ds = _make_ds()
+        sky_ds = _make_ds()
+
+        with unittest.mock.patch("canvodpy.vod_computer.ensure_vod_store_metadata"):
+            vc._write_to_store(vod_ds, "a", canopy_ds, sky_ds)
+
+        call_kwargs = mock_site._site.store_vod_analysis.call_args.kwargs
+        written_ds = call_kwargs["vod_dataset"]
+        assert written_ds["sv"].dtype == object
+        assert call_kwargs["calculator_name"] == vc._calculator_name
+        assert set(call_kwargs["source_file_hashes"]) == {"canopy_01", "reference_01"}

@@ -17,13 +17,13 @@ BROADCAST_STORE: ``tier1_broadcast_vs_agency/Rosalia/canvodpy_SBF_broadcast_stor
     Produced by ``produce_sbf_store_broadcast.py``
     (config: sbf input, ephemeris_source: broadcast,
      stores_root_dir: tier1_broadcast_vs_agency,
-     rinex_store_name: canvodpy_SBF_broadcast_store)
+     gnss_store_name: canvodpy_SBF_broadcast_store)
 
 AGENCY_STORE   : ``tier1_sbf_vs_rinex/Rosalia/canvodpy_SBF_store``
     Produced by ``produce_sbf_store_final.py``
     (config: sbf input, ephemeris_source: final,
      stores_root_dir: tier1_sbf_vs_rinex,
-     rinex_store_name: canvodpy_SBF_store)
+     gnss_store_name: canvodpy_SBF_store)
 
 Prerequisites
 -------------

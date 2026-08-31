@@ -27,8 +27,8 @@ processing.yaml::
       ephemeris_source: broadcast
     storage:
       stores_root_dir: /Volumes/ExtremePro/canvod_audit_output/tier1_broadcast_vs_agency
-      rinex_store_name: canvodpy_SBF_broadcast_store
-      rinex_store_strategy: append
+      gnss_store_name: canvodpy_SBF_broadcast_store
+      gnss_store_strategy: unsafe_append
 
 Input data
 ----------
