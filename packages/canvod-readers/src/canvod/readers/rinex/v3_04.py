@@ -773,6 +773,8 @@ class Rnxv3Obs(GNSSDataReader):
 
     aggregate_glonass_fdma: bool = True
 
+    # Pydantic exempts PrivateAttr fields from frozen=True immutability, but ty
+    # doesn't model that and flags every assignment below as read-only.
     _header: Rnxv3Header = PrivateAttr()
     _signal_mapper: SignalIDMapper = PrivateAttr()
 

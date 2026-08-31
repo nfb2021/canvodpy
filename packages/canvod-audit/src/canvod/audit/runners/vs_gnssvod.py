@@ -714,8 +714,7 @@ def audit_vs_gnssvod(
             ds_adapted = xr.Dataset(data_vars, coords=ds_merged.coords)
 
         print(
-            f"  Adapted: {dict(ds_adapted.sizes)}, "
-            f"vars={sorted(str(v) for v in ds_adapted.data_vars)}"
+            f"  Adapted: {dict(ds_adapted.sizes)}, vars={sorted(map(str, ds_adapted.data_vars))}"
         )
 
         band_result = _compare_band(

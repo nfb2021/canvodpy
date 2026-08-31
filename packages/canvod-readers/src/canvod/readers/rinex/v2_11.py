@@ -568,6 +568,8 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
     apply_overlap_filter: bool = False
     overlap_preferences: dict[str, str] | None = None
 
+    # Pydantic exempts PrivateAttr fields from frozen=True immutability, but ty
+    # doesn't model that and flags every assignment below as read-only.
     _header: Rnxv2Header = PrivateAttr()
     _signal_mapper: SignalIDMapper = PrivateAttr()
     _lines: list[str] = PrivateAttr()

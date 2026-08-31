@@ -2116,7 +2116,7 @@ class RinexDataProcessor:
             self._logger.info(
                 "store_missing_new_variables",
                 receiver=receiver_name,
-                new_vars=sorted(missing_vars),
+                new_vars=sorted(map(str, missing_vars)),
             )
 
     def _prepare_store_for_overwrite(

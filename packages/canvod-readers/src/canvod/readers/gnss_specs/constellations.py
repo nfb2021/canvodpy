@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 # Pre-compiled regex patterns used for better perfromance in data validation
 SV_PATTERN = re.compile(r"^[GRECJSI]\d{2}$")  # e.g., G01, R12, E25
-OBS_TYPE_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9\d]?[A-Z0-9]?$")  # e.g., *1C, *5X
+OBS_TYPE_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9]?[A-Z0-9]?$")  # e.g., *1C, *5X
 
 
 # ================================================================
