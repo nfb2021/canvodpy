@@ -54,8 +54,8 @@
             </div>
         </aside>
         <h2>
-            <span class="text">40 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">40<span class="text"> run</span></button>
+            <span class="text">41 statements &nbsp;</span>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">41<span class="text"> run</span></button>
             <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">0<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_e587a41e60d941b3__scaling_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-31 12:00 +0000
+            created at 2026-08-31 14:19 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -381,6 +381,14 @@
     <p class="pln"><span class="n"><a id="t299" href="#t299">299</a></span><span class="t"><span class="com">#: GLONASS FDMA signal numbers (frequency depends on FreqNr, not fixed).</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t300" href="#t300">300</a></span><span class="t"><span class="com">#: Source: RefGuide-4.14.0, Table 4.1.10, p. 256, frequency column footnote.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t301" href="#t301">301</a></span><span class="t"><span class="nam">FDMA_SIGNAL_NUMS</span><span class="op">:</span> <span class="nam">frozenset</span><span class="op">[</span><span class="nam">int</span><span class="op">]</span> <span class="op">=</span> <span class="nam">frozenset</span><span class="op">(</span><span class="op">{</span><span class="num">8</span><span class="op">,</span> <span class="num">9</span><span class="op">,</span> <span class="num">10</span><span class="op">,</span> <span class="num">11</span><span class="op">}</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t302" href="#t302">302</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t303" href="#t303">303</a></span><span class="t"><span class="com">#: Pre-computed carrier frequencies as plain Hz floats for zero-allocation hot-path access.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t304" href="#t304">304</a></span><span class="t"><span class="com">#: Derived from SIGNAL_TABLE at import time &#8212; never mutate.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t305" href="#t305">305</a></span><span class="t"><span class="com">#: GLONASS FDMA signals (8-11) map to None; use _glonass_freq_hz_f() for slot-specific Hz.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t306" href="#t306">306</a></span><span class="t"><span class="nam">_SIGNAL_FREQ_HZ</span><span class="op">:</span> <span class="nam">dict</span><span class="op">[</span><span class="nam">int</span><span class="op">,</span> <span class="nam">float</span> <span class="op">|</span> <span class="key">None</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t307" href="#t307">307</a></span><span class="t">    <span class="nam">num</span><span class="op">:</span> <span class="op">(</span><span class="nam">float</span><span class="op">(</span><span class="nam">sig</span><span class="op">.</span><span class="nam">freq</span><span class="op">.</span><span class="nam">to</span><span class="op">(</span><span class="str">&quot;Hz&quot;</span><span class="op">)</span><span class="op">.</span><span class="nam">magnitude</span><span class="op">)</span> <span class="key">if</span> <span class="nam">sig</span><span class="op">.</span><span class="nam">freq</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span> <span class="key">else</span> <span class="key">None</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t308" href="#t308">308</a></span><span class="t">    <span class="key">for</span> <span class="nam">num</span><span class="op">,</span> <span class="nam">sig</span> <span class="key">in</span> <span class="nam">SIGNAL_TABLE</span><span class="op">.</span><span class="nam">items</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t309" href="#t309">309</a></span><span class="t"><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -390,7 +398,7 @@
             <a class="nav" href="z_e587a41e60d941b3__scaling_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-31 12:00 +0000
+            created at 2026-08-31 14:19 +0000
         </p>
     </div>
 </footer>
