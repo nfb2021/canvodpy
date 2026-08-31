@@ -19,6 +19,7 @@ from datetime import datetime
 from functools import partial
 from itertools import zip_longest
 from pathlib import Path
+from typing import TypeVar
 
 import pint
 import xarray as xr
@@ -74,7 +75,14 @@ def _check_recipe_receivers_have_filemap(receivers: dict[str, dict]) -> None:
         ) from exc
 
 
-def _windowed_completions[T](
+# Old-style TypeVar (not PEP 695 `def f[T](...)`): CodeQL's Python analysis
+# doesn't yet understand the newer generic syntax and flags T as a
+# potentially-uninitialized local inside the nested _submit() closure below.
+# A module-level TypeVar is unambiguous to both type checkers and CodeQL.
+T = TypeVar("T")
+
+
+def _windowed_completions(  # noqa: UP047 -- see TypeVar comment above
     submit: Callable[[T], Future], tasks: Sequence[T], window: int
 ) -> Generator[tuple[T, Future]]:
     """Submit ``tasks`` keeping at most ``window`` futures in flight.
