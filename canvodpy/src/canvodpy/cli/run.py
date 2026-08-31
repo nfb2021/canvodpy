@@ -54,9 +54,16 @@ from canvodpy.orchestrator.store_retry import call_with_store_retries
 log = structlog.get_logger(__name__)
 
 
-def _pick_free_port() -> int:
+def _pick_free_port(host: str) -> int:
+    """Ask the OS for a free port, bound to the same host the dashboard will use.
+
+    Binding the discovery socket to ``host`` (rather than all interfaces)
+    guarantees the returned port is actually free on the interface the
+    dashboard will bind to next -- discovering on a different interface
+    (e.g. loopback) could return a port already taken on ``host``.
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 0))
+        s.bind((host, 0))
         return s.getsockname()[1]
 
 
@@ -382,7 +389,7 @@ def _main_impl(args: SimpleNamespace) -> int:
         _start_dashboard(
             config.processing.logging.get_log_dir(),
             args.dashboard_host,
-            args.dashboard_port or _pick_free_port(),
+            args.dashboard_port or _pick_free_port(args.dashboard_host),
         )
 
     from canvodpy.cli.dashboard import day_count, make_reporter

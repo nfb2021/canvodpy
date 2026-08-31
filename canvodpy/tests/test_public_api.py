@@ -272,9 +272,10 @@ class TestConfigurationCompatibility:
             cfg = load_config()
         except (FileNotFoundError, Exception) as e:
             pytest.skip(f"Config not available: {e}")
-        keep_vars = cfg.processing.params.keep_gnss_observables
-        assert keep_vars is not None
-        assert isinstance(keep_vars, list)
+        else:
+            keep_vars = cfg.processing.params.keep_gnss_observables
+            assert keep_vars is not None
+            assert isinstance(keep_vars, list)
 
 
 class TestSubpackageCompatibility:
