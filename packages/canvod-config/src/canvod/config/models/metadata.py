@@ -81,6 +81,13 @@ class MetadataConfig(_StrictModel):
     publisher: str | None = Field(None, description="Publisher name")
     publisher_url: str | None = Field(None, description="Publisher URL")
     naming_authority: str | None = Field(None, description="Naming authority URI")
+    store_description: str | None = Field(
+        None,
+        description=(
+            "Human-readable description of the store itself (not the site) -- "
+            "written to StoreIdentity.description."
+        ),
+    )
 
     def to_attrs_dict(self) -> dict[str, str]:
         """Convert to a dictionary for xarray attributes.

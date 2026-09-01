@@ -18,11 +18,13 @@ from canvod.config.models import (
     ChunkStrategy,
     CompressionConfig,
     CredentialsConfig,
+    FundingRef,
     IcechunkConfig,
     MetadataConfig,
     ProcessingConfig,
     ProcessingParams,
     ReceiverConfig,
+    ReferencesConfig,
     SidsConfig,
     SiteConfig,
     SitesConfig,
@@ -42,6 +44,23 @@ class TestMetadataConfig:
             institution="Test Uni",
         )
         assert m.author == "Test User"
+
+    def test_store_description_defaults_to_none(self):
+        m = MetadataConfig(
+            author="Test User",
+            email="test@example.com",
+            institution="Test Uni",
+        )
+        assert m.store_description is None
+
+    def test_store_description_accepts_value(self):
+        m = MetadataConfig(
+            author="Test User",
+            email="test@example.com",
+            institution="Test Uni",
+            store_description="A reference store for TestSite.",
+        )
+        assert m.store_description == "A reference store for TestSite."
 
     def test_invalid_email_raises(self):
         with pytest.raises(ValidationError, match="email"):
@@ -86,6 +105,51 @@ class TestMetadataConfig:
         assert d["department"] == "Dept"
         assert d["research_group"] == "Group"
         assert d["website"] == "https://example.com"
+
+
+# ===================================================================
+# ReferencesConfig
+# ===================================================================
+
+
+class TestReferencesConfig:
+    def test_defaults_empty(self):
+        r = ReferencesConfig()
+        assert r.software_repository is None
+        assert r.documentation is None
+        assert r.access_url is None
+        assert r.related_stores == []
+        assert r.publications == []
+        assert r.funding == []
+
+    def test_accepts_software_repository_and_documentation(self):
+        r = ReferencesConfig(
+            software_repository="https://github.com/nfb2021/canvodpy",
+            documentation="https://github.com/nfb2021/canvodpy/tree/main/docs",
+            access_url="https://example.org/store",
+            related_stores=["rosalia_v3_04/vod_store"],
+        )
+        assert r.software_repository == "https://github.com/nfb2021/canvodpy"
+        assert r.documentation == "https://github.com/nfb2021/canvodpy/tree/main/docs"
+        assert r.access_url == "https://example.org/store"
+        assert r.related_stores == ["rosalia_v3_04/vod_store"]
+
+    def test_accepts_funding(self):
+        r = ReferencesConfig(
+            funding=[
+                FundingRef(
+                    funder="Austrian Science Fund (FWF)",
+                    funder_ror="https://ror.org/013tf3c58",
+                    grant_number="I 4489-N",
+                    award_title="CONSOLIDATION",
+                )
+            ]
+        )
+        assert r.funding[0].funder == "Austrian Science Fund (FWF)"
+
+    def test_rejects_extra_fields(self):
+        with pytest.raises(ValidationError):
+            ReferencesConfig(not_a_real_field="x")
 
 
 # ===================================================================

@@ -312,7 +312,14 @@ def collect_references(config: Any) -> References:
         )
         for f in getattr(refs_config, "funding", [])
     ]
-    return References(publications=pubs, funding=funding)
+    return References(
+        software_repository=getattr(refs_config, "software_repository", None),
+        documentation=getattr(refs_config, "documentation", None),
+        access_url=getattr(refs_config, "access_url", None),
+        related_stores=getattr(refs_config, "related_stores", None) or [],
+        publications=pubs,
+        funding=funding,
+    )
 
 
 def collect_metadata(
@@ -337,6 +344,7 @@ def collect_metadata(
         identity=StoreIdentity(
             id=f"{site_name}/{store_type}",
             title=f"{site_name} {store_type.replace('_', ' ').title()}",
+            description=getattr(meta_cfg, "store_description", None),
             store_type=store_type,
             source_format=source_format,
             keywords=["GNSS", "VOD", site_name, source_format],
