@@ -51,6 +51,15 @@ dev = [
 line-length = 88
 indent-width = 4
 target-version = "py314"
+# demo/ is a separate git submodule (canvodpy-demo) with its own lint
+# config and history -- ruff walks the filesystem regardless of git
+# submodule boundaries, so without this it "fixes" demo/'s files on disk
+# on every commit here, which trips pre-commit's modified-files abort.
+# force-exclude is required too: pre-commit passes explicit filenames
+# (not a directory to walk), and `exclude` alone is silently ignored for
+# explicitly-passed paths unless force-exclude is also set.
+exclude = ["demo"]
+force-exclude = true
 
 [tool.ruff.lint]
 select = [

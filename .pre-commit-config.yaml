@@ -4,13 +4,19 @@ repos:
       # Use uv-managed ruff so local hooks and CI always use the same version
       - id: ruff-check
         name: ruff lint
-        entry: uv run ruff check --fix
+        # --frozen: use uv.lock exactly as committed, never re-resolve/write
+        # it as a side effect of `uv run`. Without this, any yanked/stale
+        # package upstream (e.g. a yanked PyPI release) makes plain `uv run`
+        # silently rewrite uv.lock on every hook invocation -- pre-commit
+        # then sees uv.lock "modified by this hook" (misattributed to ruff,
+        # which never touched it) and aborts the commit.
+        entry: uv run --frozen ruff check --fix
         language: system
         types: [python]
         stages: [pre-commit]
       - id: ruff-format
         name: ruff format
-        entry: uv run ruff format
+        entry: uv run --frozen ruff format
         language: system
         types: [python]
         stages: [pre-commit]

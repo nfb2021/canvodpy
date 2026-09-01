@@ -443,18 +443,21 @@ build-package PACKAGE:
 # Notebooks (marimo)
 # ============================================================================
 
-# list all marimo notebooks in demo/
+# list all marimo notebooks in demo/ (numbered files only -- excludes
+# helper modules like _paths.py, _download.py, _live_store.py)
 notebooks:
     @echo "{{ GREEN }}{{ BOLD }}Available notebooks:{{ NORMAL }}"
-    @ls demo/*.py | grep -v __pycache__ | sed 's|demo/||' | sort
+    @ls demo/[0-9]*.py | sed 's|demo/||' | sort
 
 # open a marimo notebook for editing (e.g. just open-notebook grids_overview.py)
+# uvx (not `uv run`) so this never touches the workspace venv/uv.lock --
+# --sandbox installs the notebook's own PEP 723 deps into a throwaway venv
 open-notebook NAME:
-    uv run marimo edit demo/{{ NAME }}
+    uvx marimo edit --sandbox demo/{{ NAME }}
 
 # run a marimo notebook as a read-only app (e.g. just app-notebook grids_overview.py)
 app-notebook NAME:
-    uv run marimo run demo/{{ NAME }}
+    uvx marimo run --sandbox demo/{{ NAME }}
 
 # start the hemisphere API server (run from repo root; see .icechunk_gridding_claude/RUNNING.md)
 hemi-serve:

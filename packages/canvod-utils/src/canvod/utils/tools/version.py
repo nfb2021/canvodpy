@@ -1,23 +1,35 @@
 """Version utilities for canVODpy packages."""
 
 import tomllib
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _installed_version
 from pathlib import Path
 
 
 def get_version_from_pyproject(pyproject_path: Path | None = None) -> str:
     """
-    Get version from pyproject.toml.
+    Get the installed canvod-utils package version.
+
+    Tries `importlib.metadata` first, which resolves correctly for any
+    install type (wheel, sdist, or editable). Falls back to walking up
+    from this file's location looking for a `pyproject.toml` -- this only
+    ever succeeds inside an editable/dev source checkout, since a built
+    wheel's site-packages never ships pyproject.toml. Without the
+    importlib.metadata path first, every store write from a non-editable
+    install (a real PyPI release, or a git-sourced install like the demo
+    notebooks use) raised FileNotFoundError here, since callers pass no
+    explicit pyproject_path and expect this to just work.
 
     Parameters
     ----------
     pyproject_path : Path, optional
-        Path to pyproject.toml. If None, automatically finds it by traversing
-        up from the current file location.
+        Path to pyproject.toml. If None, resolved automatically as
+        described above.
 
     Returns
     -------
     str
-        Version string from pyproject.toml.
+        Version string.
 
     Examples
     --------
@@ -25,6 +37,11 @@ def get_version_from_pyproject(pyproject_path: Path | None = None) -> str:
     >>> print(version)  # e.g., "0.1.0"
     """
     if pyproject_path is None:
+        try:
+            return _installed_version("canvod-utils")
+        except PackageNotFoundError:
+            pass
+
         # Automatically find pyproject.toml at package root
         # Start from this file and go up until we find pyproject.toml
         current = Path(__file__).resolve()
