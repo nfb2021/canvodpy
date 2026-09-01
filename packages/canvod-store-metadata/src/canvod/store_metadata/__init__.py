@@ -11,6 +11,8 @@ from .collectors import collect_config_snapshot, collect_metadata
 from .inventory import (
     scan_stores,
     scan_stores_as_stac,
+    to_stac_collection,
+    to_stac_collection_json,
     write_stac_catalog,
     write_stac_collection,
 )
@@ -30,6 +32,8 @@ __all__ = [
     "scan_stores",
     "scan_stores_as_stac",
     "show_metadata",
+    "to_stac_collection",
+    "to_stac_collection_json",
     "update_metadata",
     "validate_all",
     "validate_datacite",
