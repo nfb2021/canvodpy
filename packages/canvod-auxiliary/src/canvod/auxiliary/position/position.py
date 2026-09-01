@@ -5,15 +5,25 @@ Provides classes for ECEF and geodetic position handling.
 Migrated and simplified from gnssvodpy.position
 """
 
+import math
 from dataclasses import dataclass
 from typing import Self
 
 import pymap3d as pm
 import xarray as xr
+from pydantic import BaseModel, ConfigDict, model_validator
+
+# Ground-station plausibility band for ECEF magnitude: roughly on/near the
+# WGS84 ellipsoid (equatorial radius 6378137 m, polar 6356752 m). Only
+# enforced at the receiver-position parse boundary (from_ds_metadata()) --
+# NOT a field constraint on ECEFPosition itself, since that class is also
+# used as a general-purpose ECEF point (e.g. satellite positions in
+# geometry/test code), which can be far outside this band.
+_GROUND_STATION_MIN_RADIUS_M = 6.3e6
+_GROUND_STATION_MAX_RADIUS_M = 6.5e6
 
 
-@dataclass(frozen=True)
-class ECEFPosition:
+class ECEFPosition(BaseModel):
     """Earth-Centered, Earth-Fixed (ECEF) position in meters.
 
     ECEF is a Cartesian coordinate system with:
@@ -31,6 +41,16 @@ class ECEFPosition:
     z : float
         Z coordinate in meters.
 
+    Raises
+    ------
+    pydantic.ValidationError
+        If any component is non-finite (NaN/inf), or the position is
+        exactly (0, 0, 0) -- Earth's centre, never a physically valid ECEF
+        point for anything this codebase computes geometry relative to.
+        This is deliberately a *general* sanity check (applies to satellite
+        positions too, not just receivers) -- see ``from_ds_metadata()`` for
+        the additional ground-station-specific plausibility check.
+
     Examples
     --------
     >>> # From RINEX dataset metadata
@@ -42,9 +62,26 @@ class ECEFPosition:
     >>> lat, lon, alt = pos.to_geodetic()
     """
 
+    model_config = ConfigDict(frozen=True)
+
     x: float  # meters
     y: float  # meters
     z: float  # meters
+
+    @model_validator(mode="after")
+    def _validate_physically_possible(self) -> Self:
+        for _name, _v in (("x", self.x), ("y", self.y), ("z", self.z)):
+            if not math.isfinite(_v):
+                raise ValueError(f"ECEF {_name} must be finite, got {_v!r}")
+        if self.x == 0.0 and self.y == 0.0 and self.z == 0.0:
+            raise ValueError(
+                "ECEF position is exactly (0, 0, 0) -- Earth's centre, not "
+                "a physically valid point. This usually means an upstream "
+                "parser defaulted to a placeholder instead of a real "
+                "position (e.g. a RINEX header's APPROX POSITION XYZ was "
+                "never populated)."
+            )
+        return self
 
     def to_geodetic(self) -> tuple[float, float, float]:
         """Convert ECEF to geodetic coordinates.
@@ -80,6 +117,18 @@ class ECEFPosition:
         ------
         KeyError
             If position attributes not found in dataset.
+        pydantic.ValidationError
+            If the position is non-finite or exactly (0, 0, 0) (see
+            ``ECEFPosition``'s own validator).
+        ValueError
+            If the position's ECEF magnitude falls outside the plausible
+            ground-station band (``_GROUND_STATION_MIN_RADIUS_M`` ..
+            ``_GROUND_STATION_MAX_RADIUS_M``, i.e. on/near the WGS84
+            ellipsoid) -- e.g. an unpopulated RINEX header defaulted to a
+            position that happens to be finite and non-zero but still not a
+            real ground station (this check is specific to *this* parse
+            boundary, not a general ``ECEFPosition`` constraint -- see the
+            class docstring).
 
         Examples
         --------
@@ -111,7 +160,21 @@ class ECEFPosition:
                 "Expected 'APPROX POSITION X/Y/Z' or 'Approximate Position'"
             )
 
-        return cls(x=x, y=y, z=z)
+        pos = cls(x=x, y=y, z=z)
+        magnitude = math.sqrt(pos.x**2 + pos.y**2 + pos.z**2)
+        if not (
+            _GROUND_STATION_MIN_RADIUS_M <= magnitude <= _GROUND_STATION_MAX_RADIUS_M
+        ):
+            raise ValueError(
+                f"Receiver position magnitude {magnitude:.1f} m is outside "
+                "the plausible ECEF range for a ground station "
+                f"({_GROUND_STATION_MIN_RADIUS_M:.2e}-"
+                f"{_GROUND_STATION_MAX_RADIUS_M:.2e} m, i.e. on/near the "
+                f"WGS84 ellipsoid): {pos!r}. This usually means the RINEX "
+                "header's APPROX POSITION XYZ is wrong or was never "
+                "populated with the real (e.g. PPP-derived) position."
+            )
+        return pos
 
     def __repr__(self) -> str:
         return f"ECEFPosition(x={self.x:.3f}, y={self.y:.3f}, z={self.z:.3f})"
