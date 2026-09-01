@@ -589,11 +589,11 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
         # support doesn't model this and treats the assignment inside the
         # validator that first sets them as establishing a read-only
         # "property".
-        self._header = Rnxv2Header.from_file(self.fpath)  # ty: ignore[invalid-assignment]
-        self._signal_mapper = SignalIDMapper(  # ty: ignore[invalid-assignment]
+        self._header = Rnxv2Header.from_file(self.fpath)
+        self._signal_mapper = SignalIDMapper(
             aggregate_glonass_fdma=self.aggregate_glonass_fdma,
         )
-        self._lines = self._load_file()  # ty: ignore[invalid-assignment]
+        self._lines = self._load_file()
         return self
 
     @property
@@ -620,14 +620,14 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
             data = f.read()
             h.update(data)
             lines = data.decode("utf-8", errors="replace").splitlines()
-        self._file_hash = h.hexdigest()[:16]  # ty: ignore[invalid-assignment]
+        self._file_hash = h.hexdigest()[:16]
 
         # Find line after END OF HEADER (PrivateAttr, mutable despite
         # frozen=True -- see _post_init's comment above)
-        self._header_end_line = 0  # ty: ignore[invalid-assignment]
+        self._header_end_line = 0
         for i, line in enumerate(lines):
             if "END OF HEADER" in line:
-                self._header_end_line = i + 1  # ty: ignore[invalid-assignment]
+                self._header_end_line = i + 1
                 break
 
         return lines

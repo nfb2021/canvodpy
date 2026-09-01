@@ -39,13 +39,26 @@ check-lint-only:
     uv run ruff check .
 
 # format python code using ruff
+# --exclude "*.md": ruff format also reformats fenced Python code blocks
+# inside Markdown files by default -- not something this repo has ever
+# opted into, and root pyproject.toml's [tool.ruff] exclude doesn't reach
+# files under packages/*/ (each has its own [tool.ruff] section that
+# shadows the root one via ruff's nearest-config resolution), so the
+# exclude has to live on the CLI invocation instead.
+# --exclude "demo": same nested-config issue -- root's `exclude = ["demo"]`
+# only actually takes effect for pre-commit's explicit-filename hook
+# invocation (force-exclude); a directory walk from `.` (what this recipe
+# and CI do) still descends into demo/ once it finds demo/pyproject.toml,
+# even though that file has no [tool.ruff] section of its own. Verified
+# empirically: root's `exclude` alone does not stop demo/*.py from being
+# reformatted here, only a CLI-level --exclude does.
 [private]
 check-format:
-    uv run ruff format .
+    uv run ruff format . --exclude "*.md" --exclude "demo"
 
 # check formatting without modifying files (for CI)
 check-format-only:
-    uv run ruff format --check . --exclude "*.ipynb"
+    uv run ruff format --check . --exclude "*.ipynb" --exclude "*.md" --exclude "demo"
 
 # run the type checker ty (config lives in [tool.ty] in pyproject.toml)
 check-types:
@@ -443,18 +456,21 @@ build-package PACKAGE:
 # Notebooks (marimo)
 # ============================================================================
 
-# list all marimo notebooks in demo/
+# list all marimo notebooks in demo/ (numbered files only -- excludes
+# helper modules like _paths.py, _download.py, _live_store.py)
 notebooks:
     @echo "{{ GREEN }}{{ BOLD }}Available notebooks:{{ NORMAL }}"
-    @ls demo/*.py | grep -v __pycache__ | sed 's|demo/||' | sort
+    @ls demo/[0-9]*.py | sed 's|demo/||' | sort
 
 # open a marimo notebook for editing (e.g. just open-notebook grids_overview.py)
+# uvx (not `uv run`) so this never touches the workspace venv/uv.lock --
+# --sandbox installs the notebook's own PEP 723 deps into a throwaway venv
 open-notebook NAME:
-    uv run marimo edit demo/{{ NAME }}
+    uvx marimo edit --sandbox demo/{{ NAME }}
 
 # run a marimo notebook as a read-only app (e.g. just app-notebook grids_overview.py)
 app-notebook NAME:
-    uv run marimo run demo/{{ NAME }}
+    uvx marimo run --sandbox demo/{{ NAME }}
 
 # start the hemisphere API server (run from repo root; see .icechunk_gridding_claude/RUNNING.md)
 hemi-serve:

@@ -247,7 +247,7 @@ when more than one site is present.
             _base = (
                 _alt.Chart(trend_data.to_pandas())
                 .mark_line(point=True)
-                .encode(
+                .encode(  # ty: ignore[unresolved-attribute] -- altair's stubs lose the concrete Chart type across this chain
                     x=_alt.X("date_key:N", title="Day (YYYYDOY)"),
                     y=_alt.Y("duration_seconds:Q", title="Duration (s)"),
                     color=_alt.Color("unit:N", title="Receiver / analysis"),
@@ -290,7 +290,7 @@ def _(filtered, mo, pl):
             _base = (
                 _alt.Chart(by_unit.to_pandas())
                 .mark_bar()
-                .encode(
+                .encode(  # ty: ignore[unresolved-attribute] -- altair's stubs lose the concrete Chart type across this chain
                     x=_alt.X("date_key:N", title="Day (YYYYDOY)"),
                     y=_alt.Y("total_seconds:Q", title="Total time (s)"),
                     color=_alt.Color("unit:N", title="Receiver / analysis"),

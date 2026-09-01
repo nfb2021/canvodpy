@@ -1309,7 +1309,7 @@ class SbfReader(GNSSDataReader):
     # Dataset construction — observations
     # ------------------------------------------------------------------
 
-    def to_ds(
+    def to_ds(  # ty: ignore[invalid-method-override] -- intentional SBF-specific kwargs, not a substitutability bug: callers going through the base GNSSDataReader.to_ds contract never pass pad_global_sid/strip_fillval by name
         self,
         keep_data_vars: list[str] | None = None,
         pad_global_sid: bool = True,
@@ -2066,7 +2066,7 @@ class SbfReader(GNSSDataReader):
     # Combined single-pass: observations + auxiliary metadata
     # ------------------------------------------------------------------
 
-    def to_ds_and_auxiliary(
+    def to_ds_and_auxiliary(  # ty: ignore[invalid-method-override] -- intentional SBF-specific kwargs, not a substitutability bug: see to_ds() above
         self,
         keep_data_vars: list[str] | None = None,
         pad_global_sid: bool = True,

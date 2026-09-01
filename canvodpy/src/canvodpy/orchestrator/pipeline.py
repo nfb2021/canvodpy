@@ -36,7 +36,7 @@ try:
     _HAS_LOKY = True
 except ImportError:
     _HAS_LOKY = False
-    _loky_reusable = None  # ty: ignore[invalid-assignment]
+    _loky_reusable = None
 
 from canvodpy._deprecation import deprecated
 from canvodpy.logging import get_logger
