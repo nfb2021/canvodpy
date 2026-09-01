@@ -11,17 +11,17 @@ VOD (Vegetation Optical Depth) retrieval algorithms.
 
 ## Algorithm
 
-Zeroth-order Tau-Omega radiative transfer model:
-- Compares SNR through canopy vs open-sky reference
-- `VOD = -ln(SNR_canopy / SNR_reference) / (2 * cos(theta))`
+Zeroth-order-scattering Tau-Omega radiative transfer model (`TauOmegaZerothOrder`):
+- Compares SNR through canopy vs open-sky reference (both in dB)
+- `delta_snr = SNR_canopy - SNR_sky`; `transmissivity = 10 ** (delta_snr / 10)`
+- `VOD = -ln(transmissivity) * cos(theta)`
 - theta = polar angle of satellite signal path through canopy
 
 ## Input requirements
 
-Dataset must have:
-- `obs` / `snr` variables with `(epoch, sid)` dims
-- Canopy and reference theta/phi from ephemeris augmentation
-- Grid cell assignments (for spatial aggregation)
+Each `canopy_ds`/`sky_ds` input must be an `xarray.Dataset` with an `SNR`
+variable on `(epoch, sid)` dims (enforced by a pydantic `field_validator`)
+and `theta`/`phi` from ephemeris augmentation.
 
 ## Testing
 
