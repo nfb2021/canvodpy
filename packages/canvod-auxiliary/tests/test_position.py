@@ -1,6 +1,9 @@
 """Tests for position and coordinate transformations."""
 
 import numpy as np
+import pytest
+import xarray as xr
+from pydantic import ValidationError
 
 from canvod.auxiliary.position import (
     ECEFPosition,
@@ -8,6 +11,83 @@ from canvod.auxiliary.position import (
     add_spherical_coords_to_dataset,
     compute_spherical_coordinates,
 )
+
+
+class TestECEFPositionGuardRail:
+    """Regression tests for #111: reject implausible receiver positions.
+
+    A zeroed/unpopulated RINEX ``APPROX POSITION XYZ`` header used to be
+    silently accepted as (0, 0, 0) -- the Earth's centre -- and passed on
+    as the receiver position, corrupting every downstream satellite
+    geometry computation without any error or warning.
+    """
+
+    def test_rejects_exact_origin(self):
+        """(0, 0, 0) is never a valid ECEF point, receiver or otherwise."""
+        with pytest.raises(ValidationError, match="Earth's centre"):
+            ECEFPosition(x=0.0, y=0.0, z=0.0)
+
+    def test_rejects_nan_component(self):
+        with pytest.raises(ValidationError, match="finite"):
+            ECEFPosition(x=float("nan"), y=931735.3, z=4801629.6)
+
+    def test_rejects_inf_component(self):
+        with pytest.raises(ValidationError, match="finite"):
+            ECEFPosition(x=4075539.8, y=float("inf"), z=4801629.6)
+
+    def test_accepts_plausible_ground_station(self):
+        """A real ground-station position must still construct cleanly."""
+        pos = ECEFPosition(x=4075539.8, y=931735.3, z=4801629.6)
+        assert pos.x == 4075539.8
+
+    def test_satellite_range_positions_still_construct(self):
+        """ECEFPosition itself stays general-purpose (satellite ranges too).
+
+        Only from_ds_metadata() (the receiver-position parse boundary)
+        enforces the tighter ground-station magnitude band -- bare
+        ECEFPosition construction must keep accepting LEO-range points,
+        since it's also used to represent satellite positions elsewhere
+        (e.g. test_position_properties.py's Hypothesis strategies).
+        """
+        pos = ECEFPosition(x=2.5e7, y=5e6, z=1.5e7)
+        assert pos.x == 2.5e7
+
+    def test_from_ds_metadata_rejects_zeroed_header(self, sample_rinex_data):
+        """The real-world failure mode: an unpopulated RINEX header."""
+        corrupted = sample_rinex_data.copy()
+        corrupted.attrs["APPROX POSITION X"] = 0.0
+        corrupted.attrs["APPROX POSITION Y"] = 0.0
+        corrupted.attrs["APPROX POSITION Z"] = 0.0
+
+        with pytest.raises(ValidationError, match="Earth's centre"):
+            ECEFPosition.from_ds_metadata(corrupted)
+
+    def test_from_ds_metadata_rejects_implausible_but_finite_position(
+        self, sample_rinex_data
+    ):
+        """Finite, non-zero, but nowhere near a ground station -- e.g. a
+        unit/scale mixup (km written where m was expected)."""
+        corrupted = sample_rinex_data.copy()
+        corrupted.attrs["APPROX POSITION X"] = 4075.5398
+        corrupted.attrs["APPROX POSITION Y"] = 931.7353
+        corrupted.attrs["APPROX POSITION Z"] = 4801.6296
+
+        with pytest.raises(ValueError, match="plausible ECEF range"):
+            ECEFPosition.from_ds_metadata(corrupted)
+
+    def test_from_ds_metadata_accepts_real_position(self, sample_rinex_data):
+        """Sanity check: the real, correct fixture position still passes."""
+        pos = ECEFPosition.from_ds_metadata(sample_rinex_data)
+        assert pos.x == 4075539.8
+
+    def test_alternative_format_rejects_zeroed_position(self):
+        """The 'Approximate Position' string-format branch gets the same
+        guard rail as the standard 'APPROX POSITION X/Y/Z' branch."""
+        ds = xr.Dataset(
+            attrs={"Approximate Position": "(X = 0.0 m, Y = 0.0 m, Z = 0.0 m)"}
+        )
+        with pytest.raises(ValidationError, match="Earth's centre"):
+            ECEFPosition.from_ds_metadata(ds)
 
 
 class TestECEFPosition:
