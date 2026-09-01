@@ -22,9 +22,7 @@ _TEST_DATA = (
     / "test_data"
 )
 _ROSALIA_DATA = _TEST_DATA / "valid" / "rinex_v3_04" / "01_Rosalia"
-_STORE_ROOT = _TEST_DATA / "valid" / "stores" / "rosalia_rinex"
 HAS_TEST_DATA = _ROSALIA_DATA.exists()
-HAS_STORE = _STORE_ROOT.exists()
 
 # Receiver layout matching the test data directory structure
 _TEST_RECEIVERS = {
@@ -51,8 +49,8 @@ _TEST_VOD_ANALYSES = {
 
 @pytest.mark.integration
 @pytest.mark.skipif(
-    not (HAS_CONFIG and HAS_TEST_DATA and HAS_STORE),
-    reason="Integration test requires config files, test data, and store directory",
+    not (HAS_CONFIG and HAS_TEST_DATA),
+    reason="Integration test requires config files and test data",
 )
 def test_sid_filtering_integration(tmp_path, monkeypatch):
     """Test SID filtering with full orchestrator."""
