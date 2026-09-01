@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_6d37236cfcdf52b4___init___py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-31 14:36 +0000
+            created at 2026-09-01 14:16 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -1391,7 +1391,7 @@
     <p class="pln"><span class="n"><a id="t1309" href="#t1309">1309</a></span><span class="t">    <span class="com"># Dataset construction &#8212; observations</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1310" href="#t1310">1310</a></span><span class="t">    <span class="com"># ------------------------------------------------------------------</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1311" href="#t1311">1311</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1312" href="#t1312">1312</a></span><span class="t">    <span class="key">def</span> <span class="nam">to_ds</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1312" href="#t1312">1312</a></span><span class="t">    <span class="key">def</span> <span class="nam">to_ds</span><span class="op">(</span>  <span class="com"># ty: ignore[invalid-method-override] -- intentional SBF-specific kwargs, not a substitutability bug: callers going through the base GNSSDataReader.to_ds contract never pass pad_global_sid/strip_fillval by name</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1313" href="#t1313">1313</a></span><span class="t">        <span class="nam">self</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1314" href="#t1314">1314</a></span><span class="t">        <span class="nam">keep_data_vars</span><span class="op">:</span> <span class="nam">list</span><span class="op">[</span><span class="nam">str</span><span class="op">]</span> <span class="op">|</span> <span class="key">None</span> <span class="op">=</span> <span class="key">None</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1315" href="#t1315">1315</a></span><span class="t">        <span class="nam">pad_global_sid</span><span class="op">:</span> <span class="nam">bool</span> <span class="op">=</span> <span class="key">True</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -2148,7 +2148,7 @@
     <p class="pln"><span class="n"><a id="t2066" href="#t2066">2066</a></span><span class="t">    <span class="com"># Combined single-pass: observations + auxiliary metadata</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2067" href="#t2067">2067</a></span><span class="t">    <span class="com"># ------------------------------------------------------------------</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2068" href="#t2068">2068</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t2069" href="#t2069">2069</a></span><span class="t">    <span class="key">def</span> <span class="nam">to_ds_and_auxiliary</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t2069" href="#t2069">2069</a></span><span class="t">    <span class="key">def</span> <span class="nam">to_ds_and_auxiliary</span><span class="op">(</span>  <span class="com"># ty: ignore[invalid-method-override] -- intentional SBF-specific kwargs, not a substitutability bug: see to_ds() above</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t2070" href="#t2070">2070</a></span><span class="t">        <span class="nam">self</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t2071" href="#t2071">2071</a></span><span class="t">        <span class="nam">keep_data_vars</span><span class="op">:</span> <span class="nam">list</span><span class="op">[</span><span class="nam">str</span><span class="op">]</span> <span class="op">|</span> <span class="key">None</span> <span class="op">=</span> <span class="key">None</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t2072" href="#t2072">2072</a></span><span class="t">        <span class="nam">pad_global_sid</span><span class="op">:</span> <span class="nam">bool</span> <span class="op">=</span> <span class="key">True</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -3276,7 +3276,7 @@
             <a class="nav" href="z_6d37236cfcdf52b4___init___py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-31 14:36 +0000
+            created at 2026-09-01 14:16 +0000
         </p>
     </div>
 </footer>

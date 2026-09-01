@@ -205,7 +205,7 @@
 | packages/canvod-utils/src/canvod/utils/tools/hashing.py                         |        9 |        6 |     33% |     32-37 |
 | packages/canvod-utils/src/canvod/utils/tools/sanitize.py                        |       15 |        5 |     67% |     41-48 |
 | packages/canvod-utils/src/canvod/utils/tools/validation.py                      |        7 |        5 |     29% |     29-33 |
-| packages/canvod-utils/src/canvod/utils/tools/version.py                         |       16 |        2 |     88% |     38-39 |
+| packages/canvod-utils/src/canvod/utils/tools/version.py                         |       22 |       14 |     36% |     42-61 |
 | packages/canvod-utils/src/canvod/utils/tools/worker.py                          |       16 |       14 |     12% |     15-30 |
 | packages/canvod-viz/src/canvod/viz/\_\_init\_\_.py                              |        6 |        0 |    100% |           |
 | packages/canvod-viz/src/canvod/viz/hemisphere\_2d.py                            |      262 |      172 |     34% |37-39, 127-128, 136, 217, 228, 235-244, 271, 295-339, 349-386, 392-431, 437-475, 542, 588-589, 646-761 |
@@ -216,7 +216,7 @@
 | packages/canvod-vod/src/canvod/vod/\_internal/\_\_init\_\_.py                   |        2 |        0 |    100% |           |
 | packages/canvod-vod/src/canvod/vod/\_internal/logger.py                         |        5 |        1 |     80% |        26 |
 | packages/canvod-vod/src/canvod/vod/calculator.py                                |       66 |        7 |     89% |51, 65, 106-112 |
-| **TOTAL**                                                                       | **21526** | **11727** | **46%** |           |
+| **TOTAL**                                                                       | **21532** | **11739** | **45%** |           |
 
 
 ## Setup coverage badge

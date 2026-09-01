@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_511ef897427f84bd_v3_05_stripped_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-31 14:36 +0000
+            created at 2026-09-01 14:16 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -873,10 +873,10 @@
     <p class="pln"><span class="n"><a id="t791" href="#t791">791</a></span><span class="t">        <span class="com"># validator that first sets them as establishing a read-only</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t792" href="#t792">792</a></span><span class="t">        <span class="com"># &quot;property&quot;.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t793" href="#t793">793</a></span><span class="t">        <span class="com"># Load header once</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t794" href="#t794">794</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">_header</span> <span class="op">=</span> <span class="nam">Rnxv3Header</span><span class="op">.</span><span class="nam">from_file</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">fpath</span><span class="op">)</span>  <span class="com"># ty: ignore[invalid-assignment]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t794" href="#t794">794</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">_header</span> <span class="op">=</span> <span class="nam">Rnxv3Header</span><span class="op">.</span><span class="nam">from_file</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">fpath</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t795" href="#t795">795</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t796" href="#t796">796</a></span><span class="t">        <span class="com"># Initialize signal mapper</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t797" href="#t797">797</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">_signal_mapper</span> <span class="op">=</span> <span class="nam">SignalIDMapper</span><span class="op">(</span>  <span class="com"># ty: ignore[invalid-assignment]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t797" href="#t797">797</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">_signal_mapper</span> <span class="op">=</span> <span class="nam">SignalIDMapper</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t798" href="#t798">798</a></span><span class="t">            <span class="nam">aggregate_glonass_fdma</span><span class="op">=</span><span class="nam">self</span><span class="op">.</span><span class="nam">aggregate_glonass_fdma</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t799" href="#t799">799</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t800" href="#t800">800</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -893,7 +893,7 @@
     <p class="mis show_mis"><span class="n"><a id="t811" href="#t811">811</a></span><span class="t">                <span class="nam">warnings</span><span class="op">.</span><span class="nam">warn</span><span class="op">(</span><span class="nam">str</span><span class="op">(</span><span class="nam">e</span><span class="op">)</span><span class="op">,</span> <span class="nam">RuntimeWarning</span><span class="op">,</span> <span class="nam">stacklevel</span><span class="op">=</span><span class="num">2</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t812" href="#t812">812</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t813" href="#t813">813</a></span><span class="t">        <span class="com"># Cache file lines</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t814" href="#t814">814</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">_lines</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_load_file</span><span class="op">(</span><span class="op">)</span>  <span class="com"># ty: ignore[invalid-assignment]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t814" href="#t814">814</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">_lines</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_load_file</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t815" href="#t815">815</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t816" href="#t816">816</a></span><span class="t">        <span class="key">return</span> <span class="nam">self</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t817" href="#t817">817</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -1048,7 +1048,7 @@
     <p class="mis mis2 show_mis"><span class="n"><a id="t966" href="#t966">966</a></span><span class="t">        <span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t967" href="#t967">967</a></span><span class="t">        <span class="nam">starts</span><span class="op">.</span><span class="nam">append</span><span class="op">(</span><span class="nam">len</span><span class="op">(</span><span class="nam">lines</span><span class="op">)</span><span class="op">)</span>  <span class="com"># Add EOF</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t968" href="#t968">968</a></span><span class="t">        <span class="com"># PrivateAttr, mutable despite frozen=True -- see _post_init&#x27;s comment.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t969" href="#t969">969</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">_cached_epoch_batches</span> <span class="op">=</span> <span class="op">[</span>  <span class="com"># ty: ignore[invalid-assignment]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t969" href="#t969">969</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">_cached_epoch_batches</span> <span class="op">=</span> <span class="op">[</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t970" href="#t970">970</a></span><span class="t">            <span class="op">(</span><span class="nam">start</span><span class="op">,</span> <span class="nam">starts</span><span class="op">[</span><span class="nam">i</span> <span class="op">+</span> <span class="num">1</span><span class="op">]</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t971" href="#t971">971</a></span><span class="t">            <span class="key">for</span> <span class="nam">i</span><span class="op">,</span> <span class="nam">start</span> <span class="key">in</span> <span class="nam">enumerate</span><span class="op">(</span><span class="nam">starts</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t972" href="#t972">972</a></span><span class="t">            <span class="key">if</span> <span class="nam">i</span> <span class="op">+</span> <span class="num">1</span> <span class="op">&lt;</span> <span class="nam">len</span><span class="op">(</span><span class="nam">starts</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -2196,7 +2196,7 @@
             <a class="nav" href="z_511ef897427f84bd_v3_05_stripped_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-31 14:36 +0000
+            created at 2026-09-01 14:16 +0000
         </p>
     </div>
 </footer>
