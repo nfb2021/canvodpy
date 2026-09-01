@@ -39,13 +39,26 @@ check-lint-only:
     uv run ruff check .
 
 # format python code using ruff
+# --exclude "*.md": ruff format also reformats fenced Python code blocks
+# inside Markdown files by default -- not something this repo has ever
+# opted into, and root pyproject.toml's [tool.ruff] exclude doesn't reach
+# files under packages/*/ (each has its own [tool.ruff] section that
+# shadows the root one via ruff's nearest-config resolution), so the
+# exclude has to live on the CLI invocation instead.
+# --exclude "demo": same nested-config issue -- root's `exclude = ["demo"]`
+# only actually takes effect for pre-commit's explicit-filename hook
+# invocation (force-exclude); a directory walk from `.` (what this recipe
+# and CI do) still descends into demo/ once it finds demo/pyproject.toml,
+# even though that file has no [tool.ruff] section of its own. Verified
+# empirically: root's `exclude` alone does not stop demo/*.py from being
+# reformatted here, only a CLI-level --exclude does.
 [private]
 check-format:
-    uv run ruff format .
+    uv run ruff format . --exclude "*.md" --exclude "demo"
 
 # check formatting without modifying files (for CI)
 check-format-only:
-    uv run ruff format --check . --exclude "*.ipynb"
+    uv run ruff format --check . --exclude "*.ipynb" --exclude "*.md" --exclude "demo"
 
 # run the type checker ty (config lives in [tool.ty] in pyproject.toml)
 check-types:

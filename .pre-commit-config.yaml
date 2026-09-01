@@ -16,7 +16,12 @@ repos:
         stages: [pre-commit]
       - id: ruff-format
         name: ruff format
-        entry: uv run --frozen ruff format
+        # --exclude "*.md": harmless here since `types: [python]` already
+        # keeps pre-commit from passing markdown files to this hook -- kept
+        # for symmetry with the justfile/CI invocation, which does need it
+        # (see pyproject.toml's [tool.ruff] exclude comment for why the
+        # root config's `exclude` can't do this instead).
+        entry: uv run --frozen ruff format --exclude "*.md"
         language: system
         types: [python]
         stages: [pre-commit]
