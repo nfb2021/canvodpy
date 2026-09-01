@@ -791,10 +791,10 @@ class Rnxv3Obs(GNSSDataReader):
         # validator that first sets them as establishing a read-only
         # "property".
         # Load header once
-        self._header = Rnxv3Header.from_file(self.fpath)  # ty: ignore[invalid-assignment]
+        self._header = Rnxv3Header.from_file(self.fpath)
 
         # Initialize signal mapper
-        self._signal_mapper = SignalIDMapper(  # ty: ignore[invalid-assignment]
+        self._signal_mapper = SignalIDMapper(
             aggregate_glonass_fdma=self.aggregate_glonass_fdma
         )
 
@@ -811,7 +811,7 @@ class Rnxv3Obs(GNSSDataReader):
                 warnings.warn(str(e), RuntimeWarning, stacklevel=2)
 
         # Cache file lines
-        self._lines = self._load_file()  # ty: ignore[invalid-assignment]
+        self._lines = self._load_file()
 
         return self
 
@@ -966,7 +966,7 @@ class Rnxv3Obs(GNSSDataReader):
         ]
         starts.append(len(lines))  # Add EOF
         # PrivateAttr, mutable despite frozen=True -- see _post_init's comment.
-        self._cached_epoch_batches = [  # ty: ignore[invalid-assignment]
+        self._cached_epoch_batches = [
             (start, starts[i + 1])
             for i, start in enumerate(starts)
             if i + 1 < len(starts)
