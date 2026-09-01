@@ -91,7 +91,7 @@
 | packages/canvod-auxiliary/src/canvod/auxiliary/matching/dataset\_matcher.py     |       38 |       28 |     26% |95-102, 128-135, 152-153, 172-173, 193-194, 222-251 |
 | packages/canvod-auxiliary/src/canvod/auxiliary/pipeline.py                      |      118 |        8 |     93% |254, 263, 318-331, 440 |
 | packages/canvod-auxiliary/src/canvod/auxiliary/position/\_\_init\_\_.py         |        3 |        0 |    100% |           |
-| packages/canvod-auxiliary/src/canvod/auxiliary/position/position.py             |       34 |        7 |     79% |    99-107 |
+| packages/canvod-auxiliary/src/canvod/auxiliary/position/position.py             |       50 |        0 |    100% |           |
 | packages/canvod-auxiliary/src/canvod/auxiliary/position/spherical\_coords.py    |       29 |        3 |     90% |   184-196 |
 | packages/canvod-auxiliary/src/canvod/auxiliary/preprocessing.py                 |      165 |       53 |     68% |165, 169-177, 183, 244, 286-361 |
 | packages/canvod-auxiliary/src/canvod/auxiliary/products/\_\_init\_\_.py         |        3 |        0 |    100% |           |
@@ -216,7 +216,7 @@
 | packages/canvod-vod/src/canvod/vod/\_internal/\_\_init\_\_.py                   |        2 |        0 |    100% |           |
 | packages/canvod-vod/src/canvod/vod/\_internal/logger.py                         |        5 |        1 |     80% |        26 |
 | packages/canvod-vod/src/canvod/vod/calculator.py                                |       66 |        7 |     89% |51, 65, 106-112 |
-| **TOTAL**                                                                       | **21532** | **11739** | **45%** |           |
+| **TOTAL**                                                                       | **21548** | **11732** | **46%** |           |
 
 
 ## Setup coverage badge
