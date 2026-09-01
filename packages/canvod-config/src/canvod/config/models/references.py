@@ -24,7 +24,18 @@ class FundingRef(_StrictModel):
 
 
 class ReferencesConfig(_StrictModel):
-    """Publications and funding references."""
+    """Publications, funding, and related-resource references."""
 
+    software_repository: str | None = Field(
+        None, description="URL of the software repository (e.g. GitHub)"
+    )
+    documentation: str | None = Field(None, description="URL of the documentation")
+    access_url: str | None = Field(
+        None,
+        description="URL where the store data is actually accessible (FAIR A1)",
+    )
+    related_stores: list[str] = Field(
+        default_factory=list, description="Identifiers/paths of related stores"
+    )
     publications: list[PublicationRef] = Field(default_factory=list)
     funding: list[FundingRef] = Field(default_factory=list)
