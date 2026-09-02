@@ -1,11 +1,10 @@
 name: Publish to PyPI
 
-# Trigger only on production release tags
+# Manual only -- deliberately not triggered by tag push. Tagging/versioning
+# (cz bump + git push --tags) creates the GitHub tag and draft release
+# (see release.yml) independently of a PyPI release; publishing to PyPI is a
+# separate, explicit decision made at whatever point via this dispatch.
 on:
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'  # e.g., v0.1.0, v1.2.3
-      # Excludes pre-release tags (beta, alpha, rc)
   workflow_dispatch:
     inputs:
       version:
