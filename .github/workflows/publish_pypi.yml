@@ -55,7 +55,6 @@ jobs:
             packages/canvod-vod \
             packages/canvod-ops \
             packages/canvod-preflight \
-            packages/canvod-audit \
             canvodpy; do
             echo "Building $pkg..."
             uv build --package "$(basename $pkg)" --out-dir dist/

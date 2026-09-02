@@ -64,14 +64,6 @@ signal-to-noise ratio observations.
 
     [:octicons-arrow-right-24: Architecture](architecture.md)
 
--   :fontawesome-solid-flask: &nbsp; **Four-tier verification suite**
-
-    ---
-
-    Self-consistency, internal cross-checks, regression snapshots, and comparison against reference implementations — a structured audit trail for trusting the numbers.
-
-    [:octicons-arrow-right-24: canvod-audit](packages/audit/overview.md)
-
 -   :fontawesome-solid-shield-halved: &nbsp; **Reliable by design**
 
     ---
@@ -276,13 +268,6 @@ flowchart TD
 
     Store-level provenance (DataCite, ACDD, STAC), compliance validation,
     inventory builder, STAC catalog export.
-
--   :fontawesome-solid-flask: &nbsp; **canvod-audit**
-
-    ---
-
-    Three-tier verification suite: internal consistency, regression
-    snapshots, and comparison against reference implementations.
 
 -   :fontawesome-solid-circle-nodes: &nbsp; **canvodpy**
 

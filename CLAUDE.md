@@ -103,7 +103,6 @@ RINEX/SBF files → Reader → xarray.Dataset(epoch, sid)
 | `canvod-viz` | `canvod.viz` | Visualization and store viewer |
 | `canvod-ops` | `canvod.ops` | Operational pipeline (streaming, monitoring) |
 | `canvod-preflight` | `canvod.preflight` | Naming convention parsing and pre-pipeline data directory validation |
-| `canvod-audit` | `canvod.audit` | Three-tier verification suite (internal consistency, regression, vs gnssvod) |
 | `canvodpy` | `canvodpy` | Orchestrator, API levels (L1-L4), VodComputer |
 
 Optional, published as separate packages in
@@ -145,7 +144,6 @@ deprecated (`DeprecationWarning` on use) — kept working, no longer taught.
 | `ty` | `uv run ty check` | Type checking (Astral's type checker) |
 | `pytest` | `uv run pytest` | Test runner; `-m "not integration"` for fast suite |
 | `beautiful-mermaid` | `npx beautiful-mermaid render ...` | Render `.mmd` diagrams to SVG/PNG |
-| `gfzrnx` | `/usr/local/bin/gfzrnx` | IGS RINEX toolkit (obs type filtering, splicing) — used by `RinexTrimmer` |
 | `Zensical` | `uv run zensical build` | Rust+Python MkDocs Material wrapper for docs |
 | `commitizen` | pre-commit hook | Enforces conventional commit messages |
 | `pre-commit` | auto on `git commit` | Runs ruff, trim whitespace, large file check, private key detection |
@@ -175,7 +173,6 @@ uv sync                                  # Install all workspace deps
 just check                               # Lint + format (all packages) — fast, always passes
 just check-types                         # Type check with ty (informational, allowed to fail)
 just test                                # Run all tests
-just test-audit                          # Run audit suite (unit + integration)
 just test-all-packages                   # Run tests per package (avoids namespace collisions)
 just test-package canvod-readers         # Test a single package
 uv run pytest -m "not integration"       # Skip integration tests (fast)
@@ -226,7 +223,7 @@ just deps-cross                          # Cross-package dependency graph
 Run `just check-types` to run ty locally before pushing. Real diagnostics get
 fixed or given a targeted `# ty: ignore[<rule>]` with a one-line reason — see
 `docs/guides/DEVELOPMENT.md` for the convention. Focus on correctness tests
-(audit suite) over type bureaucracy when the two are in tension.
+over type bureaucracy when the two are in tension.
 
 ### Test code exemptions
 Tests can use `assert`, magic numbers, and intentionally weird patterns
@@ -235,7 +232,7 @@ to test edge cases (see `pyproject.toml:90` for ruff exemptions).
 ## Guardrails — what NOT to change without understanding
 
 > These areas involve scientific correctness or data integrity. Do not modify
-> them without understanding the underlying science and running the audit suite.
+> them without understanding the underlying science.
 
 - **VOD formula** (`canvod-vod`) — Tau-Omega radiative transfer model
 - **Coordinate transforms** (`canvod-auxiliary`) — ECEF ↔ spherical, deg/rad conversions
@@ -246,7 +243,6 @@ to test edge cases (see `pyproject.toml:90` for ruff exemptions).
 
 After changes to any of the above, run:
 ```bash
-uv run pytest packages/canvod-audit/tests/  # Audit suite (60 tests, includes real data)
 uv run pytest -m "not integration"          # Fast unit tests across all packages
 ```
 
@@ -300,14 +296,13 @@ When you need deeper context than this file provides, read these docs **in order
 Each document cross-references the next, building from high-level architecture down
 to package-specific details.
 
-1. `docs/guides/ai-development.md` — **start here**: Claude Code setup, skills, audit suite, workflows
+1. `docs/guides/ai-development.md` — **start here**: Claude Code setup, skills, workflows
 2. `docs/architecture.md` — system architecture and data flow
 3. `docs/principles.md` — design principles and philosophy
 4. `docs/guides/api-levels.md` — CLI, `Site.pipeline()`, and the functional API explained
 5. `docs/guides/getting-started.md` — setup and first run
-6. `docs/packages/audit/overview.md` — three-tier verification suite
-7. `docs/findings/` — scientific comparison results and findings
-8. `docs/packages/*/overview.md` — per-package deep dives
+6. `docs/findings/` — scientific comparison results and findings
+7. `docs/packages/*/overview.md` — per-package deep dives
 
 **Onboarding rule:** If a user asks you to explain the project, walk them through
 this trail. If you encounter an unfamiliar package or concept, follow the trail
@@ -335,8 +330,6 @@ The AI agent is configured with:
   Pydantic, pytest, uv, marimo, Mermaid, and scientific writing (see skills table above)
 - **Persistent memory** — cross-session recall of project decisions, conventions,
   and known issues (stored in `.claude/` directory)
-- **Three-tier audit suite** — scientifically defensible verification that runs as CI
-  and catches regressions when any pipeline component changes
 
 New contributors: Claude Code can explain any part of the codebase, run the test
 suite, generate diagrams, and help navigate the monorepo. Start with

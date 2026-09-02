@@ -40,10 +40,10 @@ When Claude Code starts, it follows this chain to build understanding:
 ```
 CLAUDE.md (auto-loaded)
 ├── Scientific context (GNSS-T, VOD, key domain concepts)
-├── Architecture (12 packages, CLI + Site.pipeline() + functional API, data contracts)
+├── Architecture (11 packages, CLI + Site.pipeline() + functional API, data contracts)
 ├── Conventions (uv, ruff, ty, pytest, commitizen)
 ├── Skills table (15+ domain skills, auto-applied)
-├── Guardrails (what NOT to change without running audits)
+├── Guardrails (what NOT to change without understanding the underlying science)
 └── Key documentation pointers:
     ├── docs/guides/ai-development.md  ← you are here
     ├── docs/architecture.md           ← system design & data flow
@@ -163,36 +163,6 @@ Claude will:
    functions, or VODWorkflow — all deprecated, see docs/guides/api-levels.md
 ```
 
-### Running the audit suite
-
-```
-> Run the audit tests and explain any failures
-
-Claude will:
-1. Run: just test-audit
-2. Parse test output (60+ tests across 4 tiers)
-3. For failures: read the relevant comparison engine code
-4. Explain what scientific property was violated
-```
-
----
-
-## Three-tier audit suite
-
-The [canvod-audit](../packages/audit/overview.md) package provides scientifically
-defensible verification across four tiers:
-
-| Tier | What it verifies | CI |
-|---|---|---|
-| 0 | Reader self-consistency (read twice = identical) | test_platforms.yml |
-| 1a | SBF vs RINEX structural consistency | audit.yml |
-| 1b | Broadcast vs agency ephemeris angular agreement | audit.yml |
-| 2 | Regression freeze/thaw round-trips | audit.yml |
-| 3 | vs gnssvod (Humphrey et al.) — external validation | Manual |
-
-The audit CI runs on every push that touches readers, store, auxiliary, or audit code.
-It uses real GNSS test data from a git submodule.
-
 ---
 
 ## Guidelines for AI-assisted contributions
@@ -220,4 +190,3 @@ It uses real GNSS test data from a git submodule.
 - [Architecture](../architecture.md) — system design and data flow
 - [Contributor Setup](contributor-setup.md) — contributor setup and first run
 - [API Levels](api-levels.md) — CLI, `Site.pipeline()`, and the functional API explained
-- [Audit Overview](../packages/audit/overview.md) — three-tier verification suite

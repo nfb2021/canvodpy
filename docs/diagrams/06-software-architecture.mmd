@@ -28,8 +28,7 @@ graph TD
         UTILS["canvod-utils"]
     end
 
-    subgraph VERIFY["Quality Assurance (standalone CLIs, not imported by canvodpy)"]
-        AUDIT["canvod-audit"]
+    subgraph VERIFY["Quality Assurance (standalone CLI, not imported by canvodpy)"]
         NAMING["canvod-preflight"]
     end
 
@@ -50,7 +49,6 @@ graph TD
     STORE -.-> READERS
     STOREMETA -.-> CONFIG
     NAMING -.->|standalone, verifies inputs before a run| STORE
-    AUDIT -.->|standalone, verifies outputs after a run| STORE
     READERS -.-> UTILS & CONFIG
     GRIDS -.-> UTILS
 

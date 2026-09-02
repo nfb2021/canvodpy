@@ -15,13 +15,6 @@ Review store operations for safety. Check the following before any store write:
 
 5. **Consolidated metadata:** NEVER pass `consolidated=True` to `xr.open_zarr()` with Icechunk.
 
-## Audit store rules
-
-For stores in `/Volumes/ExtremePro/canvod_audit_output/`:
-- NEVER modify `main` branch
-- `gnssvodpy_based/` stores are read-only truth references
-- Always create new branches for experiments
-
 ## Recovery patterns
 
 | Problem | Solution |

@@ -417,7 +417,7 @@ retrieval, and the result is written to the site's VOD store (pass
 
 ---
 
-**Next in the trail:** [Users guide](../users/index.md) · [Audit Suite](../packages/audit/overview.md) · [Architecture](../architecture.md) · [AI Development](ai-development.md)
+**Next in the trail:** [Users guide](../users/index.md) · [Architecture](../architecture.md) · [AI Development](ai-development.md)
 
 ---
 

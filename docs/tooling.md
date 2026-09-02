@@ -239,26 +239,7 @@ canVODpy uses a modern Python toolchain built almost entirely on the [Astral](ht
 
     Monorepo scopes (optional but encouraged): `readers`, `aux`, `grids`, `vod`,
     `store`, `viz`, `utils`, `naming`, `orchestrator`, `diagnostics`, `ops`,
-    `audit`, `ci`, `docs`, `deps`.
-
-=== "gfzrnx / RinexTrimmer"
-
-    **gfzrnx** is the IGS-standard RINEX manipulation toolkit. It is an external
-    binary installed at `/usr/local/bin/gfzrnx` and used for observation-type
-    filtering, file splicing, and format conversion.
-
-    canVODpy wraps it through `RinexTrimmer` in `canvod-audit`:
-
-    ```python
-    from canvod.audit.rinex_trimmer import RinexTrimmer
-
-    trimmer = RinexTrimmer.gps_galileo_l1_l2()   # preset: GPS + Galileo, L1+L2
-    trimmer = RinexTrimmer.gps_l1_only()          # preset: GPS L1 only
-    print(trimmer.describe())                     # methods-section-ready text
-    ```
-
-    Used primarily for Tier 3 audit comparisons against gnssvod — trimming to
-    one observation code per band eliminates SID vs PRN ambiguity between tools.
+    `ci`, `docs`, `deps`.
 
 === "Zensical + beautiful-mermaid"
 
