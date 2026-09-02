@@ -1,6 +1,6 @@
 [project]
 name = "canvod-auxiliary"
-version = "0.2.3"
+version = "0.4.0"
 description = "Ephemeris and auxiliary data handling for GNSS-Transmissometry"
 authors = [
     {name = "Nicolas François Bader", email = "support@canvodpy.eu"}

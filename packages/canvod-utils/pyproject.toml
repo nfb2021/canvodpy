@@ -1,6 +1,6 @@
 [project]
 name = "canvod-utils"
-version = "0.3.0"
+version = "0.4.0"
 description = "Shared utilities and diagnostics for canVODpy"
 readme = "README.md"
 requires-python = ">=3.14"
