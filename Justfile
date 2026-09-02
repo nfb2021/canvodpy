@@ -307,10 +307,13 @@ release VERSION: test
     @echo ""
     @echo "{{GREEN}}{{BOLD}}✅ Release v{{VERSION}} created!{{NORMAL}}"
     @echo ""
-    @echo "Next steps:"
-    @echo "  1. Review the commits and tag"
-    @echo "  2. Push with: git push && git push --tags"
-    @echo "  3. GitHub Actions will create the release draft"
+    @echo "Next steps (main requires a PR -- see docs/RELEASING.md):"
+    @echo "  1. Review the commit; drop the local tag for now: git tag -d v{{VERSION}}"
+    @echo "  2. Push a branch + open a PR for the commit, merge it"
+    @echo "  3. Pull main, recreate the tag there, push it:"
+    @echo "       git pull origin main && git tag -a v{{VERSION}} -m 'Release v{{VERSION}}' && git push origin v{{VERSION}}"
+    @echo "  4. GitHub Actions will create the release draft"
+    @echo "  5. PyPI publish is separate + manual: gh workflow run publish_pypi.yml --ref v{{VERSION}} -f version={{VERSION}}"
 
 # ============================================================================
 # Build & Publish Recipes
