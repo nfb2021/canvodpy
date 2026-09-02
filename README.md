@@ -187,7 +187,7 @@
 | packages/canvod-readers/src/canvod/readers/sbf/reader.py                        |     1032 |      924 |     10% |71-72, 114-116, 130-135, 145, 193-204, 898-910, 933-954, 971-986, 998-1027, 1079, 1097-1107, 1122-1123, 1139-1141, 1157-1162, 1173, 1186, 1211-1216, 1236-1258, 1284-1306, 1345-1548, 1576-2063, 2104-2935, 2963-2996, 3028-3037, 3060-3099, 3139-3169, 3187 |
 | packages/canvod-store-metadata/src/canvod/store\_metadata/\_\_init\_\_.py       |        7 |        0 |    100% |           |
 | packages/canvod-store-metadata/src/canvod/store\_metadata/collectors.py         |      133 |       24 |     82% |60-61, 81-83, 92-102, 108, 116, 131-132, 181, 185, 188, 192, 262 |
-| packages/canvod-store-metadata/src/canvod/store\_metadata/inventory.py          |       91 |       43 |     53% |67, 129-132, 147, 150-151, 179, 194-232, 256-264, 288-312 |
+| packages/canvod-store-metadata/src/canvod/store\_metadata/inventory.py          |       93 |       31 |     67% |67, 129-132, 147, 150-151, 179, 240, 242, 244, 323-347 |
 | packages/canvod-store-metadata/src/canvod/store\_metadata/io.py                 |       55 |        4 |     93% |38-39, 95-96 |
 | packages/canvod-store-metadata/src/canvod/store\_metadata/schema.py             |      143 |        0 |    100% |           |
 | packages/canvod-store-metadata/src/canvod/store\_metadata/show.py               |      255 |      225 |     12% |24, 28-29, 33-39, 43-52, 56-66, 70-80, 84-91, 95-103, 107-123, 127-142, 146-158, 162-199, 203-218, 222-239, 243-258, 262-269, 307-339, 344-358, 415-427, 446-451, 456-463 |
@@ -216,7 +216,7 @@
 | packages/canvod-vod/src/canvod/vod/\_internal/\_\_init\_\_.py                   |        2 |        0 |    100% |           |
 | packages/canvod-vod/src/canvod/vod/\_internal/logger.py                         |        5 |        1 |     80% |        26 |
 | packages/canvod-vod/src/canvod/vod/calculator.py                                |       66 |        7 |     89% |51, 65, 106-112 |
-| **TOTAL**                                                                       | **21553** | **11729** | **46%** |           |
+| **TOTAL**                                                                       | **21555** | **11717** | **46%** |           |
 
 
 ## Setup coverage badge
