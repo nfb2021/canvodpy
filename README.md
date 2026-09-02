@@ -45,27 +45,6 @@
 | canvodpy/src/canvodpy/workflow.py                                               |       96 |       25 |     74% |147-149, 236-238, 300-302, 359-381, 472-479 |
 | canvodpy/src/canvodpy/workflows/\_\_init\_\_.py                                 |        2 |        0 |    100% |           |
 | canvodpy/src/canvodpy/workflows/tasks.py                                        |      520 |      340 |     35% |49-60, 70-73, 160-184, 343-352, 365-430, 473-582, 610-634, 685-783, 823-943, 997-1139, 1258-1261, 1309-1364, 1407-1408 |
-| packages/canvod-audit/src/canvod/audit/\_\_init\_\_.py                          |        6 |        0 |    100% |           |
-| packages/canvod-audit/src/canvod/audit/\_meta.py                                |        1 |        0 |    100% |           |
-| packages/canvod-audit/src/canvod/audit/core.py                                  |      223 |       65 |     71% |63, 92-96, 108, 120-129, 138-140, 198-201, 211-216, 232-268, 317, 327, 358, 371, 486, 491-493, 496-497, 520-521, 524-529 |
-| packages/canvod-audit/src/canvod/audit/reporting/\_\_init\_\_.py                |        2 |        0 |    100% |           |
-| packages/canvod-audit/src/canvod/audit/reporting/typst.py                       |      106 |       96 |      9% |35, 50-57, 61-63, 105-304 |
-| packages/canvod-audit/src/canvod/audit/rinex\_trimmer.py                        |      194 |      141 |     27% |40-47, 55-77, 111-136, 156-217, 259-308, 358, 410-451, 496-529 |
-| packages/canvod-audit/src/canvod/audit/runners/\_\_init\_\_.py                  |       11 |        0 |    100% |           |
-| packages/canvod-audit/src/canvod/audit/runners/api\_levels.py                   |       32 |       26 |     19% |    72-115 |
-| packages/canvod-audit/src/canvod/audit/runners/common.py                        |       56 |       25 |     55% |67-76, 85-89, 98-108, 113-116 |
-| packages/canvod-audit/src/canvod/audit/runners/constellation\_filter.py         |       24 |       19 |     21% |    65-102 |
-| packages/canvod-audit/src/canvod/audit/runners/ephemeris.py                     |       28 |       21 |     25% |   101-139 |
-| packages/canvod-audit/src/canvod/audit/runners/idempotency.py                   |       20 |       15 |     25% |     61-85 |
-| packages/canvod-audit/src/canvod/audit/runners/regression.py                    |       53 |       45 |     15% |67-94, 128-170 |
-| packages/canvod-audit/src/canvod/audit/runners/round\_trip.py                   |       49 |       40 |     18% |56-100, 105-141 |
-| packages/canvod-audit/src/canvod/audit/runners/sbf\_vs\_rinex.py                |       31 |       20 |     35% |   275-314 |
-| packages/canvod-audit/src/canvod/audit/runners/temporal\_chunking.py            |       22 |       17 |     23% |     61-88 |
-| packages/canvod-audit/src/canvod/audit/runners/vs\_gnssvod.py                   |      202 |      178 |     12% |265-314, 335-363, 380-392, 402-421, 426-442, 472-568, 633-758 |
-| packages/canvod-audit/src/canvod/audit/stats.py                                 |      169 |       75 |     56% |117-183, 197-222, 287-291, 296-299, 304-307, 312-315, 322, 401 |
-| packages/canvod-audit/src/canvod/audit/tiers/\_\_init\_\_.py                    |        0 |        0 |    100% |           |
-| packages/canvod-audit/src/canvod/audit/tiers/regression.py                      |       17 |        0 |    100% |           |
-| packages/canvod-audit/src/canvod/audit/tolerances.py                            |       24 |        0 |    100% |           |
 | packages/canvod-auxiliary/src/canvod/auxiliary/\_\_init\_\_.py                  |       27 |        4 |     85% |125-126, 148-149 |
 | packages/canvod-auxiliary/src/canvod/auxiliary/\_internal/\_\_init\_\_.py       |        4 |        0 |    100% |           |
 | packages/canvod-auxiliary/src/canvod/auxiliary/\_internal/logger.py             |        5 |        0 |    100% |           |
@@ -216,7 +195,7 @@
 | packages/canvod-vod/src/canvod/vod/\_internal/\_\_init\_\_.py                   |        2 |        0 |    100% |           |
 | packages/canvod-vod/src/canvod/vod/\_internal/logger.py                         |        5 |        1 |     80% |        26 |
 | packages/canvod-vod/src/canvod/vod/calculator.py                                |       66 |        7 |     89% |51, 65, 106-112 |
-| **TOTAL**                                                                       | **21555** | **11717** | **46%** |           |
+| **TOTAL**                                                                       | **20285** | **10934** | **46%** |           |
 
 
 ## Setup coverage badge
