@@ -279,7 +279,10 @@ changelog VERSION="auto":
 # bump version across all packages (major, minor, patch, or explicit like 0.2.0)
 bump VERSION:
     @echo "{{GREEN}}{{BOLD}}Bumping all packages to {{VERSION}}{{NORMAL}}"
-    uv run cz bump --increment {{VERSION}} --yes
+    @case "{{VERSION}}" in \
+        major|minor|patch|MAJOR|MINOR|PATCH) uv run cz bump --increment "$(echo {{VERSION}} | tr '[:lower:]' '[:upper:]')" --yes ;; \
+        *) uv run cz bump {{VERSION}} --yes ;; \
+    esac
     uv lock
     @echo "{{GREEN}}Version bumped to $(uv version --short){{NORMAL}}"
 

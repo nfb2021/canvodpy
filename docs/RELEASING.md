@@ -67,7 +67,23 @@ git push origin --tags
 
 The `.github/workflows/release.yml` workflow detects the new tag and creates a **draft** release. Review and publish at [github.com/nfb2021/canvodpy/releases](https://github.com/nfb2021/canvodpy/releases).
 
-### 6. Post-release
+Pushing the tag does **not** publish to PyPI — tagging/versioning and PyPI
+publishing are deliberately decoupled (see step 6).
+
+### 6. Publish to PyPI (separate, manual, whenever you decide)
+
+Not automatic. Trigger `publish_pypi.yml` explicitly, either from the
+[Actions tab](https://github.com/nfb2021/canvodpy/actions/workflows/publish_pypi.yml)
+("Run workflow", choosing the tag/ref to build from) or:
+
+```bash
+gh workflow run publish_pypi.yml --ref v0.2.0 -f version=0.2.0
+```
+
+You can create several tags/GitHub releases before ever running this — a
+tag existing is not a promise that PyPI has it.
+
+### 7. Post-release
 
 - Monitor issues for regressions
 - Create a Zenodo snapshot for DOI ([Zenodo Setup](guides/ZENODO_SETUP.md))
@@ -94,9 +110,10 @@ The `.github/workflows/release.yml` workflow detects the new tag and creates a *
     just release 0.2.0            # recreate
     ```
 
-??? failure "Workflow did not trigger"
+??? failure "Draft release did not appear"
     Verify the tag matches the pattern `v*.*.*` at
     [github.com/nfb2021/canvodpy/actions](https://github.com/nfb2021/canvodpy/actions).
+    (PyPI publishing never triggers from a tag push at all — see step 6.)
 
 ---
 
