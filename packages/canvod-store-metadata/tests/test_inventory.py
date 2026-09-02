@@ -1,10 +1,18 @@
 """Test inventory/scan_stores on temp directories."""
 
+import json
+
 import icechunk
 import zarr
 
-from canvod.store_metadata.inventory import scan_stores, scan_stores_as_stac
-from canvod.store_metadata.io import write_metadata
+from canvod.store_metadata.inventory import (
+    scan_stores,
+    scan_stores_as_stac,
+    to_stac_collection,
+    to_stac_collection_json,
+    write_stac_collection,
+)
+from canvod.store_metadata.io import read_metadata, write_metadata
 from canvod.store_metadata.schema import (
     Creator,
     SiteInfo,
@@ -68,3 +76,65 @@ class TestInventory:
     def test_scan_nonexistent_dir(self, tmp_path):
         df = scan_stores(tmp_path / "nope")
         assert len(df) == 0
+
+
+class TestStacCollection:
+    """to_stac_collection() / to_stac_collection_json() -- in-memory STAC
+    conversion, no file I/O (see also write_stac_collection() in
+    test_io-adjacent coverage below for the file-writing counterpart)."""
+
+    def test_to_stac_collection_shape(self, tmp_path):
+        _create_store_with_metadata(tmp_path, "site/store")
+        meta = read_metadata(tmp_path)
+
+        collection = to_stac_collection(meta)
+
+        assert collection["type"] == "Collection"
+        assert collection["stac_version"] == "1.1.0"
+        assert collection["id"] == "site/store"
+        assert collection["title"] == meta.identity.title
+        assert collection["license"] == "proprietary"  # no license set on fixture
+        assert "extent" in collection
+        assert "spatial" in collection["extent"]
+        assert "temporal" in collection["extent"]
+        assert collection["providers"][0]["name"] == meta.creator.institution
+
+    def test_to_stac_collection_is_pure_no_file_io(self, tmp_path):
+        """Calling to_stac_collection() must not write anything to disk."""
+        _create_store_with_metadata(tmp_path, "site/store")
+        meta = read_metadata(tmp_path)
+
+        to_stac_collection(meta)
+
+        assert not (tmp_path / "collection.json").exists()
+
+    def test_to_stac_collection_json_roundtrips(self, tmp_path):
+        _create_store_with_metadata(tmp_path, "site/store")
+        meta = read_metadata(tmp_path)
+
+        as_json = to_stac_collection_json(meta)
+        parsed = json.loads(as_json)
+
+        assert parsed == to_stac_collection(meta)
+
+    def test_to_stac_collection_json_respects_indent(self, tmp_path):
+        _create_store_with_metadata(tmp_path, "site/store")
+        meta = read_metadata(tmp_path)
+
+        compact = to_stac_collection_json(meta, indent=0)
+        wide = to_stac_collection_json(meta, indent=4)
+
+        assert len(wide) > len(compact)
+
+    def test_write_stac_collection_matches_to_stac_collection(self, tmp_path):
+        """Regression guard: write_stac_collection() delegates to
+        to_stac_collection() internally -- the written file's content must
+        be identical to the in-memory dict, not just structurally similar."""
+        _create_store_with_metadata(tmp_path, "site/store")
+        meta = read_metadata(tmp_path)
+
+        output_path = write_stac_collection(tmp_path)
+
+        assert output_path == tmp_path / "collection.json"
+        written = json.loads(output_path.read_text())
+        assert written == to_stac_collection(meta)

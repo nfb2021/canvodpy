@@ -189,8 +189,21 @@ def scan_stores_as_stac(root_dir: Path) -> dict[str, Any]:
     }
 
 
-def _metadata_to_stac_collection(meta: StoreMetadata) -> dict[str, Any]:
-    """Convert a single StoreMetadata to a STAC Collection dict."""
+def to_stac_collection(meta: StoreMetadata) -> dict[str, Any]:
+    """Convert a single StoreMetadata to a STAC 1.1 Collection dict, in-memory.
+
+    Parameters
+    ----------
+    meta : StoreMetadata
+        Metadata to convert (e.g. from ``read_metadata(store_path)``).
+
+    Returns
+    -------
+    dict[str, Any]
+        A STAC Collection object, ready to ``json.dumps()`` or inspect
+        directly -- no file I/O. See ``write_stac_collection()`` to also
+        persist it to disk.
+    """
     collection: dict[str, Any] = {
         "type": "Collection",
         "stac_version": "1.1.0",
@@ -232,6 +245,28 @@ def _metadata_to_stac_collection(meta: StoreMetadata) -> dict[str, Any]:
     return collection
 
 
+def to_stac_collection_json(meta: StoreMetadata, indent: int = 2) -> str:
+    """Convert a single StoreMetadata to a STAC 1.1 Collection JSON string.
+
+    Convenience wrapper around ``to_stac_collection()`` for callers who want
+    the serialized form directly (e.g. to display, hash, or send over the
+    wire) without touching the filesystem.
+
+    Parameters
+    ----------
+    meta : StoreMetadata
+        Metadata to convert.
+    indent : int
+        JSON indentation width.
+
+    Returns
+    -------
+    str
+        The STAC Collection, serialized as JSON.
+    """
+    return json.dumps(to_stac_collection(meta), indent=indent, default=str)
+
+
 def write_stac_collection(
     store_path: Path,
     output_path: Path | None = None,
@@ -254,7 +289,7 @@ def write_stac_collection(
         The written JSON file path.
     """
     meta = read_metadata(store_path, branch)
-    collection = _metadata_to_stac_collection(meta)
+    collection = to_stac_collection(meta)
 
     if output_path is None:
         output_path = store_path / "collection.json"
