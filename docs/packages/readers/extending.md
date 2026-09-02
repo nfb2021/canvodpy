@@ -347,44 +347,6 @@ The default implementation calls `to_ds()` and returns an empty dict.
 
 ---
 
-## Audit Integration
-
-Adding a new reader is not complete until the **audit suite** can validate its
-output against existing readers. This ensures intra-validation — that your new
-reader produces scientifically consistent results when processing the same
-observation data.
-
-1. **Add a Tier 1 comparison** — compare your reader's output against an existing
-   reader on shared test data (same receiver, same time window). Follow the pattern
-   in `canvod.audit.runners.sbf_vs_rinex`:
-
-    ```python
-    from canvod.audit.runners import audit_sbf_vs_rinex
-
-    # Your equivalent: audit_myformat_vs_rinex(...)
-    result = audit_sbf_vs_rinex(sbf_store="...", rinex_store="...")
-    assert result.passed
-    ```
-
-2. **Define tolerances** — SNR should be bit-identical if the underlying data is the
-   same. Angular values (θ, φ) may differ if ephemeris sources differ. Use the
-   appropriate `ToleranceTier` (EXACT, NUMERICAL, or SCIENTIFIC) and document
-   expected differences.
-
-3. **Add integration tests** in `packages/canvod-audit/tests/test_integration.py` —
-   verify dataset structure, shared observables, and value ranges against real data
-   from the test submodule.
-
-4. **Run the full audit** after implementation:
-
-    ```bash
-    just test-audit
-    ```
-
-See the [Audit Suite](../../packages/audit/overview.md) for the full tier system.
-
----
-
 ## Common Pitfalls
 
 !!! failure "Wrong dtype for frequency coordinates"

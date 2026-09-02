@@ -64,10 +64,6 @@
             "name": "🧪 test-data",
             "path": "packages/canvod-readers/tests/test_data",
         },
-        {
-            "name": "🔍 canvod-audit",
-            "path": "packages/canvod-audit",
-        },
     ],
     "settings": {
         // --- Python Environment ---

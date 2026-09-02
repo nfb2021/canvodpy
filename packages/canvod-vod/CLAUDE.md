@@ -29,4 +29,4 @@ and `theta`/`phi` from ephemeris augmentation.
 uv run pytest packages/canvod-vod/tests/
 ```
 
-VOD is bit-identical between canvodpy and gnssvodpy (verified by canvod-audit Tier 0).
+VOD is bit-identical between canvodpy and gnssvodpy (verified via a private regression suite).

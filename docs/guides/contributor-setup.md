@@ -816,4 +816,4 @@ just test-coverage
 
 ---
 
-**Next in the trail:** [Configuration Guide](configuration.md) · [API Levels](api-levels.md) · [Architecture](../architecture.md) · [Audit Suite](../packages/audit/overview.md) · [AI Development](ai-development.md)
+**Next in the trail:** [Configuration Guide](configuration.md) · [API Levels](api-levels.md) · [Architecture](../architecture.md) · [AI Development](ai-development.md)

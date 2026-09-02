@@ -94,9 +94,6 @@ nav = [
       { "canvod-preflight" = [
         { "Naming Convention & Validation" = "packages/naming/overview.md" },
       ]},
-      { "canvod-audit" = [
-        { "Overview" = "packages/audit/overview.md" },
-      ]},
     ]},
   ]},
 
@@ -142,7 +139,6 @@ nav = [
     { "canvod.config" = "api/canvod-config.md" },
     { "canvod.utils" = "api/canvod-utils.md" },
     { "canvod.ops" = "api/canvod-ops.md" },
-    { "canvod.audit" = "api/canvod-audit.md" },
   ]},
 
   { "Legal" = [

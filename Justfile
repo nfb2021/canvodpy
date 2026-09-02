@@ -98,11 +98,6 @@ test-all-packages:
     uv run pytest packages/canvod-vod/tests/ --verbose --color=yes
     uv run pytest packages/canvod-ops/tests/ --verbose --color=yes
     uv run pytest packages/canvod-store-metadata/tests/ --verbose --color=yes
-    uv run pytest packages/canvod-audit/tests/ --verbose --color=yes
-
-# run canvod-audit tests (comparison engine, tolerance checks, adapters)
-test-audit:
-    uv run pytest packages/canvod-audit/tests/ --verbose --color=yes
 
 # run tests with coverage report
 test-coverage:
@@ -320,7 +315,7 @@ release VERSION: test
 
 # Build all packages (outputs to workspace root dist/)
 build-all:
-    @echo "🔨 Building all 12 packages..."
+    @echo "🔨 Building all 11 packages..."
     @rm -rf dist/
     @mkdir -p dist/
     uv build --package canvod-readers --out-dir dist/
@@ -333,9 +328,8 @@ build-all:
     uv build --package canvod-preflight --out-dir dist/
     uv build --package canvod-vod --out-dir dist/
     uv build --package canvod-ops --out-dir dist/
-    uv build --package canvod-audit --out-dir dist/
     uv build --package canvodpy --out-dir dist/
-    @echo "✅ Built 12 packages to dist/"
+    @echo "✅ Built 11 packages to dist/"
     @ls -lh dist/*.whl
 
 # Publish all packages to TestPyPI (requires credentials)

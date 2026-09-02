@@ -59,7 +59,6 @@ graph TD
     end
 
     subgraph QA["Quality Assurance"]
-        AUDIT["canvod-audit"]
         PREFLIGHT["canvod-preflight"]
     end
 
@@ -85,10 +84,6 @@ graph TD
     OPS -.-> UTILS
     VIZ -.-> GRIDS
     STOREMETA -.-> UTILS
-    AUDIT -.-> READERS
-    AUDIT -.-> STORE
-    AUDIT -.-> VOD
-    AUDIT -.-> UTILS
 ```
 
 | Layer | Packages | Role |
@@ -98,14 +93,14 @@ graph TD
 | **Persistence** | canvod-store, canvod-store-metadata | Icechunk versioned storage, three-layer deduplication, provenance metadata (DataCite/ACDD/STAC) |
 | **Data I/O** | canvod-readers, canvod-auxiliary | RINEX/SBF parsing, SP3/CLK retrieval |
 | **Presentation** | canvod-viz | 2D polar projections, 3D interactive surfaces, store viewer |
-| **Quality Assurance** | canvod-audit, canvod-preflight | Three-tier scientific verification suite; naming convention parsing and pre-run data checks |
+| **Quality Assurance** | canvod-preflight | Naming convention parsing and pre-run data checks |
 | **Foundation** | canvod-config, canvod-utils | Configuration loading/validation; date utilities and diagnostics |
 
 Two more packages — `canvod-filemap` (non-canonical filename mapping) and
 `canvod-airflow` (Airflow DAG definitions) — are optional and published
 separately in
 [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions), not
-part of this twelve-package core.
+part of this eleven-package core.
 
 ---
 
@@ -185,7 +180,6 @@ canvodpy/                           # Repository root
     canvod-config/
     canvod-utils/
     canvod-ops/
-    canvod-audit/
     canvod-preflight/
   canvodpy/                         # Umbrella package
     src/
@@ -216,8 +210,6 @@ canvod-store            ──── depends on canvod-auxiliary, canvod-config,
 canvod-store-metadata   ──── depends on canvod-config
 canvod-viz              ──── depends on canvod-grids
 canvod-ops              ──── depends on canvod-config, canvod-grids
-canvod-audit            ──── depends on canvod-readers, canvod-store,
-                              canvod-utils, canvod-vod
 canvodpy                ──── depends on all core packages
 ```
 

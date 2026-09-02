@@ -25,7 +25,6 @@ graph TB
     subgraph InfraPkg[Infrastructure Packages]
         Ops["⚙️ canvod-ops<br/>Preprocessing Pipeline"]
         Naming["🏷️ canvod-preflight<br/>Pre-flight Validation (CLI, standalone)"]
-        Audit["🔍 canvod-audit<br/>Verification Suite (CLI, standalone)"]
     end
 
     Config --> Canvodpy
@@ -53,7 +52,6 @@ graph TB
     Ops --> CanvodConfig
 
     Naming -.->|invoked standalone, not imported| Store
-    Audit -.->|invoked standalone, not imported| Store
 
     style Canvodpy fill:#e1f5ff,stroke:#01579b,stroke-width:3px
     style Readers fill:#fff3e0,stroke:#e65100,stroke-width:2px
@@ -67,4 +65,3 @@ graph TB
     style Utils fill:#fce4ec,stroke:#880e4f,stroke-width:2px
     style Ops fill:#e0f2f1,stroke:#004d40,stroke-width:2px
     style Naming fill:#e0f2f1,stroke:#004d40,stroke-width:2px
-    style Audit fill:#fff8e1,stroke:#f57f17,stroke-width:2px

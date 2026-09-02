@@ -7,10 +7,10 @@ Inter-package dependency relationships and independence metrics for the canVODpy
 ## Dependency Graph
 
 This covers the 10 packages `canvodpy` itself directly depends on (verified
-against each package's `pyproject.toml`). `canvod-audit` and `canvod-preflight`
-are separate monorepo packages `canvodpy` doesn't depend on directly, so
-they're out of scope here — see [Architecture](architecture.md) for the
-full twelve-package picture.
+against each package's `pyproject.toml`). `canvod-preflight` is a separate
+monorepo package `canvodpy` doesn't depend on directly, so it's out of scope
+here — see [Architecture](architecture.md) for the full eleven-package
+picture.
 
 ```mermaid
 graph TD

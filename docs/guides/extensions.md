@@ -70,9 +70,7 @@ gated by a canvodpy config flag or extra on the `canvodpy` package itself):
 uv add "canvod-adapters[store] @ git+https://github.com/nfb2021/canvodpy-extensions.git@v0.1.0#subdirectory=packages/canvod-adapters"
 ```
 
-`canvod-audit`'s Tier-3 comparison against gnssvod already depends on it
-(the plain, non-`store` form) as a hard dependency. See
-[canvod-adapters's overview](https://nfb2021.github.io/canvodpy-extensions/packages/adapters/overview/)
+See [canvod-adapters's overview](https://nfb2021.github.io/canvodpy-extensions/packages/adapters/overview/)
 for the gnssvod conversion API and its known lossy-reconstruction caveat.
 
 ## What happens if an extension isn't installed

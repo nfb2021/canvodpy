@@ -366,10 +366,3 @@ packages/*/config/
 .processing/
 .vscode/
 .icechunk_gridding_claude/
-
-# ============================================================================
-# Private audit scripts (gnssvodpy cross-validation, local only)
-# ============================================================================
-packages/canvod-audit/src/canvod/audit/runners/vs_gnssvodpy.py
-packages/canvod-audit/scripts/run_tier0_vs_gnssvodpy.py
-packages/canvod-audit/scripts/run_tier0_vod.py
