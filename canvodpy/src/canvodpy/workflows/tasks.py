@@ -27,6 +27,7 @@ import xarray as xr
 from canvod.auxiliary.pipeline import AuxDataPipeline
 from canvod.auxiliary.position import ECEFPosition
 from canvod.config import load_config
+from canvod.config.models import reference_store_group
 from canvod.readers import MatchedDirs
 from canvod.utils.tools import YYYYDOY
 from canvodpy.orchestrator.interpolator import (
@@ -854,7 +855,7 @@ def process_rinex(
         else:
             # Reference receivers write to {ref}_{canopy} store groups
             canopy_names = site_cfg.resolve_paired_canopies(recv_name)
-            store_groups = [f"{recv_name}_{cn}" for cn in canopy_names]
+            store_groups = [reference_store_group(recv_name, cn) for cn in canopy_names]
 
         # Resolve RINEX files
         if receiver_files and recv_name in receiver_files:
@@ -1023,7 +1024,7 @@ def process_sbf(
             store_groups = [recv_name]
         else:
             canopy_names = site_cfg.resolve_paired_canopies(recv_name)
-            store_groups = [f"{recv_name}_{cn}" for cn in canopy_names]
+            store_groups = [reference_store_group(recv_name, cn) for cn in canopy_names]
 
         # Resolve SBF files
         if receiver_files and recv_name in receiver_files:

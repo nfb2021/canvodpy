@@ -39,6 +39,7 @@ def _make_analysis_cfg(canopy: str = "canopy_01", reference: str = "reference_01
     cfg = unittest.mock.MagicMock()
     cfg.canopy_receiver = canopy
     cfg.reference_receiver = reference
+    cfg.reference_store_group = f"{reference}_{canopy}"
     return cfg
 
 
@@ -141,7 +142,8 @@ class TestVodComputerConfig:
         vc = VodComputer(_make_site({"a": cfg}))
         canopy_ds = _make_ds()
         ref_ds = _make_ds()
-        c, r = vc._extract_pair({"c": canopy_ds, "r": ref_ds}, "a")
+        # Reference data lives under the paired store group "r_c", never "r".
+        c, r = vc._extract_pair({"c": canopy_ds, "r_c": ref_ds}, "a")
         assert c is canopy_ds
         assert r is ref_ds
 

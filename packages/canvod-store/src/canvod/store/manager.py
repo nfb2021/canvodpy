@@ -225,7 +225,7 @@ class GnssResearchSite:
             analysis_name = f"{canopy_name}_vs_{ref_name}"
             analyses[analysis_name] = VodAnalysisConfig(
                 canopy_receiver=canopy_name,
-                reference_receiver=f"{ref_name}_{canopy_name}",
+                reference_receiver=ref_name,
                 description=f"VOD analysis {canopy_name} vs {ref_name}",
             )
         return analyses
@@ -244,12 +244,10 @@ class GnssResearchSite:
         ValueError
             If configuration is invalid.
         """
-        # Check that all VOD analyses reference valid receivers
-        # Build set of valid reference store groups (e.g. reference_01_canopy_01)
-        valid_ref_groups = {
-            f"{ref}_{canopy}" for ref, canopy in self.get_reference_canopy_pairs()
-        }
-
+        # Check that all VOD analyses reference valid receivers.
+        # reference_receiver is always a bare receiver name (never a store
+        # group name) -- see VodAnalysisConfig.reference_store_group for the
+        # derived paired name used to look up data in the store.
         for analysis_name, analysis_config in self.vod_analyses.items():
             canopy_rx = analysis_config.canopy_receiver
             ref_rx = analysis_config.reference_receiver
@@ -259,11 +257,10 @@ class GnssResearchSite:
                     f"VOD analysis '{analysis_name}' references "
                     f"unknown canopy receiver: {canopy_rx}"
                 )
-            # ref_rx can be either a raw receiver name or a store group name
-            if ref_rx not in self.receivers and ref_rx not in valid_ref_groups:
+            if ref_rx not in self.receivers:
                 raise ValueError(
                     f"VOD analysis '{analysis_name}' references "
-                    f"unknown reference receiver/group: {ref_rx}"
+                    f"unknown reference receiver: {ref_rx}"
                 )
 
             # Check canopy type
@@ -272,14 +269,12 @@ class GnssResearchSite:
                 raise ValueError(
                     f"Receiver '{canopy_rx}' used as canopy but type is '{canopy_type}'"
                 )
-            # Check reference type (only if it's a raw receiver name)
-            if ref_rx in self.receivers:
-                ref_type = self.receivers[ref_rx]["type"]
-                if ref_type != "reference":
-                    raise ValueError(
-                        f"Receiver '{ref_rx}' used as reference"
-                        f" but type is '{ref_type}'"
-                    )
+            # Check reference type
+            ref_type = self.receivers[ref_rx]["type"]
+            if ref_type != "reference":
+                raise ValueError(
+                    f"Receiver '{ref_rx}' used as reference but type is '{ref_type}'"
+                )
 
         self._logger.debug("Site configuration validation passed")
         return True
@@ -640,15 +635,16 @@ class GnssResearchSite:
 
         analysis_config = self.vod_analyses[analysis_name]
         canopy_receiver = analysis_config.canopy_receiver
-        reference_receiver = analysis_config.reference_receiver
+        reference_group = analysis_config.reference_store_group
 
         self._logger.info(
-            f"Preparing VOD input data: {canopy_receiver} vs {reference_receiver}"
+            f"Preparing VOD input data: {canopy_receiver} vs {reference_group}"
         )
 
-        # Read data from both receivers
+        # Read data from both receivers. Reference data is always stored
+        # under the paired group name, never the bare receiver name.
         canopy_data = self.read_receiver_data(canopy_receiver, time_range)
-        reference_data = self.read_receiver_data(reference_receiver, time_range)
+        reference_data = self.read_receiver_data(reference_group, time_range)
 
         self._logger.info(
             f"Loaded data - Canopy: {dict(canopy_data.dims)}, "

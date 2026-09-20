@@ -26,7 +26,12 @@ from canvod.config.loader import (
     get_default_config_dir,
     get_template_dir,
 )
-from canvod.config.models import ProcessingConfig, SidsConfig, SitesConfig
+from canvod.config.models import (
+    ProcessingConfig,
+    SidsConfig,
+    SitesConfig,
+    reference_store_group,
+)
 
 # Config subcommand
 config_app = typer.Typer(
@@ -653,7 +658,7 @@ def _show_sites(config: SitesConfig) -> None:
             pair_table.add_column("Position From")
 
             for ref_name, canopy_name in pairs:
-                group_name = f"{ref_name}_{canopy_name}"
+                group_name = reference_store_group(ref_name, canopy_name)
                 pair_table.add_row(group_name, ref_name, canopy_name)
 
             console.print(pair_table)

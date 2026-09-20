@@ -46,6 +46,7 @@ from canvod.auxiliary.position import (
     compute_spherical_coordinates,
 )
 from canvod.config import load_config
+from canvod.config.models import reference_store_group
 from canvod.readers import DataDirMatcher, MatchedDirs
 from canvod.store import GnssResearchSite, scoped_zarr_concurrency
 from canvod.utils.tools import (
@@ -4582,7 +4583,7 @@ class RinexDataProcessor:
             ref_data_dir = base_path / cfg.directory / _yydoy
             canopy_names = site_config.resolve_paired_canopies(name)
             for canopy_name in canopy_names:
-                store_group = f"{name}_{canopy_name}"
+                store_group = reference_store_group(name, canopy_name)
                 position_dir = canopy_data_dirs.get(canopy_name)
                 configs.append((store_group, "reference", ref_data_dir, position_dir))
 

@@ -25,6 +25,7 @@ import pint
 import xarray as xr
 
 from canvod.config import load_config
+from canvod.config.models import reference_store_group
 from canvod.readers import MatchedDirs, PairDataDirMatcher
 from canvod.readers.gnss_specs.constants import UREG
 from canvod.store import GnssResearchSite
@@ -405,7 +406,7 @@ class PipelineOrchestrator:
                     ref_fmt = self._detect_reader_format(pair_dirs.reference_data_dir)
                 canopy_names = site_config.resolve_paired_canopies(ref_name)
                 for canopy_name in canopy_names:
-                    store_group = f"{ref_name}_{canopy_name}"
+                    store_group = reference_store_group(ref_name, canopy_name)
                     if store_group not in grouped[date_key]:
                         # Get canopy data dir for position computation
                         canopy_cfg = site_config.receivers.get(canopy_name)

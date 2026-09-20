@@ -45,6 +45,7 @@ import structlog
 import typer
 import xarray as xr
 
+from canvod.config.models import reference_store_group
 from canvodpy.logging import emit_run_summary
 from canvodpy.logging.run_context import reset_run_id, set_run_id
 from canvodpy.logging.stage_timer import reset_run_stats
@@ -193,7 +194,8 @@ def _site_groups(site) -> list[str]:
         if cfg.get("type") == "canopy"
     ]
     pair_names = [
-        f"{ref}_{canopy}" for ref, canopy in site._site.get_reference_canopy_pairs()
+        reference_store_group(ref, canopy)
+        for ref, canopy in site._site.get_reference_canopy_pairs()
     ]
     return canopy_names + pair_names
 
@@ -262,9 +264,7 @@ def _compute_vod_for_day(
     for analysis_name, analysis_cfg in vod_analyses.items():
         canopy_name = analysis_cfg.canopy_receiver
         ref_name = analysis_cfg.reference_receiver
-
-        # The reference group in the store is "{ref}_{canopy}"
-        ref_group = f"{ref_name}_{canopy_name}"
+        ref_group = analysis_cfg.reference_store_group
 
         canopy_ds = datasets.get(canopy_name)
         ref_ds = datasets.get(ref_group)

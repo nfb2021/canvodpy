@@ -41,6 +41,7 @@ def _make_analysis_cfg(canopy: str = "canopy_01", reference: str = "reference_01
     cfg = unittest.mock.MagicMock()
     cfg.canopy_receiver = canopy
     cfg.reference_receiver = reference
+    cfg.reference_store_group = f"{reference}_{canopy}"
     return cfg
 
 

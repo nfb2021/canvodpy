@@ -34,7 +34,13 @@ from .processing_params import ProcessingParams
 from .references import FundingRef, PublicationRef, ReferencesConfig
 from .root import CanvodConfig
 from .sids import SidsConfig
-from .sites import ReceiverConfig, SiteConfig, SitesConfig, VodAnalysisConfig
+from .sites import (
+    ReceiverConfig,
+    SiteConfig,
+    SitesConfig,
+    VodAnalysisConfig,
+    reference_store_group,
+)
 from .storage import MaintenanceConfig, StorageConfig
 
 __all__ = [
@@ -65,4 +71,5 @@ __all__ = [
     "TemporalAggregationConfig",
     "VodAnalysisConfig",
     "_StrictModel",
+    "reference_store_group",
 ]

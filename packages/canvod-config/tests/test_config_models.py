@@ -29,6 +29,8 @@ from canvod.config.models import (
     SiteConfig,
     SitesConfig,
     StorageConfig,
+    VodAnalysisConfig,
+    reference_store_group,
 )
 
 # ===================================================================
@@ -411,6 +413,54 @@ class TestSiteConfig:
         pairs = site.get_reference_canopy_pairs()
         assert ("r1", "c1") in pairs
         assert ("r1", "c2") in pairs
+
+    def test_auto_derive_vod_analyses_uses_bare_reference_name(self):
+        """See GH #66: reference_receiver must stay the bare receiver name
+        (matches a 'receivers' key, used for directory lookups) -- never
+        the paired store group name.
+        """
+        site = self._make_site()
+        assert site.vod_analyses is not None
+        cfg = site.vod_analyses["canopy_01_vs_reference_01"]
+        assert cfg.reference_receiver == "reference_01"
+        assert cfg.canopy_receiver == "canopy_01"
+
+    def test_explicit_vod_analyses_not_overridden(self):
+        site = self._make_site(
+            vod_analyses={
+                "custom": VodAnalysisConfig(
+                    canopy_receiver="canopy_01", reference_receiver="reference_01"
+                )
+            }
+        )
+        assert list(site.vod_analyses) == ["custom"]
+
+
+# ===================================================================
+# VodAnalysisConfig.reference_store_group
+# ===================================================================
+
+
+class TestReferenceStoreGroup:
+    def test_function_formats_paired_name(self):
+        assert reference_store_group("reference_01", "canopy_01") == (
+            "reference_01_canopy_01"
+        )
+
+    def test_vod_analysis_config_property_matches_function(self):
+        cfg = VodAnalysisConfig(
+            canopy_receiver="canopy_01", reference_receiver="reference_01"
+        )
+        assert cfg.reference_store_group == "reference_01_canopy_01"
+        assert cfg.reference_store_group == reference_store_group(
+            cfg.reference_receiver, cfg.canopy_receiver
+        )
+
+    def test_property_stays_distinct_from_bare_receiver(self):
+        cfg = VodAnalysisConfig(
+            canopy_receiver="canopy_01", reference_receiver="reference_01"
+        )
+        assert cfg.reference_store_group != cfg.reference_receiver
 
 
 # ===================================================================

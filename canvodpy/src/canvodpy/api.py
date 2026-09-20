@@ -508,19 +508,15 @@ class Pipeline:
             # Load processed data from stores
             # canopy_data = self.site.gnss_store.read_group(canopy, date=date)
             # ref_data = self.site.gnss_store.read_group(reference, date=date)
+            from canvod.config.models import reference_store_group
+
             canopy_data = self.site.gnss_store.read_group(
                 canopy, time_slice=_time_slice
             )
-            try:
-                ref_data = self.site.gnss_store.read_group(
-                    reference, time_slice=_time_slice
-                )
-            except Exception:
-                paired_name = f"{reference}_{canopy}"
-                log.info("group_fallback", original=reference, paired=paired_name)
-                ref_data = self.site.gnss_store.read_group(
-                    paired_name, time_slice=_time_slice
-                )
+            ref_group = reference_store_group(reference, canopy)
+            ref_data = self.site.gnss_store.read_group(
+                ref_group, time_slice=_time_slice
+            )
 
             # Lazy import to avoid circular dependency
             from canvod.vod import TauOmegaZerothOrder

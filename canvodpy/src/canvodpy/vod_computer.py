@@ -233,7 +233,7 @@ class VodComputer:
 
         analysis_cfg = self._get_analysis_config(analysis_name)
         canopy_name = analysis_cfg.canopy_receiver
-        ref_name = analysis_cfg.reference_receiver
+        ref_group = analysis_cfg.reference_store_group
 
         store = self._site.gnss_store
 
@@ -241,17 +241,9 @@ class VodComputer:
             canopy_ds = xr.open_zarr(
                 store=session.store, group=canopy_name, consolidated=False
             )
-            try:
-                sky_ds = xr.open_zarr(
-                    store=session.store, group=ref_name, consolidated=False
-                )
-            except Exception:
-                # Paired naming: reference_01_canopy_01 instead of reference_01
-                paired_name = f"{ref_name}_{canopy_name}"
-                log.info("group_fallback", original=ref_name, paired=paired_name)
-                sky_ds = xr.open_zarr(
-                    store=session.store, group=paired_name, consolidated=False
-                )
+            sky_ds = xr.open_zarr(
+                store=session.store, group=ref_group, consolidated=False
+            )
 
         # Time-range filter
         if start or end:
@@ -385,27 +377,20 @@ class VodComputer:
         """Extract canopy and sky datasets from a dict of receiver datasets."""
         analysis_cfg = self._get_analysis_config(analysis_name)
         canopy_name = analysis_cfg.canopy_receiver
-        ref_name = analysis_cfg.reference_receiver
+        ref_group = analysis_cfg.reference_store_group
 
         if canopy_name not in datasets:
             raise KeyError(
                 f"Canopy receiver '{canopy_name}' not in datasets. "
                 f"Available: {list(datasets.keys())}"
             )
-        if ref_name not in datasets:
-            paired_name = f"{ref_name}_{canopy_name}"
-            if paired_name in datasets:
-                self.log.info(
-                    "extract_pair_fallback", original=ref_name, paired=paired_name
-                )
-                ref_name = paired_name
-            else:
-                raise KeyError(
-                    f"Reference receiver '{ref_name}' (also tried '{paired_name}') "
-                    f"not in datasets. Available: {list(datasets.keys())}"
-                )
+        if ref_group not in datasets:
+            raise KeyError(
+                f"Reference group '{ref_group}' not in datasets. "
+                f"Available: {list(datasets.keys())}"
+            )
 
-        return datasets[canopy_name], datasets[ref_name]
+        return datasets[canopy_name], datasets[ref_group]
 
     def _get_analysis_config(self, analysis_name: str) -> Any:
         """Get the VodAnalysisConfig for the given analysis name."""
