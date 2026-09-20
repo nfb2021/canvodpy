@@ -44,7 +44,7 @@ All three produce the same `(epoch, sid)` xarray Dataset format.
 
 The recommended way to run the pipeline — production runs, cron jobs, resumable.
 `run` is a registered subcommand of the installed `canvodpy` console script
-(alongside `config`, `doctor`, `stats`, and `store` — see
+(alongside `config`, `doctor`, and `store` — see
 [Configuration](configuration.md)):
 
 ```bash
