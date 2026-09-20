@@ -2487,8 +2487,6 @@ class SbfReader(GNSSDataReader):
 
             obs_ds = strip_fillvalue(obs_ds)
 
-        validate_dataset(obs_ds, required_vars=keep_data_vars)
-
         # ----------------------------------------------------------------
         # Build metadata dataset (verbatim from to_metadata_ds())
         # ----------------------------------------------------------------
@@ -2926,6 +2924,8 @@ class SbfReader(GNSSDataReader):
                 coords=obs_ds["Phase"].coords,
                 attrs=_PHASE_RAW_ATTRS,
             )
+
+        validate_dataset(obs_ds, required_vars=keep_data_vars)
 
         if keep_data_vars is not None:
             for var in list(obs_ds.data_vars):

@@ -584,6 +584,35 @@ class TestToDsAndAuxiliary:
         assert "broadcast_theta" in meta.data_vars
         assert "broadcast_phi" in meta.data_vars
 
+    def test_keep_data_vars_raw_observables_does_not_raise(
+        self, reader: SbfReader
+    ) -> None:
+        """Regression test: requesting raw observables via keep_data_vars must
+        not raise, as long as store_raw_observables=True is also passed —
+        validation previously ran before the raw variables were created.
+        """
+        obs, _ = reader.to_ds_and_auxiliary(
+            keep_data_vars=["SNR", "Pseudorange_raw", "Phase_raw", "SNR_raw"],
+            store_raw_observables=True,
+            pad_global_sid=False,
+            strip_fillval=False,
+        )
+        assert set(obs.data_vars) == {"SNR", "Pseudorange_raw", "Phase_raw", "SNR_raw"}
+
+    def test_keep_data_vars_raw_observables_without_store_raises(
+        self, reader: SbfReader
+    ) -> None:
+        """Requesting a raw observable without store_raw_observables=True must
+        still raise — the raw variables genuinely don't exist in that case.
+        """
+        with pytest.raises(ValueError, match="Missing required data variable"):
+            reader.to_ds_and_auxiliary(
+                keep_data_vars=["SNR", "Pseudorange_raw"],
+                store_raw_observables=False,
+                pad_global_sid=False,
+                strip_fillval=False,
+            )
+
     def test_meta_sid_matches_obs_sid(
         self, combined_result: tuple[xr.Dataset, dict]
     ) -> None:
