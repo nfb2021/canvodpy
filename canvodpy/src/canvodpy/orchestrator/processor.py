@@ -160,7 +160,7 @@ def preprocess_with_hermite_aux(
     """
     import re
 
-    from canvod.auxiliary.preprocessing import reset_sid_accumulators
+    from canvod.readers.preprocessing import reset_sid_accumulators
 
     # Clear any SID-issue accumulation left over from earlier work in this
     # process (e.g. aux/ephemeris padding during Phase 1 never flushes) so
@@ -247,7 +247,7 @@ def preprocess_with_hermite_aux(
                     ds = add_broadcast_spherical_coords_to_dataset(
                         ds, bt.values, bp.values
                     )
-                from canvod.auxiliary.preprocessing import flush_sid_accumulators
+                from canvod.readers.preprocessing import flush_sid_accumulators
 
                 sid_issues = flush_sid_accumulators()
                 sid_issues["dropped_no_ephemeris"] = []
@@ -385,7 +385,7 @@ def preprocess_with_hermite_aux(
             )
             raise
 
-    from canvod.auxiliary.preprocessing import flush_sid_accumulators
+    from canvod.readers.preprocessing import flush_sid_accumulators
 
     sid_issues = flush_sid_accumulators()
     sid_issues["dropped_no_ephemeris"] = sorted(rinex_only)
@@ -439,7 +439,7 @@ def preprocess_reference_with_hermite_aux_fanout(
     """
     import re
 
-    from canvod.auxiliary.preprocessing import reset_sid_accumulators
+    from canvod.readers.preprocessing import reset_sid_accumulators
 
     # Clear any SID-issue accumulation left over from earlier work in this
     # process (e.g. aux/ephemeris padding during Phase 1 never flushes) so
@@ -589,7 +589,7 @@ def preprocess_reference_with_hermite_aux_fanout(
             )
             raise
 
-    from canvod.auxiliary.preprocessing import flush_sid_accumulators
+    from canvod.readers.preprocessing import flush_sid_accumulators
 
     sid_issues = flush_sid_accumulators()
     sid_issues["dropped_no_ephemeris"] = sorted(rinex_only)

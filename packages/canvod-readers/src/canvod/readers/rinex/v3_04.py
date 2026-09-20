@@ -1853,13 +1853,13 @@ class Rnxv3Obs(GNSSDataReader):
         ds = self._create_dataset_single_pass(frozenset(keep_data_vars))
 
         if pad_global_sid:
-            from canvod.auxiliary.preprocessing import pad_to_global_sid
+            from canvod.readers.preprocessing import pad_to_global_sid
 
             # Pad/filter to specified sids or all possible sids
             ds = pad_to_global_sid(ds, keep_sids=keep_sids)
 
         if strip_fillval:
-            from canvod.auxiliary.preprocessing import strip_fillvalue
+            from canvod.readers.preprocessing import strip_fillvalue
 
             ds = strip_fillvalue(ds)
 

@@ -6,6 +6,15 @@ clock corrections for GNSS satellite data processing.
 """
 
 # Aux cache fingerprinting (dev/todo_later.md §44)
+from canvod.readers.preprocessing import (
+    add_future_datavars,
+    create_sv_to_sid_mapping,
+    map_aux_sv_to_sid,
+    normalize_sid_dtype,
+    pad_to_global_sid,
+    strip_fillvalue,
+)
+
 from canvod.auxiliary.cache_fingerprint import (
     CANONICAL_AUX_GRID_SECONDS,
     compute_aux_cache_fingerprint,
@@ -46,14 +55,8 @@ from canvod.auxiliary.position import (
 
 # Preprocessing
 from canvod.auxiliary.preprocessing import (
-    add_future_datavars,
-    create_sv_to_sid_mapping,
-    map_aux_sv_to_sid,
-    normalize_sid_dtype,
-    pad_to_global_sid,
     prep_aux_ds,
     preprocess_aux_for_interpolation,
-    strip_fillvalue,
 )
 
 # Product registry

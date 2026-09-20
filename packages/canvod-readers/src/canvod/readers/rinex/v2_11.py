@@ -1336,12 +1336,12 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
                 ds = ds.drop_vars([var])
 
         if pad_global_sid:
-            from canvod.auxiliary.preprocessing import pad_to_global_sid
+            from canvod.readers.preprocessing import pad_to_global_sid
 
             ds = pad_to_global_sid(ds, keep_sids=keep_sids)
 
         if strip_fillval:
-            from canvod.auxiliary.preprocessing import strip_fillvalue
+            from canvod.readers.preprocessing import strip_fillvalue
 
             ds = strip_fillvalue(ds)
 

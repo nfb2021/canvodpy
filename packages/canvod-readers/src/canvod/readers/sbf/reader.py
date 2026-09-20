@@ -1329,10 +1329,10 @@ class SbfReader(GNSSDataReader):
             Note: ``LLI`` is not produced — SBF has no loss-of-lock indicator.
         pad_global_sid : bool, default True
             If ``True``, pads the dataset to the global SID space via
-            :func:`canvod.auxiliary.preprocessing.pad_to_global_sid`.
+            :func:`canvod.readers.preprocessing.pad_to_global_sid`.
         strip_fillval : bool, default True
             If ``True``, removes fill values via
-            :func:`canvod.auxiliary.preprocessing.strip_fillvalue`.
+            :func:`canvod.readers.preprocessing.strip_fillvalue`.
         **kwargs
             Ignored (for ABC compatibility).
 
@@ -1532,7 +1532,7 @@ class SbfReader(GNSSDataReader):
                     ds = ds.drop_vars([var])
 
         if pad_global_sid:
-            from canvod.auxiliary.preprocessing import pad_to_global_sid
+            from canvod.readers.preprocessing import pad_to_global_sid
 
             ds = pad_to_global_sid(
                 ds,
@@ -1540,7 +1540,7 @@ class SbfReader(GNSSDataReader):
             )
 
         if strip_fillval:
-            from canvod.auxiliary.preprocessing import strip_fillvalue
+            from canvod.readers.preprocessing import strip_fillvalue
 
             ds = strip_fillvalue(ds)
 
@@ -1563,7 +1563,7 @@ class SbfReader(GNSSDataReader):
         ----------
         pad_global_sid : bool, default True
             If ``True``, pads to the global SID space via
-            :func:`canvod.auxiliary.preprocessing.pad_to_global_sid`.
+            :func:`canvod.readers.preprocessing.pad_to_global_sid`.
 
         Returns
         -------
@@ -2053,7 +2053,7 @@ class SbfReader(GNSSDataReader):
         )
 
         if pad_global_sid:
-            from canvod.auxiliary.preprocessing import pad_to_global_sid
+            from canvod.readers.preprocessing import pad_to_global_sid
 
             ds = pad_to_global_sid(
                 ds,
@@ -2475,7 +2475,7 @@ class SbfReader(GNSSDataReader):
         )
 
         if pad_global_sid:
-            from canvod.auxiliary.preprocessing import pad_to_global_sid
+            from canvod.readers.preprocessing import pad_to_global_sid
 
             obs_ds = pad_to_global_sid(
                 obs_ds,
@@ -2483,7 +2483,7 @@ class SbfReader(GNSSDataReader):
             )
 
         if strip_fillval:
-            from canvod.auxiliary.preprocessing import strip_fillvalue
+            from canvod.readers.preprocessing import strip_fillvalue
 
             obs_ds = strip_fillvalue(obs_ds)
 
