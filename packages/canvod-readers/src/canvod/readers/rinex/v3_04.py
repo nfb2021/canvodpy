@@ -87,6 +87,9 @@ OBS_SLICE_MIN_LEN = 6
 OBS_SLICE_MAX_LEN = 16
 OBS_SLICE_DECIMAL_POS = -6
 LLI_SSI_PAIR_LEN = 2
+# Observables an SSI may be taken from, by precedence (RINEX 3.04 Table A3
+# notes 2-3): the phase's SSI, else the code's when no phase was observed.
+_SSI_SOURCE_RANK = {"L": 2, "C": 1}
 MIN_EPOCHS_FOR_INTERVAL = 2
 
 
@@ -1592,6 +1595,9 @@ class Rnxv3Obs(GNSSDataReader):
             lli = np.full((n_epochs, n_sids), -1, dtype=DTYPES["LLI"])
         if need_ssi:
             ssi = np.full((n_epochs, n_sids), -1, dtype=DTYPES["SSI"])
+            # Rank of the observable each SSI value came from, so phase
+            # outranks code regardless of the header's observable order.
+            ssi_rank = np.zeros((n_epochs, n_sids), dtype=np.int8)
 
         # Build obs_code → (obs_type, sid_suffix) lookup per system
         mapper = self._signal_mapper
@@ -1685,10 +1691,18 @@ class Rnxv3Obs(GNSSDataReader):
                             if need_doppler:
                                 doppler[t_idx, s_idx] = value
 
-                    if need_lli and obs_lli is not None:
+                    # RINEX 3.04 Table A3 notes 1-3: LLI belongs to the
+                    # phase observation only; SSI to the phase, or to the
+                    # code when the signal has no phase. Phase, code, Doppler
+                    # and SNR share a sid, so flags on other observables must
+                    # not overwrite the phase's.
+                    if need_lli and obs_lli is not None and obs_type == "L":
                         lli[t_idx, s_idx] = obs_lli
                     if need_ssi and obs_ssi is not None:
-                        ssi[t_idx, s_idx] = obs_ssi
+                        rank = _SSI_SOURCE_RANK.get(obs_type, 0)
+                        if rank > ssi_rank[t_idx, s_idx]:
+                            ssi[t_idx, s_idx] = obs_ssi
+                            ssi_rank[t_idx, s_idx] = rank
 
         # Drop epochs that failed to parse
         if not valid_mask.all():

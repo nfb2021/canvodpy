@@ -80,6 +80,11 @@ V2_OBS_FIELD_WIDTH = 16  # F14.3 + I1 (LLI) + I1 (SSI)
 V2_MAX_OBS_PER_LINE = 5  # Max observations per line (5 x 16 = 80 chars)
 V2_MAX_SATS_PER_LINE = 12  # Max satellites on the epoch line
 V2_SAT_FIELD_WIDTH = 3  # Each satellite field: A1 + I2
+# LLI bits any observable may carry; bits 0-1 are phase-only (Table A2).
+_V2_LLI_ANY_OBS_BITS = 0b100
+# Observables an SSI may be taken from, by precedence: the phase's SSI, else
+# the code's (RINEX 3.04 Table A3 notes 2-3; 2.11 does not specify).
+_SSI_SOURCE_RANK = {"L": 2, "C": 1}
 V2_EPOCH_FLAG_OK = 0
 V2_EPOCH_FLAG_POWER_FAILURE = 1
 V2_EPOCH_FLAG_START_MOVING = 2
@@ -1234,6 +1239,8 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
             "SSI": np.full((n_epochs, n_signals), -1, dtype=DTYPES["SSI"]),
         }
         sid_to_idx = {sid: i for i, sid in enumerate(sorted_signal_ids)}
+        # Rank of the observable each SSI value came from (_SSI_SOURCE_RANK).
+        ssi_rank = np.zeros((n_epochs, n_signals), dtype=np.int8)
 
         # Second pass: fill arrays
         t_idx = 0
@@ -1265,17 +1272,24 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
                         data_arrays["Doppler"][t_idx, s_idx] = obs.value
 
                     if obs.lli is not None:
-                        # Phase and signal strength share a sid, and some
-                        # converters (teqc) flag every observable. OR the
-                        # flags: bits 0-1 are phase-only, bit 2 (AS) may come
-                        # from any observable (rinex211.txt Table A2), so
-                        # overwriting would drop the phase's slip bit.
+                        # Phase, Doppler and signal strength share a sid, and
+                        # some converters (teqc) flag every observable.
+                        # rinex211.txt Table A2: bits 0-1 are phase-only, bit
+                        # 2 (AS) may come from any observable. OR them so no
+                        # observable overwrites another's flag.
+                        bits = obs.lli if ot == "L" else obs.lli & _V2_LLI_ANY_OBS_BITS
                         prev = data_arrays["LLI"][t_idx, s_idx]
                         data_arrays["LLI"][t_idx, s_idx] = (
-                            obs.lli if prev < 0 else prev | obs.lli
+                            bits if prev < 0 else prev | bits
                         )
                     if obs.ssi is not None:
-                        data_arrays["SSI"][t_idx, s_idx] = obs.ssi
+                        # Same precedence as the RINEX 3 reader: the phase's
+                        # SSI, else the code's; other observables' SSI is
+                        # ignored (RINEX 3.04 Table A3 notes 2-3).
+                        rank = _SSI_SOURCE_RANK.get(ot, 0)
+                        if rank > ssi_rank[t_idx, s_idx]:
+                            data_arrays["SSI"][t_idx, s_idx] = obs.ssi
+                            ssi_rank[t_idx, s_idx] = rank
 
             t_idx += 1
 

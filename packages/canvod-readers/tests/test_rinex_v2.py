@@ -380,9 +380,9 @@ class TestRnxv2TrackingCodes:
         assert codes["R"] == ["L1u", "L2u", "C1C", "C1P", "C2P", "S1u", "S2u"]
 
 
-def _v2_obs_field(value: float, lli: int | None) -> str:
+def _v2_obs_field(value: float, lli: int | None, ssi: int | None = None) -> str:
     """One F14.3 + LLI + SSI observation field."""
-    return f"{value:14.3f}{'' if lli is None else lli:1}{' '}"
+    return f"{value:14.3f}{'' if lli is None else lli:1}{'' if ssi is None else ssi:1}"
 
 
 def test_lli_flags_of_phase_and_snr_are_merged(rinex_v2_file, tmp_path):
@@ -415,6 +415,42 @@ def test_lli_flags_of_phase_and_snr_are_merged(rinex_v2_file, tmp_path):
     )
     assert int(ds.LLI.sel(sid="G01|L1|u").item()) == 5
     assert int(ds.LLI.sel(sid="G01|L2|u").item()) == 4
+
+
+def test_slip_bits_and_ssi_come_from_phase(rinex_v2_file, tmp_path):
+    """rinex211.txt Table A2: LLI bits 0-1 are phase-only, bit 2 (AS) may come
+    from any observable. A slip bit on C1 or S1 must not appear as a slip on
+    the sid, and the phase's SSI outranks S1's, the code's stays with it."""
+    lines = rinex_v2_file.read_text(encoding="ascii", errors="replace").splitlines()
+    header = lines[
+        : next(i for i, line in enumerate(lines) if "END OF HEADER" in line) + 1
+    ]
+    # obs types: L1 L2 C1 P1 P2 S1 S2 (5 fields per line)
+    fields = [
+        _v2_obs_field(1.0e8, 4, 7),  # L1: AS only
+        _v2_obs_field(8.0e7, 4),  # L2
+        _v2_obs_field(2.1e7, 1, 6),  # C1: slip bit a code must not carry
+        _v2_obs_field(2.1e7, 4),  # P1
+        _v2_obs_field(2.1e7, 4),  # P2
+        _v2_obs_field(45.0, 5, 9),  # S1: slip bit + AS
+        _v2_obs_field(40.0, 4),  # S2
+    ]
+    body = [
+        " 25  1  1  0  0  0.0000000  0  1G01",
+        "".join(fields[:5]),
+        "".join(fields[5:]),
+    ]
+    path = tmp_path / "lli.25o"
+    path.write_text("\n".join([*header, *body]) + "\n", encoding="ascii")
+
+    ds = Rnxv2Obs(fpath=path).to_ds(
+        keep_data_vars=["Phase", "Pseudorange", "SNR", "LLI", "SSI"],
+        pad_global_sid=False,
+    )
+    assert int(ds.LLI.sel(sid="G01|L1|u").item()) == 4
+    assert int(ds.LLI.sel(sid="G01|L1|C").item()) == 0
+    assert int(ds.SSI.sel(sid="G01|L1|u").item()) == 7
+    assert int(ds.SSI.sel(sid="G01|L1|C").item()) == 6
 
 
 class TestRnxv2ErrorHandling:
