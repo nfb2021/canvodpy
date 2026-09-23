@@ -25,6 +25,8 @@ A RINEX v3 observation file has two sections separated by `END OF HEADER`:
 +──────────────────────────────────────────────────+
 ```
 
+For RINEX 2.11 files see [RINEX v2.11 Parsing](rinex-v2-format.md).
+
 Supported systems: [GPS](https://gssc.esa.int/navipedia/index.php/GPS){:target="_blank"} (G), [GLONASS](https://gssc.esa.int/navipedia/index.php/GLONASS){:target="_blank"} (R), [Galileo](https://gssc.esa.int/navipedia/index.php/Galileo){:target="_blank"} (E), [BeiDou](https://gssc.esa.int/navipedia/index.php/BeiDou){:target="_blank"} (C), [QZSS](https://gssc.esa.int/navipedia/index.php/QZSS){:target="_blank"} (J), [IRNSS](https://gssc.esa.int/navipedia/index.php/IRNSS){:target="_blank"} (I), [SBAS](https://gssc.esa.int/navipedia/index.php/SBAS){:target="_blank"} (S).
 
 ---
@@ -199,8 +201,8 @@ class Rnxv3ObsEpochRecord(BaseModel):
 ```python
 class Observation(BaseModel):
     value: float
-    lli:   int | None = None   # Loss of Lock Indicator (0–9)
-    ssi:   int | None = None   # Signal Strength Indicator (0–9)
+    lli:   int | None = None   # Loss of Lock Indicator (bits 0–2)
+    ssi:   int | None = None   # Signal Strength Indicator (1–9, 0 = unknown)
 
 class Satellite(BaseModel):
     sv:           str                      # e.g. "G01"
@@ -229,6 +231,29 @@ SYSTEM_BANDS = {
     "C": {"2": "B1I", "1": "B1C", "5": "B2a", "7": "B2b", "6": "B3I"},
 }
 ```
+
+### Satellites
+
+Satellite numbers follow RINEX 3.04 section 8.4. SBAS satellites are `Snn` with `nn` = PRN − 100 (PRN 120 → `S20`, EGNOS PRN 148 → `S48`); the reader recognises `S01`–`S99`. The satellite lists of the other systems come from the [constellation models](satellite-catalog.md#integration-with-constellations).
+
+---
+
+## Loss of Lock and Signal Strength Indicators
+
+Pseudorange, phase, Doppler, and SNR of one signal share one sid (`S1C`, `L1C`, `C1C`, `D1C` → `G01|L1|C`), but each observation field carries its own LLI and SSI digit. The reader stores one LLI and one SSI per sid, following RINEX 3.04 Table A3 notes 1–3:
+
+- **LLI** is taken from the **phase** observation only ("should only be associated with the phase observation"). Flags on the other observables are ignored.
+- **SSI** is taken from the **phase**; if the signal has no phase (e.g. `C1W`/`S1W`), from the **pseudorange**. SSI on Doppler or SNR fields is ignored.
+
+The result does not depend on the order of observables in the header.
+
+| LLI bit | Meaning (Table A3) |
+|---|---|
+| 0 | Lost lock between previous and current observation: cycle slip possible |
+| 1 | Half-cycle ambiguity/slip possible |
+| 2 | Galileo BOC tracking of an MBOC-modulated signal |
+
+`-1` marks "no indicator written".
 
 ---
 

@@ -559,7 +559,7 @@ Band names must match what `SignalIDMapper` recognises for frequency resolution.
 | BeiDou | `B1I`, `B1C`, `B2a`, `B2b`, `B3I` |
 | QZSS | `L1`, `L2`, `L5`, `L6` |
 
-Code names are tracking codes (e.g., `C`, `P`, `W`, `I`, `Q`, `X`). The builder does not validate code names — they are stored as-is.
+Code names are RINEX 3 tracking codes (e.g., `C`, `P`, `W`, `I`, `Q`, `X`). The builder does not validate code names — they are stored as-is. Never guess a code your format does not record: the lowercase markers `p`, `l`, `u` exist for exactly that case (see [RINEX v2.11 Parsing](rinex-v2-format.md#lowercase-tracking-code-markers)) and are the only codes `pad_to_global_sid()` keeps besides the real RINEX 3 attributes.
 
 ---
 

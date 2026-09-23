@@ -23,6 +23,17 @@ The `canvod-readers` package provides validated parsers for [GNSS](https://gssc.
 
     [:octicons-arrow-right-24: RINEX format](rinex-format.md)
 
+-   :fontawesome-solid-file-lines: &nbsp; **RINEX v2.11 — `Rnxv2Obs`**
+
+    ---
+
+    Legacy RINEX 2 observation files (`.YYo`, `.rnx`), read into the same RINEX 3
+    based `SV|BAND|CODE` structure. RINEX 2 does not record tracking codes;
+    where the specification leaves a code unresolved, the sid carries a
+    lowercase marker (`p`, `l`, `u`) instead of a guessed RINEX 3 code.
+
+    [:octicons-arrow-right-24: RINEX v2.11 format](rinex-v2-format.md)
+
 -   :fontawesome-solid-satellite-dish: &nbsp; **SBF Binary — `SbfReader`**
 
     ---
@@ -40,21 +51,22 @@ The `canvod-readers` package provides validated parsers for [GNSS](https://gssc.
 
 ## Supported Formats at a Glance
 
-| Feature | `Rnxv3Obs` | `SbfReader` |
-| ------- | ---------- | ----------- |
-| Format | Plain text | Binary |
-| Extension | `.rnx` | `.sbf` |
-| Satellite geometry (θ, φ) | SP3 download | **Embedded** |
-| Extra metadata | Header only | PVT · DOP · quality |
-| `to_ds()` | ✓ | ✓ |
-| `iter_epochs()` | ✓ | ✓ |
-| `to_metadata_ds()` | — | ✓ |
-| `to_ds_and_auxiliary()` | `{}` aux | `{"sbf_obs": meta_ds}` |
+| Feature | `Rnxv3Obs` | `Rnxv2Obs` | `SbfReader` |
+| ------- | ---------- | ---------- | ----------- |
+| Format | Plain text | Plain text | Binary |
+| Extension | `.rnx` | `.YYo`, `.rnx` | `.sbf` |
+| Tracking codes | Exact (RINEX 3 attribute) | Exact where RINEX 2.11 defines them, else lowercase marker | Exact |
+| Satellite geometry (θ, φ) | SP3 download | SP3 download | **Embedded** |
+| Extra metadata | Header only | Header only | PVT · DOP · quality |
+| `to_ds()` | ✓ | ✓ | ✓ |
+| `iter_epochs()` | ✓ | ✓ | ✓ |
+| `to_metadata_ds()` | — | — | ✓ |
+| `to_ds_and_auxiliary()` | `{}` aux | `{}` aux | `{"sbf_obs": meta_ds}` |
 
 !!! note "Consistent output structure"
 
-    Both readers always produce data with the same two dimensions — time (epoch) and signal (SID) — and the same required attributes, so analysis code works with RINEX and SBF data interchangeably.
-    Both readers produce `(epoch × sid)` xarray Datasets that pass
+    All readers always produce data with the same two dimensions — time (epoch) and signal (SID) — and the same required attributes, so analysis code works with RINEX and SBF data interchangeably.
+    All readers produce `(epoch × sid)` xarray Datasets that pass
     `validate_dataset()`. Every row is one timestep (an epoch), every column
     is one signal (a SID), and every cell is one observable — for example,
     SNR in dB-Hz. The same dimensions, coordinates, and required attributes
@@ -74,7 +86,9 @@ The `canvod-readers` package provides validated parsers for [GNSS](https://gssc.
 graph TD
     A1["RINEX v3 File (.rnx)"] --> B1["Rnxv3Obs (+ SP3/CLK)"]
     A2["SBF File (.sbf)"] --> B2["SbfReader"]
+    A3["RINEX v2 File (.YYo)"] --> B3["Rnxv2Obs (+ SP3/CLK)"]
     B1 --> C["validate_dataset()"]
+    B3 --> C
     B2 --> C
     C --> D["`**xarray.Dataset**
     epoch x sid`"]

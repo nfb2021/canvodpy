@@ -1,0 +1,107 @@
+# RINEX v2.11 Parsing
+
+`Rnxv2Obs` reads [RINEX 2.11](https://files.igs.org/pub/data/format/rinex211.txt){:target="_blank"} observation files into the same `(epoch × sid)` Dataset that `Rnxv3Obs` produces. The format specification ships next to the reader as `canvod/readers/rinex/rinex211.txt`; every rule on this page cites it.
+
+```python
+from pathlib import Path
+from canvod.readers import Rnxv2Obs
+
+ds = Rnxv2Obs(fpath=Path("p0481660.08o")).to_ds(keep_data_vars=["SNR", "Phase"])
+```
+
+---
+
+## One data structure: RINEX 3 signal IDs
+
+canvodpy has one signal axis for every input format: `SV|BAND|CODE`, with bands and tracking codes in [RINEX 3 nomenclature](rinex-format.md#signal-id-mapping). A RINEX 3 observation code names the signal completely — `L2W` is the phase of the L2 P-code tracked semi-codelessly under antispoofing, `L2L` the phase of the L2C pilot channel. Two signals with different codes are different measurements, and canvodpy keeps them apart until an analysis explicitly aggregates them.
+
+RINEX 2 cannot express that. Its observation codes are one letter for the observable and one digit for the frequency (`L2`, `P2`, `C1`, `S1`). RINEX 2.11 Table A1 defines only two pseudorange families:
+
+| RINEX 2 code | Defined as (Table A1) |
+|---|---|
+| `C1` | GPS C/A · GLONASS C/A · Galileo "All" |
+| `C2` | GPS L2C |
+| `P1`, `P2` | GPS / GLONASS P code |
+| `Lx`, `Dx`, `Sx` | carrier phase, Doppler, signal strength on frequency *x* — no code |
+
+and section 10.1 states that RINEX 2 has no way to record *which* underlying code was tracked: whether a GPS "P2" came from P, Y, or a semi-codeless technique under antispoofing, or which L2C channel a "C2" used. Phase, Doppler, and signal strength carry no code information at all.
+
+Mapping RINEX 3 down to RINEX 2 would throw that information away for every modern file. canvodpy therefore lifts RINEX 2 up into the RINEX 3 structure — and fills in only what RINEX 2 itself defines.
+
+---
+
+## Lowercase tracking-code markers
+
+Where RINEX 2 leaves the code unresolved, the reader writes a **lowercase** marker in the code position:
+
+| Marker | Meaning | Candidate RINEX 3 codes | From |
+|---|---|---|---|
+| `p` | P-code family, technique not recorded | `P`, `W`, `Y`, `D` | GPS `P1`, `P2` |
+| `l` | L2C family, channel not recorded | `S`, `L`, `X` | GPS `C2` |
+| `u` | carrier band only, no code information | any | phase, Doppler, signal strength; Galileo and L5 pseudoranges |
+
+RINEX 3 and 4 attributes are uppercase only, so a marker can never collide with a real code. A plausible-looking uppercase guess would: `X` is a real signal (the combined L1C D+P or L2C M+L channel), and `W` asserts a tracking technique the file does not record.
+
+Where RINEX 2 *does* identify the signal, the reader writes the real RINEX 3 code:
+
+- **GPS `C1`** is the C/A code → `C`.
+- **GLONASS `C1`/`C2`** are C/A → `C`; **`P1`/`P2`** are the P code, which is not encrypted → `P`.
+- A **band with a single RINEX 3 signal** resolves to that signal for every observable: SBAS L1 carries only C/A, so SBAS `C1`, `L1`, `S1` all become `L1|C`.
+
+| System | RINEX 2 code | Signal ID |
+|---|---|---|
+| GPS | `C1` | `G05\|L1\|C` |
+| GPS | `P1` | `G05\|L1\|p` |
+| GPS | `P2` | `G05\|L2\|p` |
+| GPS | `C2` | `G05\|L2\|l` |
+| GPS | `L1`, `D1`, `S1` | `G05\|L1\|u` |
+| GPS | `L2`, `D2`, `S2` | `G05\|L2\|u` |
+| GLONASS | `C1` / `P2` | `R07\|G1\|C` / `R07\|G2\|P` |
+| GLONASS | `L1`, `S1` | `R07\|G1\|u` |
+| Galileo | `C1`, `L1`, `S1` | `E11\|E1\|u` |
+| SBAS | `C1`, `L1`, `S1` | `S20\|L1\|C` |
+| SBAS | `C5`, `L5`, `S5` | `S20\|L5\|u` |
+
+Two consequences follow directly from the specification:
+
+- **Phase and signal strength of a RINEX 2 file share one sid per band** (`L1|u`), and the pseudoranges get their own (`L1|C`, `L1|p`). Table A1 describes signal strength as belonging "to the respective phase observations"; neither is tied to a code.
+- **Selecting a RINEX 3 code never silently picks up RINEX 2 data.** `ds.sel(sid=ds.code == "W")` returns nothing from a RINEX 2 file, because RINEX 2 never said the signal was `W`. To use RINEX 2 data, select the markers explicitly and decide how to treat them.
+
+Every RINEX 2 dataset documents the markers in its `"Tracking Code Markers"` attribute and records the source version in `"RINEX Version"`.
+
+!!! note "Global SID padding"
+    The markers are registered in the constellation `BAND_CODES`, so
+    `pad_to_global_sid()` keeps them. RINEX 2 and RINEX 3 data of the same
+    station can share one store: their sids are disjoint wherever RINEX 2
+    could not resolve the code, and identical where it could (`G05|L1|C`).
+
+---
+
+## Satellites
+
+RINEX 2 satellite numbers `snn` follow the same convention as RINEX 3: for SBAS, `nn` = PRN − 100 (PRN 120 → `S20`). SBAS satellites `S01`–`S99` are recognised.
+
+---
+
+## Loss of lock and signal strength indicators
+
+Each observation carries an LLI and an SSI digit, but phase, Doppler, and signal strength of one band land in one sid. Some converters write flags on every observable. The reader combines them following RINEX 2.11 Table A2:
+
+- **LLI bits 0 and 1** (cycle slip, opposite wavelength factor) are "for phase only" and are taken only from the phase observation.
+- **LLI bit 2** (observation under antispoofing) may be set on any observable and is combined across all observations of the sid.
+- **SSI** is taken from the phase; for a sid without phase, from the pseudorange. RINEX 2.11 does not assign the SSI to an observable, so the reader applies the [RINEX 3.04 rule](rinex-format.md#loss-of-lock-and-signal-strength-indicators) for consistency.
+
+A slip flag written on a pseudorange or signal-strength field therefore never appears as a slip on the sid.
+
+---
+
+## Header
+
+`obs_codes_per_system` lists the observation codes in RINEX 3 notation per system, with the resolved code or marker in the attribute position — for a mixed GPS/GLONASS file with `L1 L2 C1 P1 P2 S1 S2`:
+
+```python
+{
+    "G": ["L1u", "L2u", "C1C", "C1p", "C2p", "S1u", "S2u"],
+    "R": ["L1u", "L2u", "C1C", "C1P", "C2P", "S1u", "S2u"],
+}
+```
