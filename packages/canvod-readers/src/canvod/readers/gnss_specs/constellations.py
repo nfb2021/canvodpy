@@ -26,6 +26,30 @@ OBS_TYPE_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9]?[A-Z0-9]?$")  # e.g., *1C, *5X
 
 
 # ================================================================
+# ------------- RINEX 2 unresolved tracking-code markers -----------
+# ================================================================
+
+# RINEX 2.11 two-character observation codes (``rinex/rinex211.txt``, Table
+# A1) name the carrier band but, by the spec's own admission (section 10.1),
+# cannot express the underlying ranging code or channel. RINEX 3 attributes
+# are therefore only assignable where the v2 code defines them (e.g. GPS C1 =
+# C/A). Everywhere else the ``code`` field of a sid carries one of these
+# markers instead of a guessed RINEX 3 attribute. They are lowercase on
+# purpose: RINEX observation codes are uppercase-only, so a marker can never
+# collide with a real RINEX 3/4 attribute (a guessed "X" would -- it is the
+# real L1C D+P / L2C M+L signal).
+V2_CODE_P_FAMILY = "p"
+"""GPS P1/P2: P-code family; under antispoofing the tracking technique
+(RINEX 3 P/W/Y/D) is not recorded in RINEX 2."""
+V2_CODE_L2C_FAMILY = "l"
+"""GPS C2: L2C pseudorange; the channel (RINEX 3 S/L/X) is not recorded."""
+V2_CODE_UNRESOLVED = "u"
+"""No tracking information beyond the carrier band (v2 phase, Doppler,
+signal strength, and Galileo/L5 pseudoranges)."""
+V2_UNRESOLVED_CODES = (V2_CODE_P_FAMILY, V2_CODE_L2C_FAMILY, V2_CODE_UNRESOLVED)
+
+
+# ================================================================
 # -------------------- Base Class --------------------
 # ================================================================
 class ConstellationBase:
@@ -128,11 +152,12 @@ class GALILEO(ConstellationBase):
         "8": "E5",
     }
     BAND_CODES: ClassVar[dict[str, list[str]]] = {
-        "E1": ["A", "B", "C", "X", "Z"],
-        "E5a": ["I", "Q", "X"],
-        "E5b": ["I", "Q", "X"],
-        "E5": ["I", "Q", "X"],
-        "E6": ["A", "B", "C", "X", "Z"],
+        # Trailing lowercase entries: RINEX 2 markers (see V2_CODE_*).
+        "E1": ["A", "B", "C", "X", "Z", "u"],
+        "E5a": ["I", "Q", "X", "u"],
+        "E5b": ["I", "Q", "X", "u"],
+        "E5": ["I", "Q", "X", "u"],
+        "E6": ["A", "B", "C", "X", "Z", "u"],
     }
     BAND_PROPERTIES: ClassVar[dict[str, dict[str, Any]]] = {
         "E1": {
@@ -194,9 +219,10 @@ class GPS(ConstellationBase):
 
     BANDS: ClassVar[dict[str, str]] = {"1": "L1", "2": "L2", "5": "L5"}
     BAND_CODES: ClassVar[dict[str, list[str]]] = {
-        "L1": ["C", "S", "L", "X", "P", "W", "Y", "M", "N"],
-        "L2": ["C", "D", "S", "L", "X", "P", "W", "Y", "M", "N"],
-        "L5": ["I", "Q", "X"],
+        # Trailing lowercase entries: RINEX 2 markers (see V2_CODE_*).
+        "L1": ["C", "S", "L", "X", "P", "W", "Y", "M", "N", "p", "u"],
+        "L2": ["C", "D", "S", "L", "X", "P", "W", "Y", "M", "N", "l", "p", "u"],
+        "L5": ["I", "Q", "X", "u"],
     }
     BAND_PROPERTIES: ClassVar[dict[str, dict[str, Any]]] = {
         "L1": {
@@ -396,9 +422,14 @@ class GLONASS(ConstellationBase):
         "1": "G1",
         "2": "G2",
     }
+    # Trailing lowercase entries: RINEX 2 markers (see V2_CODE_*).
     AGGR_BAND_CODES: ClassVar[dict[str, list[str]]] = {
-        "G1": ["C", "P"],
-        "G2": ["C", "P"],
+        "G1": ["C", "P", "u"],
+        "G2": ["C", "P", "u"],
+    }
+    FDMA_BAND_CODES: ClassVar[dict[str, list[str]]] = {
+        "G1_FDMA": ["C", "P", "u"],
+        "G2_FDMA": ["C", "P", "u"],
     }
 
     # n_min=-7, n_max=6 (see Note on G1 & G2 above):
@@ -452,8 +483,7 @@ class GLONASS(ConstellationBase):
             self.__dict__["BANDS"] = {**self.BANDS, "1": "G1_FDMA", "2": "G2_FDMA"}
             self.__dict__["BAND_CODES"] = {
                 **self.BAND_CODES,
-                "G1_FDMA": ["C", "P"],
-                "G2_FDMA": ["C", "P"],
+                **self.FDMA_BAND_CODES,
             }
             # Add placeholder properties (actual freqs are SV-dependent)
             self.__dict__["BAND_PROPERTIES"] = {
@@ -544,9 +574,11 @@ class SBAS(ConstellationBase):
     """
 
     BANDS: ClassVar[dict[str, str]] = {"1": "L1", "5": "L5"}
+    # Trailing lowercase entry: RINEX 2 marker (see V2_CODE_*). L1 needs none:
+    # C/A is its only signal, so every v2 L1 observable resolves to "C".
     BAND_CODES: ClassVar[dict[str, list[str]]] = {
         "L1": ["C"],
-        "L5": ["I", "Q", "X"],
+        "L5": ["I", "Q", "X", "u"],
     }
     BAND_PROPERTIES: ClassVar[dict[str, dict[str, Any]]] = {
         "L1": {

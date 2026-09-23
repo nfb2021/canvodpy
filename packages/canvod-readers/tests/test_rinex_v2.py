@@ -2,10 +2,13 @@
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 import xarray as xr
 
-from canvod.readers.rinex.v2_11 import Rnxv2Header, Rnxv2Obs
+from canvod.readers.gnss_specs.constellations import V2_UNRESOLVED_CODES
+from canvod.readers.preprocessing import pad_to_global_sid
+from canvod.readers.rinex.v2_11 import Rnxv2Header, Rnxv2Obs, _v2_tracking_code
 
 # Test data paths
 TEST_DATA_DIR = Path(__file__).parent / "test_data"
@@ -279,6 +282,139 @@ class TestRnxv2SignalMapping:
         assert len(systems_found) > 1, (
             f"Expected multiple systems, got: {systems_found}"
         )
+
+
+# Spec rows: rinex211.txt Table A1 ("C: Pseudorange GPS: C/A, L2C; Glonass:
+# C/A; Galileo: All", "P: Pseudorange GPS and Glonass: P code") and section
+# 10.1 (v2 codes cannot express the underlying code or channel).
+_V2_TRACKING_CODE_CASES = [
+    ("G", "C1", "L1", "C"),  # C/A: defined by the v2 code
+    ("G", "P1", "L1", "p"),  # P family: P/W/Y/D under AS not recorded
+    ("G", "C2", "L2", "l"),  # L2C family: S/L/X channel not recorded
+    ("G", "P2", "L2", "p"),
+    ("G", "L1", "L1", "u"),  # phase: no code information at all
+    ("G", "S2", "L2", "u"),  # SNR belongs to "the respective phase"
+    ("G", "D1", "L1", "u"),
+    ("G", "C5", "L5", "u"),  # L5 I/Q/X not recorded
+    ("R", "C1", "G1", "C"),  # GLONASS C/A
+    ("R", "P2", "G2", "P"),  # GLONASS P code is unencrypted: exact
+    ("R", "L1", "G1", "u"),
+    ("R", "C1", "G1_FDMA", "C"),  # same codes without FDMA aggregation
+    ("E", "C1", "E1", "u"),  # Galileo "C" means "All"
+    ("E", "L5", "E5a", "u"),
+    ("S", "C1", "L1", "C"),  # SBAS L1 carries only C/A ...
+    ("S", "L1", "L1", "C"),  # ... so even phase/SNR resolve exactly
+    ("S", "C5", "L5", "u"),
+]
+
+
+class TestRnxv2TrackingCodes:
+    """Tracking codes follow RINEX 2.11 instead of guessed RINEX 3 attributes."""
+
+    @pytest.mark.parametrize(
+        ("system", "obs_code", "band", "expected"), _V2_TRACKING_CODE_CASES
+    )
+    def test_tracking_code_follows_rinex211(self, system, obs_code, band, expected):
+        assert _v2_tracking_code(system, obs_code, band) == expected
+
+    def test_markers_can_never_be_rinex_attributes(self):
+        # RINEX observation codes are uppercase-only; a marker must not
+        # collide with a real attribute (e.g. "X" = L2C M+L).
+        assert len(set(V2_UNRESOLVED_CODES)) == len(V2_UNRESOLVED_CODES)
+        assert all(code.islower() and len(code) == 1 for code in V2_UNRESOLVED_CODES)
+
+    def test_mixed_file_sids(self, rinex_v2_file):
+        """Obs types L1 L2 C1 P1 P2 S1 S2 yield exactly these band|code pairs."""
+        ds = Rnxv2Obs(fpath=rinex_v2_file).to_ds(
+            keep_data_vars=["SNR", "Pseudorange", "Phase"], pad_global_sid=False
+        )
+        by_system: dict[str, set[str]] = {}
+        for sid in ds.sid.values:
+            sv, band_code = str(sid).split("|", 1)
+            by_system.setdefault(sv[0], set()).add(band_code)
+        assert by_system["G"] == {"L1|C", "L1|p", "L1|u", "L2|p", "L2|u"}
+        assert by_system["R"] == {"G1|C", "G1|P", "G1|u", "G2|P", "G2|u"}
+        assert by_system["E"] == {"E1|u"}
+        assert by_system["S"] == {"L1|C"}
+
+    def test_observables_land_on_their_sids(self, rinex_v2_file):
+        ds = Rnxv2Obs(fpath=rinex_v2_file).to_ds(
+            keep_data_vars=["SNR", "Pseudorange", "Phase"], pad_global_sid=False
+        )
+        gps = ds.sel(sid=[s for s in ds.sid.values if str(s).startswith("G")])
+        has = {
+            var: {
+                str(s).split("|", 1)[1]
+                for s in gps.sid.values[gps[var].notnull().any("epoch").values]
+            }
+            for var in ("Pseudorange", "Phase", "SNR")
+        }
+        assert has["Pseudorange"] == {"L1|C", "L1|p", "L2|p"}
+        assert has["Phase"] == {"L1|u", "L2|u"}
+        assert has["SNR"] == {"L1|u", "L2|u"}
+
+    def test_global_padding_keeps_every_observation(self, rinex_v2_file):
+        """Regression: padding onto the global sid space used to drop GLONASS,
+        SBAS and Galileo phase/SNR (41 % of them in this file), because their
+        v2 sids were not in any constellation's BAND_CODES."""
+        ds = Rnxv2Obs(fpath=rinex_v2_file).to_ds(
+            keep_data_vars=["SNR", "Pseudorange", "Phase"], pad_global_sid=False
+        )
+        padded = pad_to_global_sid(ds)
+        assert set(ds.sid.values) <= set(padded.sid.values)
+        for var in ("SNR", "Pseudorange", "Phase"):
+            assert int(np.isfinite(padded[var]).sum()) == int(
+                np.isfinite(ds[var]).sum()
+            )
+
+    def test_markers_documented_in_attrs(self, rinex_v2_file):
+        ds = Rnxv2Obs(fpath=rinex_v2_file).to_ds(
+            keep_data_vars=["SNR"], pad_global_sid=False
+        )
+        assert ds.attrs["RINEX Version"] == "2.11"
+        assert "'u' = carrier band only" in ds.attrs["Tracking Code Markers"]
+
+    def test_header_codes_are_system_specific(self, rinex_v2_file):
+        codes = Rnxv2Header.from_file(rinex_v2_file).obs_codes_per_system
+        assert codes["G"] == ["L1u", "L2u", "C1C", "C1p", "C2p", "S1u", "S2u"]
+        assert codes["R"] == ["L1u", "L2u", "C1C", "C1P", "C2P", "S1u", "S2u"]
+
+
+def _v2_obs_field(value: float, lli: int | None) -> str:
+    """One F14.3 + LLI + SSI observation field."""
+    return f"{value:14.3f}{'' if lli is None else lli:1}{' '}"
+
+
+def test_lli_flags_of_phase_and_snr_are_merged(rinex_v2_file, tmp_path):
+    """Phase and signal strength share a sid. teqc sets the AS bit (4) on every
+    observable, so S1's LLI must not overwrite L1's slip bit (LLI 5 = 4 | 1)."""
+    lines = rinex_v2_file.read_text(encoding="ascii", errors="replace").splitlines()
+    header = lines[
+        : next(i for i, line in enumerate(lines) if "END OF HEADER" in line) + 1
+    ]
+    # obs types: L1 L2 C1 P1 P2 S1 S2 (5 fields per line)
+    fields = [
+        _v2_obs_field(1.0e8, 5),  # L1: slip + AS
+        _v2_obs_field(8.0e7, 4),  # L2: AS
+        _v2_obs_field(2.1e7, 4),  # C1
+        _v2_obs_field(2.1e7, 4),  # P1
+        _v2_obs_field(2.1e7, 4),  # P2
+        _v2_obs_field(45.0, 4),  # S1: AS only
+        _v2_obs_field(40.0, 4),  # S2
+    ]
+    body = [
+        " 25  1  1  0  0  0.0000000  0  1G01",
+        "".join(fields[:5]),
+        "".join(fields[5:]),
+    ]
+    path = tmp_path / "lli.25o"
+    path.write_text("\n".join([*header, *body]) + "\n", encoding="ascii")
+
+    ds = Rnxv2Obs(fpath=path).to_ds(
+        keep_data_vars=["Phase", "SNR", "LLI"], pad_global_sid=False
+    )
+    assert int(ds.LLI.sel(sid="G01|L1|u").item()) == 5
+    assert int(ds.LLI.sel(sid="G01|L2|u").item()) == 4
 
 
 class TestRnxv2ErrorHandling:

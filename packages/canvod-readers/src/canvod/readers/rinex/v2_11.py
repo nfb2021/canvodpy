@@ -43,6 +43,16 @@ from pydantic import (
 
 from canvod.readers.base import GNSSDataReader, validate_dataset
 from canvod.readers.gnss_specs.constants import UREG
+from canvod.readers.gnss_specs.constellations import (
+    GALILEO,
+    GLONASS,
+    GPS,
+    SBAS,
+    V2_CODE_L2C_FAMILY,
+    V2_CODE_P_FAMILY,
+    V2_CODE_UNRESOLVED,
+    V2_UNRESOLVED_CODES,
+)
 from canvod.readers.gnss_specs.exceptions import (
     IncompleteEpochError,
     InvalidEpochError,
@@ -79,14 +89,15 @@ V2_EPOCH_FLAG_EXTERNAL_EVENT = 5
 V2_EPOCH_FLAG_CYCLE_SLIP = 6
 V2_YEAR_PIVOT = 80  # Two-digit year pivot: >= 80 → 19xx, < 80 → 20xx
 
-# RINEX v2 tracking-code map.
-# Only C1, P1, C2, P2 transmit an explicit ranging code.
-# All other v2 obs codes do not specify the ranging code → "X".
-_V2_TRACKING_CODE: dict[str, str] = {
-    "C1": "C",  # C/A code pseudorange on L1
-    "P1": "P",  # P-code pseudorange on L1
-    "C2": "C",  # L2C civil code pseudorange
-    "P2": "P",  # P-code pseudorange on L2
+# RINEX v2 -> RINEX 3 tracking-code resolution (see _v2_tracking_code()).
+# Per-system RINEX 3 code lists, keyed by the band names SignalIDMapper
+# produces for v2 frequency numbers. GLONASS FDMA bands carry the same codes
+# as the aggregated G1/G2 bands.
+_V2_SYSTEM_BAND_CODES: dict[str, dict[str, list[str]]] = {
+    "G": GPS.BAND_CODES,
+    "R": {**GLONASS.AGGR_BAND_CODES, **GLONASS.FDMA_BAND_CODES},
+    "E": GALILEO.BAND_CODES,
+    "S": SBAS.BAND_CODES,
 }
 
 # v2 pseudorange codes P1/P2 map to obs-type "C" (pseudorange) in v3.
@@ -106,8 +117,8 @@ def _expand_v2_year(yy: int) -> int:
     return 2000 + yy
 
 
-def _parse_v2_obs_code(obs_code_v2: str) -> tuple[str, str, str]:
-    """Parse a RINEX v2 2-char obs code into (obs_type, freq_num, tracking_code).
+def _parse_v2_obs_code(obs_code_v2: str) -> tuple[str, str]:
+    """Parse a RINEX v2 2-char obs code into (obs_type, freq_num).
 
     Parameters
     ----------
@@ -116,17 +127,55 @@ def _parse_v2_obs_code(obs_code_v2: str) -> tuple[str, str, str]:
 
     Returns
     -------
-    tuple[str, str, str]
-        (obs_type, freq_num, tracking_code) where:
-        - obs_type: v3 observation type character ("C", "L", "D", "S")
-        - freq_num: frequency number as string ("1", "2", "5", "6", "7", "8")
-        - tracking_code: "C" for C1/C2, "P" for P1/P2, "X" otherwise
+    tuple[str, str]
+        (obs_type, freq_num) where obs_type is the v3 observation type
+        character ("C", "L", "D", "S"; v2 "P" pseudoranges become "C") and
+        freq_num the frequency number as string ("1", "2", "5", "6", "7", "8").
     """
     raw_type = obs_code_v2[0]  # C, P, L, D, S
     freq_num = obs_code_v2[1]  # 1, 2, 5, 6, 7, 8
-    obs_type = _V2_OBS_TYPE_REMAP.get(raw_type, raw_type)
-    tracking_code = _V2_TRACKING_CODE.get(obs_code_v2, "X")
-    return obs_type, freq_num, tracking_code
+    return _V2_OBS_TYPE_REMAP.get(raw_type, raw_type), freq_num
+
+
+def _v2_tracking_code(system: str, obs_code_v2: str, band: str | None) -> str:
+    """Resolve the sid tracking code of a RINEX v2 observable.
+
+    Assigns a RINEX 3 attribute only where RINEX 2.11 itself defines the
+    ranging code (``rinex211.txt`` Table A1: "C: Pseudorange GPS: C/A, L2C;
+    Glonass: C/A; Galileo: All" and "P: Pseudorange GPS and Glonass: P
+    code"), and otherwise returns one of the lowercase
+    ``V2_CODE_*`` markers -- RINEX 2 cannot express the underlying code or
+    channel (spec section 10.1), so any RINEX 3 attribute beyond that would
+    be a guess.
+
+    Rules, in order:
+
+    1. A band carrying exactly one RINEX 3 signal (SBAS L1: C/A only)
+       resolves every observable to that signal's code.
+    2. GPS: C1 -> ``C`` (C/A); C2 -> ``l`` (L2C, channel S/L/X unknown);
+       P1/P2 -> ``p`` (P code; under antispoofing P/W/Y/D unknown).
+    3. GLONASS: C -> ``C`` (C/A), P -> ``P`` (the GLONASS P code is not
+       encrypted, so no ambiguity).
+    4. Everything else -> ``u``: phase, Doppler and signal strength (the spec
+       ties signal strength to "the respective phase observations", so it
+       shares their sid), Galileo pseudoranges ("All" codes), and L5.
+    """
+    band_codes = _V2_SYSTEM_BAND_CODES.get(system, {}).get(band or "", [])
+    signal_codes = [code for code in band_codes if code not in V2_UNRESOLVED_CODES]
+    if len(signal_codes) == 1:
+        return signal_codes[0]
+
+    raw_type = obs_code_v2[0]
+    if system == "G":
+        if obs_code_v2 == "C1":
+            return "C"
+        if obs_code_v2 == "C2":
+            return V2_CODE_L2C_FAMILY
+        if raw_type == "P":
+            return V2_CODE_P_FAMILY
+    elif system == "R" and raw_type in ("C", "P"):
+        return raw_type
+    return V2_CODE_UNRESOLVED
 
 
 # --------------------------------------------------------------------------- #
@@ -392,11 +441,20 @@ class Rnxv2Header(BaseModel):
         else:
             systems_present = [system_char]
 
-        # Store parsed v2 obs codes per system (type+freq_num+tracking_code)
-        v3_style_codes = [
-            f"{t}{f}{c}" for t, f, c in (_parse_v2_obs_code(ot) for ot in obs_types)
-        ]
-        data["obs_codes_per_system"] = dict.fromkeys(systems_present, v3_style_codes)
+        # Store parsed v2 obs codes per system (type+freq_num+tracking_code).
+        # Tracking codes are system-dependent (see _v2_tracking_code()).
+        system_bands = SignalIDMapper().SYSTEM_BANDS
+        obs_codes_per_system: dict[str, list[str]] = {}
+        for system in systems_present:
+            codes = []
+            for ot in obs_types:
+                obs_type, freq_num = _parse_v2_obs_code(ot)
+                band = system_bands.get(system, {}).get(freq_num)
+                codes.append(
+                    f"{obs_type}{freq_num}{_v2_tracking_code(system, ot, band)}"
+                )
+            obs_codes_per_system[system] = codes
+        data["obs_codes_per_system"] = obs_codes_per_system
 
         return data
 
@@ -859,7 +917,7 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
                 value, lli, ssi = self._parse_observation_value(field)
 
                 obs_code_v2 = obs_types_v2[obs_idx]
-                obs_type_char, _freq_num, _tracking = _parse_v2_obs_code(obs_code_v2)
+                obs_type_char, _freq_num = _parse_v2_obs_code(obs_code_v2)
 
                 observation = Observation(
                     obs_type=obs_type_char,
@@ -1039,7 +1097,7 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
         1. First pass: discover all signal IDs and collect timestamps.
         2. Second pass: fill data arrays.
         """
-        # Pre-parse v2 obs codes → (obs_type, freq_num, tracking_code)
+        # Pre-parse v2 obs codes → (obs_type, freq_num)
         obs_types_v2 = self.header.obs_types
         parsed_obs_codes = [_parse_v2_obs_code(ot) for ot in obs_types_v2]
 
@@ -1052,18 +1110,36 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
         signal_id_to_properties: dict[str, dict[str, object]] = {}
         timestamps: list[np.datetime64] = []
 
-        def _build_sid(sv: str, freq_num: str, tracking_code: str) -> str | None:
-            """Build SID from SV, freq number, and tracking code.
+        # (system, obs index) -> (band, tracking code); None if the system
+        # has no band for that frequency number.
+        sid_parts_cache: dict[tuple[str, int], tuple[str, str] | None] = {}
+
+        def _build_sid(sv: str, obs_idx: int) -> str | None:
+            """Build SID from SV and the index of the v2 obs type.
 
             Uses SignalIDMapper.SYSTEM_BANDS to resolve the system-specific
             band name (e.g. GPS freq "1" → "L1", Galileo freq "1" → "E1",
-            GLONASS freq "1" → "G1").
+            GLONASS freq "1" → "G1") and _v2_tracking_code() for the
+            system-dependent tracking code.
             """
             system = sv[0] if sv else "G"
-            band_name = system_bands.get(system, {}).get(freq_num)
-            if band_name is None:
+            key = (system, obs_idx)
+            if key not in sid_parts_cache:
+                band_name = system_bands.get(system, {}).get(
+                    parsed_obs_codes[obs_idx][1]
+                )
+                sid_parts_cache[key] = (
+                    None
+                    if band_name is None
+                    else (
+                        band_name,
+                        _v2_tracking_code(system, obs_types_v2[obs_idx], band_name),
+                    )
+                )
+            parts = sid_parts_cache[key]
+            if parts is None:
                 return None
-            return f"{sv}|{band_name}|{tracking_code}"
+            return f"{sv}|{parts[0]}|{parts[1]}"
 
         def _cache_band_freq(band: str) -> tuple[float, float, float, float]:
             if band not in band_freq_cache:
@@ -1102,8 +1178,8 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
                 for i, obs in enumerate(sat.observations):
                     if i >= len(parsed_obs_codes):
                         break
-                    _obs_type, freq_num, tracking_code = parsed_obs_codes[i]
-                    sid = _build_sid(sv, freq_num, tracking_code)
+                    freq_num = parsed_obs_codes[i][1]
+                    sid = _build_sid(sv, i)
                     if sid is None:
                         continue
 
@@ -1121,7 +1197,7 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
                             "sv": sv,
                             "system": system,
                             "band": band_name,
-                            "code": tracking_code,
+                            "code": sid.rsplit("|", 1)[1],
                             "freq_center": freq_center,
                             "freq_min": freq_min,
                             "freq_max": freq_max,
@@ -1173,8 +1249,7 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
                 for i, obs in enumerate(sat.observations):
                     if obs.value is None or i >= len(parsed_obs_codes):
                         continue
-                    _ot, fn, tc = parsed_obs_codes[i]
-                    sid = _build_sid(sv, fn, tc)
+                    sid = _build_sid(sv, i)
                     if sid is None or sid not in sid_to_idx:
                         continue
                     s_idx = sid_to_idx[sid]
@@ -1190,7 +1265,15 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
                         data_arrays["Doppler"][t_idx, s_idx] = obs.value
 
                     if obs.lli is not None:
-                        data_arrays["LLI"][t_idx, s_idx] = obs.lli
+                        # Phase and signal strength share a sid, and some
+                        # converters (teqc) flag every observable. OR the
+                        # flags: bits 0-1 are phase-only, bit 2 (AS) may come
+                        # from any observable (rinex211.txt Table A2), so
+                        # overwriting would drop the phase's slip bit.
+                        prev = data_arrays["LLI"][t_idx, s_idx]
+                        data_arrays["LLI"][t_idx, s_idx] = (
+                            obs.lli if prev < 0 else prev | obs.lli
+                        )
                     if obs.ssi is not None:
                         data_arrays["SSI"][t_idx, s_idx] = obs.ssi
 
@@ -1402,6 +1485,14 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
         attrs["Created"] = datetime.now(UTC).isoformat()
         attrs["Software"] = (
             f"{attrs['Software']}, Version: {get_version_from_pyproject()}"
+        )
+        attrs["RINEX Version"] = str(self.header.version)
+        attrs["Tracking Code Markers"] = (
+            "RINEX 2 does not record tracking codes; lowercase sid codes mark "
+            f"what it leaves unresolved: {V2_CODE_P_FAMILY!r} = P-code family "
+            f"(P/W/Y/D), {V2_CODE_L2C_FAMILY!r} = L2C family (S/L/X), "
+            f"{V2_CODE_UNRESOLVED!r} = carrier band only. See rinex211.txt "
+            "Table A1 and section 10.1."
         )
         return attrs
 
