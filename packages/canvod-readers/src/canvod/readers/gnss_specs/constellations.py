@@ -534,7 +534,12 @@ class SBAS(ConstellationBase):
 
     Notes
     -----
-    Uses a static list S01-S36 as PRNs are region-specific.
+    RINEX numbers SBAS satellites ``Snn`` with nn = broadcast PRN - 100
+    (``rinex/rinex211.txt`` section 9.1, RINEX 3.04 section 8.4: PRN 120 ->
+    S20; QZSS SBAS-signal PRNs 183+ -> S83+). The static list therefore
+    spans the full two-digit range S01-S99 the format allows, rather than an
+    assignment table that goes stale: a sid outside it is silently dropped
+    by ``pad_to_global_sid()`` (e.g. EGNOS PRN 148 -> S48).
 
     """
 
@@ -558,7 +563,7 @@ class SBAS(ConstellationBase):
         """Initialize SBAS constellation."""
         super().__init__(
             constellation="SBAS",
-            static_svs=[f"S{x:02d}" for x in range(1, 37)],
+            static_svs=[f"S{x:02d}" for x in range(1, 100)],
         )
 
 
