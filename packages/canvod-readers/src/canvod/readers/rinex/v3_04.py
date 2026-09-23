@@ -13,6 +13,7 @@ Classes:
 - Rnxv3Obs: Main reader class, converts RINEX to xarray Dataset
 """
 
+import functools
 import hashlib
 import json
 import re
@@ -42,6 +43,15 @@ from canvod.readers.base import GNSSDataReader, validate_dataset
 from canvod.readers.gnss_specs.constants import (
     EPOCH_RECORD_INDICATOR,
     UREG,
+)
+from canvod.readers.gnss_specs.constellations import (
+    BEIDOU,
+    GALILEO,
+    GLONASS,
+    GPS,
+    IRNSS,
+    QZSS,
+    SBAS,
 )
 from canvod.readers.gnss_specs.exceptions import (
     IncompleteEpochError,
@@ -99,22 +109,29 @@ _EPOCH_RE = re.compile(
     r"^>\s*(\d{4})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d+\.\d+)\s+(\d+)\s+(\d+)"
 )
 
-_CONSTELLATION_SVS: dict[str, list[str]] = {
-    "G": [f"G{i:02d}" for i in range(1, 33)],
-    "E": [f"E{i:02d}" for i in range(1, 37)],
-    "R": [f"R{i:02d}" for i in range(1, 25)],
-    "C": [f"C{i:02d}" for i in range(1, 64)],
-    "J": [f"J{i:02d}" for i in range(1, 11)],
-    "S": [f"S{i:02d}" for i in range(1, 37)],
-    "I": [f"I{i:02d}" for i in range(1, 15)],
-}
-
 _OBS_VAL_END = 14
 
 
-def _get_constellation_svs(system: str) -> list[str]:
-    """Return static list of SV identifiers for a GNSS system."""
-    return _CONSTELLATION_SVS.get(system, [])
+@functools.cache
+def _get_constellation_svs(system: str) -> tuple[str, ...]:
+    """Return the static SV identifiers for a GNSS system.
+
+    Taken from the constellation models that also define the global sid
+    space (``pad_to_global_sid()``), so the reader cannot keep a stale copy:
+    a separate table here once limited SBAS to S01-S36 and silently dropped
+    real GEOs such as EGNOS PRN 148 (S48) at read time.
+    """
+    models = {
+        "G": GPS,
+        "E": GALILEO,
+        "R": GLONASS,
+        "C": BEIDOU,
+        "J": QZSS,
+        "S": SBAS,
+        "I": IRNSS,
+    }
+    model = models.get(system)
+    return tuple(model().svs) if model is not None else ()
 
 
 def _parse_obs_fast(slice_text: str) -> tuple[float | None, int | None, int | None]:

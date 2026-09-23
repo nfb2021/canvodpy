@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 import xarray as xr
 
@@ -12,6 +13,13 @@ TEST_DATA_DIR = Path(__file__).parent / "test_data"
 RINEX_FILE = (
     TEST_DATA_DIR
     / "valid/rinex_v3_04/01_Rosalia/02_canopy/01_GNSS/01_raw/25001/ROSA01TUW_R_20250010000_15M_05S_AA.rnx"
+)
+
+
+# Contains SBAS GEO S48 (EGNOS PRN 148) besides S23 and S36.
+RINEX_FILE_WITH_S48 = (
+    TEST_DATA_DIR
+    / "valid/rinex_v3_04/01_Rosalia/02_canopy/01_GNSS/01_raw/25001/ROSA01TUW_R_20250012230_15M_05S_AA.rnx"
 )
 
 
@@ -217,6 +225,22 @@ class TestSignalMapping:
                 continue
 
             assert dataset_system == sv_system
+
+
+def test_sbas_satellites_beyond_s36_are_read():
+    """Regression: SBAS sats are Snn with nn = PRN - 100 over the full
+    two-digit range (RINEX 3.04 section 8.4). The reader used to keep its own
+    S01-S36 list and silently dropped S48's observations at read time."""
+    if not RINEX_FILE_WITH_S48.exists():
+        pytest.skip(f"Test file not found: {RINEX_FILE_WITH_S48}")
+    lines = RINEX_FILE_WITH_S48.read_text(encoding="ascii").splitlines()
+    n_s48_records = sum(line.startswith("S48") for line in lines)
+    assert n_s48_records > 0
+
+    ds = Rnxv3Obs(fpath=RINEX_FILE_WITH_S48).to_ds(
+        keep_data_vars=["SNR"], pad_global_sid=False
+    )
+    assert int(np.isfinite(ds.SNR.sel(sid="S48|L1|C")).sum()) == n_s48_records
 
 
 class TestErrorHandling:
