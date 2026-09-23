@@ -69,7 +69,7 @@ The `canvod-readers` package provides validated parsers for [GNSS](https://gssc.
     All readers produce `(epoch × sid)` xarray Datasets that pass
     `validate_dataset()`. Every row is one timestep (an epoch), every column
     is one signal (a SID), and every cell is one observable — for example,
-    SNR in dB-Hz. The same dimensions, coordinates, and required attributes
+    SNR, with its unit in the `units` attribute. The same dimensions, coordinates, and required attributes
     are guaranteed, so downstream analysis code is reader-agnostic for observables.
     Geometry provisioning differs: RINEX datasets are augmented with satellite
     positions from SP3 files (CLK too, by default — optional, see

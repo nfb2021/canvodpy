@@ -8,7 +8,12 @@ import xarray as xr
 
 from canvod.readers.gnss_specs.constellations import V2_UNRESOLVED_CODES
 from canvod.readers.preprocessing import pad_to_global_sid
-from canvod.readers.rinex.v2_11 import Rnxv2Header, Rnxv2Obs, _v2_tracking_code
+from canvod.readers.rinex.v2_11 import (
+    Rnxv2Header,
+    Rnxv2Obs,
+    _parse_wavelength_fact_line,
+    _v2_tracking_code,
+)
 
 # Test data paths
 TEST_DATA_DIR = Path(__file__).parent / "test_data"
@@ -385,72 +390,129 @@ def _v2_obs_field(value: float, lli: int | None, ssi: int | None = None) -> str:
     return f"{value:14.3f}{'' if lli is None else lli:1}{'' if ssi is None else ssi:1}"
 
 
-def test_lli_flags_of_phase_and_snr_are_merged(rinex_v2_file, tmp_path):
-    """Phase and signal strength share a sid. teqc sets the AS bit (4) on every
-    observable, so S1's LLI must not overwrite L1's slip bit (LLI 5 = 4 | 1)."""
+def _v2_header(rinex_v2_file: Path, wavelength_fact: str | None = None) -> list[str]:
+    """Header of the test file (obs types L1 L2 C1 P1 P2 S1 S2), optionally
+    with the default WAVELENGTH FACT L1/2 record replaced."""
     lines = rinex_v2_file.read_text(encoding="ascii", errors="replace").splitlines()
     header = lines[
         : next(i for i, line in enumerate(lines) if "END OF HEADER" in line) + 1
     ]
-    # obs types: L1 L2 C1 P1 P2 S1 S2 (5 fields per line)
+    if wavelength_fact is not None:
+        header = [
+            f"{wavelength_fact:<60}WAVELENGTH FACT L1/2"
+            if line[60:].strip() == "WAVELENGTH FACT L1/2"
+            else line
+            for line in header
+        ]
+    return header
+
+
+def _v2_sat_records(lli_l1: int | None, lli_l2: int | None) -> list[str]:
+    """Observation records of one satellite: L1 L2 C1 P1 P2 / S1 S2."""
+    fields = [
+        _v2_obs_field(1.0e8, lli_l1),
+        _v2_obs_field(8.0e7, lli_l2),
+        _v2_obs_field(2.1e7, None),
+        _v2_obs_field(2.1e7, None),
+        _v2_obs_field(2.1e7, None),
+        _v2_obs_field(45.0, None),
+        _v2_obs_field(40.0, None),
+    ]
+    return ["".join(fields[:5]), "".join(fields[5:])]
+
+
+def _read_lli(tmp_path: Path, header: list[str], body: list[str]) -> xr.Dataset:
+    path = tmp_path / "lli.25o"
+    path.write_text("\n".join([*header, *body]) + "\n", encoding="ascii")
+    return Rnxv2Obs(fpath=path).to_ds(
+        keep_data_vars=["Phase", "Pseudorange", "SNR", "LLI", "SSI"],
+        pad_global_sid=False,
+    )
+
+
+def test_lli_is_translated_to_rinex3_meaning(rinex_v2_file, tmp_path):
+    """RINEX 2.11 Table A2 -> RINEX 3.04 Table A3: bit 0 (lost lock) carries
+    over, bit 2 (antispoofing, obsolete in RINEX 3) is dropped, and flags on
+    signal strength never reach the shared phase sid."""
+    lines = _v2_header(rinex_v2_file)
     fields = [
         _v2_obs_field(1.0e8, 5),  # L1: slip + AS
         _v2_obs_field(8.0e7, 4),  # L2: AS
         _v2_obs_field(2.1e7, 4),  # C1
         _v2_obs_field(2.1e7, 4),  # P1
         _v2_obs_field(2.1e7, 4),  # P2
-        _v2_obs_field(45.0, 4),  # S1: AS only
-        _v2_obs_field(40.0, 4),  # S2
+        _v2_obs_field(45.0, 5),  # S1: slip bit a signal strength must not carry
+        _v2_obs_field(40.0, 5),  # S2
     ]
     body = [
         " 25  1  1  0  0  0.0000000  0  1G01",
         "".join(fields[:5]),
         "".join(fields[5:]),
     ]
-    path = tmp_path / "lli.25o"
-    path.write_text("\n".join([*header, *body]) + "\n", encoding="ascii")
-
-    ds = Rnxv2Obs(fpath=path).to_ds(
-        keep_data_vars=["Phase", "SNR", "LLI"], pad_global_sid=False
-    )
-    assert int(ds.LLI.sel(sid="G01|L1|u").item()) == 5
-    assert int(ds.LLI.sel(sid="G01|L2|u").item()) == 4
+    ds = _read_lli(tmp_path, lines, body)
+    assert int(ds.LLI.sel(sid="G01|L1|u").item()) == 1
+    assert int(ds.LLI.sel(sid="G01|L2|u").item()) == 0
+    # LLI is associated with the phase only (RINEX 3.04 Table A3 note 1).
+    assert int(ds.LLI.sel(sid="G01|L1|C").item()) == -1
 
 
-def test_slip_bits_and_ssi_come_from_phase(rinex_v2_file, tmp_path):
-    """rinex211.txt Table A2: LLI bits 0-1 are phase-only, bit 2 (AS) may come
-    from any observable. A slip bit on C1 or S1 must not appear as a slip on
-    the sid, and the phase's SSI outranks S1's, the code's stays with it."""
-    lines = rinex_v2_file.read_text(encoding="ascii", errors="replace").splitlines()
-    header = lines[
-        : next(i for i, line in enumerate(lines) if "END OF HEADER" in line) + 1
-    ]
-    # obs types: L1 L2 C1 P1 P2 S1 S2 (5 fields per line)
+def test_ssi_comes_from_phase_then_code(rinex_v2_file, tmp_path):
+    """The phase's SSI outranks S1's; the code's stays with the code sid."""
     fields = [
-        _v2_obs_field(1.0e8, 4, 7),  # L1: AS only
-        _v2_obs_field(8.0e7, 4),  # L2
-        _v2_obs_field(2.1e7, 1, 6),  # C1: slip bit a code must not carry
-        _v2_obs_field(2.1e7, 4),  # P1
-        _v2_obs_field(2.1e7, 4),  # P2
-        _v2_obs_field(45.0, 5, 9),  # S1: slip bit + AS
-        _v2_obs_field(40.0, 4),  # S2
+        _v2_obs_field(1.0e8, None, 7),  # L1
+        _v2_obs_field(8.0e7, None),  # L2
+        _v2_obs_field(2.1e7, None, 6),  # C1
+        _v2_obs_field(2.1e7, None),  # P1
+        _v2_obs_field(2.1e7, None),  # P2
+        _v2_obs_field(45.0, None, 9),  # S1
+        _v2_obs_field(40.0, None),  # S2
     ]
     body = [
         " 25  1  1  0  0  0.0000000  0  1G01",
         "".join(fields[:5]),
         "".join(fields[5:]),
     ]
-    path = tmp_path / "lli.25o"
-    path.write_text("\n".join([*header, *body]) + "\n", encoding="ascii")
-
-    ds = Rnxv2Obs(fpath=path).to_ds(
-        keep_data_vars=["Phase", "Pseudorange", "SNR", "LLI", "SSI"],
-        pad_global_sid=False,
-    )
-    assert int(ds.LLI.sel(sid="G01|L1|u").item()) == 4
-    assert int(ds.LLI.sel(sid="G01|L1|C").item()) == 0
+    ds = _read_lli(tmp_path, _v2_header(rinex_v2_file), body)
     assert int(ds.SSI.sel(sid="G01|L1|u").item()) == 7
     assert int(ds.SSI.sel(sid="G01|L1|C").item()) == 6
+
+
+def test_half_cycle_bit_from_wavelength_factor(rinex_v2_file, tmp_path):
+    """Header factor 2 (half-cycle ambiguities, Table A1) sets RINEX 3 bit 1
+    even without an LLI digit; v2 bit 1 switches the factor for one epoch."""
+    header = _v2_header(rinex_v2_file, wavelength_fact="     1     2")
+    body = [
+        " 25  1  1  0  0  0.0000000  0  2G01G02",
+        *_v2_sat_records(None, None),  # G01: L1 factor 1, L2 factor 2
+        *_v2_sat_records(2, 3),  # G02: both switched, L2 slip
+    ]
+    ds = _read_lli(tmp_path, header, body)
+    assert int(ds.LLI.sel(sid="G01|L1|u").item()) == -1
+    assert int(ds.LLI.sel(sid="G01|L2|u").item()) == 2
+    assert int(ds.LLI.sel(sid="G02|L1|u").item()) == 2
+    assert int(ds.LLI.sel(sid="G02|L2|u").item()) == 1
+
+
+def test_wavelength_factor_changed_by_event_flag_4(rinex_v2_file, tmp_path):
+    """A satellite-specific WAVELENGTH FACT L1/2 record inside an epoch-flag-4
+    block applies from the following epochs on (rinex211.txt example file)."""
+    body = [
+        " 25  1  1  0  0  0.0000000  0  1G09",
+        *_v2_sat_records(None, None),
+        " 25  1  1  0  0 10.0000000  4  1",
+        f"{'     1     2     1   G 9':<60}WAVELENGTH FACT L1/2",
+        " 25  1  1  0  0 15.0000000  0  1G09",
+        *_v2_sat_records(None, None),
+    ]
+    ds = _read_lli(tmp_path, _v2_header(rinex_v2_file), body)
+    lli_l2 = ds.LLI.sel(sid="G09|L2|u").values.tolist()
+    assert lli_l2 == [-1, 2]
+
+
+def test_parse_wavelength_fact_line_normalizes_satellites():
+    wl1, wl2, sats = _parse_wavelength_fact_line("     1     2     3   G 9   G12    14")
+    assert (wl1, wl2) == (1, 2)
+    assert sats == ["G09", "G12", "G14"]
 
 
 class TestRnxv2ErrorHandling:
@@ -542,3 +604,16 @@ def test_individual_data_vars(rinex_v2_file, data_var):
 
     assert data_var in ds.data_vars
     assert ds[data_var].dims == ("epoch", "sid")
+
+
+def test_snr_and_lli_metadata(rinex_v2_file):
+    """Shared LLI metadata carries the RINEX 3.04 meaning; the SNR metadata
+    states that RINEX 2.11 declares no unit (dB assumed)."""
+    ds = Rnxv2Obs(fpath=rinex_v2_file).to_ds(
+        keep_data_vars=["SNR", "LLI"], pad_global_sid=False
+    )
+    assert ds.SNR.attrs["units"] == "dB"
+    assert "RINEX 2.11 declares no unit" in ds.SNR.attrs["description"]
+    assert ds.LLI.attrs["valid_range"] == [-1, 7]
+    assert "RINEX 3.04 Table A3" in ds.LLI.attrs["description"]
+    assert int(ds.LLI.max()) <= 3  # v2 bit 2 (antispoofing) never survives

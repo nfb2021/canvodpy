@@ -253,7 +253,11 @@ The result does not depend on the order of observables in the header.
 | 1 | Half-cycle ambiguity/slip possible |
 | 2 | Galileo BOC tracking of an MBOC-modulated signal |
 
-`-1` marks "no indicator written".
+`-1` marks "no indicator written". Table A3 defines no further bits, so the `valid_range` of `LLI` is `[-1, 7]`. The RINEX 3 meaning of `LLI` and `SSI` is shared by all readers; the [RINEX 2 reader](rinex-v2-format.md#loss-of-lock-and-signal-strength-indicators) translates its bits.
+
+## Signal strength unit
+
+The unit of the `S` observations is declared by the optional `SIGNAL STRENGTH UNIT` header record (RINEX 3.04 sect. 5.7), which defines only `DBHZ`. With `DBHZ`, `SNR` is labelled as C/N0 in dB-Hz. Without it, the unit is not declared and `SNR` is labelled dB.
 
 ---
 

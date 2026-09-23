@@ -75,6 +75,31 @@ except ImportError as _err:
 
 log = structlog.get_logger(__name__)
 
+# C/N0 as decoded from SBF (Septentrio), on top of the generic C/N0 entry.
+_SBF_CN0_METADATA: dict[str, Any] = {
+    **CN0_METADATA,
+    "description": (
+        "Carrier-to-noise density ratio (C/N0): carrier power relative to the "
+        "noise power density (per 1 Hz), as reported in SBF MeasEpoch."
+    ),
+    "resolution": "0.25 dB-Hz (MeasEpoch); 0.03125 dB-Hz with MeasExtra CN0HighRes",
+    "comment": (
+        "Sourced from MeasEpoch.MeasEpochChannelType1.CN0 (u1, scale 0.25 dB-Hz/LSB, "
+        "Do-Not-Use 255). Resolution is 0.25 dB-Hz by default. "
+        "GPS L1P (sig 1, RINEX 1W) and GPS L2P (sig 2, RINEX 2W) use semi-codeless "
+        "tracking: formula is C/N0 = raw * 0.25 (no +10 dB-Hz offset). "
+        "All other signals: C/N0 = raw * 0.25 + 10. "
+        "If MeasExtra (Block 4000) is also logged, add cn0_highres_correction "
+        "(from MeasExtraChannelSub.Misc bits 0-2) to extend resolution to 0.03125 dB-Hz."
+    ),
+    "references": (
+        "Septentrio AsteRx SB3 ProBase Firmware v4.14.0 Reference Guide, "
+        "MeasEpoch block (Block 4027), MeasEpochChannelType1 sub-block, "
+        "field CN0, p.264; signal type table Section 4.1.10, pp.255-256; "
+        "MeasExtra block (Block 4000), MeasExtraChannelSub, field Misc (CN0HighRes), p.268."
+    ),
+}
+
 # ---------------------------------------------------------------------------
 # GPS ↔ UTC time conversion
 # Source: IS-GPS-200, §20.3.3.5.2.4
@@ -1501,7 +1526,7 @@ class SbfReader(GNSSDataReader):
 
         ds = xr.Dataset(
             data_vars={
-                "SNR": (["epoch", "sid"], snr_arr, CN0_METADATA),
+                "SNR": (["epoch", "sid"], snr_arr, _SBF_CN0_METADATA),
                 "Pseudorange": (
                     ["epoch", "sid"],
                     pr_arr,
@@ -2450,7 +2475,7 @@ class SbfReader(GNSSDataReader):
 
         obs_ds = xr.Dataset(
             data_vars={
-                "SNR": (["epoch", "sid"], snr_arr, CN0_METADATA),
+                "SNR": (["epoch", "sid"], snr_arr, _SBF_CN0_METADATA),
                 "Pseudorange": (
                     ["epoch", "sid"],
                     pr_arr,

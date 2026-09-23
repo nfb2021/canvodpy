@@ -100,13 +100,24 @@ RINEX 2 satellite numbers `snn` follow the same convention as RINEX 3: for SBAS,
 
 ## Loss of lock and signal strength indicators
 
-Each observation carries an LLI and an SSI digit, but phase, Doppler, and signal strength of one band land in one sid. Some converters write flags on every observable. The reader combines them following RINEX 2.11 Table A2:
+The `LLI` variable has the [RINEX 3.04 meaning](rinex-format.md#loss-of-lock-and-signal-strength-indicators) for every input format. The RINEX 2.11 bits (Table A2) differ, so the reader translates them:
 
-- **LLI bits 0 and 1** (cycle slip, opposite wavelength factor) are "for phase only" and are taken only from the phase observation.
-- **LLI bit 2** (observation under antispoofing) may be set on any observable and is combined across all observations of the sid.
-- **SSI** is taken from the phase; for a sid without phase, from the pseudorange. RINEX 2.11 does not assign the SSI to an observable, so the reader applies the [RINEX 3.04 rule](rinex-format.md#loss-of-lock-and-signal-strength-indicators) for consistency.
+| Bit | RINEX 2.11 (Table A2) | Written as (RINEX 3.04 Table A3) |
+|---|---|---|
+| 0 | lost lock, cycle slip possible | bit 0, unchanged |
+| 1 | wavelength factor opposite to the one in force | bit 1 (half-cycle ambiguity) if the phase's resulting factor is 2 |
+| 2 | observation under antispoofing | dropped — RINEX 3.04 sect. 7 declares the antispoofing flag obsolete |
 
-A slip flag written on a pseudorange or signal-strength field therefore never appears as a slip on the sid.
+The `WAVELENGTH FACT L1/2` header record gives the factor for GPS L1 and L2 phase: 1 = full-cycle, 2 = half-cycle ambiguities (squaring receivers). The factor in force is the header default or a satellite-specific record, including records inserted with epoch flag 4 later in the file. Bit 1 switches it for the current epoch only. Every phase with factor 2 gets RINEX 3 bit 1, even without an LLI digit.
+
+Phase, Doppler, and signal strength of one band land in one sid, and some converters write flags on every observable. Following RINEX 3.04 Table A3 notes 1–3:
+
+- **LLI** is taken only from the phase observation. Flags on code, Doppler, or signal strength are ignored.
+- **SSI** is taken from the phase; for a sid without phase, from the pseudorange. RINEX 2.11 does not assign the SSI to an observable.
+
+## Signal strength unit
+
+RINEX 2.11 Table A1 defines `S` as "raw signal strengths or SNR values as given by the receiver" and declares no unit. `SNR` is labelled dB, and its `description` attribute states the assumption.
 
 ---
 

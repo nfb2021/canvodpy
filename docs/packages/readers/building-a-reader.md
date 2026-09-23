@@ -428,7 +428,7 @@ The builder knows the dtype and metadata for these variables:
 
 | Variable | Dtype | Description |
 |----------|-------|-------------|
-| `SNR` | `float32` | Signal-to-Noise Ratio (dB-Hz) |
+| `SNR` | `float32` | Signal-to-Noise Ratio (dB) |
 | `CN0` | `float32` | Carrier-to-Noise density (dB-Hz) |
 | `Pseudorange` | `float64` | Pseudorange measurement (meters) |
 | `Phase` | `float64` | Carrier phase measurement (cycles) |

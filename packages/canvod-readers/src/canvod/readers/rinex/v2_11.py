@@ -80,11 +80,28 @@ V2_OBS_FIELD_WIDTH = 16  # F14.3 + I1 (LLI) + I1 (SSI)
 V2_MAX_OBS_PER_LINE = 5  # Max observations per line (5 x 16 = 80 chars)
 V2_MAX_SATS_PER_LINE = 12  # Max satellites on the epoch line
 V2_SAT_FIELD_WIDTH = 3  # Each satellite field: A1 + I2
-# LLI bits any observable may carry; bits 0-1 are phase-only (Table A2).
-_V2_LLI_ANY_OBS_BITS = 0b100
+# LLI bits (rinex211.txt Table A2 -> RINEX 3.04 Table A3). Bit 0 (lost
+# lock) means the same in both. v2 bit 1 flags the opposite wavelength
+# factor; it is translated into v3 bit 1 (half-cycle ambiguity). v2 bit 2
+# (antispoofing) is obsolete in v3 (RINEX 3.04 sect. 7) and dropped.
+_LLI_LOST_LOCK = 0b001
+_V2_LLI_OPPOSITE_WL_FACTOR = 0b010
+_V3_LLI_HALF_CYCLE = 0b010
+# WAVELENGTH FACT L1/2 value for half-cycle ambiguities (squaring).
+_WL_FACTOR_HALF_CYCLE = 2
+_WL_FACTOR_OPPOSITE = {1: 2, 2: 1}
 # Observables an SSI may be taken from, by precedence: the phase's SSI, else
 # the code's (RINEX 3.04 Table A3 notes 2-3; 2.11 does not specify).
 _SSI_SOURCE_RANK = {"L": 2, "C": 1}
+# rinex211.txt Table A1 declares no unit for S observations.
+_V2_SNR_METADATA = {
+    **SNR_METADATA,
+    "description": (
+        "Raw signal strength or SNR value as given by the receiver for the "
+        "respective phase observation (RINEX 2.11 Table A1, observation code "
+        "S). RINEX 2.11 declares no unit; dB is assumed."
+    ),
+}
 V2_EPOCH_FLAG_OK = 0
 V2_EPOCH_FLAG_POWER_FAILURE = 1
 V2_EPOCH_FLAG_START_MOVING = 2
@@ -110,6 +127,79 @@ _V2_OBS_TYPE_REMAP: dict[str, str] = {"P": "C"}
 
 # System identifiers recognized in RINEX v2.11
 V2_SYSTEM_CODES = {"G", "R", "S", "E", " "}
+
+
+def _parse_wavelength_fact_line(line: str) -> tuple[int, int, list[str]]:
+    """Parse a WAVELENGTH FACT L1/2 record into (L1, L2, satellites).
+
+    An empty satellite list means the record sets the defaults.
+    """
+    wl1 = int(line[0:6].strip() or "1")
+    wl2 = int(line[6:12].strip() or "1")
+    num_sats_str = line[12:18].strip()
+    sats: list[str] = []
+    if num_sats_str and int(num_sats_str) > 0:
+        for j in range(int(num_sats_str)):
+            offset = 18 + j * 6
+            sat_id = line[offset : offset + 6].strip()
+            # Normalize: "G14", "G 9" or " 14" -> "G14" / "G09"
+            if sat_id and len(sat_id) >= 2:
+                if not sat_id[0].isalpha():
+                    sat_id = "G" + sat_id
+                sat_id = sat_id[0] + sat_id[1:].strip().zfill(2)
+                sats.append(sat_id)
+    return wl1, wl2, sats
+
+
+class _WavelengthFactors:
+    """Wavelength factors in force at an epoch (rinex211.txt Table A1).
+
+    The factors apply to GPS L1 and L2 phase only (sect. 10.1.2); every
+    other phase has factor 1.
+    """
+
+    __slots__ = ("default", "per_sat")
+
+    def __init__(
+        self,
+        default: tuple[int, int],
+        per_sat: dict[str, tuple[int, int]],
+    ) -> None:
+        self.default = default
+        self.per_sat = per_sat
+
+    def factor(self, sv: str, freq_num: str) -> int:
+        if sv[0] != "G" or freq_num not in ("1", "2"):
+            return 1
+        return self.per_sat.get(sv, self.default)[int(freq_num) - 1]
+
+    def updated(self, line: str) -> _WavelengthFactors:
+        """Return the factors after an in-file WAVELENGTH FACT L1/2 record."""
+        wl1, wl2, sats = _parse_wavelength_fact_line(line)
+        if not sats:
+            return _WavelengthFactors((wl1, wl2), self.per_sat)
+        return _WavelengthFactors(
+            self.default, {**self.per_sat, **dict.fromkeys(sats, (wl1, wl2))}
+        )
+
+
+def _v3_phase_lli(v2_lli: int | None, wl_factor: int) -> int | None:
+    """Translate a RINEX 2 phase LLI into the RINEX 3.04 Table A3 meaning.
+
+    rinex211.txt Table A2: bit 1 flags the wavelength factor opposite to the
+    one in force, for the current epoch only. The phase's own factor is
+    therefore the one in force, switched when bit 1 is set; factor 2 means
+    half-cycle ambiguities (Table A1), which RINEX 3 flags with bit 1.
+    Bit 0 (lost lock) carries over; bit 2 (antispoofing) has no RINEX 3
+    counterpart. Returns None when nothing was recorded.
+    """
+    if v2_lli is not None and v2_lli & _V2_LLI_OPPOSITE_WL_FACTOR:
+        wl_factor = _WL_FACTOR_OPPOSITE.get(wl_factor, wl_factor)
+    half_cycle = wl_factor == _WL_FACTOR_HALF_CYCLE
+    if v2_lli is None and not half_cycle:
+        return None
+    lost_lock = (v2_lli or 0) & _LLI_LOST_LOCK
+    return lost_lock | (_V3_LLI_HALF_CYCLE if half_cycle else 0)
 
 
 def _expand_v2_year(yy: int) -> int:
@@ -329,20 +419,10 @@ class Rnxv2Header(BaseModel):
                 data["antenna_delta"] = [h, e, n]
 
             elif label == "WAVELENGTH FACT L1/2":
-                wl1 = int(line[0:6].strip() or "1")
-                wl2 = int(line[6:12].strip() or "1")
-                num_sats_str = line[12:18].strip()
-                if num_sats_str and int(num_sats_str) > 0:
+                wl1, wl2, wl_sats = _parse_wavelength_fact_line(line)
+                if wl_sats:
                     # Satellite-specific wavelength factors
-                    num_sats = int(num_sats_str)
-                    for j in range(num_sats):
-                        offset = 18 + j * 6
-                        sat_id = line[offset : offset + 6].strip()
-                        # Normalize: "G14" or " 14" → "G14"
-                        if sat_id and len(sat_id) >= 2:
-                            if sat_id[0] == " ":
-                                sat_id = "G" + sat_id[-2:]
-                            sat_id = sat_id[0] + sat_id[-2:].zfill(2)
+                    for sat_id in wl_sats:
                         wavelength_sat_specific[sat_id] = (wl1, wl2)
                 else:
                     # Default wavelength factors
@@ -552,6 +632,9 @@ class Rnxv2EpochRecord:
         Receiver clock offset in seconds.
     satellites : list[Satellite]
         Parsed satellite observation data.
+    wavelength_factors : _WavelengthFactors or None
+        Wavelength factors in force at this epoch (header, updated by
+        event-flag-4 header records).
     """
 
     __slots__ = (
@@ -565,6 +648,7 @@ class Rnxv2EpochRecord:
         "satellite_list",
         "satellites",
         "seconds",
+        "wavelength_factors",
         "year",
     )
 
@@ -581,7 +665,9 @@ class Rnxv2EpochRecord:
         satellite_list: list[str],
         receiver_clock_offset: float | None,
         satellites: list[Satellite],
+        wavelength_factors: _WavelengthFactors | None = None,
     ) -> None:
+        self.wavelength_factors = wavelength_factors
         self.year = year
         self.month = month
         self.day = day
@@ -946,6 +1032,10 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
         """
         lines = self._lines
         idx = self._header_end_line
+        wl_factors = _WavelengthFactors(
+            (self.header.wavelength_fact_l1, self.header.wavelength_fact_l2),
+            dict(self.header.wavelength_fact_satellites),
+        )
 
         while idx < len(lines):
             line = lines[idx]
@@ -977,7 +1067,13 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
 
             # Handle epoch flags 2-5: special records (header info, events)
             if V2_EPOCH_FLAG_START_MOVING <= epoch_flag <= V2_EPOCH_FLAG_EXTERNAL_EVENT:
-                # Skip the num_sats special records that follow
+                # num_sats special records follow. Of flag-4 header records
+                # only wavelength factors affect the data (the LLI half-cycle
+                # bit); other records are skipped.
+                if epoch_flag == V2_EPOCH_FLAG_HEADER_INFO:
+                    for special in lines[idx : idx + num_sats]:
+                        if special[60:80].strip() == "WAVELENGTH FACT L1/2":
+                            wl_factors = wl_factors.updated(special)
                 idx += num_sats
                 continue
 
@@ -1031,6 +1127,7 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
                 satellite_list=sat_list,
                 receiver_clock_offset=rcv_clock,
                 satellites=satellites,
+                wavelength_factors=wl_factors,
             )
 
     # ---- Time helpers ----------------------------------------------------- #
@@ -1271,17 +1368,19 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
                     elif ot == "D":
                         data_arrays["Doppler"][t_idx, s_idx] = obs.value
 
-                    if obs.lli is not None:
-                        # Phase, Doppler and signal strength share a sid, and
-                        # some converters (teqc) flag every observable.
-                        # rinex211.txt Table A2: bits 0-1 are phase-only, bit
-                        # 2 (AS) may come from any observable. OR them so no
-                        # observable overwrites another's flag.
-                        bits = obs.lli if ot == "L" else obs.lli & _V2_LLI_ANY_OBS_BITS
-                        prev = data_arrays["LLI"][t_idx, s_idx]
-                        data_arrays["LLI"][t_idx, s_idx] = (
-                            bits if prev < 0 else prev | bits
+                    if ot == "L":
+                        # The LLI is written in the RINEX 3.04 meaning, which
+                        # ties it to the phase only (Table A3 note 1); flags
+                        # some converters (teqc) write on code, Doppler or
+                        # signal strength are ignored.
+                        wl_factor = (
+                            epoch.wavelength_factors.factor(sv, parsed_obs_codes[i][1])
+                            if epoch.wavelength_factors is not None
+                            else 1
                         )
+                        lli = _v3_phase_lli(obs.lli, wl_factor)
+                        if lli is not None:
+                            data_arrays["LLI"][t_idx, s_idx] = lli
                     if obs.ssi is not None:
                         # Same precedence as the RINEX 3 reader: the phase's
                         # SSI, else the code's; other observables' SSI is
@@ -1339,8 +1438,7 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
             ),
         }
 
-        # SNR metadata depends on signal strength unit
-        snr_meta = SNR_METADATA
+        snr_meta = _V2_SNR_METADATA
 
         ds = xr.Dataset(
             data_vars={
