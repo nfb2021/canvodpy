@@ -170,7 +170,7 @@ class TestConfigLoaderDefaults:
         assert config.processing.aux_data.agency == "COD"
         assert config.sids.mode == "preset"
         assert config.sids.preset == "default"
-        assert len(config.sids.get_sids()) == 277
+        assert len(config.sids.get_sids()) == 367
 
 
 class TestConfigLoaderValidationError:

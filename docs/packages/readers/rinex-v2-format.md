@@ -77,6 +77,21 @@ Every RINEX 2 dataset documents the markers in its `"Tracking Code Markers"` att
 
 ---
 
+## Default SID preset
+
+The `default` SID preset is defined in RINEX 3 codes, which RINEX 2 signal strength never carries. It therefore also lists the band-only sids of the same satellites on the L1-type bands, following the preset's own exclusion rule (no semi-codeless tracking):
+
+| Band | RINEX 3 candidates for `u` | Included |
+|---|---|---|
+| GLONASS G1 | `C`, `P` — open, not semi-codeless | `Rnn\|G1\|u` |
+| Galileo E1 | `B`, `C`, `X` — Open Service (`A`/`Z` are PRS) | `Enn\|E1\|u` |
+| GPS L1 | C/A, L1C, semi-codeless P(Y) | `Gnn\|L1\|u`, **assuming** S1 does not come from semi-codeless P(Y) tracking |
+| GPS L2 | L2C or semi-codeless P(Y) | excluded — without L2C (older satellites) only semi-codeless tracking is possible, and RINEX 2 cannot tell the two apart |
+
+GLONASS G2 and Galileo E5a/E5b band-only sids are not included. Use `sids: mode: custom` to choose differently.
+
+---
+
 ## Satellites
 
 RINEX 2 satellite numbers `snn` follow the same convention as RINEX 3: for SBAS, `nn` = PRN − 100 (PRN 120 → `S20`). SBAS satellites `S01`–`S99` are recognised.
