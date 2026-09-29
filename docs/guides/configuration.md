@@ -373,12 +373,12 @@ Three modes are available:
 
 === "Default preset"
 
-    The package ships one built-in preset: `default` — a curated 367-SID
+    The package ships one built-in preset: `default` — a curated 277-SID
     multi-GNSS list covering MEO satellites only (GPS + Galileo + BeiDou MEO +
     GLONASS). GEO, IGSO, augmentation signals (SBAS/IRNSS/QZSS), and GPS L2W are
     excluded because they are not useful for canopy transmissometry.
-    277 SIDs are RINEX 3 signals; 90 are the RINEX 2 band-only SIDs
-    (`L1|u`, `G1|u`, `E1|u`) of the same satellites, see
+    All are RINEX 3 signals. RINEX 2 band-only SIDs (e.g. `L1|u`) are not
+    included and must be selected explicitly, see
     [RINEX v2.11 Parsing](../packages/readers/rinex-v2-format.md#default-sid-preset).
 
     ```yaml

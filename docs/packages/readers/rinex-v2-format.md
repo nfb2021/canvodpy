@@ -13,18 +13,18 @@ ds = Rnxv2Obs(fpath=Path("p0481660.08o")).to_ds(keep_data_vars=["SNR", "Phase"])
 
 ## One data structure: RINEX 3 signal IDs
 
-canvodpy has one signal axis for every input format: `SV|BAND|CODE`, with bands and tracking codes in [RINEX 3 nomenclature](rinex-format.md#signal-id-mapping). A RINEX 3 observation code names the signal completely — `L2W` is the phase of the L2 P-code tracked semi-codelessly under antispoofing, `L2L` the phase of the L2C pilot channel. Two signals with different codes are different measurements, and canvodpy keeps them apart until an analysis explicitly aggregates them.
+canvodpy has one signal axis for every input format: `SV|BAND|CODE`, with bands and tracking codes in [RINEX 3 nomenclature](rinex-format.md#signal-id-mapping). A RINEX 3 observation code names the signal completely — `L2W` is the phase of the L2 P-code tracked by Z-tracking or a similar technique under antispoofing (RINEX 3.04 Table 4), `L2L` the phase of the L2C pilot channel. Two signals with different codes are different measurements, and canvodpy keeps them apart until an analysis explicitly aggregates them.
 
 RINEX 2 cannot express that. Its observation codes are one letter for the observable and one digit for the frequency (`L2`, `P2`, `C1`, `S1`). RINEX 2.11 Table A1 defines only two pseudorange families:
 
 | RINEX 2 code | Defined as (Table A1) |
 |---|---|
 | `C1` | GPS C/A · GLONASS C/A · Galileo "All" |
-| `C2` | GPS L2C |
+| `C2` | GPS C/A or L2C (Table A1 does not distinguish them) |
 | `P1`, `P2` | GPS / GLONASS P code |
 | `Lx`, `Dx`, `Sx` | carrier phase, Doppler, signal strength on frequency *x* — no code |
 
-and section 10.1 states that RINEX 2 has no way to record *which* underlying code was tracked: whether a GPS "P2" came from P, Y, or a semi-codeless technique under antispoofing, or which L2C channel a "C2" used. Phase, Doppler, and signal strength carry no code information at all.
+and section 10.1.1 states that the two-character code cannot express the underlying code (P, Y, M in GPS) or the channel (e.g. I/Q in L5, the GPS L2C channels). Table A1 adds that observations collected under antispoofing are stored as "L2" or "P2", so the tracking technique is not recorded either. Phase, Doppler, and signal strength carry no code information at all.
 
 Mapping RINEX 3 down to RINEX 2 would throw that information away for every modern file. canvodpy therefore lifts RINEX 2 up into the RINEX 3 structure — and fills in only what RINEX 2 itself defines.
 
@@ -36,8 +36,8 @@ Where RINEX 2 leaves the code unresolved, the reader writes a **lowercase** mark
 
 | Marker | Meaning | Candidate RINEX 3 codes | From |
 |---|---|---|---|
-| `p` | P-code family, technique not recorded | `P`, `W`, `Y`, `D` | GPS `P1`, `P2` |
-| `l` | L2C family, channel not recorded | `S`, `L`, `X` | GPS `C2` |
+| `p` | P-code family, technique not recorded | `P`, `W`, `Y`; `D` on L2 only (RINEX 3.04 Table 4) | GPS `P1`, `P2` |
+| `l` | civil code on L2 (C/A or L2C), not recorded which | `C`, `S`, `L`, `X` | GPS `C2` |
 | `u` | carrier band only, no code information | any | phase, Doppler, signal strength; Galileo and L5 pseudoranges |
 
 RINEX 3 and 4 attributes are uppercase only, so a marker can never collide with a real code. A plausible-looking uppercase guess would: `X` is a real signal (the combined L1C D+P or L2C M+L channel), and `W` asserts a tracking technique the file does not record.
@@ -45,7 +45,7 @@ RINEX 3 and 4 attributes are uppercase only, so a marker can never collide with 
 Where RINEX 2 *does* identify the signal, the reader writes the real RINEX 3 code:
 
 - **GPS `C1`** is the C/A code → `C`.
-- **GLONASS `C1`/`C2`** are C/A → `C`; **`P1`/`P2`** are the P code, which is not encrypted → `P`.
+- **GLONASS `C1`/`C2`** are C/A → `C`; **`P1`/`P2`** are the P code, for which RINEX 3.04 Table 5 defines a single attribute → `P`.
 - A **band with a single RINEX 3 signal** resolves to that signal for every observable: SBAS L1 carries only C/A, so SBAS `C1`, `L1`, `S1` all become `L1|C`.
 
 | System | RINEX 2 code | Signal ID |
@@ -65,7 +65,7 @@ Where RINEX 2 *does* identify the signal, the reader writes the real RINEX 3 cod
 Two consequences follow directly from the specification:
 
 - **Phase and signal strength of a RINEX 2 file share one sid per band** (`L1|u`), and the pseudoranges get their own (`L1|C`, `L1|p`). Table A1 describes signal strength as belonging "to the respective phase observations"; neither is tied to a code.
-- **Selecting a RINEX 3 code never silently picks up RINEX 2 data.** `ds.sel(sid=ds.code == "W")` returns nothing from a RINEX 2 file, because RINEX 2 never said the signal was `W`. To use RINEX 2 data, select the markers explicitly and decide how to treat them.
+- **Selecting a RINEX 3 code picks up RINEX 2 data only where RINEX 2 defines that code** (e.g. GPS `C1` in `L1|C`). `ds.sel(sid=ds.code == "W")` returns nothing from a RINEX 2 file, because RINEX 2 never said the signal was `W`. To use the remaining RINEX 2 data, select the markers explicitly and decide how to treat them.
 
 Every RINEX 2 dataset documents the markers in its `"Tracking Code Markers"` attribute and records the source version in `"RINEX Version"`.
 
@@ -79,16 +79,16 @@ Every RINEX 2 dataset documents the markers in its `"Tracking Code Markers"` att
 
 ## Default SID preset
 
-The `default` SID preset is defined in RINEX 3 codes, which RINEX 2 signal strength never carries. It therefore also lists the band-only sids of the same satellites on the L1-type bands, following the preset's own exclusion rule (no semi-codeless tracking):
+The `default` SID preset is defined in RINEX 3 codes, which RINEX 2 signal strength never carries. Band-only sids are populated only from RINEX 2 files, so the preset does not include them; otherwise every RINEX 3 or SBF dataset would carry them as empty sids. To process RINEX 2 files, select them explicitly (`sids: mode: custom`). The commented-out block at the end of `presets/default.yaml` lists the band-only sids of the preset's satellites that follow its exclusion rule (no codeless or semi-codeless tracking):
 
-| Band | RINEX 3 candidates for `u` | Included |
+| Band | RINEX 3 candidates for `u` | Listed |
 |---|---|---|
-| GLONASS G1 | `C`, `P` — open, not semi-codeless | `Rnn\|G1\|u` |
-| Galileo E1 | `B`, `C`, `X` — Open Service (`A`/`Z` are PRS) | `Enn\|E1\|u` |
-| GPS L1 | C/A, L1C, semi-codeless P(Y) | `Gnn\|L1\|u`, **assuming** S1 does not come from semi-codeless P(Y) tracking |
-| GPS L2 | L2C or semi-codeless P(Y) | excluded — without L2C (older satellites) only semi-codeless tracking is possible, and RINEX 2 cannot tell the two apart |
+| GLONASS G1 | `C`, `P` — RINEX 3.04 defines codeless/semi-codeless attributes for GPS only (Sect. 5.1) | `Rnn\|G1\|u` |
+| Galileo E1 | `A`, `B`, `C`, `X`, `Z` — likewise no codeless/semi-codeless attribute | `Enn\|E1\|u` |
+| GPS L1 | C/A, L1C, P(Y) codeless (`N`) or Z-tracking (`W`) | `Gnn\|L1\|u`, **assuming** S1 does not come from codeless or Z-tracking of P(Y) |
+| GPS L2 | L2C, C/A, or P(Y) | excluded — without L2C, L2 carries P(Y) or, by ground command, C/A (IS-GPS-200N Sect. 3.2.3); civil receivers track P(Y) only by codeless or semicodeless processing (Betz & Cerruti 2020, doi:10.1002/navi.347), and RINEX 2 cannot tell these modes from L2C |
 
-GLONASS G2 and Galileo E5a/E5b band-only sids are not included. Use `sids: mode: custom` to choose differently.
+GLONASS G2 and Galileo E5a/E5b band-only sids are not listed.
 
 ---
 
