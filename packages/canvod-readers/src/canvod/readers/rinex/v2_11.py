@@ -247,10 +247,11 @@ def _v2_tracking_code(system: str, obs_code_v2: str, band: str | None) -> str:
 
     1. A band carrying exactly one RINEX 3 signal (SBAS L1: C/A only)
        resolves every observable to that signal's code.
-    2. GPS: C1 -> ``C`` (C/A); C2 -> ``l`` (L2C, channel S/L/X unknown);
-       P1/P2 -> ``p`` (P code; under antispoofing P/W/Y/D unknown).
-    3. GLONASS: C -> ``C`` (C/A), P -> ``P`` (the GLONASS P code is not
-       encrypted, so no ambiguity).
+    2. GPS: C1 -> ``C`` (C/A); C2 -> ``l`` (C/A or L2C on L2; C/S/L/X unknown);
+       P1/P2 -> ``p`` (P code; under antispoofing P/W/Y, and D on L2,
+       unknown; RINEX 3.04 Table 4).
+    3. GLONASS: C -> ``C`` (C/A), P -> ``P`` (RINEX 3.04 Table 5 defines a
+       single P-code attribute for GLONASS, so no ambiguity).
     4. Everything else -> ``u``: phase, Doppler and signal strength (the spec
        ties signal strength to "the respective phase observations", so it
        shares their sid), Galileo pseudoranges ("All" codes), and L5.
@@ -1602,7 +1603,7 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
         attrs["Tracking Code Markers"] = (
             "RINEX 2 does not record tracking codes; lowercase sid codes mark "
             f"what it leaves unresolved: {V2_CODE_P_FAMILY!r} = P-code family "
-            f"(P/W/Y/D), {V2_CODE_L2C_FAMILY!r} = L2C family (S/L/X), "
+            f"(P/W/Y; D on L2), {V2_CODE_L2C_FAMILY!r} = GPS C2, C/A or L2C (C/S/L/X), "
             f"{V2_CODE_UNRESOLVED!r} = carrier band only. See rinex211.txt "
             "Table A1 and section 10.1."
         )

@@ -73,8 +73,9 @@ def decode_signal_num(type_byte: int, obs_info: int) -> int:
 #   C/N0 [dB-Hz] = raw * 0.25 + 10  for all signals except 1 (L1P) and 2 (L2P)
 #   C/N0 [dB-Hz] = raw * 0.25       for signals 1 and 2 (codeless P-code; no +10 offset)
 #   Do-Not-Use: raw == 255 (u1 max; field is set to 255 when C/N0 not available)
-#   Signal numbers 1 (GPS L1P) and 2 (GPS L2P) use semi-codeless tracking → lower
-#   typical C/N0 and fixed minimum mask of 1 dB-Hz enforced by firmware.
+#   Signal numbers 1 (GPS L1P) and 2 (GPS L2P) use the codeless tracking scheme
+#   needed for the GPS P-code → lower typical C/N0 and a C/N0 mask fixed at
+#   1 dB-Hz by the firmware (RefGuide-4.14.0 Sect. 3.2.4 setCN0Mask, p.97).
 #   Source: Section 4.1.10 (signal type table) p.255-256;
 #           MeasEpochChannelType1 table p.262-264.
 # ---------------------------------------------------------------------------
@@ -103,7 +104,8 @@ def cn0_dbhz(raw: int, sig_num: int) -> pint.Quantity | None:
     Resolution is 0.25 dB-Hz; use MeasExtra.Misc CN0HighRes (p.268) to
     extend to 0.03125 dB-Hz if MeasExtra is logged.
     Signal numbers 1 (GPS L1P, RINEX 1W) and 2 (GPS L2P, RINEX 2W) are
-    tracked semi-codeless and use C/N0 = raw * 0.25 (no +10 dB-Hz offset).
+    tracked codelessly (RefGuide-4.14.0 Sect. 3.2.4 setCN0Mask, p.97) and
+    use C/N0 = raw * 0.25 (no +10 dB-Hz offset).
     All other signals use C/N0 = raw * 0.25 + 10.
     """
     if raw == 255:

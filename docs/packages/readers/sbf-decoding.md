@@ -69,7 +69,7 @@ C/N_0 = \begin{cases}
 \end{cases}
 $$
 
-Signals 1 and 2 are tracked *semi-codeless* and have a lower intrinsic $C/N_0$;
+Signals 1 and 2 are tracked *codelessly* (Septentrio reference guide 4.14.0, Sect. 3.2.4, `setCN0Mask`) and have a lower intrinsic $C/N_0$;
 the firmware omits the +10 dB offset and enforces a minimum of 1 dB‑Hz.
 
 **Do-Not-Use:** raw value 255 → stored as NaN.

@@ -86,7 +86,7 @@ _SBF_CN0_METADATA: dict[str, Any] = {
     "comment": (
         "Sourced from MeasEpoch.MeasEpochChannelType1.CN0 (u1, scale 0.25 dB-Hz/LSB, "
         "Do-Not-Use 255). Resolution is 0.25 dB-Hz by default. "
-        "GPS L1P (sig 1, RINEX 1W) and GPS L2P (sig 2, RINEX 2W) use semi-codeless "
+        "GPS L1P (sig 1, RINEX 1W) and GPS L2P (sig 2, RINEX 2W) use codeless "
         "tracking: formula is C/N0 = raw * 0.25 (no +10 dB-Hz offset). "
         "All other signals: C/N0 = raw * 0.25 + 10. "
         "If MeasExtra (Block 4000) is also logged, add cn0_highres_correction "

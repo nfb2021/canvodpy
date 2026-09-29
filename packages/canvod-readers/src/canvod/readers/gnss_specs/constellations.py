@@ -40,9 +40,14 @@ OBS_TYPE_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9]?[A-Z0-9]?$")  # e.g., *1C, *5X
 # real L1C D+P / L2C M+L signal).
 V2_CODE_P_FAMILY = "p"
 """GPS P1/P2: P-code family; under antispoofing the tracking technique
-(RINEX 3 P/W/Y/D) is not recorded in RINEX 2."""
+(RINEX 3 P/W/Y, and D on L2 only; RINEX 3.04 Table 4) is not recorded in
+RINEX 2 (rinex211.txt Table A1: antispoofing observations are stored as
+P2/L2)."""
 V2_CODE_L2C_FAMILY = "l"
-"""GPS C2: L2C pseudorange; the channel (RINEX 3 S/L/X) is not recorded."""
+"""GPS C2: civil-code pseudorange on L2, either C/A or L2C (rinex211.txt
+Table A1: "C: Pseudorange GPS: C/A, L2C"; IS-GPS-200N Sect. 3.2.3: C/A on L2
+selectable by ground command); the RINEX 3 attribute (C, or L2C channel
+S/L/X) is not recorded. The constant name is historical."""
 V2_CODE_UNRESOLVED = "u"
 """No tracking information beyond the carrier band (v2 phase, Doppler,
 signal strength, and Galileo/L5 pseudoranges)."""
@@ -354,11 +359,18 @@ class GLONASS(ConstellationBase):
 
     References
     ----------
-      - Band numbers, codes, frequencies and FDMA equations from RINEX v3.04
-        Guide: http://acc.igs.org/misc/rinex304.pdf (Table 5).
-      - Bandwidths from GLONASS ICD:
+      - Band numbers, codes and CDMA band (G1a, G2a, G3) center frequencies
+        from RINEX v3.04: http://acc.igs.org/misc/rinex304.pdf (Table 5).
+        Note that Table 5 lists k = -7...+12; the channel range used here
+        is the FDMA ICD's.
+      - FDMA equations, channel range K = -7...+6 ("All GLONASS SVs
+        launched after 2005") and per-channel bandwidth (+/-0.511 MHz, i.e.
+        1.022 MHz) from the GLONASS FDMA ICD, Edition 5.1 (2008):
         https://www.unavco.org/help/glossary/docs/
-        ICD_GLONASS_4.0_(1998)_en.pdf (3.3.1.4 Spurious emissions).
+        ICD_GLONASS_5.1_(2008)_en.pdf (3.3.1.1 Frequency plan, Table 3.1;
+        3.3.1.4 Spurious emissions).
+      - CDMA band bandwidths (7.875 MHz for G1a, G2a, G3): no source found;
+        see the GitHub issue on this value.
       - GLONASS channel assignment from: see included channel file.
 
     G1/G2 is treated as a single band here, although it consists of sub-bands

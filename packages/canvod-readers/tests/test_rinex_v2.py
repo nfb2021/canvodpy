@@ -294,8 +294,8 @@ class TestRnxv2SignalMapping:
 # 10.1 (v2 codes cannot express the underlying code or channel).
 _V2_TRACKING_CODE_CASES = [
     ("G", "C1", "L1", "C"),  # C/A: defined by the v2 code
-    ("G", "P1", "L1", "p"),  # P family: P/W/Y/D under AS not recorded
-    ("G", "C2", "L2", "l"),  # L2C family: S/L/X channel not recorded
+    ("G", "P1", "L1", "p"),  # P family: P/W/Y (D on L2) under AS not recorded
+    ("G", "C2", "L2", "l"),  # C2: C/A or L2C (C/S/L/X) not recorded
     ("G", "P2", "L2", "p"),
     ("G", "L1", "L1", "u"),  # phase: no code information at all
     ("G", "S2", "L2", "u"),  # SNR belongs to "the respective phase"
