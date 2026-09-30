@@ -174,8 +174,34 @@ class VodWritePlan:
     action: str  # "write" | "append"
     start: np.datetime64
     end: np.datetime64
-    commit_message: str
+    commit_message: str  # per-group description, then the batch commit message
     dataset: xr.Dataset
+
+
+def _vod_batch_commit(
+    version: str, action: str, plans: Sequence[VodWritePlan]
+) -> tuple[str, dict[str, str]]:
+    """Commit message and metadata for the VOD groups sharing one commit.
+
+    Sets each plan's ``commit_message`` to the returned message, so the
+    log-book rows written for these groups match the commit exactly.
+    """
+    message = _with_run_id(
+        f"[v{version}] {action} " + "; ".join(p.commit_message for p in plans)
+    )
+    metadata = {
+        "groups": ",".join(p.item.group_name for p in plans),
+        "total_groups": str(len(plans)),
+        "start": str(min(p.start for p in plans)),
+        "end": str(max(p.end for p in plans)),
+        "source_file_hashes": json.dumps(
+            {p.item.group_name: p.item.source_file_hashes for p in plans},
+            sort_keys=True,
+        ),
+    }
+    for plan in plans:
+        plan.commit_message = message
+    return message, metadata
 
 
 @dataclass
@@ -1851,13 +1877,13 @@ class MyIcechunkStore:
                                   is recoverable via repo.ancestry())
             action          str   (UTF-8, e.g. "write"|"append"|"overwrite")
             commit_msg      str   (UTF-8)
-            written_at      str   (UTF-8, ISO8601 with timezone)
+            written_at      str   (UTF-8, ISO8601, UTC)
             write_strategy  str   (UTF-8)
             attrs           str   (UTF-8, JSON dump of dataset attrs)
             canonical_name  str   (UTF-8)
             physical_path   str   (UTF-8)
         """
-        written_at = datetime.now().astimezone().isoformat()
+        written_at = datetime.now(UTC).isoformat()
         row = {
             "rinex_hash": str(rinex_hash),
             "start": np.datetime64(start, "ns"),
@@ -2034,13 +2060,15 @@ class MyIcechunkStore:
             end                 datetime64[ns]
             snapshot_id         str (UTF-8)
             action              str (UTF-8, "write"|"append"|"overwrite")
-            commit_msg          str (UTF-8)
-            written_at          str (UTF-8, ISO8601 with timezone)
+            commit_msg          str (UTF-8, the message of the commit that
+                                 holds the row, including its run_id)
+            run_id              str (UTF-8, "" outside a run)
+            written_at          str (UTF-8, ISO8601, UTC)
             write_strategy      str (UTF-8)
             calculator_name     str (UTF-8)
             attrs               str (UTF-8, JSON dump of dataset attrs)
         """
-        written_at = datetime.now().astimezone().isoformat()
+        written_at = datetime.now(UTC).isoformat()
         row = {
             "source_file_hashes": json.dumps(source_file_hashes, sort_keys=True),
             "source_gnss_stores": json.dumps(source_gnss_stores, sort_keys=True),
@@ -2049,6 +2077,7 @@ class MyIcechunkStore:
             "snapshot_id": str(snapshot_id),
             "action": str(action),
             "commit_msg": str(commit_msg),
+            "run_id": get_run_id() or "",
             "written_at": written_at,
             "write_strategy": str(self._vod_store_strategy),
             "calculator_name": str(calculator_name),
@@ -2244,9 +2273,11 @@ class MyIcechunkStore:
         if commit_message is None:
             version = get_version_from_pyproject()
             commit_message = (
-                f"[v{version}] {action.capitalize()}d VOD group '{group_name}' "
+                f"[v{version}] {action} VOD group '{group_name}' "
                 f"(calculator={calculator_name})"
             )
+        # The log-book row must carry the message the commit actually gets.
+        commit_message = _with_run_id(commit_message)
 
         with self.writable_session(branch) as session:
             self._logger.info(
@@ -2301,7 +2332,7 @@ class MyIcechunkStore:
                 calculator_name=calculator_name,
                 dataset_attrs=dict(dataset.attrs),
             )
-            session.commit(_with_run_id(commit_message))
+            session.commit(commit_message)
 
         self._logger.info(
             f"{action.capitalize()}d VOD group '{group_name}' "
@@ -2352,13 +2383,11 @@ class MyIcechunkStore:
         start = dataset.epoch.min().values
         end = dataset.epoch.max().values
         action = "append" if self.group_exists(item.group_name, branch) else "write"
-        commit_message = item.commit_message
-        if commit_message is None:
-            version = get_version_from_pyproject()
-            commit_message = (
-                f"[v{version}] {action.capitalize()}d VOD group "
-                f"'{item.group_name}' (calculator={item.calculator_name})"
-            )
+        # A description of this group's write; the batch combines the
+        # descriptions of all groups sharing a commit into its message.
+        commit_message = item.commit_message or (
+            f"VOD {item.group_name} (calculator={item.calculator_name})"
+        )
         return None, VodWritePlan(
             item=item,
             action=action,
@@ -2489,6 +2518,9 @@ class MyIcechunkStore:
         # Pre-pass: brand-new groups, sequential, one clean session, one commit.
         if new_plans:
             summary_parts: list[str] = []
+            prepass_msg, prepass_metadata = _vod_batch_commit(
+                version, "write", new_plans
+            )
             with self.writable_session(branch) as prepass_session:
                 for plan in new_plans:
                     t_start = time.perf_counter()
@@ -2532,18 +2564,19 @@ class MyIcechunkStore:
                     summary_parts.append(group_name)
 
                 if summary_parts:
-                    prepass_msg = (
-                        f"[v{version}] pre-pass create {len(summary_parts)} "
-                        f"VOD groups: {', '.join(summary_parts)}"
-                    )
                     prepass_snapshot_id = prepass_session.commit(
-                        _with_run_id(prepass_msg)
+                        prepass_msg, metadata=prepass_metadata
                     )
                     for name in summary_parts:
                         results[name].snapshot_id = prepass_snapshot_id
 
         # Fork/merge phase: pre-existing groups only.
         if append_plans:
+            # Fail-fast below: either every group lands in this commit or
+            # none does, so the message can name all of them up front.
+            commit_msg, agg_metadata = _vod_batch_commit(
+                version, "append", list(append_plans.values())
+            )
             with self.writable_session(branch) as base_session:
                 forks = {name: base_session.fork() for name in append_plans}
                 with ThreadPoolExecutor(max_workers=len(append_plans)) as tpe:
@@ -2565,14 +2598,8 @@ class MyIcechunkStore:
                         raise
 
                 base_session.merge(*forks.values())
-                summary = ", ".join(completed)
-                commit_msg = f"[v{version}] {len(completed)} VOD groups: {summary}"
-                agg_metadata = {
-                    "groups": ",".join(completed),
-                    "total_groups": str(len(completed)),
-                }
                 batch_snapshot_id = base_session.commit(
-                    _with_run_id(commit_msg), metadata=agg_metadata
+                    commit_msg, metadata=agg_metadata
                 )
                 for name, result in completed.items():
                     result.snapshot_id = batch_snapshot_id

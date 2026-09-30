@@ -211,3 +211,43 @@ def test_case_fail_fast_no_partial_merge(
     assert ds1.sizes["epoch"] == 180  # still just the seed
     ds2 = store.read_group("tau_omega/canopy_02_vs_reference_01").compute()
     assert ds2.sizes["epoch"] == 180  # still just the seed
+
+
+def test_log_book_rows_match_their_commit(store: MyIcechunkStore) -> None:
+    """Every log-book row records the message and run_id of its commit.
+
+    Covers the pre-pass (new group) and the fork/merge phase (existing
+    group) in one mixed batch, inside a run context.
+    """
+    from canvodpy.logging.run_context import reset_run_id, set_run_id
+
+    store.write_or_append_vod_groups_batch(
+        [_item("tau_omega/canopy_01_vs_reference_01", slot=0, source_id="seed")]
+    )
+    token = set_run_id("TestSite-20260930-120000")
+    try:
+        store.write_or_append_vod_groups_batch(
+            [
+                _item("tau_omega/canopy_01_vs_reference_01", slot=1, source_id="d2"),
+                _item("tau_omega/canopy_02_vs_reference_01", slot=0, source_id="n"),
+            ]
+        )
+    finally:
+        reset_run_id(token)
+
+    snapshots = list(store.repo.ancestry(branch="main"))
+    messages = {s.message for s in snapshots}
+    with store.readonly_session("main") as session:
+        for group in (
+            "tau_omega/canopy_01_vs_reference_01",
+            "tau_omega/canopy_02_vs_reference_01",
+        ):
+            rows = store.read_metadata_table(session, group)
+            assert set(rows["commit_msg"]) <= messages, group
+    assert rows["run_id"].to_list() == ["TestSite-20260930-120000"]
+
+    append_commit = next(s for s in snapshots if s.message.startswith("[v"))
+    assert append_commit.message.endswith("(run=TestSite-20260930-120000)")
+    assert "d2" in append_commit.message
+    assert append_commit.metadata["groups"] == "tau_omega/canopy_01_vs_reference_01"
+    assert "hash_d2" in append_commit.metadata["source_file_hashes"]
