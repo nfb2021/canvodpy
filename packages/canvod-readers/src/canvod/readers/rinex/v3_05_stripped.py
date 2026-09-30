@@ -106,6 +106,12 @@ class Rnxv3StrippedObs(Rnxv3Obs):
                 valid_mask[t_idx] = False
                 continue
 
+            # Skip event epochs (flag 2-6: special records, not observations)
+            # and out-of-range flags, as iter_epochs() does
+            if int(m[7]) > 1:
+                valid_mask[t_idx] = False
+                continue
+
             year, month, day = int(m[1]), int(m[2]), int(m[3])
             hour, minute = int(m[4]), int(m[5])
             seconds = float(m[6])
