@@ -339,18 +339,13 @@ def check_sbf(site: str, yyyydoy: str) -> dict:
 def _resolve_recipe(recipe_name: str) -> Path:
     """Resolve a recipe name to its YAML file path.
 
-    Searches ``config/recipes/`` relative to the monorepo root.
+    Same lookup as the pipeline's file discovery: the active config
+    directory's ``recipes/`` first, then ``config/recipes/`` in the monorepo
+    root (see :func:`canvodpy.orchestrator.discovery.resolve_recipe_path`).
     """
-    from canvod.config.loader import find_monorepo_root
+    from canvodpy.orchestrator.discovery import resolve_recipe_path
 
-    recipe_path = find_monorepo_root() / "config" / "recipes" / f"{recipe_name}.yaml"
-    if not recipe_path.exists():
-        msg = (
-            f"Recipe file not found: {recipe_path}\n"
-            f"Create it with: just naming-init {recipe_name}"
-        )
-        raise FileNotFoundError(msg)
-    return recipe_path
+    return resolve_recipe_path(recipe_name)
 
 
 def _validate_receiver_with_recipe(

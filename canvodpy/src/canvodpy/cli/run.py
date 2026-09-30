@@ -224,6 +224,13 @@ def _resolve_date_range(args, site) -> tuple[str, str]:
     return start, end
 
 
+def _source_hashes(research_site, group_name: str, ds: xr.Dataset) -> str:
+    """Hashes of the GNSS files behind ``ds`` (see ``_compute_vod_for_day``)."""
+    if research_site is None:
+        return str(ds.attrs.get("File Hash", "unknown"))
+    return research_site.source_file_hashes_for(group_name, ds)
+
+
 def _compute_vod_for_day(
     datasets: dict[str, xr.Dataset],
     vod_analyses: dict,
@@ -231,6 +238,7 @@ def _compute_vod_for_day(
     reporter=None,
     calculator_name: str = "tau_omega",
     gnss_store_path: str = "",
+    research_site=None,
 ) -> dict[str, dict]:
     """Compute VOD for all configured analysis pairs.
 
@@ -242,7 +250,9 @@ def _compute_vod_for_day(
     vod_analyses
         VOD analysis configs from ``site.vod_analyses``.
     research_site
-        ``GnssResearchSite`` instance (owns the VOD store).
+        ``GnssResearchSite`` instance whose GNSS store log book supplies the
+        hashes of every file behind each input dataset. Without it, only the
+        datasets' own ``"File Hash"`` attribute is recorded.
     date_key
         YYYYDOY string for logging.
     calculator_name
@@ -313,8 +323,8 @@ def _compute_vod_for_day(
             results[analysis_name] = {
                 "vod_ds": vod_ds,
                 "source_file_hashes": {
-                    canopy_name: canopy_ds.attrs.get("File Hash", "unknown"),
-                    ref_name: ref_ds.attrs.get("File Hash", "unknown"),
+                    canopy_name: _source_hashes(research_site, canopy_name, canopy_ds),
+                    ref_name: _source_hashes(research_site, ref_group, ref_ds),
                 },
                 "source_gnss_stores": {
                     canopy_name: gnss_store_path,
@@ -533,6 +543,7 @@ def _main_impl(args: SimpleNamespace) -> int:
                                 gnss_store_path=str(
                                     research_site.gnss_store.store_path
                                 ),
+                                research_site=research_site,
                             )
                             dt_vod = time.perf_counter() - t_vod
                             # Additive stage_timing so the performance dashboard

@@ -42,6 +42,7 @@ except ImportError:
 from canvodpy._deprecation import deprecated
 from canvodpy.logging import get_logger
 from canvodpy.logging.run_context import get_run_id
+from canvodpy.orchestrator.discovery import discover_files, recipe_for_data_dir
 from canvodpy.orchestrator.processor import (
     RinexDataProcessor,
     _processing_progress,
@@ -467,10 +468,15 @@ class PipelineOrchestrator:
         for date_key, receivers in dates:
             date_info = {"date": date_key, "receivers": []}
 
-            for receiver_name, (data_dir, receiver_type, _pos_dir, _fmt) in sorted(
+            for receiver_name, (data_dir, receiver_type, _pos_dir, fmt) in sorted(
                 receivers.items()
             ):
-                files = list(data_dir.glob("*.2*o"))
+                # Same selection as the real run (processor._get_rinex_files).
+                files = discover_files(
+                    data_dir,
+                    fmt,
+                    recipe=recipe_for_data_dir(self.site._site_config, data_dir),
+                )
 
                 receiver_info = {
                     "name": receiver_name,

@@ -352,8 +352,12 @@ class VodComputer:
             analysis_name=analysis_name,
             calculator_name=self._calculator_name,
             source_file_hashes={
-                canopy_name: canopy_ds.attrs.get("File Hash", "unknown"),
-                ref_name: sky_ds.attrs.get("File Hash", "unknown"),
+                canopy_name: self._site._site.source_file_hashes_for(
+                    canopy_name, canopy_ds
+                ),
+                ref_name: self._site._site.source_file_hashes_for(
+                    analysis_cfg.reference_store_group, sky_ds
+                ),
             },
             source_gnss_stores={
                 canopy_name: gnss_store_path,
