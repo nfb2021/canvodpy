@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest import mock
+
 import canvodpy.cli.config as cfg
 import typer
 import yaml
@@ -151,9 +153,11 @@ class TestValidateRecipeWithoutFilemap:
         config_dir = tmp_path / "config"
         self._write_config(config_dir, tmp_path, with_recipe=True)
 
-        result = runner.invoke(
-            _app(), ["config", "validate", "--config-dir", str(config_dir)]
-        )
+        # Simulate an install without canvod-filemap, whatever this env has
+        with mock.patch.dict("sys.modules", {"canvod.filemap": None}):
+            result = runner.invoke(
+                _app(), ["config", "validate", "--config-dir", str(config_dir)]
+            )
 
         assert result.exit_code == 1
         assert "canopy_01" in result.output

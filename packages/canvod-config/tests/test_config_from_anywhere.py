@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Test config loader works from any directory."""
 
-import shutil
+import os
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,19 +13,25 @@ from canvod.config import loader as loader_module
 
 
 def find_monorepo_root(start_path: Path) -> Path:
-    """Find monorepo root by looking for pyproject.toml."""
+    """Find monorepo root by looking for a ``.git`` entry.
+
+    Same rule as ``canvod.config.loader.find_monorepo_root``: a ``.git``
+    directory (clone) or file (worktree/submodule). A ``pyproject.toml``
+    would stop at the first workspace package instead of the repo root.
+    """
     current = start_path
     while current != current.parent:
-        if (current / "pyproject.toml").exists():
+        if (current / ".git").exists():
             return current
         current = current.parent
     raise RuntimeError("Could not find monorepo root")
 
 
-# Find monorepo and check if config exists
+# Find monorepo and check if the checkout has its own config
+# (``canvodpy config init`` writes config/canvod-settings.yaml; gitignored)
 MONOREPO_ROOT = find_monorepo_root(Path(__file__).parent)
 CONFIG_DIR = MONOREPO_ROOT / "config"
-HAS_CONFIG = (CONFIG_DIR / "sites.yaml").exists()
+HAS_CONFIG = (CONFIG_DIR / "canvod-settings.yaml").exists()
 
 # Test directories (relative to monorepo root)
 TEST_DIRS = [
@@ -46,21 +53,28 @@ def test_config_loader_from_directory(test_dir: str):
     if not full_path.exists():
         pytest.skip(f"Directory doesn't exist: {test_dir}")
 
-    # Find python executable (use current interpreter)
-    python_exe = shutil.which("python") or shutil.which("python3")
-    if not python_exe:
-        pytest.skip("Python executable not found")
+    # Sites configured in the checkout's config, as the expected output
+    expected_sites = sorted(
+        loader_module.ConfigLoader(CONFIG_DIR).load().sites.sites.keys()
+    )
 
-    # Test loading config from this directory
+    # Test loading config from this directory, with the current interpreter
+    # and without an env override, so the loader must discover config/ itself
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("CANVOD_CONFIG_DIR", "CANVOD_CONFIG_FILE")
+    }
     result = subprocess.run(
         [
-            python_exe,
+            sys.executable,
             "-c",
             "from canvod.config import load_config; "
             "config = load_config(); "
-            "print(f'Sites: {list(config.sites.sites.keys())}')",
+            "print(f'Sites: {sorted(config.sites.sites.keys())}')",
         ],
         cwd=full_path,
+        env=env,
         capture_output=True,
         text=True,
         timeout=10,
@@ -73,9 +87,9 @@ def test_config_loader_from_directory(test_dir: str):
         f"stderr: {result.stderr}"
     )
 
-    # Verify expected site exists in config
-    assert "rosalia" in result.stdout.lower(), (
-        f"Expected 'rosalia' site in output from {test_dir}\nGot: {result.stdout}"
+    # Verify the checkout's own config was found
+    assert f"Sites: {expected_sites}" in result.stdout, (
+        f"Expected sites {expected_sites} from {test_dir}\nGot: {result.stdout}"
     )
 
 
