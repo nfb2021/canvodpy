@@ -204,6 +204,38 @@ class TestTauOmegaZerothOrder:
         with pytest.raises(ValueError, match="All delta_snr values are NaN"):
             calculator.calculate_vod()
 
+    def test_calculate_vod_all_nan_lazy(self):
+        """All-NaN delta_snr also raises for dask-backed (store-read) inputs."""
+        ds = xr.Dataset(
+            {
+                "SNR": (["epoch", "sid"], np.full((10, 5), np.nan)),
+                "phi": (["epoch", "sid"], np.zeros((10, 5))),
+                "theta": (["epoch", "sid"], np.zeros((10, 5))),
+            }
+        ).chunk({"epoch": 5})
+
+        calculator = TauOmegaZerothOrder(canopy_ds=ds, sky_ds=ds.copy())
+
+        with pytest.raises(ValueError, match="All delta_snr values are NaN"):
+            calculator.calculate_vod()
+
+    def test_calculate_vod_lazy_result_stays_lazy(self):
+        """The input checks do not compute the VOD result itself."""
+        ds = xr.Dataset(
+            {
+                "SNR": (["epoch", "sid"], np.full((10, 5), 40.0)),
+                "phi": (["epoch", "sid"], np.zeros((10, 5))),
+                "theta": (["epoch", "sid"], np.full((10, 5), np.pi / 4)),
+            }
+        ).chunk({"epoch": 5})
+        sky = ds.copy()
+        sky["SNR"] = sky["SNR"] + 3.0
+
+        vod_ds = TauOmegaZerothOrder(canopy_ds=ds, sky_ds=sky).calculate_vod()
+
+        assert vod_ds["VOD"].chunks is not None
+        assert np.isfinite(vod_ds["VOD"].values).all()
+
     def test_calculate_vod_negative_transmissivity_warning(self):
         """Test warning when transmissivity <= 0."""
         n_epoch, n_sid = 5, 3

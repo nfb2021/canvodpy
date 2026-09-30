@@ -191,7 +191,7 @@ class TauOmegaZerothOrder(VODCalculator):
         Raises
         ------
         ValueError
-            If all delta SNR values are NaN (eager arrays only).
+            If all delta SNR values are NaN.
         """
         start_time = time.time()
         log.info(
@@ -203,20 +203,29 @@ class TauOmegaZerothOrder(VODCalculator):
 
         delta_snr = self.get_delta_snr()
 
-        # Detect lazy (dask-backed) arrays — avoid .item()/.any()/.all() on
-        # large dask arrays, as each call triggers a full compute pass.
+        # Lazy (dask-backed) inputs stay lazy so that a single write triggers
+        # the VOD computation; only the two input checks below are computed.
         _lazy = delta_snr.chunks is not None
 
-        if not _lazy and delta_snr.isnull().all():
+        canopy_transmissivity = self.decibel2linear(delta_snr)
+
+        # Both checks in one pass; for lazy inputs this reads only the two
+        # SNR variables, not the full datasets.
+        checks = xr.Dataset(
+            {
+                "all_nan": delta_snr.isnull().all(),
+                "n_invalid": (canopy_transmissivity <= 0).sum(),
+            }
+        ).compute()
+
+        if bool(checks["all_nan"]):
             log.error("vod_calculation_failed", reason="all_delta_snr_nan")
             raise ValueError(
                 "All delta_snr values are NaN - check data alignment",
             )
 
-        canopy_transmissivity = self.decibel2linear(delta_snr)
-
-        if not _lazy and (canopy_transmissivity <= 0).any():
-            n_invalid = int((canopy_transmissivity <= 0).sum())
+        n_invalid = int(checks["n_invalid"])
+        if n_invalid > 0:
             total = canopy_transmissivity.size
             log.warning(
                 "invalid_transmissivity",
