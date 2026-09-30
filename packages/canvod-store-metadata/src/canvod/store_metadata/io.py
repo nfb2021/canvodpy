@@ -61,6 +61,23 @@ def read_metadata(
     return StoreMetadata.from_root_attrs(attrs)
 
 
+def apply_updates(metadata: StoreMetadata, updates: dict[str, Any]) -> StoreMetadata:
+    """Return a copy of ``metadata`` with dotted-key ``updates`` applied.
+
+    Keys such as ``"temporal.updated"`` address nested fields.
+    """
+    data = metadata.model_dump(mode="json")
+
+    for key, value in updates.items():
+        parts = key.split(".")
+        target = data
+        for part in parts[:-1]:
+            target = target[part]
+        target[parts[-1]] = value
+
+    return StoreMetadata.model_validate(data)
+
+
 def update_metadata(
     store_path: Path,
     updates: dict[str, Any],
@@ -75,17 +92,7 @@ def update_metadata(
     str
         Snapshot ID from the commit.
     """
-    existing = read_metadata(store_path, branch)
-    data = existing.model_dump(mode="json")
-
-    for key, value in updates.items():
-        parts = key.split(".")
-        target = data
-        for part in parts[:-1]:
-            target = target[part]
-        target[parts[-1]] = value
-
-    updated = StoreMetadata.model_validate(data)
+    updated = apply_updates(read_metadata(store_path, branch), updates)
 
     repo = _open_repo(store_path)
     session = repo.writable_session(branch)

@@ -2937,10 +2937,12 @@ class RinexDataProcessor:
         # to one history entry per ingest event instead of one per group).
         try:
             from canvod.store_metadata import (
+                apply_updates,
                 collect_config_snapshot,
                 collect_metadata,
                 metadata_exists,
                 read_metadata,
+                summarize_store,
                 update_metadata,
                 write_metadata,
             )
@@ -2965,6 +2967,14 @@ class RinexDataProcessor:
                         store_path=store_path,
                         dask_workers=resources.get("n_workers"),
                         dask_threads_per_worker=resources.get("threads_per_worker"),
+                    )
+                    meta = apply_updates(
+                        meta,
+                        summarize_store(
+                            store_path,
+                            branch="main",
+                            receivers=set(meta.instruments.receivers),
+                        ),
                     )
                     write_metadata(store_path, meta, branch="main")
                     log.info("Wrote rich store metadata")
@@ -2996,6 +3006,14 @@ class RinexDataProcessor:
                         *history_entries,
                     ]
 
+                    # Coverage and summaries describe the data now stored.
+                    updates.update(
+                        summarize_store(
+                            store_path,
+                            branch="main",
+                            receivers=set(existing_meta.instruments.receivers),
+                        )
+                    )
                     update_metadata(store_path, updates, branch="main")
                     log.info(
                         "Updated store metadata%s",
@@ -3523,10 +3541,12 @@ class RinexDataProcessor:
         # was true on the very first ingest, forever (dev/todo_later.md §4).
         try:
             from canvod.store_metadata import (
+                apply_updates,
                 collect_config_snapshot,
                 collect_metadata,
                 metadata_exists,
                 read_metadata,
+                summarize_store,
                 update_metadata,
                 write_metadata,
             )
@@ -3555,6 +3575,14 @@ class RinexDataProcessor:
                         store_path=store_path,
                         dask_workers=resources.get("n_workers"),
                         dask_threads_per_worker=resources.get("threads_per_worker"),
+                    )
+                    meta = apply_updates(
+                        meta,
+                        summarize_store(
+                            store_path,
+                            branch=branch,
+                            receivers=set(meta.instruments.receivers),
+                        ),
                     )
                     write_metadata(store_path, meta, branch=branch)
                     log.info("Wrote rich store metadata")
@@ -3589,6 +3617,14 @@ class RinexDataProcessor:
                         *history_entries,
                     ]
 
+                    # Coverage and summaries describe the data now stored.
+                    updates.update(
+                        summarize_store(
+                            store_path,
+                            branch=branch,
+                            receivers=set(existing_meta.instruments.receivers),
+                        )
+                    )
                     update_metadata(store_path, updates, branch=branch)
                     log.info(
                         "Updated store metadata%s",

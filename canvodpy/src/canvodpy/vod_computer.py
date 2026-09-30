@@ -63,10 +63,12 @@ def ensure_vod_store_metadata(site: Site, calculator_name: str) -> None:
     try:
         from canvod.config import load_config
         from canvod.store_metadata import (
+            apply_updates,
             collect_config_snapshot,
             collect_metadata,
             metadata_exists,
             read_metadata,
+            summarize_store,
             update_metadata,
             write_metadata,
         )
@@ -87,6 +89,7 @@ def ensure_vod_store_metadata(site: Site, calculator_name: str) -> None:
                 source_format=calculator_name,
                 store_path=store_path,
             )
+            meta = apply_updates(meta, summarize_store(store_path))
             write_metadata(store_path, meta)
             log.info("vod_store_metadata_written")
         else:
@@ -114,6 +117,8 @@ def ensure_vod_store_metadata(site: Site, calculator_name: str) -> None:
                 *history_entries,
             ]
 
+            # Coverage and summaries describe the data now stored.
+            updates.update(summarize_store(store_path))
             update_metadata(store_path, updates)
             log.info("vod_store_metadata_updated", config_drift_detected=drifted)
     except Exception:
