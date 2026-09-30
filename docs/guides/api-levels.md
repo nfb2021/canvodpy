@@ -424,9 +424,9 @@ retrieval, and the result is written to the site's VOD store (pass
 !!! example "Try it"
     [12 — API Overview](../notebooks/_build/12_api_overview.html){target=_blank}
     ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/12_api_overview.py))
-    · [13 — Site Pipeline](../notebooks/_build/13_site_pipeline.html){target=_blank}
-    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/13_site_pipeline.py))
-    · [14 — Functional API](../notebooks/_build/14_functional_api.html){target=_blank}
-    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/14_functional_api.py))
-    · [15 — Single-Day Workflow](../notebooks/_build/15_single_day_python.html){target=_blank}
-    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/15_single_day_python.py))
+    · [14 — Site Pipeline](../notebooks/_build/14_site_pipeline.html){target=_blank}
+    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/14_site_pipeline.py))
+    · [15 — Functional API](../notebooks/_build/15_functional_api.html){target=_blank}
+    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/15_functional_api.py))
+    · [16 — Single-Day Workflow](../notebooks/_build/16_workflow_single_day.html){target=_blank}
+    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/16_workflow_single_day.py))

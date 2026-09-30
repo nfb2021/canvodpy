@@ -25,7 +25,7 @@ and live editing.
 
 | # | Notebook | Topic | Try it |
 |---|---|---|---|
-| 00 | CLI Quickstart | Raw GNSS files to a versioned VOD store with one `canvodpy` command | [Notebook](_build/00_cli_quickstart.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/00_cli_quickstart.py) |
+| 00 | Speedrun | The full pipeline in five cells, one 15-minute file per receiver | [Notebook](_build/00_convenience_speedrun.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/00_convenience_speedrun.py) |
 | 01 | Naming Convention & Validation | IGS/RINEX filename parsing and validation | [Notebook](_build/01_naming_convention.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/01_naming_convention.py) |
 | 02 | RINEX v3 Observation Reading | RINEX v3.04 → `xarray.Dataset` | [Notebook](_build/02_rinex_reading.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/02_rinex_reading.py) |
 | 03 | Satellite Catalog | IGS SatelliteCatalog — PRN metadata | [Notebook](_build/03_satellite_catalog.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/03_satellite_catalog.py) |
@@ -33,7 +33,7 @@ and live editing.
 | 05 | Ephemeris & Coordinate Augmentation | SP3/CLK augmentation, ECEF → spherical | [Notebook](_build/05_ephemeris_coordinates.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/05_ephemeris_coordinates.py) |
 | 06 | Hemispheric Grids | Equal-area, equal-angle, geodesic, Fibonacci | [Notebook](_build/06_hemispheric_grids.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/06_hemispheric_grids.py) |
 | 07 | VOD Retrieval | Tau-Omega radiative transfer model | [Notebook](_build/07_vod_retrieval.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/07_vod_retrieval.py) |
-| 08 | Icechunk Store | Versioned Icechunk/Zarr storage | [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/08_icechunk_store.py) only — rendered snapshot pending a test-data fixture fix |
+| 08 | Icechunk Store | Versioned Icechunk/Zarr storage | [Notebook](_build/08_icechunk_store.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/08_icechunk_store.py) |
 | 09 | Store Metadata & FAIR Compliance | DataCite/ACDD/STAC provenance | [Notebook](_build/09_store_metadata.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/09_store_metadata.py) |
 | 10 | Visualization | 2D/3D hemispheric plots | [Notebook](_build/10_visualization.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/10_visualization.py) |
 | 11 | Configuration & Diagnostics | Pydantic configuration models, two-track logging, `stage_timer` diagnostics | [Notebook](_build/11_configuration.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/11_configuration.py) |
@@ -43,20 +43,21 @@ and live editing.
 | # | Notebook | Topic | Try it |
 |---|---|---|---|
 | 12 | API Overview | The CLI, `Site.pipeline()`, and the functional API side by side | [Notebook](_build/12_api_overview.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/12_api_overview.py) |
-| 13 | Site Pipeline | `Site().pipeline().process_range()` — the path the CLI wraps | [Notebook](_build/13_site_pipeline.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/13_site_pipeline.py) |
-| 14 | Functional API | L4 — pure functions in `canvodpy.functional` for custom pipelines | [Notebook](_build/14_functional_api.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/14_functional_api.py) |
+| 13 | CLI Pipeline | `canvodpy run` — raw GNSS files to a versioned VOD store with one command | [Notebook](_build/13_cli_pipeline.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/13_cli_pipeline.py) |
+| 14 | Site Pipeline | `Site().pipeline().process_range()` — the path the CLI wraps | [Notebook](_build/14_site_pipeline.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/14_site_pipeline.py) |
+| 15 | Functional API | L4 — pure functions in `canvodpy.functional` for custom pipelines | [Notebook](_build/15_functional_api.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/15_functional_api.py) |
 
 ### Workflow notebooks
 
 | # | Notebook | Topic | Try it |
 |---|---|---|---|
-| 15 | Single-Day Workflow | End-to-end single-day processing: read, augment, grid, retrieve VOD | [Notebook](_build/15_single_day_python.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/15_single_day_python.py) |
-| 16 | Batch Processing | Multi-day processing — the CLI's primary use case, plus the equivalent L3 API | [Notebook](_build/16_batch_processing.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/16_batch_processing.py) |
-| 17 | Store Operations | Store read/write/branch operations, temporal aggregation, metadata queries | [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/17_store_operations.py) only — rendered snapshot pending a test-data fixture fix |
-| 18 | Grid Exploration | Interactive hemispheric grid explorer | [Notebook](_build/18_grid_exploration.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/18_grid_exploration.py) |
+| 16 | Single-Day Workflow | End-to-end single-day processing: read, augment, grid, retrieve VOD | [Notebook](_build/16_workflow_single_day.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/16_workflow_single_day.py) |
+| 17 | Batch Processing | Multi-day processing — the CLI's primary use case, plus the equivalent L3 API | [Notebook](_build/17_workflow_batch_processing.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/17_workflow_batch_processing.py) |
+| 18 | Store Operations | Store read/write/branch operations, temporal aggregation, metadata queries | [Notebook](_build/18_workflow_store_operations.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/18_workflow_store_operations.py) |
+| 19 | Grid Exploration | Interactive hemispheric grid explorer | [Notebook](_build/19_grid_exploration.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/19_grid_exploration.py) |
+| 20 | 3D Grid Gallery | 3D gallery comparing all hemispheric grid types | [Notebook](_build/20_grid_3d_gallery.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/20_grid_3d_gallery.py) |
 
-17 of 19 notebooks render; 2 (08, 17) currently link to source only, until
-their bundled store fixture is fixed. See
+All 21 notebooks are rendered. See
 `dev/notebook_docs_integration_plan.md` in the repo for the full technical
 writeup, and `scripts/export_demo_notebooks.sh` / `just docs-export-notebooks`
 for how these are rebuilt.

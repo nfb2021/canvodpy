@@ -19,37 +19,6 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEMO_DIR="$REPO_ROOT/demo"
 OUT_DIR="$REPO_ROOT/docs/notebooks/_build"
 
-NOTEBOOKS=(
-    00_cli_quickstart
-    01_naming_convention
-    02_rinex_reading
-    03_satellite_catalog
-    04_sbf_reading
-    05_ephemeris_coordinates
-    06_hemispheric_grids
-    07_vod_retrieval
-    09_store_metadata
-    10_visualization
-    11_configuration
-    12_api_overview
-    13_site_pipeline
-    14_functional_api
-    15_single_day_python
-    16_batch_processing
-    18_grid_exploration
-)
-
-# 08_icechunk_store and 17_store_operations are intentionally excluded here:
-# their bundled `rosalia_rinex` store fixture is an empty first-commit
-# snapshot with no populated data, so `marimo export html` fails with
-# `IcechunkError: object not found` before ever reaching this script.
-# Pre-existing, not introduced by this export pipeline -- fix the fixture,
-# then add both names to NOTEBOOKS above.
-SKIPPED_NOTEBOOKS=(
-    08_icechunk_store
-    17_store_operations
-)
-
 mkdir -p "$OUT_DIR"
 cd "$DEMO_DIR"
 
@@ -60,22 +29,16 @@ cd "$DEMO_DIR"
 # global ~/.config/canvodpy/canvod-settings.yaml. Point it at the real one.
 export CANVOD_CONFIG_DIR="$REPO_ROOT/config"
 
+# Every numbered notebook in demo/ (NN_name.py), so renaming or adding a
+# notebook there needs no change here. 08 and 18 build their Icechunk
+# store at run time with the canvodpy CLI (demo/_live_store.py), so no
+# notebook is skipped.
+NOTEBOOKS=([0-9][0-9]_*.py)
+
 echo "== Static HTML exports, code included (${#NOTEBOOKS[@]}) =="
 for nb in "${NOTEBOOKS[@]}"; do
-    echo "-- $nb"
-    if [ "$nb" = "00_cli_quickstart" ]; then
-        # This notebook gates its pipeline run behind an mo.ui.run_button(),
-        # which can never be "clicked" during a non-interactive export --
-        # bypass the gate so the static docs page shows a real run.
-        CANVOD_DEMO_RUN_PIPELINE=1 uv run --project "$REPO_ROOT" marimo export html "${nb}.py" -o "$OUT_DIR/${nb}.html"
-    else
-        uv run --project "$REPO_ROOT" marimo export html "${nb}.py" -o "$OUT_DIR/${nb}.html"
-    fi
-done
-
-echo "== Skipped (pre-existing store-fixture failure, see comment above) =="
-for nb in "${SKIPPED_NOTEBOOKS[@]}"; do
-    echo "-- $nb (not exported)"
+    echo "-- ${nb%.py}"
+    uv run --project "$REPO_ROOT" marimo export html "$nb" -o "$OUT_DIR/${nb%.py}.html"
 done
 
 echo "Done. Output in $OUT_DIR"
