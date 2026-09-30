@@ -82,13 +82,12 @@ pipeline = AuxDataPipeline(
     agency="COD",
     product_type="final",
     ftp_server="ftp://gssc.esa.int/gnss",
-    aux_file_path=Path("aux_data")
+    aux_file_path=Path("aux_data"),
 )
 
 # Get augmented data for specific date
 augmented_ds = pipeline.get_or_create_aux_data(
-    yyyydoy="2024015",
-    target_epochs=my_rinex_epochs
+    yyyydoy="2024015", target_epochs=my_rinex_epochs
 )
 ```
 
@@ -99,7 +98,7 @@ from canvod.auxiliary import Sp3Config, Sp3InterpolationStrategy
 import numpy as np
 
 # Configure interpolation
-config = Sp3Config(use_velocities=True, fallback_method='cubic')
+config = Sp3Config(use_velocities=True, fallback_method="cubic")
 strategy = Sp3InterpolationStrategy(config=config)
 
 # Interpolate to new epochs

@@ -39,8 +39,13 @@ individual source files for deduplication and auditing.
 ```python
 from pathlib import Path
 from canvod.store_metadata import (
-    write_metadata, read_metadata, format_metadata, validate_all,
-    extract_env, write_stac_collection, scan_stores,
+    write_metadata,
+    read_metadata,
+    format_metadata,
+    validate_all,
+    extract_env,
+    write_stac_collection,
+    scan_stores,
 )
 
 # Write metadata to an existing Icechunk store
@@ -326,7 +331,7 @@ Each store can be exported as a standalone STAC Collection JSON file:
 from canvod.store_metadata import write_stac_collection, write_stac_catalog
 
 # Single store → collection.json
-write_stac_collection(store_path)                # writes store_path/collection.json
+write_stac_collection(store_path)  # writes store_path/collection.json
 write_stac_collection(store_path, Path("out.json"))  # custom path
 
 # Scan directory → catalog.json + per-store collection.json files

@@ -28,6 +28,7 @@ based on its (theta, phi) angles.
 
 ```python
 from canvod.grids import create_hemigrid
+
 grid = create_hemigrid(grid_type=GridType.EQUAL_AREA, resolution=2.0)
 ```
 
