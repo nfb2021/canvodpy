@@ -2983,11 +2983,15 @@ class RinexDataProcessor:
                     existing_meta = read_metadata(store_path, branch="main")
                     new_snapshot = collect_config_snapshot(self._config)
 
+                    # Per-action counts, as in the commit message: a
+                    # skipped file is in the log book but not newly stored.
                     per_receiver = ", ".join(
-                        f"{name}={len(r.metadata_records)}"
+                        f"{name}("
+                        + ", ".join(f"{k}={v}" for k, v in r.actions.items() if v > 0)
+                        + ")"
                         for name, r in results.items()
                     )
-                    history_entries = [f"{now}: Ingested {per_receiver}"]
+                    history_entries = [f"{now}: Ingest {yyyydoy}: {per_receiver}"]
                     updates: dict[str, object] = {"temporal.updated": now}
 
                     drifted = (
@@ -3591,9 +3595,14 @@ class RinexDataProcessor:
                     existing_meta = read_metadata(store_path, branch=branch)
                     new_snapshot = collect_config_snapshot(self._config)
 
+                    # Per-action counts, as in the commit message: a
+                    # skipped file is in the log book but not newly stored.
+                    action_counts = ", ".join(
+                        f"{k}={v}" for k, v in actions.items() if v > 0
+                    )
                     history_entries = [
-                        f"{now}: Ingested {len(augmented_datasets)}"
-                        f" files for {receiver_name}"
+                        f"{now}: Ingest {receiver_name}"
+                        f" {self.matched_data_dirs.yyyydoy}: {action_counts}"
                     ]
                     updates: dict[str, object] = {"temporal.updated": now}
 
