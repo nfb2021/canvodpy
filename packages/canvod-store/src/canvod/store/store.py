@@ -82,6 +82,78 @@ def _with_run_id(commit_message: str) -> str:
     return f"{commit_message} (run={run_id})"
 
 
+def _append_log_rows(zmeta: zarr.Group, df: pl.DataFrame) -> None:
+    """Append rows to a log-book table (``{group}/metadata/table``).
+
+    Assigns continuous ``index`` values and keeps every column at the
+    table's row count: a column new to the table is backfilled for the rows
+    already stored, and a stored column absent from ``df`` is padded (``""``
+    for strings, ``NaT`` for ``start``/``end``). Tables written by different
+    ingest paths, or by older canVODpy versions with fewer columns, therefore
+    stay readable as one DataFrame.
+    """
+    start_index = 0
+    existing_len = 0
+    if "index" in zmeta:
+        existing_len = zmeta["index"].shape[0]
+        start_index = int(zmeta["index"][-1].item()) + 1 if existing_len > 0 else 0
+
+    df_with_index = df.with_columns(
+        (pl.arange(start_index, start_index + df.height)).alias("index")
+    )
+
+    def _column_spec(col_name: str) -> tuple[Any, Any]:
+        """(dtype, fill value) of a log-book column."""
+        if col_name == "index":
+            return "i8", 0
+        if col_name in ("start", "end"):
+            return "M8[ns]", np.datetime64("NaT", "ns")
+        # strings / jsons / ids
+        return VariableLengthUTF8(), ""
+
+    for col_name in df_with_index.columns:
+        col_data = df_with_index[col_name]
+        dtype, fill = _column_spec(col_name)
+
+        if col_name in ("index", "start", "end"):
+            arr = col_data.to_numpy().astype(dtype)
+        else:
+            arr = col_data.to_list()
+
+        if col_name not in zmeta:
+            zmeta.create_array(
+                name=col_name,
+                shape=(existing_len,),
+                dtype=dtype,
+                chunks=(1024,),
+                fill_value=fill,
+                overwrite=True,
+            )
+            if existing_len:
+                zmeta[col_name][:] = (
+                    [fill] * existing_len
+                    if isinstance(fill, str)
+                    else np.full(existing_len, fill, dtype=dtype)
+                )
+
+        # Resize and append
+        old_len = zmeta[col_name].shape[0]
+        new_len = old_len + len(arr)
+        zmeta[col_name].resize(new_len)
+        zmeta[col_name][old_len:new_len] = arr
+
+    for col_name in set(zmeta.array_keys()) - set(df_with_index.columns):
+        dtype, fill = _column_spec(col_name)
+        old_len = zmeta[col_name].shape[0]
+        new_len = old_len + df_with_index.height
+        zmeta[col_name].resize(new_len)
+        zmeta[col_name][old_len:new_len] = (
+            [fill] * df_with_index.height
+            if isinstance(fill, str)
+            else np.full(df_with_index.height, fill, dtype=dtype)
+        )
+
+
 @dataclass
 class VodWriteItem:
     """One VOD analysis pair's write request, as passed into a batch write."""
@@ -1203,7 +1275,12 @@ class MyIcechunkStore:
         branch: str = "main",
         commit_message: str | None = None,
     ) -> None:
-        """Overwrite a file's contribution to the group (same hash, new epoch range)."""
+        """Overwrite a file's contribution to the group (same hash, new epoch range).
+
+        The group's epochs outside ``[start, end]`` and ``dataset`` are merged
+        and rewritten in epoch order, so ``epoch`` stays monotonic when the
+        replaced range lies before the latest stored data.
+        """
 
         dataset = self._normalize_encodings(dataset)
 
@@ -1221,33 +1298,23 @@ class MyIcechunkStore:
             mask = (ds_from_store.epoch.values < start) | (
                 ds_from_store.epoch.values > end
             )
-            ds_from_store_cleansed = ds_from_store.isel(epoch=mask)
-            ds_from_store_cleansed = self._normalize_encodings(ds_from_store_cleansed)
-
-            # Check if any epochs remain after cleansing, then write leftovers.
-            if ds_from_store_cleansed.sizes.get("epoch", 0) > 0:
-                self._to_icechunk_throttled(
-                    ds_from_store_cleansed, session, group=group_name, mode="w"
-                )
-            # no epochs left, reset group to empty
-            else:
-                self._to_icechunk_throttled(
-                    dataset.isel(epoch=[]), session, group=group_name, mode="w"
-                )
+            ds_rewrite = xr.concat(
+                [ds_from_store.isel(epoch=mask), dataset],
+                dim="epoch",
+                combine_attrs="override",
+            ).sortby("epoch")
+            ds_rewrite = self._normalize_encodings(ds_rewrite)
+            self._to_icechunk_throttled(ds_rewrite, session, group=group_name, mode="w")
 
             # write back the backed up metadata table
             self.restore_metadata_table(group_name, metadata_backup, session)
-
-            # Append the new dataset
-            self._to_icechunk_throttled(
-                dataset, session, group=group_name, append_dim="epoch"
-            )
 
             if commit_message is None:
                 version = get_version_from_pyproject()
                 commit_message = (
                     f"[v{version}] Overwrote file {rinex_hash} in group '{group_name}'"
                 )
+            commit_message = _with_run_id(commit_message)
 
             zroot = zarr.open_group(session.store, mode="a")
             self._append_metadata_row(
@@ -1261,7 +1328,7 @@ class MyIcechunkStore:
                 commit_msg=commit_message,
                 dataset_attrs=dataset.attrs,
             )
-            session.commit(_with_run_id(commit_message))
+            session.commit(commit_message)
 
     def get_group_info(self, group_name: str, branch: str = "main") -> dict[str, Any]:
         """
@@ -1807,38 +1874,8 @@ class MyIcechunkStore:
             "physical_path": str(physical_path) if physical_path else "",
         }
         df_row = pl.DataFrame([row])
-        meta_group_path = f"{group_name}/metadata/table"
-
-        if (
-            "metadata" not in zroot[group_name]
-            or "table" not in zroot[group_name]["metadata"]
-        ):
-            zmeta = zroot.require_group(meta_group_path)
-            zmeta.create_array(
-                name="index", shape=(0,), dtype="i8", chunks=(1024,), overwrite=True
-            )
-            zmeta["index"].append([0])
-            for col in df_row.columns:
-                if col in ("start", "end"):
-                    dtype = "M8[ns]"
-                    arr = np.array(df_row[col].to_numpy(), dtype=dtype)
-                else:
-                    dtype = VariableLengthUTF8()
-                    arr = df_row[col].to_list()
-                zmeta.create_array(
-                    name=col, shape=(0,), dtype=dtype, chunks=(1024,), overwrite=True
-                )
-                zmeta[col].append(arr)
-        else:
-            zmeta = zroot[meta_group_path]
-            current_len = zmeta["index"].shape[0]
-            zmeta["index"].append([current_len])
-            for col in df_row.columns:
-                if col in ("start", "end"):
-                    arr = np.array(df_row[col].to_numpy(), dtype="M8[ns]")
-                else:
-                    arr = df_row[col].to_list()
-                zmeta[col].append(arr)
+        zmeta = zroot.require_group(f"{group_name}/metadata/table")
+        _append_log_rows(zmeta, df_row)
 
     def append_metadata(
         self,
@@ -1943,51 +1980,10 @@ class MyIcechunkStore:
             meta_group_path = f"{group_name}/metadata/table"
             zmeta = zroot.require_group(meta_group_path)
 
-            start_index = 0
-            if "index" in zmeta:
-                existing_len = zmeta["index"].shape[0]
-                start_index = (
-                    int(zmeta["index"][-1].item()) + 1 if existing_len > 0 else 0
-                )
-
-            # Assign sequential indices
-            df_with_index = df.with_columns(
-                (pl.arange(start_index, start_index + df.height)).alias("index")
-            )
-
-            # Write each column
-            for col_name in df_with_index.columns:
-                col_data = df_with_index[col_name]
-
-                if col_name == "index":
-                    dtype = "i8"
-                    arr = col_data.to_numpy().astype(dtype)
-                elif col_name in ("start", "end"):
-                    dtype = "M8[ns]"
-                    arr = col_data.to_numpy().astype(dtype)
-                else:
-                    # strings / jsons / ids
-                    dtype = VariableLengthUTF8()
-                    arr = col_data.to_list()
-
-                if col_name not in zmeta:
-                    # Create array if it doesn't exist
-                    zmeta.create_array(
-                        name=col_name,
-                        shape=(0,),
-                        dtype=dtype,
-                        chunks=(1024,),
-                        overwrite=True,
-                    )
-
-                # Resize and append
-                old_len = zmeta[col_name].shape[0]
-                new_len = old_len + len(arr)
-                zmeta[col_name].resize(new_len)
-                zmeta[col_name][old_len:new_len] = arr
+            _append_log_rows(zmeta, df)
 
             self._logger.info(
-                f"Appended {df_with_index.height} metadata rows to group '{group_name}'"
+                f"Appended {df.height} metadata rows to group '{group_name}'"
             )
 
         if session is not None:
@@ -2059,38 +2055,8 @@ class MyIcechunkStore:
             "attrs": json.dumps(dataset_attrs, default=str),
         }
         df_row = pl.DataFrame([row])
-        meta_group_path = f"{group_name}/metadata/table"
-
-        if (
-            "metadata" not in zroot[group_name]
-            or "table" not in zroot[group_name]["metadata"]
-        ):
-            zmeta = zroot.require_group(meta_group_path)
-            zmeta.create_array(
-                name="index", shape=(0,), dtype="i8", chunks=(1024,), overwrite=True
-            )
-            zmeta["index"].append([0])
-            for col in df_row.columns:
-                if col in ("start", "end"):
-                    dtype = "M8[ns]"
-                    arr = np.array(df_row[col].to_numpy(), dtype=dtype)
-                else:
-                    dtype = VariableLengthUTF8()
-                    arr = df_row[col].to_list()
-                zmeta.create_array(
-                    name=col, shape=(0,), dtype=dtype, chunks=(1024,), overwrite=True
-                )
-                zmeta[col].append(arr)
-        else:
-            zmeta = zroot[meta_group_path]
-            current_len = zmeta["index"].shape[0]
-            zmeta["index"].append([current_len])
-            for col in df_row.columns:
-                if col in ("start", "end"):
-                    arr = np.array(df_row[col].to_numpy(), dtype="M8[ns]")
-                else:
-                    arr = df_row[col].to_list()
-                zmeta[col].append(arr)
+        zmeta = zroot.require_group(f"{group_name}/metadata/table")
+        _append_log_rows(zmeta, df_row)
 
     def _vod_metadata_row_exists(
         self,
@@ -2869,6 +2835,41 @@ class MyIcechunkStore:
                 return int(zmeta["index"].shape[0])
         except Exception:
             return 0
+
+    def source_file_hashes(
+        self,
+        group_name: str,
+        start: np.datetime64,
+        end: np.datetime64,
+        branch: str = "main",
+    ) -> list[str]:
+        """Hashes of the ingested files whose data overlaps ``[start, end]``.
+
+        Read from ``group_name``'s log book, in ingest order and without
+        duplicates. Rows recording a file that was skipped as already
+        ingested (``exists`` is ``"True"`` and nothing was written) are
+        ignored, so each file counts once however often it was re-run.
+
+        Used as the provenance of a dataset read back from the store for
+        that range, e.g. the daily inputs of a VOD computation.
+        """
+        df = self.load_metadata_for_dedup(group_name, branch=branch)
+        if df is None or df.is_empty():
+            return []
+
+        start_ns = np.datetime64(start, "ns")
+        end_ns = np.datetime64(end, "ns")
+        rows = df.filter((pl.col("start") <= end_ns) & (pl.col("end") >= start_ns))
+        if "action" in rows.columns:
+            skipped = (pl.col("action") == "skipped") | (
+                (pl.col("action") == "") & (pl.col("exists") == "True")
+            )
+        elif "exists" in rows.columns:
+            skipped = pl.col("exists") == "True"
+        else:
+            skipped = pl.lit(False)
+        rows = rows.filter(~skipped).sort("index")
+        return list(dict.fromkeys(str(h) for h in rows["rinex_hash"].to_list()))
 
     def load_metadata_for_dedup(
         self, group_name: str, branch: str = "main"

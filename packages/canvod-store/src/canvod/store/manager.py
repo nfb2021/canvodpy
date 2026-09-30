@@ -370,6 +370,23 @@ class GnssResearchSite:
 
         self._logger.info(f"Successfully ingested data for receiver '{receiver_name}'")
 
+    def source_file_hashes_for(self, group_name: str, ds: xr.Dataset) -> str:
+        """Comma-joined hashes of the GNSS files behind ``ds``.
+
+        ``ds`` is data read from GNSS store group ``group_name``. The hashes
+        come from that group's log book, for every ingested file overlapping
+        ``ds``'s epoch range (see ``MyIcechunkStore.source_file_hashes``), so a
+        daily dataset built from many files lists all of them. Falls back to
+        ``ds.attrs["File Hash"]`` when the log book has no matching rows.
+        """
+        if ds.sizes.get("epoch", 0):
+            hashes = self.gnss_store.source_file_hashes(
+                group_name, ds.epoch.min().values, ds.epoch.max().values
+            )
+            if hashes:
+                return ",".join(hashes)
+        return str(ds.attrs.get("File Hash", "unknown"))
+
     def read_receiver_data(
         self, receiver_name: str, time_range: tuple[datetime, datetime] | None = None
     ) -> xr.Dataset:
@@ -739,8 +756,12 @@ class GnssResearchSite:
         vod_ds.attrs["canopy_receiver"] = analysis_config.canopy_receiver
         vod_ds.attrs["reference_receiver"] = analysis_config.reference_receiver
         vod_ds.attrs["calculator"] = calculator_class.__name__
-        vod_ds.attrs["canopy_hash"] = canopy_ds.attrs.get("File Hash", "unknown")
-        vod_ds.attrs["reference_hash"] = reference_ds.attrs.get("File Hash", "unknown")
+        vod_ds.attrs["canopy_hash"] = self.source_file_hashes_for(
+            analysis_config.canopy_receiver, canopy_ds
+        )
+        vod_ds.attrs["reference_hash"] = self.source_file_hashes_for(
+            analysis_config.reference_store_group, reference_ds
+        )
 
         self._logger.info(
             f"VOD calculated for {analysis_name} using {calculator_class.__name__}"
