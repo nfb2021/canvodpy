@@ -28,9 +28,7 @@ sky_ds = xr.open_dataset("sky.nc")
 
 # Calculate VOD
 vod_ds = TauOmegaZerothOrder.from_datasets(
-    canopy_ds=canopy_ds,
-    sky_ds=sky_ds,
-    align=True
+    canopy_ds=canopy_ds, sky_ds=sky_ds, align=True
 )
 ```
 
