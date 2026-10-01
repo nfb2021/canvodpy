@@ -1289,6 +1289,10 @@ def validate_ingest(site: str, yyyydoy: str) -> dict:
 def calculate_vod(site: str, yyyydoy: str) -> dict:
     """Compute VOD for all active analysis pairs and write to the VOD store.
 
+    Reads the day from the GNSS store and goes through
+    ``VodComputer.compute_bulk_all`` -- the same VOD code as ``canvodpy run``
+    and ``site.vod`` -- writing all analyses of the day in one commit.
+
     Parameters
     ----------
     site : str
@@ -1302,58 +1306,26 @@ def calculate_vod(site: str, yyyydoy: str) -> dict:
         ``{"site", "yyyydoy", "analyses": {name: {"mean_vod", "std_vod",
         "n_epochs"}}}``
     """
-    from canvod.store import GnssResearchSite
+    from canvodpy.api import Site
 
     date_obj = _resolve_date(yyyydoy)
 
-    research_site = GnssResearchSite(site)
-
-    # Build time range for this day
     day_date = date_obj.date
     if day_date is None:
         msg = f"Missing calendar date for {date_obj.to_str()}"
         raise ValueError(msg)
     start_time = datetime.datetime.combine(day_date, datetime.time.min)
     end_time = datetime.datetime.combine(day_date, datetime.time.max)
-    time_range = (start_time, end_time)
+
+    logger.info("calculate_vod: %s %s", site, date_obj.to_str())
+    results = Site(site).vod.compute_bulk_all(start=start_time, end=end_time)
 
     analyses_result: dict[str, dict] = {}
-    for analysis_name, analysis_cfg in research_site.active_vod_analyses.items():
-        logger.info("calculate_vod: running %s for %s", analysis_name, site)
-
-        vod_ds = research_site.calculate_vod(
-            analysis_name=analysis_name,
-            time_range=time_range,
-        )
-
-        calculator_name = vod_ds.attrs.get("calculator", "unknown")
-        gnss_store_path = str(research_site.gnss_store.store_path)
-        research_site.store_vod_analysis(
-            vod_dataset=vod_ds,
-            analysis_name=analysis_name,
-            calculator_name=calculator_name,
-            source_file_hashes={
-                analysis_cfg.canopy_receiver: vod_ds.attrs.get(
-                    "canopy_hash", "unknown"
-                ),
-                analysis_cfg.reference_receiver: vod_ds.attrs.get(
-                    "reference_hash", "unknown"
-                ),
-            },
-            source_gnss_stores={
-                analysis_cfg.canopy_receiver: gnss_store_path,
-                analysis_cfg.reference_receiver: gnss_store_path,
-            },
-            commit_message=f"Airflow VOD {analysis_name} {date_obj.to_str()}",
-        )
-
-        # Collect stats — TauOmegaZerothOrder returns variable "VOD"
-        tau_values = vod_ds["VOD"].values if "VOD" in vod_ds else None
+    for analysis_name, vod_ds in results.items():
+        vod_values = vod_ds["VOD"].values
         analyses_result[analysis_name] = {
-            "mean_vod": float(np.nanmean(tau_values))
-            if tau_values is not None
-            else None,
-            "std_vod": float(np.nanstd(tau_values)) if tau_values is not None else None,
+            "mean_vod": float(np.nanmean(vod_values)),
+            "std_vod": float(np.nanstd(vod_values)),
             "n_epochs": int(vod_ds.sizes.get("epoch", 0)),
         }
 

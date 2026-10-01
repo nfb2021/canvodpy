@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from canvod.vod import VODCalculator
 
 from canvod.config.models import VodAnalysisConfig
+from canvod.utils.tools import deprecated
 from canvodpy.logging import get_logger
 
 from canvod.store.store import (
@@ -670,6 +671,12 @@ class GnssResearchSite:
 
         return canopy_data, reference_data
 
+    @deprecated(
+        "GnssResearchSite.calculate_vod() is left over from development and "
+        "will be removed with the next major version. Use "
+        "canvodpy.Site(<site>).vod.compute_bulk(<analysis>, start=..., "
+        "end=..., write=False) instead."
+    )
     def calculate_vod(
         self,
         analysis_name: str,
@@ -721,9 +728,7 @@ class GnssResearchSite:
         )
 
         # Use the calculator's class method for calculation (alignment already done)
-        vod_ds = calculator_class.from_datasets(
-            canopy_aligned, reference_aligned, align=False
-        )
+        vod_ds = calculator_class.from_datasets(canopy_aligned, reference_aligned)
 
         # Apply config-gated derived quantities
         if processing_params is None:
@@ -768,6 +773,13 @@ class GnssResearchSite:
         )
         return vod_ds
 
+    @deprecated(
+        "GnssResearchSite.store_vod() is left over from development and will "
+        "be removed with the next major version. Use "
+        "canvodpy.Site(<site>).vod.compute_bulk(<analysis>) or "
+        "GnssResearchSite.store_vod_analysis() instead, which deduplicate and "
+        "record the source files in the VOD log book."
+    )
     def store_vod(
         self,
         vod_ds: xr.Dataset,

@@ -304,15 +304,18 @@ class TestTauOmegaZerothOrder:
     def test_from_icechunkstore_import_error(self):
         """Test ImportError with helpful message when canvod-store not installed."""
         with unittest.mock.patch.dict("sys.modules", {"canvod.store": None}):
-            with pytest.raises(ImportError, match="canvod-store"):
+            with (
+                pytest.warns(DeprecationWarning, match="compute_bulk"),
+                pytest.raises(ImportError, match="canvod-store"),
+            ):
                 TauOmegaZerothOrder.from_icechunkstore("/fake/path")
 
 
 class TestFromDatasets:
     """Test from_datasets classmethod."""
 
-    def test_from_datasets_no_align(self):
-        """Test from_datasets without alignment."""
+    def test_from_datasets_align_argument_deprecated(self):
+        """The ignored ``align`` argument warns."""
         canopy_ds = xr.Dataset(
             {
                 "SNR": (["epoch", "sid"], np.full((10, 5), 10.0)),
@@ -328,9 +331,10 @@ class TestFromDatasets:
             }
         )
 
-        vod_ds = TauOmegaZerothOrder.from_datasets(
-            canopy_ds=canopy_ds, sky_ds=sky_ds, align=False
-        )
+        with pytest.warns(DeprecationWarning, match="next major version"):
+            vod_ds = TauOmegaZerothOrder.from_datasets(
+                canopy_ds=canopy_ds, sky_ds=sky_ds, align=False
+            )
 
         assert isinstance(vod_ds, xr.Dataset)
         assert "VOD" in vod_ds.data_vars
@@ -356,14 +360,40 @@ class TestFromDatasets:
             coords={"epoch": range(2, 14), "sid": range(1, 7)},
         )
 
-        vod_ds = TauOmegaZerothOrder.from_datasets(
-            canopy_ds=canopy_ds, sky_ds=sky_ds, align=True
-        )
+        vod_ds = TauOmegaZerothOrder.from_datasets(canopy_ds=canopy_ds, sky_ds=sky_ds)
 
         assert isinstance(vod_ds, xr.Dataset)
         assert "VOD" in vod_ds.data_vars
         # After inner join: epochs 2-9 (8 epochs), sids 1-4 (4 sids)
         assert vod_ds["VOD"].shape == (8, 4)
+
+    def test_constructor_aligns(self):
+        """Direct construction (as VODFactory does) aligns too.
+
+        Without it the output kept every canopy epoch and signal, with NaN
+        VOD where the reference had no data.
+        """
+        canopy_ds = xr.Dataset(
+            {
+                "SNR": (["epoch", "sid"], np.full((10, 5), 10.0)),
+                "phi": (["epoch", "sid"], np.zeros((10, 5))),
+                "theta": (["epoch", "sid"], np.full((10, 5), np.pi / 4)),
+            },
+            coords={"epoch": range(10), "sid": range(5)},
+        )
+        sky_ds = xr.Dataset(
+            {
+                "SNR": (["epoch", "sid"], np.full((12, 6), 20.0)),
+                "phi": (["epoch", "sid"], np.zeros((12, 6))),
+                "theta": (["epoch", "sid"], np.full((12, 6), np.pi / 4)),
+            },
+            coords={"epoch": range(2, 14), "sid": range(1, 7)},
+        )
+
+        vod_ds = TauOmegaZerothOrder(canopy_ds=canopy_ds, sky_ds=sky_ds).calculate_vod()
+
+        assert dict(vod_ds.sizes) == {"epoch": 8, "sid": 4}
+        assert not vod_ds["VOD"].isnull().any()
 
 
 class TestEdgeCases:

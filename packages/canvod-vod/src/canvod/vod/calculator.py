@@ -1,13 +1,15 @@
 """VOD calculators based on Tau-Omega model variants."""
 
 import time
+import warnings
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import xarray as xr
-from pydantic import BaseModel, ConfigDict, field_validator
+from canvod.utils.tools import deprecated
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from canvod.vod._internal import get_logger
 
@@ -20,6 +22,10 @@ class VODCalculator(ABC, BaseModel):
     Notes
     -----
     This is an abstract base class (ABC) and a Pydantic model.
+
+    On construction, ``canopy_ds`` and ``sky_ds`` are aligned with an inner
+    join on all shared coordinates, so every calculator works only on the
+    epochs and signals present in both receivers, whoever constructs it.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -53,6 +59,14 @@ class VODCalculator(ABC, BaseModel):
             raise ValueError("Dataset must contain 'SNR' variable")
         return v
 
+    @model_validator(mode="after")
+    def _align_receivers(self) -> VODCalculator:
+        """Restrict both datasets to the epochs and signals they share."""
+        self.canopy_ds, self.sky_ds = xr.align(
+            self.canopy_ds, self.sky_ds, join="inner"
+        )
+        return self
+
     @abstractmethod
     def calculate_vod(self) -> xr.Dataset:
         """Calculate VOD and return a dataset with VOD, phi, theta.
@@ -65,6 +79,13 @@ class VODCalculator(ABC, BaseModel):
         raise NotImplementedError
 
     @classmethod
+    @deprecated(
+        "VODCalculator.from_icechunkstore() is left over from development and "
+        "will be removed with the next major version. Use "
+        "canvodpy.Site(<site>).vod.compute_bulk(<analysis>, write=False) "
+        "instead, which reads the configured store groups, drops duplicate "
+        "epochs and sorts them."
+    )
     def from_icechunkstore(
         cls,
         icechunk_store_pth: Path,
@@ -109,18 +130,14 @@ class VODCalculator(ABC, BaseModel):
             canopy_ds = xr.open_zarr(store=session.store, group=canopy_group)
             sky_ds = xr.open_zarr(store=session.store, group=sky_group)
 
-        return cls.from_datasets(
-            canopy_ds=canopy_ds,
-            sky_ds=sky_ds,
-            align=True,
-        )
+        return cls.from_datasets(canopy_ds=canopy_ds, sky_ds=sky_ds)
 
     @classmethod
     def from_datasets(
         cls,
         canopy_ds: xr.Dataset,
         sky_ds: xr.Dataset,
-        align: bool = True,
+        align: bool | None = None,
     ) -> xr.Dataset:
         """Convenience method to calculate VOD directly from datasets.
 
@@ -130,16 +147,25 @@ class VODCalculator(ABC, BaseModel):
             Canopy receiver dataset.
         sky_ds : xr.Dataset
             Sky/reference receiver dataset.
-        align : bool
-            Whether to align datasets on common coordinates.
+        align : bool, optional
+            Deprecated and ignored: the calculator always aligns both
+            datasets on their shared coordinates.
 
         Returns
         -------
         xr.Dataset
             VOD dataset.
         """
-        if align:
-            canopy_ds, sky_ds = xr.align(canopy_ds, sky_ds, join="inner")
+        if align is not None:
+            warnings.warn(
+                "The 'align' argument of from_datasets() is left over from "
+                "development and will be removed with the next major "
+                "version. It is ignored: the calculator always aligns both "
+                "datasets on their shared epochs and signals. Remove the "
+                "argument.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         calculator = cls(canopy_ds=canopy_ds, sky_ds=sky_ds)
         return calculator.calculate_vod()

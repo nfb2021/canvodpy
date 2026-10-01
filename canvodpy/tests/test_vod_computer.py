@@ -137,107 +137,235 @@ class TestVodComputerConfig:
         with pytest.raises(ValueError, match="not configured"):
             vc._get_analysis_config("nonexistent")
 
-    def test_extract_pair_happy_path(self):
+    def test_aligned_pair_happy_path(self):
         cfg = _make_analysis_cfg(canopy="c", reference="r")
         vc = VodComputer(_make_site({"a": cfg}))
         canopy_ds = _make_ds()
         ref_ds = _make_ds()
         # Reference data lives under the paired store group "r_c", never "r".
-        c, r = vc._extract_pair({"c": canopy_ds, "r_c": ref_ds}, "a")
-        assert c is canopy_ds
-        assert r is ref_ds
+        c, r = vc._aligned_pair({"c": canopy_ds, "r_c": ref_ds}, "a")
+        xr.testing.assert_identical(c, canopy_ds)
+        xr.testing.assert_identical(r, ref_ds)
 
-    def test_extract_pair_missing_canopy_raises(self):
+    def test_aligned_pair_restricts_to_shared_coords(self):
+        cfg = _make_analysis_cfg(canopy="c", reference="r")
+        vc = VodComputer(_make_site({"a": cfg}))
+        c, r = vc._aligned_pair(
+            {
+                "c": _make_ds(n_epochs=5, n_sids=3),
+                "r_c": _make_ds(n_epochs=4, n_sids=2),
+            },
+            "a",
+        )
+        assert dict(c.sizes) == dict(r.sizes) == {"epoch": 4, "sid": 2}
+
+    def test_aligned_pair_missing_canopy_raises(self):
         cfg = _make_analysis_cfg(canopy="canopy_01", reference="ref_01")
         vc = VodComputer(_make_site({"a": cfg}))
         with pytest.raises(KeyError, match="canopy_01"):
-            vc._extract_pair({"ref_01": _make_ds()}, "a")
+            vc._aligned_pair({"ref_01": _make_ds()}, "a")
 
-    def test_extract_pair_missing_reference_raises(self):
+    def test_aligned_pair_missing_reference_raises(self):
         cfg = _make_analysis_cfg(canopy="canopy_01", reference="ref_01")
         vc = VodComputer(_make_site({"a": cfg}))
         with pytest.raises(KeyError, match="ref_01"):
-            vc._extract_pair({"canopy_01": _make_ds()}, "a")
+            vc._aligned_pair({"canopy_01": _make_ds()}, "a")
 
 
 # ---------------------------------------------------------------------------
-# _compute_and_write
+# Computing and writing
 # ---------------------------------------------------------------------------
 
 
-class TestVodComputerComputeAndWrite:
-    def test_write_false_skips_store(self):
-        cfg = _make_analysis_cfg()
-        vc = VodComputer(_make_site({"a": cfg}))
-        canopy_ds = _make_ds()
-        sky_ds = _make_ds()
-        mock_vod = xr.Dataset({"VOD": (["epoch", "sid"], np.zeros((5, 3)))})
+@pytest.fixture(autouse=True)
+def _vod_output_params(monkeypatch):
+    """Default VOD output options, without reading a config file."""
+    params = unittest.mock.MagicMock(store_delta_snr=False, store_radial_diff=False)
+    config = unittest.mock.MagicMock()
+    config.processing.params = params
+    monkeypatch.setattr("canvod.config.load_config", lambda *a, **k: config)
+    return params
 
-        with (
-            # VODFactory is imported locally inside _compute_and_write
-            unittest.mock.patch("canvodpy.factories.VODFactory") as mock_factory_cls,
-            unittest.mock.patch.object(vc, "_write_to_store") as mock_write,
+
+def _day_datasets(canopy_epochs: int = 6, ref_epochs: int = 4) -> dict:
+    canopy = _make_ds(n_epochs=canopy_epochs, n_sids=3)
+    canopy["SNR"] = canopy["SNR"] * 30.0
+    ref = _make_ds(n_epochs=ref_epochs, n_sids=2)
+    ref["SNR"] = ref["SNR"] * 40.0
+    return {"canopy_01": canopy, "reference_01_canopy_01": ref}
+
+
+class TestVodComputerCompute:
+    def test_compute_day_without_write_returns_aligned_vod(self):
+        site = _make_site({"a": _make_analysis_cfg()})
+        vc = VodComputer(site)
+
+        vod_ds = vc.compute_day(_day_datasets(), "a", write=False)
+
+        # Only epochs and signals present in both receivers.
+        assert dict(vod_ds.sizes) == {"epoch": 4, "sid": 2}
+        assert not vod_ds["VOD"].isnull().any()
+        site._site.store_vod_analyses_batch.assert_not_called()
+
+    def test_compute_day_all_writes_one_batch_then_metadata(self):
+        analyses = {
+            "a": _make_analysis_cfg(),
+            "b": _make_analysis_cfg(),
+        }
+        site = _make_site(analyses)
+        order: list[str] = []
+
+        def write(items):
+            order.append(f"write {len(items)}")
+            return {}
+
+        site._site.store_vod_analyses_batch.side_effect = write
+        vc = VodComputer(site)
+
+        with unittest.mock.patch(
+            "canvodpy.vod_computer.ensure_vod_store_metadata",
+            side_effect=lambda *a: order.append("metadata"),
         ):
-            mock_factory_cls.create.return_value.calculate_vod.return_value = mock_vod
-            result = vc._compute_and_write(canopy_ds, sky_ds, "a", write=False)
+            results = vc.compute_day_all(_day_datasets())
 
-        mock_write.assert_not_called()
-        assert "VOD" in result
+        assert set(results) == {"a", "b"}
+        # One commit for both analyses, metadata only after the data write.
+        assert order == ["write 2", "metadata"]
+        items = site._site.store_vod_analyses_batch.call_args.kwargs["items"]
+        assert [i["commit_message"] for i in items] == [
+            "VOD a 2025001",
+            "VOD b 2025001",
+        ]
+        assert {i["calculator_name"] for i in items} == {"tau_omega"}
+        assert set(items[0]["source_file_hashes"]) == {"canopy_01", "reference_01"}
 
-    def test_write_true_calls_store(self):
-        cfg = _make_analysis_cfg()
-        vc = VodComputer(_make_site({"a": cfg}))
-        canopy_ds = _make_ds()
-        sky_ds = _make_ds()
-        mock_vod = xr.Dataset({"VOD": (["epoch", "sid"], np.zeros((5, 3)))})
-
-        with (
-            unittest.mock.patch("canvodpy.factories.VODFactory") as mock_factory_cls,
-            unittest.mock.patch.object(vc, "_write_to_store") as mock_write,
-        ):
-            mock_factory_cls.create.return_value.calculate_vod.return_value = mock_vod
-            vc._compute_and_write(canopy_ds, sky_ds, "a", write=True)
-
-        mock_write.assert_called_once_with(mock_vod, "a", canopy_ds, sky_ds)
-
-    def test_write_to_store_clears_encodings(self):
-        cfg = _make_analysis_cfg()
-        mock_site = _make_site({"a": cfg})
-        vc = VodComputer(mock_site)
-
-        vod_ds = xr.Dataset({"VOD": (["epoch", "sid"], np.zeros((5, 3)))})
-        vod_ds["VOD"].encoding["dtype"] = "float32"
-        canopy_ds = _make_ds()
-        sky_ds = _make_ds()
+    def test_source_hashes_use_aligned_epochs(self):
+        site = _make_site({"a": _make_analysis_cfg()})
+        vc = VodComputer(site)
 
         with unittest.mock.patch("canvodpy.vod_computer.ensure_vod_store_metadata"):
-            vc._write_to_store(vod_ds, "a", canopy_ds, sky_ds)
+            vc.compute_day(_day_datasets(canopy_epochs=6, ref_epochs=4), "a")
 
-        assert vod_ds["VOD"].encoding == {}
-        mock_site._site.store_vod_analysis.assert_called_once()
+        calls = site._site.source_file_hashes_for.call_args_list
+        assert [c.args[0] for c in calls] == ["canopy_01", "reference_01_canopy_01"]
+        assert all(c.args[1].sizes["epoch"] == 4 for c in calls)
 
-    def test_write_to_store_casts_string_dtype_to_object(self):
-        if not hasattr(np.dtypes, "StringDType"):
-            pytest.skip("requires numpy >= 2.0")
+    def test_prepare_for_store_drops_encodings_without_mutating(self):
+        vc = VodComputer(_make_site(), rechunk={"epoch": 2, "sid": -1})
+        vod_ds = _make_ds()
+        vod_ds["SNR"].encoding["dtype"] = "float32"
+        vod_ds["epoch"].encoding["units"] = "seconds"
 
-        cfg = _make_analysis_cfg()
-        mock_site = _make_site({"a": cfg})
-        vc = VodComputer(mock_site)
+        prepared = vc._prepare_for_store(vod_ds)
 
-        sv_values = np.array(["G01", "G02"], dtype=np.dtypes.StringDType())
-        vod_ds = xr.Dataset(
-            {"VOD": (["epoch", "sid"], np.zeros((5, 2)))},
-            coords={"sv": ("sid", sv_values)},
+        assert all(prepared[v].encoding == {} for v in prepared.variables)
+        assert prepared["SNR"].chunks[0] == (2, 2, 1)
+        assert vod_ds["SNR"].encoding == {"dtype": "float32"}
+
+    def test_date_label(self):
+        assert VodComputer._date_label(_make_ds()) == "2025001"
+        two_days = xr.Dataset(
+            coords={"epoch": pd.to_datetime(["2025-01-01", "2025-01-02"])}
         )
-        assert vod_ds["sv"].dtype.kind == "T"
-        canopy_ds = _make_ds()
-        sky_ds = _make_ds()
+        assert VodComputer._date_label(two_days) == "2025001-2025002"
 
-        with unittest.mock.patch("canvodpy.vod_computer.ensure_vod_store_metadata"):
-            vc._write_to_store(vod_ds, "a", canopy_ds, sky_ds)
 
-        call_kwargs = mock_site._site.store_vod_analysis.call_args.kwargs
-        written_ds = call_kwargs["vod_dataset"]
-        assert written_ds["sv"].dtype == object
-        assert call_kwargs["calculator_name"] == vc._calculator_name
-        assert set(call_kwargs["source_file_hashes"]) == {"canopy_01", "reference_01"}
+class TestCliVodForDay:
+    """``canvodpy run`` computes through VodComputer, skipping failures."""
+
+    def test_skips_missing_groups_and_failures(self):
+        from canvodpy.cli.run import _compute_vod_for_day
+
+        analyses = {
+            "ok": _make_analysis_cfg(),
+            "missing": _make_analysis_cfg(canopy="canopy_02"),
+            "broken": _make_analysis_cfg(),
+        }
+        vc = VodComputer(_make_site(analyses))
+        datasets = _day_datasets()
+        real_compute_day = vc.compute_day
+
+        def compute_day(ds, name, *, write):
+            if name == "broken":
+                raise ValueError("boom")
+            return real_compute_day(ds, name, write=write)
+
+        reporter = unittest.mock.MagicMock()
+        with unittest.mock.patch.object(vc, "compute_day", side_effect=compute_day):
+            results = _compute_vod_for_day(vc, datasets, analyses, "2025001", reporter)
+
+        assert set(results) == {"ok"}
+        xr.testing.assert_identical(
+            results["ok"], vc.compute_day(datasets, "ok", write=False)
+        )
+        reporter.on_vod_failed.assert_called_once_with("broken", "boom")
+
+
+class TestVodOutputOptions:
+    def test_delta_snr_dropped_by_default(self):
+        vc = VodComputer(_make_site({"a": _make_analysis_cfg()}))
+        vod_ds = vc.compute_day(_day_datasets(), "a", write=False)
+        assert "delta_snr" not in vod_ds
+        assert vod_ds.attrs["analysis_name"] == "a"
+        assert vod_ds.attrs["calculator"] == "tau_omega"
+
+    def test_delta_snr_kept_when_enabled(self, _vod_output_params):
+        _vod_output_params.store_delta_snr = True
+        vc = VodComputer(_make_site({"a": _make_analysis_cfg()}))
+        vod_ds = vc.compute_day(_day_datasets(), "a", write=False)
+        assert "delta_snr" in vod_ds
+
+    def test_radial_diff_when_enabled(self, _vod_output_params):
+        _vod_output_params.store_radial_diff = True
+        datasets = _day_datasets()
+        datasets["canopy_01"]["r"] = datasets["canopy_01"]["SNR"] * 0 + 2.0e7
+        datasets["reference_01_canopy_01"]["r"] = (
+            datasets["reference_01_canopy_01"]["SNR"] * 0 + 2.0e7 - 5.0
+        )
+        vc = VodComputer(_make_site({"a": _make_analysis_cfg()}))
+        vod_ds = vc.compute_day(datasets, "a", write=False)
+        np.testing.assert_allclose(vod_ds["radial_diff"].values, 5.0)
+
+
+class TestComputeBulkAll:
+    def test_one_commit_for_all_analyses(self):
+        site = _make_site({"a": _make_analysis_cfg(), "b": _make_analysis_cfg()})
+        vc = VodComputer(site)
+        datasets = _day_datasets()
+
+        def entry(name, start, end):
+            c, r = vc._aligned_pair(datasets, name)
+            return vc._compute(c, r, name), c, r
+
+        with (
+            unittest.mock.patch.object(vc, "_compute_bulk_entry", side_effect=entry),
+            unittest.mock.patch("canvodpy.vod_computer.ensure_vod_store_metadata"),
+        ):
+            results = vc.compute_bulk_all()
+
+        assert set(results) == {"a", "b"}
+        site._site.store_vod_analyses_batch.assert_called_once()
+        items = site._site.store_vod_analyses_batch.call_args.kwargs["items"]
+        assert [i["analysis_name"] for i in items] == ["a", "b"]
+
+
+class TestAirflowVodTask:
+    def test_calculate_vod_goes_through_vod_computer(self):
+        from canvodpy.workflows import tasks
+
+        vod_ds = xr.Dataset(
+            {"VOD": (["epoch", "sid"], np.array([[1.0, 3.0], [np.nan, 2.0]]))}
+        )
+        site = unittest.mock.MagicMock()
+        site.vod.compute_bulk_all.return_value = {"a": vod_ds}
+        with unittest.mock.patch("canvodpy.api.Site", return_value=site):
+            result = tasks.calculate_vod("TestSite", "2025001")
+
+        kwargs = site.vod.compute_bulk_all.call_args.kwargs
+        assert kwargs["start"].isoformat() == "2025-01-01T00:00:00"
+        assert kwargs["end"].date().isoformat() == "2025-01-01"
+        assert result["analyses"]["a"] == {
+            "mean_vod": 2.0,
+            "std_vod": pytest.approx(np.std([1.0, 3.0, 2.0])),
+            "n_epochs": 2,
+        }

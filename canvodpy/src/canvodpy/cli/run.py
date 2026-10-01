@@ -224,114 +224,51 @@ def _resolve_date_range(args, site) -> tuple[str, str]:
     return start, end
 
 
-def _source_hashes(research_site, group_name: str, ds: xr.Dataset) -> str:
-    """Hashes of the GNSS files behind ``ds`` (see ``_compute_vod_for_day``)."""
-    if research_site is None:
-        return str(ds.attrs.get("File Hash", "unknown"))
-    return research_site.source_file_hashes_for(group_name, ds)
-
-
 def _compute_vod_for_day(
+    vod_computer,
     datasets: dict[str, xr.Dataset],
     vod_analyses: dict,
     date_key: str,
     reporter=None,
-    calculator_name: str = "tau_omega",
-    gnss_store_path: str = "",
-    research_site=None,
-) -> dict[str, dict]:
-    """Compute VOD for all configured analysis pairs.
+) -> dict[str, xr.Dataset]:
+    """Compute VOD for all configured analysis pairs, without writing.
+
+    Each analysis goes through ``VodComputer.compute_day`` (the same code as
+    ``site.vod`` in Python). Terminal-only behavior: an analysis whose
+    receiver groups are missing is skipped, and a failing analysis is
+    logged and reported instead of stopping the run. The caller writes the
+    results with ``VodComputer.write_day``.
 
     Parameters
     ----------
+    vod_computer
+        ``VodComputer`` for the site and the selected calculator.
     datasets
         ``{group_name: ds}`` dict as yielded by ``process_range``.
         Group names: ``canopy_01``, ``reference_01_canopy_01``, etc.
     vod_analyses
         VOD analysis configs from ``site.vod_analyses``.
-    research_site
-        ``GnssResearchSite`` instance whose GNSS store log book supplies the
-        hashes of every file behind each input dataset. Without it, only the
-        datasets' own ``"File Hash"`` attribute is recorded.
     date_key
         YYYYDOY string for logging.
-    calculator_name
-        Name registered in ``VODFactory`` (e.g. ``"tau_omega"``).
-    gnss_store_path
-        Path to the site's RINEX store, for VOD provenance (both receivers
-        of a site live in the same store).
 
     Returns
     -------
-    dict mapping analysis name to a dict with keys ``vod_ds``,
-    ``source_file_hashes``, ``source_gnss_stores`` (see
-    ``write_or_append_vod_group`` / dev/todo_later.md §29).
+    dict mapping analysis name to its VOD dataset.
     """
-    from canvodpy.factories import VODFactory
+    results: dict[str, xr.Dataset] = {}
 
-    results: dict[str, dict] = {}
-
-    for analysis_name, analysis_cfg in vod_analyses.items():
-        canopy_name = analysis_cfg.canopy_receiver
-        ref_name = analysis_cfg.reference_receiver
-        ref_group = analysis_cfg.reference_store_group
-
-        canopy_ds = datasets.get(canopy_name)
-        ref_ds = datasets.get(ref_group)
-
-        if canopy_ds is None:
-            log.warning(
-                "vod_skipped",
-                analysis=analysis_name,
-                reason=f"canopy group '{canopy_name}' not in datasets",
-                date=date_key,
-            )
-            continue
-        if ref_ds is None:
-            log.warning(
-                "vod_skipped",
-                analysis=analysis_name,
-                reason=f"reference group '{ref_group}' not in datasets",
-                date=date_key,
-            )
-            continue
-
+    for analysis_name in vod_analyses:
         t0 = time.perf_counter()
         try:
-            canopy_ds, ref_ds = xr.align(canopy_ds, ref_ds, join="inner")
-            calculator = VODFactory.create(
-                calculator_name, canopy_ds=canopy_ds, sky_ds=ref_ds
+            vod_ds = vod_computer.compute_day(datasets, analysis_name, write=False)
+        except KeyError as e:
+            log.warning(
+                "vod_skipped",
+                analysis=analysis_name,
+                reason=str(e),
+                date=date_key,
             )
-            vod_ds = calculator.calculate_vod()
-
-            # Rechunk + clear encoding for clean Icechunk writes
-            vod_ds = vod_ds.chunk({"epoch": 17280, "sid": -1})
-            for var in vod_ds.data_vars:
-                vod_ds[var].encoding = {}
-
-            dt = time.perf_counter() - t0
-
-            n_valid = int((~vod_ds["VOD"].isnull()).sum())
-            n_total = vod_ds["VOD"].size
-            if reporter:
-                reporter.on_vod_result(analysis_name, n_valid, n_total, dt)
-            else:
-                pct = 100 * n_valid / n_total if n_total else 0
-                print(
-                    f"  VOD {analysis_name}: {n_valid}/{n_total} valid ({pct:.0f}%)  {dt:.1f}s"
-                )
-            results[analysis_name] = {
-                "vod_ds": vod_ds,
-                "source_file_hashes": {
-                    canopy_name: _source_hashes(research_site, canopy_name, canopy_ds),
-                    ref_name: _source_hashes(research_site, ref_group, ref_ds),
-                },
-                "source_gnss_stores": {
-                    canopy_name: gnss_store_path,
-                    ref_name: gnss_store_path,
-                },
-            }
-
+            continue
         except Exception as e:
             log.error(
                 "vod_failed",
@@ -343,6 +280,19 @@ def _compute_vod_for_day(
                 reporter.on_vod_failed(analysis_name, str(e))
             else:
                 print(f"  VOD {analysis_name}: FAILED — {e}")
+            continue
+
+        dt = time.perf_counter() - t0
+        n_valid = int((~vod_ds["VOD"].isnull()).sum())
+        n_total = vod_ds["VOD"].size
+        if reporter:
+            reporter.on_vod_result(analysis_name, n_valid, n_total, dt)
+        else:
+            pct = 100 * n_valid / n_total if n_total else 0
+            print(
+                f"  VOD {analysis_name}: {n_valid}/{n_total} valid ({pct:.0f}%)  {dt:.1f}s"
+            )
+        results[analysis_name] = vod_ds
 
     return results
 
@@ -376,7 +326,7 @@ def _main_impl(args: SimpleNamespace) -> int:
         config.processing.params.ephemeris_source = args.ephemeris_source
 
     from canvodpy.api import Site
-    from canvodpy.vod_computer import ensure_vod_store_metadata
+    from canvodpy.vod_computer import VodComputer
 
     site_names: list[str] = args.site
 
@@ -500,8 +450,7 @@ def _main_impl(args: SimpleNamespace) -> int:
                                 f"{analysis_name} --execute' to backfill"
                             )
 
-                # Access the underlying GnssResearchSite for VOD store writes
-                research_site = site._site
+                vod_computer = VodComputer(site, calculator=args.vod_calculator)
 
                 def _on_group_written(
                     group_name: str, _site_name: str = site_name
@@ -535,15 +484,11 @@ def _main_impl(args: SimpleNamespace) -> int:
                             stage = "vod_calc"
                             t_vod = time.perf_counter()
                             vod_results = _compute_vod_for_day(
+                                vod_computer,
                                 datasets,
                                 vod_analyses,
                                 date_key,
                                 reporter,
-                                calculator_name=args.vod_calculator,
-                                gnss_store_path=str(
-                                    research_site.gnss_store.store_path
-                                ),
-                                research_site=research_site,
                             )
                             dt_vod = time.perf_counter() - t_vod
                             # Additive stage_timing so the performance dashboard
@@ -561,28 +506,13 @@ def _main_impl(args: SimpleNamespace) -> int:
                             )
 
                             stage = "vod_store"
-                            if vod_results:
-                                call_with_store_retries(
-                                    partial(
-                                        ensure_vod_store_metadata,
-                                        site,
-                                        args.vod_calculator,
-                                    ),
-                                    logger=log,
-                                    date=date_key,
-                                    op="vod_metadata_write",
-                                )
                             t_vod_store = time.perf_counter()
                             if vod_results:
-                                # One fork/merge batch commit for all of
-                                # today's analysis pairs, instead of one
-                                # full session-open/write/commit cycle per
-                                # pair in sequence -- same cross-group
-                                # parallelization as the RINEX receiver-group
-                                # writes (RinexDataProcessor.
-                                # _write_receiver_batch_forked). Retried as
-                                # one unit: the batch write is all-or-nothing
-                                # (fail-fast, no partial merge -- see
+                                # VodComputer.write_day: one commit for all
+                                # of today's analysis pairs, then the VOD
+                                # store metadata. Retried as one unit: the
+                                # batch write is all-or-nothing (fail-fast,
+                                # no partial merge -- see
                                 # write_or_append_vod_groups_batch), so a
                                 # retry after a transient error is safe --
                                 # any pre-pass commit for a brand-new group
@@ -590,24 +520,9 @@ def _main_impl(args: SimpleNamespace) -> int:
                                 # won't be re-attempted.
                                 batch_results = call_with_store_retries(
                                     partial(
-                                        research_site.store_vod_analyses_batch,
-                                        items=[
-                                            {
-                                                "vod_dataset": result["vod_ds"],
-                                                "analysis_name": analysis_name,
-                                                "calculator_name": args.vod_calculator,
-                                                "source_file_hashes": result[
-                                                    "source_file_hashes"
-                                                ],
-                                                "source_gnss_stores": result[
-                                                    "source_gnss_stores"
-                                                ],
-                                                "commit_message": (
-                                                    f"VOD {analysis_name} {date_key}"
-                                                ),
-                                            }
-                                            for analysis_name, result in vod_results.items()
-                                        ],
+                                        vod_computer.write_day,
+                                        datasets,
+                                        vod_results,
                                     ),
                                     logger=log,
                                     date=date_key,
