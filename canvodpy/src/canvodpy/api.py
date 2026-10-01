@@ -591,8 +591,9 @@ class Pipeline:
 
 
 @deprecated(
-    "process_date() is deprecated. Use Site(site).pipeline().process_date(date) "
-    "instead, or run the pipeline via the `canvodpy` CLI."
+    "canvodpy.process_date() is left over from development and will be removed with the next major version. "
+    "Use canvodpy.Site(<site>).pipeline().process_date(<date>) or the "
+    "terminal command `canvodpy run` instead."
 )
 def process_date(
     site: str,
@@ -651,9 +652,11 @@ def process_date(
 
 
 @deprecated(
-    "calculate_vod() is deprecated. Use "
-    "Site(site).pipeline().calculate_vod(canopy, reference, date) instead, "
-    "or run the pipeline via the `canvodpy` CLI."
+    "canvodpy.calculate_vod() is left over from development and will be removed with the next major version. "
+    "Use the terminal command `canvodpy run` instead, or process the day "
+    "with canvodpy.Site(<site>).pipeline().process_date(<date>) and compute "
+    "VOD with canvodpy.Site(<site>).vod.compute_bulk(<analysis>, "
+    "start=..., end=...)."
 )
 def calculate_vod(
     site: str,
@@ -714,8 +717,8 @@ def calculate_vod(
 
 
 @deprecated(
-    "preview_processing() is deprecated. Use "
-    "Site(site).pipeline(dry_run=True).preview() instead."
+    "canvodpy.preview_processing() is left over from development and will be removed with the next major version. "
+    "Use canvodpy.Site(<site>).pipeline(dry_run=True).preview() instead."
 )
 def preview_processing(site: str) -> dict:
     """Preview processing plan for a site (convenience function).

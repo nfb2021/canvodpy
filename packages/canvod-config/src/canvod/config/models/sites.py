@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
+from canvod.utils.tools import deprecated
+
 from .base import _StrictModel
 
 
@@ -68,7 +70,8 @@ class ReceiverConfig(_StrictModel):
             import warnings
 
             warnings.warn(
-                "ReceiverConfig: 'scs_from' is deprecated; use 'paired_canopies' instead",
+                "The receiver setting 'scs_from' is left over from development and will be removed with the next major version. "
+                "Rename it to 'paired_canopies' in your site configuration.",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -249,15 +252,12 @@ class SiteConfig(_StrictModel):
             raise ValueError(msg)
         return [cfg.paired_canopies]
 
+    @deprecated(
+        "SiteConfig.resolve_scs_from() is left over from development and will be removed with the next major version. "
+        "Use SiteConfig.resolve_paired_canopies() instead."
+    )
     def resolve_scs_from(self, receiver_name: str) -> list[str]:
         """Deprecated: use resolve_paired_canopies instead."""
-        import warnings
-
-        warnings.warn(
-            "SiteConfig.resolve_scs_from is deprecated; use resolve_paired_canopies instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         return self.resolve_paired_canopies(receiver_name)
 
     @model_validator(mode="after")

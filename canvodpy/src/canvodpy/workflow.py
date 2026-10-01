@@ -5,8 +5,8 @@ VOD workflow orchestration using component factories.
     ``VODWorkflow`` is deprecated and its ``_augment_data`` step is a
     no-op stub — it never applies ephemeris augmentation, so VOD
     computed through this class uses un-augmented angles. Use
-    ``Site(site).pipeline()`` for configured pipeline runs, or
-    ``canvodpy.functional`` for component-level scripting/analysis.
+    ``Site(site).pipeline()`` to process data and ``Site(site).vod``
+    to compute VOD. Removed with the next major version.
     ``VODWorkflow`` emits a ``DeprecationWarning`` on instantiation.
 
 Provides high-level workflow coordination with structured logging and
@@ -52,10 +52,10 @@ if TYPE_CHECKING:
 
 
 @deprecated(
-    "VODWorkflow is deprecated (its augmentation step is a no-op stub — "
-    "VOD computed through it uses un-augmented angles). Use "
-    "Site(site).pipeline() for configured pipeline runs, or "
-    "canvodpy.functional for component-level scripting."
+    "VODWorkflow is left over from development and will be removed with the next major version. "
+    "It never augments the data, so its VOD uses un-augmented angles. "
+    "Use canvodpy.Site(<site>).pipeline() to process data and "
+    "canvodpy.Site(<site>).vod to compute VOD instead."
 )
 class VODWorkflow:
     """

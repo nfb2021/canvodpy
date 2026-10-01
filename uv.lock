@@ -248,6 +248,7 @@ name = "canvod-config"
 version = "0.4.0"
 source = { editable = "packages/canvod-config" }
 dependencies = [
+    { name = "canvod-utils" },
     { name = "email-validator" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -256,6 +257,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "canvod-utils", editable = "packages/canvod-utils" },
     { name = "email-validator", specifier = ">=2.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
@@ -279,6 +281,7 @@ source = { editable = "packages/canvod-grids" }
 dependencies = [
     { name = "astropy" },
     { name = "canvod-store" },
+    { name = "canvod-utils" },
     { name = "dask" },
     { name = "loguru" },
     { name = "matplotlib" },
@@ -305,6 +308,7 @@ optional = [
 requires-dist = [
     { name = "astropy", specifier = ">=6.0.0" },
     { name = "canvod-store", editable = "packages/canvod-store" },
+    { name = "canvod-utils", editable = "packages/canvod-utils" },
     { name = "dask", specifier = ">=2024.1.0" },
     { name = "loguru", specifier = ">=0.7.0" },
     { name = "matplotlib", specifier = ">=3.8.0" },

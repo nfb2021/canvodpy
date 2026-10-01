@@ -1353,9 +1353,9 @@ class PipelineOrchestrator:
 
 
 @deprecated(
-    "SingleReceiverProcessor is never instantiated by the live pipeline and its "
-    "process() calls a RinexDataProcessor method that no longer exists (would "
-    "raise AttributeError if invoked). Use PipelineOrchestrator instead."
+    "SingleReceiverProcessor is left over from development and will be removed with the next major version. "
+    "Its process() method fails because it calls a method that no longer "
+    "exists. Use canvodpy.Site(<site>).pipeline() instead."
 )
 class SingleReceiverProcessor:
     """Process a single receiver for one day.

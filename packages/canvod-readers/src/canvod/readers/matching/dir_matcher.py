@@ -11,7 +11,7 @@ from pathlib import Path
 from natsort import natsorted
 
 from canvod.readers.gnss_specs.constants import RINEX_OBS_GLOB_PATTERNS
-from canvod.utils.tools import YYYYDOY
+from canvod.utils.tools import YYYYDOY, deprecated
 
 from .models import MatchedDirs, PairMatchedDirs
 
@@ -56,6 +56,10 @@ def _has_rinex_files(directory: Path) -> bool:
     return False
 
 
+@deprecated(
+    "DataDirMatcher is left over from development and will be removed with the next major version. "
+    "Use canvod.preflight.FilenameMapper with DataDirectoryValidator instead."
+)
 class DataDirMatcher:
     """Match RINEX data directories for canopy and reference receivers.
 
@@ -101,14 +105,6 @@ class DataDirMatcher:
         canopy_pattern: Path = Path("02_canopy/01_GNSS/01_raw"),
     ) -> None:
         """Initialize matcher with directory structure."""
-        import warnings
-
-        warnings.warn(
-            "DataDirMatcher is deprecated. Use canvod.filemap.FilenameMapper "
-            "with DataDirectoryValidator instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         self.root = Path(root)
         self.reference_dir = self.root / reference_pattern
         self.canopy_dir = self.root / canopy_pattern
@@ -229,6 +225,10 @@ class DataDirMatcher:
             raise FileNotFoundError(msg)
 
 
+@deprecated(
+    "PairDataDirMatcher is left over from development and will be removed with the next major version. "
+    "Use canvod.preflight.FilenameMapper with DataDirectoryValidator instead."
+)
 class PairDataDirMatcher:
     """Match RINEX directories for receiver pairs across dates.
 
@@ -284,14 +284,6 @@ class PairDataDirMatcher:
         analysis_pairs: dict[str, dict[str, str]],
     ) -> None:
         """Initialize pair matcher with receiver configuration."""
-        import warnings
-
-        warnings.warn(
-            "PairDataDirMatcher is deprecated. Use canvod.filemap.FilenameMapper "
-            "with DataDirectoryValidator instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         self.base_dir = Path(base_dir)
         self.receivers = receivers
         self.analysis_pairs = analysis_pairs

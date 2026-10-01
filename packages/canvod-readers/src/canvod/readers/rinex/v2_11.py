@@ -22,7 +22,6 @@ Classes:
 
 import hashlib
 import json
-import warnings
 from collections import Counter
 from datetime import UTC, datetime
 from itertools import pairwise
@@ -70,6 +69,7 @@ from canvod.readers.gnss_specs.models import (
 )
 from canvod.readers.gnss_specs.signals import SignalIDMapper
 from canvod.readers.gnss_specs.utils import get_version_from_pyproject
+from canvod.utils.tools import deprecated
 
 # --------------------------------------------------------------------------- #
 # Constants
@@ -1713,6 +1713,12 @@ def _normalize_sv(sv_str: str) -> str:
 # --------------------------------------------------------------------------- #
 
 
+@deprecated(
+    "canvod.readers.rinex.v2_11._register_factory() is left over from "
+    "development and will be removed with the next major version. It never "
+    "registered anything. Rnxv2Obs is registered as 'rinex2' when canvodpy "
+    "is imported; nothing needs to be called instead."
+)
 def _register_factory() -> None:
     """Dead code, kept only to emit a deprecation notice before removal.
 
@@ -1724,21 +1730,9 @@ def _register_factory() -> None:
     import ``canvodpy.factories.ReaderFactory`` directly since canvodpy
     depends on canvod-readers, not the other way around.
     """
-    warnings.warn(
-        "Rnxv2Obs._register_factory() is dead code: canvod.readers.base "
-        "has no ReaderFactory, so this has always silently registered "
-        "nothing. Rnxv2Obs is actually registered as 'rinex2' via "
-        "canvodpy's _register_builtin_components(). This function will "
-        "be removed in a future release.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
     import contextlib
 
     with contextlib.suppress(ImportError):
         from canvod.readers.base import ReaderFactory
 
         ReaderFactory.register("rinex_v2", Rnxv2Obs)
-
-
-_register_factory()

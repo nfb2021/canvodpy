@@ -699,9 +699,8 @@ def append_rinex_ds_to_store(
 
 
 @deprecated(
-    "worker_task() is unused by the live pipeline (Phase 2 submits "
-    "preprocess_with_hermite_aux()/preprocess_reference_with_hermite_aux_fanout() "
-    "directly to the loky pool). Kept for reference only."
+    "worker_task() is left over from development and will be removed with the next major version. "
+    "Use preprocess_with_hermite_aux() instead."
 )
 def worker_task(
     rinex_file: Path,
@@ -746,9 +745,8 @@ def worker_task(
 
 
 @deprecated(
-    "worker_task_append_only() is unused by the live pipeline (Phase 2 submits "
-    "preprocess_with_hermite_aux()/preprocess_reference_with_hermite_aux_fanout() "
-    "directly to the loky pool). Kept for reference only."
+    "worker_task_append_only() is left over from development and will be removed with the next major version. "
+    "Use preprocess_with_hermite_aux() instead."
 )
 def worker_task_append_only(
     rinex_file: Path,
@@ -3737,9 +3735,8 @@ class RinexDataProcessor:
         return rinex_dir, receiver_name
 
     @deprecated(
-        "parsed_rinex_data_gen_2_receivers() has no callers in the live pipeline "
-        "(PipelineOrchestrator._process_multi_day_batches() is the primary path). "
-        "Kept for reference only."
+        "parsed_rinex_data_gen_2_receivers() is left over from development and will be removed with the next major version. "
+        "Use canvodpy.Site(<site>).pipeline() instead."
     )
     def parsed_rinex_data_gen_2_receivers(
         self,
@@ -4787,9 +4784,8 @@ class RinexDataProcessor:
 
 
 @deprecated(
-    "DistributedRinexDataProcessor is never instantiated by the live pipeline "
-    "and is unfinished (own docstring: 'Under development. Use with caution.'). "
-    "Use PipelineOrchestrator/RinexDataProcessor instead."
+    "DistributedRinexDataProcessor is left over from development and will be removed with the next major version. "
+    "It was never finished. Use canvodpy.Site(<site>).pipeline() instead."
 )
 class DistributedRinexDataProcessor(RinexDataProcessor):
     """Under development. Use with caution.

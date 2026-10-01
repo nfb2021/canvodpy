@@ -24,7 +24,6 @@ Notes
 from __future__ import annotations
 
 import time
-import warnings
 from multiprocessing import Pool, cpu_count
 from typing import Any, cast
 
@@ -33,6 +32,7 @@ import structlog
 import xarray as xr
 
 from canvod.grids import add_cell_ids_to_vod_fast, create_hemigrid
+from canvod.utils.tools import deprecated
 
 logger = structlog.get_logger(__name__)
 
@@ -133,6 +133,10 @@ def process_spatial_batch_worker(args: tuple) -> dict:
 # ----------------------------------------------------------------------
 
 
+@deprecated(
+    "hampel_cell_sid_parallelized() is left over from development and will be removed with the next major version. "
+    "Use aggr_hampel_cell_sid_parallelized() instead."
+)
 def hampel_cell_sid_parallelized(
     vod_ds: xr.Dataset,
     grid_name: str = "equal_area_2deg",
@@ -176,13 +180,6 @@ def hampel_cell_sid_parallelized(
         Dataset-level attrs include full processing metadata.
 
     """
-    warnings.warn(
-        "hampel_cell_sid_parallelized() has no callers in this codebase — use "
-        "aggr_hampel_cell_sid_parallelized() instead, which additionally "
-        "supports optional temporal aggregation.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
     if n_workers is None:
         n_workers = min(cpu_count(), 8)
 

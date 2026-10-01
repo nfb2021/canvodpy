@@ -2,7 +2,6 @@
 Storage integration helpers for working with `HemiGrid` via composition.
 """
 
-import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -10,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 import polars as pl
 import zarr
+from canvod.utils.tools import deprecated
 
 if TYPE_CHECKING:
     import xarray as xr
@@ -187,6 +187,11 @@ class HemiGridStorageAdapter:
     # Backwards-compatible adapters
     # ------------------------------------------------------------------
 
+    @deprecated(
+        "HemiGridStorageAdapter.to_zarr() is left over from development and will "
+        "be removed with the next major version. "
+        "Use HemiGridStorageAdapter.to_icechunk(session, ...) instead."
+    )
     def to_zarr(  # pragma: no cover - legacy path
         self,
         *args: Any,
@@ -206,12 +211,6 @@ class HemiGridStorageAdapter:
         str
             Grid hash for verification.
         """
-        warnings.warn(
-            "HemiGridStorageAdapter.to_zarr is deprecated; "
-            "use to_icechunk(session, ...) instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         if not args or not hasattr(args[0], "store"):
             raise TypeError(
                 "Legacy to_zarr usage is no longer supported. "
@@ -222,6 +221,11 @@ class HemiGridStorageAdapter:
         return self.to_icechunk(session, *remaining_args, **kwargs)
 
     @staticmethod
+    @deprecated(
+        "HemiGridStorageAdapter.from_zarr() is left over from development and will "
+        "be removed with the next major version. "
+        "Use HemiGridStorageAdapter.from_icechunk(session, ...) instead."
+    )
     def from_zarr(  # pragma: no cover - legacy path
         *args: Any,
         **kwargs: Any,
@@ -240,12 +244,6 @@ class HemiGridStorageAdapter:
         StoredHemiGrid
             Loaded grid wrapper.
         """
-        warnings.warn(
-            "HemiGridStorageAdapter.from_zarr is deprecated; "
-            "use from_icechunk(session, ...) instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         return HemiGridStorageAdapter.from_icechunk(*args, **kwargs)
 
     # -------------------------------------------------------------------------
