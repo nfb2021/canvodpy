@@ -376,3 +376,26 @@ class TestPairDataDirMatcher:
         results = list(matcher)
         dates = [r.yyyydoy for r in results]
         assert dates == sorted(dates)
+
+    def test_has_data_decides_which_days_match(self, pair_setup):
+        """An injected ``has_data`` replaces the filename-glob check."""
+        base, receivers, pairs = pair_setup
+        calls = []
+
+        def has_data(receiver, path):
+            calls.append(receiver)
+            return path.name == "25002"
+
+        matcher = PairDataDirMatcher(base, receivers, pairs, has_data=has_data)
+        results = list(matcher)
+        assert [r.yyyydoy.to_str() for r in results] == ["2025002"]
+        assert set(calls) == {"canopy_01", "reference_01"}
+
+    def test_not_deprecated(self, pair_setup):
+        """The pipeline uses PairDataDirMatcher, so it must not warn."""
+        import warnings
+
+        base, receivers, pairs = pair_setup
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            PairDataDirMatcher(base, receivers, pairs)

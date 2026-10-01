@@ -294,6 +294,7 @@ class PipelineOrchestrator:
                 name: cfg.model_dump() if hasattr(cfg, "model_dump") else cfg
                 for name, cfg in site.vod_analyses.items()
             },
+            has_data=self._day_has_data,
         )
 
         self._logger.info(
@@ -314,6 +315,17 @@ class PipelineOrchestrator:
 
     def __exit__(self, *exc: object) -> None:
         self.close()
+
+    def _day_has_data(self, receiver_name: str, day_dir: Path) -> bool:
+        """Whether the run would process any file in a receiver's day directory.
+
+        Uses the run's file discovery (recipe, otherwise canonical names), so
+        a day is scheduled only if files would actually be read from it.
+        """
+        receiver_cfg = self.site._site_config.receivers.get(receiver_name)
+        reader_format = receiver_cfg.reader_format if receiver_cfg else None
+        recipe = receiver_cfg.recipe if receiver_cfg else None
+        return bool(discover_files(day_dir, reader_format, recipe=recipe))
 
     def _detect_reader_format(self, data_dir: Path) -> str:
         """Detect reader format from files in a directory.
