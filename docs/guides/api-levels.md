@@ -33,7 +33,7 @@ All three produce the same `(epoch, sid)` xarray Dataset format.
 | **Pattern** | `canvodpy run --site ... --start ... --end ...` | `site.pipeline().process_date(...)` | `read_rinex(path)` |
 | **Ephemeris** | Automatic (from config) | Automatic (from config) | `augment_with_ephemeris(ds, pos, ...)` |
 | **Store writes** | Automatic (Icechunk) | Automatic (Icechunk) | None (NetCDF / pickle files) |
-| **File discovery** | `canvod-filemap` `BUILTIN_PATTERNS` if installed, else canonical globs (`*.rnx`/`*.sbf`) | Same as CLI | Caller provides paths |
+| **File discovery** | Naming recipe (`canvod-filemap`) if configured, else canonical canVOD names only | Same as CLI | Caller provides paths |
 | **Parallel workers** | Yes | Yes | No |
 | **Deduplication** | 3-layer | 3-layer | None |
 | **Best for** | Daily cron jobs, production runs | Multi-day batch runs from Python | Airflow / custom pipelines / analysis |
@@ -303,7 +303,7 @@ flowchart TD
     end
 
     subgraph Discovery["File Discovery"]
-        FM["BUILTIN_PATTERNS globs<br/>canvod-filemap if installed, else canonical fallback"]
+        FM["Naming recipe (canvod-filemap) if configured,<br/>else canonical canVOD names only"]
     end
 
     subgraph Reading["Parsing"]

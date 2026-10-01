@@ -4,19 +4,17 @@ One code path decides which files in a receiver's per-day directory are
 processed, so ``canvodpy run --dry-run`` reports exactly the files a real run
 would ingest.
 
-Discovery order per receiver:
+Discovery per receiver:
 
 1. **Recipe** -- when the receiver config sets ``recipe:``, the naming recipe
    (``canvod-filemap``) selects the files and maps each to its canonical
-   canVOD name.
-2. **Filename patterns** -- otherwise, ``canvod-filemap``'s built-in source
-   patterns when that optional package is installed.
-3. **Canonical convention** -- otherwise, canonical canVOD names only
-   (``*.rnx``/``*.sbf``, restricted by ``reader_format``).
+   canVOD name. This is the only way non-canonical filenames are processed.
+2. **Canonical convention** -- otherwise, only files whose names follow the
+   canVOD naming convention (``canvod-preflight``) are processed, restricted
+   by ``reader_format``. Other files in the directory are ignored. Compressed
+   files are not selected, because the readers do not decompress.
 
-Canonical names for (2) and (3) come from parsing the physical filename
-against the canVOD naming convention (``canvod-preflight``); a filename that
-does not follow the convention gets an empty canonical name.
+Whether ``canvod-filemap`` is installed does not change (2).
 """
 
 from __future__ import annotations
@@ -95,28 +93,26 @@ def _load_recipe(recipe_path: Path) -> Any:
     return NamingRecipe.load(recipe_path)
 
 
-def _pattern_globs(reader_format: str | None) -> set[str]:
-    """Glob patterns for non-recipe discovery (see module docstring, 2 and 3)."""
-    try:
-        from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
-    except ImportError:
-        if reader_format == "sbf":
-            return {"*.sbf", "*.SBF"}
-        if reader_format in ("rinex3", "rinex"):
-            return {"*.rnx", "*.RNX"}
-        return {"*.rnx", "*.RNX", "*.sbf", "*.SBF"}
+#: File types each reader format reads (``None``/``"auto"``: all of them).
+_READER_FILE_TYPES: dict[str | None, frozenset[str]] = {
+    "sbf": frozenset({"sbf"}),
+    "rinex3": frozenset({"rnx"}),
+    "rinex": frozenset({"rnx"}),
+}
+_ALL_FILE_TYPES = frozenset({"rnx", "sbf"})
 
-    if reader_format == "sbf":
-        globs = set(BUILTIN_PATTERNS["septentrio_sbf"].file_globs)
-        globs.update(g for g in BUILTIN_PATTERNS["canvod"].file_globs if ".sbf" in g)
-        return globs
-    names = auto_match_order()
-    if reader_format in ("rinex3", "rinex"):
-        names = tuple(n for n in names if n != "septentrio_sbf")
-    globs = set()
-    for name in names:
-        globs.update(BUILTIN_PATTERNS[name].file_globs)
-    return globs
+
+def _canonical_file(path: Path, file_types: frozenset[str]) -> DiscoveredFile | None:
+    """``path`` as a discovered file if its name follows the convention."""
+    from canvod.preflight.convention import CanVODFilename
+
+    try:
+        parsed = CanVODFilename.from_filename(path.name)
+    except ValueError:
+        return None
+    if parsed.compression is not None or parsed.file_type.value not in file_types:
+        return None
+    return DiscoveredFile(path=path, canonical_name=parsed.name)
 
 
 def discover_files(
@@ -157,16 +153,26 @@ def discover_files(
         ]
         return natsorted(found, key=lambda d: str(d.path))
 
-    seen: set[Path] = set()
-    found = []
-    for g in sorted(_pattern_globs(reader_format)):
-        for path in data_dir.glob(g):
-            if path.is_file() and path not in seen:
-                seen.add(path)
-                found.append(
-                    DiscoveredFile(path=path, canonical_name=canonical_name_for(path))
-                )
+    file_types = _READER_FILE_TYPES.get(reader_format, _ALL_FILE_TYPES)
+    found = [
+        discovered
+        for path in data_dir.iterdir()
+        if path.is_file()
+        and (discovered := _canonical_file(path, file_types)) is not None
+    ]
     return natsorted(found, key=lambda d: str(d.path))
+
+
+def detect_reader_format(files: list[DiscoveredFile]) -> str:
+    """Reader format for a receiver whose config says ``reader_format: auto``.
+
+    Decided from the canonical names of the discovered files: ``"sbf"`` if
+    they are all SBF, otherwise ``"rinex3"``.
+    """
+    suffixes = {Path(f.canonical_name).suffix for f in files if f.canonical_name}
+    if suffixes == {".sbf"}:
+        return "sbf"
+    return "rinex3"
 
 
 def recipe_for_data_dir(site_config: Any, data_dir: Path) -> str | None:

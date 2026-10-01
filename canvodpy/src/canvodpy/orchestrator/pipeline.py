@@ -42,7 +42,11 @@ except ImportError:
 from canvod.utils.tools import deprecated
 from canvodpy.logging import get_logger
 from canvodpy.logging.run_context import get_run_id
-from canvodpy.orchestrator.discovery import discover_files, recipe_for_data_dir
+from canvodpy.orchestrator.discovery import (
+    detect_reader_format,
+    discover_files,
+    recipe_for_data_dir,
+)
 from canvodpy.orchestrator.processor import (
     RinexDataProcessor,
     _processing_progress,
@@ -311,8 +315,7 @@ class PipelineOrchestrator:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
-    @staticmethod
-    def _detect_reader_format(data_dir: Path) -> str:
+    def _detect_reader_format(self, data_dir: Path) -> str:
         """Detect reader format from files in a directory.
 
         Parameters
@@ -323,43 +326,21 @@ class PipelineOrchestrator:
         Returns
         -------
         str
-            Detected format name (e.g. ``"rinex3"``, ``"sbf"``).
-            Falls back to ``"rinex3"`` if nothing matches.
+            ``"sbf"`` if all files a run would process are SBF, otherwise
+            ``"rinex3"``.
 
         Notes
         -----
-        Uses ``canvod-filemap``'s richer pattern set when that optional
-        package is installed. Without it, falls back to a canonical
-        canVOD-only glob check (``*.sbf``/``*.SBF`` vs. ``*.rnx``/``*.RNX``).
-        Non-canonical filenames require ``canvod-filemap`` + a recipe.
+        Uses the same file selection as the run
+        (:func:`canvodpy.orchestrator.discovery.discover_files`): the
+        receiver's naming recipe when configured, otherwise canonical
+        canVOD names only.
 
         """
-        try:
-            from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
-
-            # Map source pattern names to reader format names
-            _PATTERN_TO_READER = {
-                "septentrio_sbf": "sbf",
-                "rinex_v2_short": "rinex3",
-                "rinex_v3_long": "rinex3",
-                "canvod": "rinex3",
-            }
-            for name in auto_match_order():
-                pat = BUILTIN_PATTERNS[name]
-                if any(
-                    f
-                    for glob in pat.file_globs
-                    for f in data_dir.glob(glob)
-                    if f.is_file()
-                ):
-                    return _PATTERN_TO_READER.get(name, "rinex3")
-            return "rinex3"
-        except ImportError:
-            has_rnx = any(data_dir.glob(g) for g in ("*.rnx", "*.RNX"))
-            has_sbf = any(data_dir.glob(g) for g in ("*.sbf", "*.SBF"))
-            if has_sbf and not has_rnx:
-                return "sbf"
-            return "rinex3"
+        files = discover_files(
+            data_dir, recipe=recipe_for_data_dir(self.site._site_config, data_dir)
+        )
+        return detect_reader_format(files)
 
     def _group_by_date_and_receiver(
         self,
@@ -1400,33 +1381,15 @@ class SingleReceiverProcessor:
         )
 
     def _get_rinex_files(self) -> list[Path]:
-        """Get sorted list of GNSS data files using BUILTIN_PATTERNS globs.
+        """Get sorted list of GNSS data files, as the run selects them.
 
-        Uses ``canvod-filemap``'s pattern registry when that optional
-        package is installed. Without it, falls back to canonical
-        canVOD-only names (``*.rnx``/``*.RNX``, ``*.sbf``/``*.SBF``)
-        selected by ``self.reader_name``.
+        Delegates to :func:`canvodpy.orchestrator.discovery.discover_files`.
         """
-        try:
-            from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
-
-            globs: set[str] = set()
-            for name in auto_match_order():
-                globs.update(BUILTIN_PATTERNS[name].file_globs)
-        except ImportError:
-            if self.reader_name == "sbf":
-                globs = {"*.sbf", "*.SBF"}
-            else:
-                globs = {"*.rnx", "*.RNX"}
-
-        files: list[Path] = []
-        seen: set[Path] = set()
-        for g in sorted(globs):
-            for path in self.data_dir.glob(g):
-                if path.is_file() and path not in seen:
-                    seen.add(path)
-                    files.append(path)
-        return sorted(files)
+        recipe = recipe_for_data_dir(self.site._site_config, self.data_dir)
+        return [
+            found.path
+            for found in discover_files(self.data_dir, self.reader_name, recipe=recipe)
+        ]
 
     def process(self, keep_vars: list[str] | None = None) -> xr.Dataset:
         """Process all RINEX files for this receiver and write to Icechunk.

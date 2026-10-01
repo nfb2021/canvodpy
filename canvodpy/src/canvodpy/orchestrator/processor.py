@@ -1329,9 +1329,8 @@ class RinexDataProcessor:
 
         Delegates to :func:`canvodpy.orchestrator.discovery.discover_files`
         (the same selection the dry-run preview reports): the receiver's
-        naming recipe when configured, otherwise canvod-filemap's patterns
-        when installed, otherwise canonical canVOD names. Each file's
-        canonical name is cached for the log book (see
+        naming recipe when configured, otherwise canonical canVOD names
+        only. Each file's canonical name is cached for the log book (see
         :meth:`_canonical_name`).
 
         Parameters
@@ -1339,8 +1338,8 @@ class RinexDataProcessor:
         rinex_dir : Path
             Directory to search.
         reader_format : str | None
-            If ``"sbf"``, restrict to SBF glob patterns only.
-            Otherwise discovers all recognized GNSS file types.
+            If ``"sbf"``, restrict to SBF files; if ``"rinex3"``/``"rinex"``,
+            to RINEX files. Otherwise discovers both.
 
         """
         if not rinex_dir.exists():

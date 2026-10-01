@@ -8,7 +8,9 @@ from unittest import mock
 
 import pytest
 from canvodpy.orchestrator.discovery import (
+    DiscoveredFile,
     canonical_name_for,
+    detect_reader_format,
     discover_files,
     recipe_for_data_dir,
     resolve_recipe_path,
@@ -30,12 +32,48 @@ def test_canonical_name_for() -> None:
 
 def test_convention_discovery_by_reader_format(tmp_path: Path) -> None:
     _touch(tmp_path, CANONICAL, "ROSA01TUW_R_20250010000_15M_05S_AA.sbf", "x.txt")
-    with mock.patch.dict("sys.modules", {"canvod.filemap.patterns": None}):
-        rnx = discover_files(tmp_path, "rinex3")
-        sbf = discover_files(tmp_path, "sbf")
+    rnx = discover_files(tmp_path, "rinex3")
+    sbf = discover_files(tmp_path, "sbf")
+    both = discover_files(tmp_path, "auto")
     assert [f.path.name for f in rnx] == [CANONICAL]
     assert rnx[0].canonical_name == CANONICAL
     assert [f.path.suffix for f in sbf] == [".sbf"]
+    assert len(both) == 2
+
+
+def test_non_canonical_files_are_ignored(tmp_path: Path) -> None:
+    """Without a recipe only names following the convention are processed."""
+    _touch(
+        tmp_path,
+        CANONICAL,
+        "rref001a00.25o",  # RINEX v2 short name
+        "ROSA00AUT_R_20250010000_01D_30S_MO.rnx",  # RINEX v3 long name
+        "rosa001a.rnx",
+        "ROSA01TUW_R_20250010045_15M_05S_AA.RNX",  # upper-case extension
+        "ROSA01TUW_R_20250010015_15M_05S_AA.rnx.gz",  # compressed
+        "ROSA01TUW_R_20250010030_15M_05S_AA.ubx",  # no reader
+    )
+    assert [f.path.name for f in discover_files(tmp_path, None)] == [CANONICAL]
+
+
+def test_installed_filemap_does_not_widen_discovery(tmp_path: Path) -> None:
+    """Having canvod-filemap installed must not change non-recipe discovery."""
+    _touch(tmp_path, CANONICAL, "rref001a00.25o", "rosa001a.rnx")
+    fake_patterns = SimpleNamespace(
+        BUILTIN_PATTERNS={"any": SimpleNamespace(file_globs=("*",))},
+        auto_match_order=lambda: ("any",),
+    )
+    with mock.patch.dict("sys.modules", {"canvod.filemap.patterns": fake_patterns}):
+        found = discover_files(tmp_path, None)
+    assert [f.path.name for f in found] == [CANONICAL]
+
+
+def test_detect_reader_format() -> None:
+    rnx = DiscoveredFile(Path("a"), CANONICAL)
+    sbf = DiscoveredFile(Path("b"), CANONICAL.replace(".rnx", ".sbf"))
+    assert detect_reader_format([sbf]) == "sbf"
+    assert detect_reader_format([rnx, sbf]) == "rinex3"
+    assert detect_reader_format([]) == "rinex3"
 
 
 def test_missing_directory_yields_nothing(tmp_path: Path) -> None:
