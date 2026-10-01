@@ -43,6 +43,7 @@ from canvod.utils.tools import deprecated
 from canvodpy.logging import get_logger
 from canvodpy.logging.run_context import get_run_id
 from canvodpy.orchestrator.discovery import (
+    check_recipe_receivers,
     detect_reader_format,
     discover_files,
     recipe_for_data_dir,
@@ -253,6 +254,7 @@ class PipelineOrchestrator:
         on_group_written: Callable[[str], None] | None = None,
     ) -> None:
         _check_recipe_receivers_have_filemap(site.receivers)
+        check_recipe_receivers(site.receivers)
 
         self.site = site
         self.n_max_workers = n_max_workers

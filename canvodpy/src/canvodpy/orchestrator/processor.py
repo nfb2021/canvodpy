@@ -105,6 +105,34 @@ def _processing_progress(disable: bool = False) -> Progress:
     )
 
 
+def _warn_if_aux_grid_coarser(
+    log: Any, rnx_file: Path, ds: xr.Dataset, aux_store: xr.Dataset
+) -> None:
+    """Warn if the ephemeris grid is coarser than the file's sampling.
+
+    The grid interval comes from the sampling field of the filename when it
+    can be parsed. If that field is wrong, each observation epoch is matched
+    to the nearest grid epoch instead of its own, without an error.
+    """
+    if ds.sizes.get("epoch", 0) < 2 or aux_store.sizes.get("epoch", 0) < 2:
+        return
+    data_step = float(np.median(np.diff(ds.epoch.values)) / np.timedelta64(1, "s"))
+    aux_epochs = aux_store.epoch.values[:2]
+    grid_step = float((aux_epochs[1] - aux_epochs[0]) / np.timedelta64(1, "s"))
+    if data_step < grid_step:
+        log.warning(
+            "sampling_mismatch",
+            file=str(rnx_file.name),
+            data_sampling_s=data_step,
+            ephemeris_grid_s=grid_step,
+            hint=(
+                "The file is sampled more finely than the ephemeris grid, so "
+                "satellite positions are taken from the nearest grid epoch. "
+                "Check the sampling field of the filename or naming recipe."
+            ),
+        )
+
+
 def preprocess_with_hermite_aux(
     rnx_file: Path,
     keep_vars: list[str] | None,
@@ -280,6 +308,7 @@ def preprocess_with_hermite_aux(
                 decode_timedelta=True,
                 consolidated=False,
             )
+            _warn_if_aux_grid_coarser(log, rnx_file, ds, aux_store)
             aux_slice = aux_store.sel(epoch=ds.epoch, method="nearest")
 
             # Eagerly load aux slice — batches all Zarr reads (X, Y, Z, clock)
@@ -489,6 +518,7 @@ def preprocess_reference_with_hermite_aux_fanout(
                 decode_timedelta=True,
                 consolidated=False,
             )
+            _warn_if_aux_grid_coarser(log, rnx_file, ds, aux_store)
             aux_slice = aux_store.sel(epoch=ds.epoch, method="nearest")
             aux_slice = aux_slice.load()
             t_aux = time.perf_counter()

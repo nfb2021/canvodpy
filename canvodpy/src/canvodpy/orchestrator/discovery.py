@@ -102,6 +102,52 @@ _READER_FILE_TYPES: dict[str | None, frozenset[str]] = {
 _ALL_FILE_TYPES = frozenset({"rnx", "sbf"})
 
 
+def check_recipe_receivers(receivers: dict[str, dict[str, Any]]) -> None:
+    """Check that each receiver's recipe gives it its own canonical identity.
+
+    The canonical name of a file starts with the receiver identity
+    (site, receiver type, receiver number, agency, e.g. ``ROSA01TUW``). Two
+    receivers whose recipes produce the same identity cannot be told apart
+    in the store, and a recipe whose receiver type differs from the
+    receiver's configured type would label the files with the wrong role.
+
+    Parameters
+    ----------
+    receivers : dict[str, dict]
+        Receiver name to receiver configuration (``type``, ``recipe``).
+
+    Raises
+    ------
+    ValueError
+        Listing every problem found.
+    """
+    owner: dict[str, str] = {}
+    problems: list[str] = []
+    for name, cfg in receivers.items():
+        recipe_name = cfg.get("recipe")
+        if not recipe_name:
+            continue
+        recipe = _load_recipe(resolve_recipe_path(recipe_name))
+        if recipe.receiver_type != cfg.get("type"):
+            problems.append(
+                f"Receiver '{name}' is configured as '{cfg.get('type')}', but its "
+                f"recipe '{recipe_name}' sets receiver_type '{recipe.receiver_type}'."
+            )
+        role = "R" if recipe.receiver_type == "reference" else "A"
+        identity = f"{recipe.site}{role}{recipe.receiver_number:02d}{recipe.agency}"
+        if identity in owner:
+            problems.append(
+                f"Receivers '{owner[identity]}' and '{name}' both get canonical "
+                f"names starting with {identity}. Give each receiver its own "
+                f"recipe with a distinct receiver_number."
+            )
+        else:
+            owner[identity] = name
+    if problems:
+        msg = "Naming recipe problems:\n  - " + "\n  - ".join(problems)
+        raise ValueError(msg)
+
+
 def _canonical_file(path: Path, file_types: frozenset[str]) -> DiscoveredFile | None:
     """``path`` as a discovered file if its name follows the convention."""
     from canvod.preflight.convention import CanVODFilename

@@ -10,6 +10,7 @@ import pytest
 from canvodpy.orchestrator.discovery import (
     DiscoveredFile,
     canonical_name_for,
+    check_recipe_receivers,
     detect_reader_format,
     discover_files,
     recipe_for_data_dir,
@@ -138,3 +139,57 @@ def test_recipe_drives_discovery(
 
     assert [f.path.name for f in found] == ["rref001a15.25o"]
     assert found[0].canonical_name == "ROSR01TUW_R_20250010015_15M_05S_AA.rnx"
+
+
+def _recipes(**recipes: SimpleNamespace):
+    """Patch recipe loading to return the given recipes by name."""
+    return (
+        mock.patch(
+            "canvodpy.orchestrator.discovery.resolve_recipe_path",
+            side_effect=lambda name: name,
+        ),
+        mock.patch(
+            "canvodpy.orchestrator.discovery._load_recipe",
+            side_effect=lambda name: recipes[name],
+        ),
+    )
+
+
+def _recipe(receiver_type: str, number: int) -> SimpleNamespace:
+    return SimpleNamespace(
+        site="ROS", agency="TUW", receiver_type=receiver_type, receiver_number=number
+    )
+
+
+def test_recipe_receivers_with_distinct_identities_pass() -> None:
+    receivers = {
+        "reference_01": {"type": "reference", "recipe": "ref"},
+        "canopy_01": {"type": "canopy", "recipe": "can1"},
+        "canopy_02": {"type": "canopy", "recipe": "can2"},
+        "canopy_03": {"type": "canopy", "recipe": None},
+    }
+    a, b = _recipes(
+        ref=_recipe("reference", 1),
+        can1=_recipe("canopy", 1),
+        can2=_recipe("canopy", 2),
+    )
+    with a, b:
+        check_recipe_receivers(receivers)
+
+
+def test_shared_recipe_identity_is_rejected() -> None:
+    """Two canopies sharing one recipe would both be named ROSA01TUW."""
+    receivers = {
+        "canopy_01": {"type": "canopy", "recipe": "can"},
+        "canopy_02": {"type": "canopy", "recipe": "can"},
+    }
+    a, b = _recipes(can=_recipe("canopy", 1))
+    with a, b, pytest.raises(ValueError, match="ROSA01TUW"):
+        check_recipe_receivers(receivers)
+
+
+def test_recipe_receiver_type_must_match() -> None:
+    receivers = {"canopy_01": {"type": "canopy", "recipe": "ref"}}
+    a, b = _recipes(ref=_recipe("reference", 1))
+    with a, b, pytest.raises(ValueError, match="receiver_type 'reference'"):
+        check_recipe_receivers(receivers)
