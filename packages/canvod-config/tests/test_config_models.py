@@ -300,7 +300,7 @@ class TestReceiverConfig:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             rc = ReceiverConfig(type="reference", directory="ref/raw", scs_from="all")
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert any(issubclass(x.category, FutureWarning) for x in w)
         assert rc.paired_canopies == "all"
 
     def test_recipe_and_naming_both_set_raises(self):
@@ -382,7 +382,7 @@ class TestSiteConfig:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             result = site.resolve_scs_from("reference_01")
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert any(issubclass(x.category, FutureWarning) for x in w)
         assert result == ["canopy_01"]
 
     def test_paired_canopies_references_nonexistent_canopy_raises(self):
@@ -516,7 +516,7 @@ class TestStorageConfig:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             result = sc.get_rinex_store_path("rosalia")
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert any(issubclass(x.category, FutureWarning) for x in w)
         assert result == tmp_path / "rosalia" / "rinex"
 
     def test_placeholder_path_not_validated(self):

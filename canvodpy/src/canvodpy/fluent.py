@@ -3,7 +3,7 @@
 .. deprecated::
     Use ``Site(site).pipeline()`` to process data and ``Site(site).vod``
     to compute VOD. Removed with the next major version.
-    ``FluentWorkflow`` emits a ``DeprecationWarning`` on instantiation.
+    ``FluentWorkflow`` emits a ``FutureWarning`` on instantiation.
 
 Provides a chainable, lazy pipeline where steps are recorded and
 executed only when a terminal method is called.

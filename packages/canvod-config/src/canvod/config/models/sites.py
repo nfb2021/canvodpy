@@ -72,7 +72,7 @@ class ReceiverConfig(_StrictModel):
             warnings.warn(
                 "The receiver setting 'scs_from' is left over from development and will be removed with the next major version. "
                 "Rename it to 'paired_canopies' in your site configuration.",
-                DeprecationWarning,
+                FutureWarning,
                 stacklevel=2,
             )
             data = dict(data)

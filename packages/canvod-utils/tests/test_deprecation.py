@@ -13,7 +13,7 @@ def test_function_warns_and_returns_result():
         """Add two numbers."""
         return a + b
 
-    with pytest.warns(DeprecationWarning, match="Use new_add instead."):
+    with pytest.warns(FutureWarning, match="Use new_add instead."):
         assert old_add(1, 2) == 3
     assert old_add.__name__ == "old_add"
     assert old_add.__doc__ == "Add two numbers."
@@ -25,7 +25,7 @@ def test_class_warns_on_instantiation():
         def __init__(self, value):
             self.value = value
 
-    with pytest.warns(DeprecationWarning, match="Use NewThing instead."):
+    with pytest.warns(FutureWarning, match="Use NewThing instead."):
         obj = OldThing(5)
     assert obj.value == 5
     assert isinstance(obj, OldThing)

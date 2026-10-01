@@ -163,7 +163,7 @@ class VODCalculator(ABC, BaseModel):
                 "version. It is ignored: the calculator always aligns both "
                 "datasets on their shared epochs and signals. Remove the "
                 "argument.",
-                DeprecationWarning,
+                FutureWarning,
                 stacklevel=2,
             )
 

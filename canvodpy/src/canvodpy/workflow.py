@@ -7,7 +7,7 @@ VOD workflow orchestration using component factories.
     computed through this class uses un-augmented angles. Use
     ``Site(site).pipeline()`` to process data and ``Site(site).vod``
     to compute VOD. Removed with the next major version.
-    ``VODWorkflow`` emits a ``DeprecationWarning`` on instantiation.
+    ``VODWorkflow`` emits a ``FutureWarning`` on instantiation.
 
 Provides high-level workflow coordination with structured logging and
 extensibility through factory pattern.

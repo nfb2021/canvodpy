@@ -305,7 +305,7 @@ class TestTauOmegaZerothOrder:
         """Test ImportError with helpful message when canvod-store not installed."""
         with unittest.mock.patch.dict("sys.modules", {"canvod.store": None}):
             with (
-                pytest.warns(DeprecationWarning, match="compute_bulk"),
+                pytest.warns(FutureWarning, match="compute_bulk"),
                 pytest.raises(ImportError, match="canvod-store"),
             ):
                 TauOmegaZerothOrder.from_icechunkstore("/fake/path")
@@ -331,7 +331,7 @@ class TestFromDatasets:
             }
         )
 
-        with pytest.warns(DeprecationWarning, match="next major version"):
+        with pytest.warns(FutureWarning, match="next major version"):
             vod_ds = TauOmegaZerothOrder.from_datasets(
                 canopy_ds=canopy_ds, sky_ds=sky_ds, align=False
             )
