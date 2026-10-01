@@ -461,6 +461,12 @@ class Pipeline:
         ):
             yield date_key, datasets
 
+    @deprecated(
+        "Pipeline.calculate_vod() is left over from development and will be "
+        "removed with the next major version. Use "
+        "canvodpy.Site(<site>).vod.compute_bulk(<analysis>, start=..., end=...) "
+        "instead."
+    )
     def calculate_vod(
         self,
         canopy: str,
@@ -468,7 +474,10 @@ class Pipeline:
         date: str,
         write_to_store: bool = True,
     ) -> xr.Dataset:
-        """Calculate VOD for a receiver pair.
+        """Calculate VOD for a receiver pair on one day.
+
+        Delegates to ``Site.vod.compute_bulk()`` for the configured analysis
+        of this canopy/reference pair, restricted to the given day.
 
         Parameters
         ----------
@@ -478,73 +487,16 @@ class Pipeline:
             Reference receiver name (e.g., "reference_01")
         date : str
             Date in YYYYDOY format
+        write_to_store : bool, default True
+            If True, write the result to the VOD store.
 
         Returns
         -------
         xr.Dataset
             VOD analysis results
 
-        Examples
-        --------
-        >>> pipeline = Pipeline("ExampleSite")
-        >>> vod = pipeline.calculate_vod("canopy_01", "reference_01", "2025001")
-        >>> print(vod.vod.mean().values)
-        0.42
-
         """
-        log = self.log.bind(date=date, canopy=canopy, reference=reference)
-        log.info("vod_calculation_started")
-
-        try:
-            # Convert YYYYDOY string to a one-day time_slice for read_group
-            import datetime
-
-            from canvod.utils.tools.date_utils import YYYYDOY
-
-            _d = YYYYDOY.from_str(date).date
-            if _d is None:
-                raise ValueError(f"Could not parse date from {date!r}")
-            _time_slice = slice(str(_d), str(_d + datetime.timedelta(days=1)))
-            # Load processed data from stores
-            # canopy_data = self.site.gnss_store.read_group(canopy, date=date)
-            # ref_data = self.site.gnss_store.read_group(reference, date=date)
-            from canvod.config.models import reference_store_group
-
-            canopy_data = self.site.gnss_store.read_group(
-                canopy, time_slice=_time_slice
-            )
-            ref_group = reference_store_group(reference, canopy)
-            ref_data = self.site.gnss_store.read_group(
-                ref_group, time_slice=_time_slice
-            )
-
-            # Lazy import to avoid circular dependency
-            from canvod.vod import TauOmegaZerothOrder
-
-            # Use proven VOD calculator
-            calculator = TauOmegaZerothOrder(canopy_ds=canopy_data, sky_ds=ref_data)
-            vod_results = calculator.calculate_vod()
-
-            # Store results
-            analysis_name = f"{canopy}_vs_{reference}"
-            if write_to_store:
-                self.site.vod_store.write_or_append_group(vod_results, analysis_name)
-
-            log.info(
-                "vod_calculation_complete",
-                analysis=analysis_name,
-                vod_mean=float(vod_results.vod.mean().values)
-                if "vod" in vod_results
-                else None,
-            )
-            return vod_results
-        except Exception as e:
-            log.error(
-                "vod_calculation_failed",
-                error=str(e),
-                exception=type(e).__name__,
-            )
-            raise
+        return _vod_for_day(self.site, canopy, reference, date, write_to_store)
 
     def preview(
         self,
@@ -583,6 +535,45 @@ class Pipeline:
             f"workers={self.n_workers}, "
             f"days_per_batch={self.days_per_batch})"
         )
+
+
+def _vod_for_day(
+    site: Site,
+    canopy: str,
+    reference: str,
+    date: str,
+    write: bool,
+) -> xr.Dataset:
+    """Compute one day of VOD for a canopy/reference pair via ``site.vod``.
+
+    Backs the deprecated ``Pipeline.calculate_vod()`` and
+    ``canvodpy.calculate_vod()``.
+    """
+    import datetime
+
+    from canvod.utils.tools.date_utils import YYYYDOY
+
+    analysis_name = next(
+        (
+            name
+            for name, cfg in site.vod_analyses.items()
+            if cfg.canopy_receiver == canopy and cfg.reference_receiver == reference
+        ),
+        None,
+    )
+    if analysis_name is None:
+        raise ValueError(
+            f"No VOD analysis configured for canopy {canopy!r} and reference "
+            f"{reference!r}. Configured analyses: {list(site.vod_analyses)}"
+        )
+
+    day = YYYYDOY.from_str(date).date
+    if day is None:
+        raise ValueError(f"Could not parse date from {date!r}")
+    start = datetime.datetime.combine(day, datetime.time())
+    end = start + datetime.timedelta(days=1) - datetime.timedelta(microseconds=1)
+
+    return site.vod.compute_bulk(analysis_name, start=start, end=end, write=write)
 
 
 # ============================================================================
@@ -667,11 +658,11 @@ def calculate_vod(
     aux_agency: str | None = None,
     write_to_store: bool = True,
 ) -> xr.Dataset:
-    """Calculate VOD for a receiver pair (convenience function).
+    """Calculate VOD for a receiver pair on one day (convenience function).
 
-    This is the simplest way to calculate VOD - just provide
-    site, receivers, and date. All optional parameters default to
-    values from ``config/processing.yaml``.
+    Computes VOD from the site's GNSS store via ``Site.vod.compute_bulk()``
+    for the configured analysis of this canopy/reference pair. The day must
+    already be processed into the GNSS store.
 
     Parameters
     ----------
@@ -684,9 +675,11 @@ def calculate_vod(
     date : str
         Date in YYYYDOY format
     keep_vars : list[str], optional
-        RINEX variables to keep. Default: from config.
+        Unused. VOD is computed from the stored data.
     aux_agency : str, optional
-        Analysis center. Default: from config.
+        Unused. VOD is computed from the stored data.
+    write_to_store : bool, default True
+        If True, write the result to the VOD store.
 
     Returns
     -------
@@ -706,14 +699,7 @@ def calculate_vod(
     0.42
 
     """
-    with Pipeline(
-        site=site,
-        keep_vars=keep_vars,
-        aux_agency=aux_agency,
-    ) as pipeline:
-        return pipeline.calculate_vod(
-            canopy, reference, date, write_to_store=write_to_store
-        )
+    return _vod_for_day(Site(site), canopy, reference, date, write_to_store)
 
 
 @deprecated(

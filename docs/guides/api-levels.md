@@ -184,7 +184,7 @@ vod_ds = calculate_vod(canopy_ds, reference_ds)
 
     `from canvodpy import calculate_vod` gives you the **deprecated** flat
     function (`site, canopy, reference, date` — reads from the store, writes
-    to the store; use `Site(site).pipeline().calculate_vod(...)` instead).
+    to the store; use `Site(site).vod.compute_bulk(...)` instead).
     `from canvodpy.functional import calculate_vod` gives you the
     **functional API** version (`canopy_ds, sky_ds` — pure, in-memory). Import
     from the module that matches your intent.
@@ -348,7 +348,7 @@ flowchart TD
 | Ephemeris augmentation | auto | auto | `augment_with_ephemeris()` |
 | Deduplication | :fontawesome-solid-check: | :fontawesome-solid-check: | — |
 | Store write | auto | auto | — |
-| VOD computation | `pipeline.calculate_vod()` | `pipeline.calculate_vod()` / `site.vod` | `functional.calculate_vod()` |
+| VOD computation | auto | `site.vod` | `functional.calculate_vod()` |
 | Parallel workers | :fontawesome-solid-check: | :fontawesome-solid-check: | — |
 
 ---

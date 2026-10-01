@@ -139,7 +139,7 @@ pip install canvodpy
     site = Site("ExampleSite")
     with site.pipeline() as pipeline:
         data = pipeline.process_date("2025001")
-        vod = pipeline.calculate_vod("canopy_01", "reference_01", "2025001")
+    vod = site.vod.compute_day_all(data)  # every configured analysis
     ```
 
 === "Functional — component-level"

@@ -5,24 +5,20 @@ vegetation optical depth (VOD) using the tau-omega model.
 
 Quick Start
 -----------
-Three levels of API to match your needs:
+**Site processing, from the terminal** (production runs, resumable)::
 
-**Level 1: Simple (one-liners)**
-    >>> from canvodpy import process_date, calculate_vod
-    >>> data = process_date("ExampleSite", "2025001")
-    >>> vod = calculate_vod("ExampleSite", "canopy_01", "reference_01", "2025001")
+    canvodpy run
 
-**Level 2: Object-oriented (more control)**
-    >>> from canvodpy import Site, Pipeline
+**Site processing, from Python** (same logic as ``canvodpy run``)
+    >>> from canvodpy import Site
     >>> site = Site("ExampleSite")
-    >>> pipeline = site.pipeline()
-    >>> data = pipeline.process_date("2025001")
-    >>> vod = pipeline.calculate_vod("canopy_01", "reference_01", "2025001")
+    >>> with site.pipeline() as pipeline:
+    ...     data = pipeline.process_date("2025001")
+    >>> vod = site.vod.compute_day_all(data)  # every configured analysis
 
-**Level 3: Low-level (full control)**
-    >>> from canvod.store import GnssResearchSite
-    >>> from canvod.vod import VODCalculator
-    >>> # Direct access to all internals
+**Single-step functions** (read, augment, grid or compute VOD on datasets)
+    >>> from canvodpy.functional import calculate_vod
+    >>> vod = calculate_vod(canopy_ds, sky_ds, calculator="tau_omega")
 
 Community Extensions
 --------------------
@@ -49,22 +45,12 @@ Default variables and settings are in `globals.py`.
 
 Examples
 --------
-Process one day of data:
-    >>> from canvodpy import process_date
-    >>> data = process_date("ExampleSite", "2025001")
-
-Process a week:
-    >>> from canvodpy import Pipeline
-    >>> pipeline = Pipeline("ExampleSite")
-    >>> for date, datasets in pipeline.process_range("2025001", "2025007"):
-    ...     print(f"Processed {date}")
-
-Calculate and visualize VOD:
-    >>> from canvodpy import calculate_vod
-    >>> from canvod.viz import HemisphereVisualizer
-    >>> vod = calculate_vod("ExampleSite", "canopy_01", "reference_01", "2025001")
-    >>> viz = HemisphereVisualizer()
-    >>> fig = viz.plot_2d(vod)
+Process a week, computing VOD for every configured analysis per day:
+    >>> from canvodpy import Site
+    >>> site = Site("ExampleSite")
+    >>> with site.pipeline() as pipeline:
+    ...     for date, datasets in pipeline.process_range("2025001", "2025007"):
+    ...         site.vod.compute_day_all(datasets)
 
 """
 
