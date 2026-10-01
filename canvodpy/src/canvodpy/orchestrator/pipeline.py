@@ -39,7 +39,7 @@ except ImportError:
     _HAS_LOKY = False
     _loky_reusable = None
 
-from canvodpy._deprecation import deprecated
+from canvod.utils.tools import deprecated
 from canvodpy.logging import get_logger
 from canvodpy.logging.run_context import get_run_id
 from canvodpy.orchestrator.discovery import discover_files, recipe_for_data_dir

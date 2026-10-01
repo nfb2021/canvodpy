@@ -36,7 +36,7 @@ from __future__ import annotations
 from functools import wraps
 from typing import TYPE_CHECKING, Any
 
-from canvodpy._deprecation import deprecated
+from canvod.utils.tools import deprecated
 from canvodpy.api import Site
 from canvodpy.factories import GridFactory, ReaderFactory, VODFactory
 from canvodpy.logging import get_logger

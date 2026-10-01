@@ -42,7 +42,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import xarray as xr
 
-from canvodpy._deprecation import deprecated
+from canvod.utils.tools import deprecated
 from canvodpy.api import Site
 from canvodpy.factories import GridFactory, ReaderFactory, VODFactory
 from canvodpy.logging import get_logger

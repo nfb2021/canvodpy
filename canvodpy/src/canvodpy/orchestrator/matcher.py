@@ -5,7 +5,7 @@ import warnings
 import xarray as xr
 
 from canvod.auxiliary.interpolation import create_interpolator_from_attrs
-from canvodpy._deprecation import deprecated
+from canvod.utils.tools import deprecated
 
 
 @deprecated(

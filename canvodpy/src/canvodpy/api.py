@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canvodpy._deprecation import deprecated
+from canvod.utils.tools import deprecated
 
 # Lazy imports to avoid circular dependencies
 

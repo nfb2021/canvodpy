@@ -51,10 +51,10 @@ from canvod.store import GnssResearchSite, scoped_zarr_concurrency
 from canvod.store.store import _with_run_id
 from canvod.utils.tools import (
     _worker_init,
+    deprecated,
     get_version_from_pyproject,
     sanitize_directory,
 )
-from canvodpy._deprecation import deprecated
 from canvodpy.logging import get_logger, stage_timer
 from canvodpy.logging.run_context import get_run_id, set_run_id
 from canvodpy.orchestrator.discovery import (

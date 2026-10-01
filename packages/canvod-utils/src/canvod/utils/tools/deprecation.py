@@ -1,4 +1,4 @@
-"""Shared deprecation-warning decorator for canvodpy's legacy API surfaces."""
+"""Shared deprecation-warning decorator for canVODpy packages."""
 
 from __future__ import annotations
 
