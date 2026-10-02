@@ -49,6 +49,7 @@ from canvodpy.orchestrator.discovery import (
     detect_reader_format,
     discover_files,
     receiver_days,
+    recipe_file,
 )
 from canvodpy.orchestrator.processor import (
     RinexDataProcessor,
@@ -233,7 +234,9 @@ class PipelineOrchestrator:
     ) -> None:
         # A new run sees files added since the previous one.
         clear_discovery_cache()
-        check_receivers(site.receivers, site._site_config.get_base_path())
+        check_receivers(
+            site.receivers, site._site_config.get_base_path(), site.site_name
+        )
 
         self.site = site
         self.n_max_workers = n_max_workers
@@ -300,7 +303,7 @@ class PipelineOrchestrator:
             receiver_name,
             site_config.get_base_path() / cfg.directory,
             reader_format,
-            cfg.recipe,
+            recipe_file(self.site.site_name, cfg.recipe),
         )
         return {day.yyyydoy: day for day in days}
 
@@ -389,7 +392,7 @@ class PipelineOrchestrator:
                             canopy_name,
                             site_config.get_base_path() / canopy_cfg.directory,
                             date_key,
-                            canopy_cfg.recipe,
+                            recipe_file(self.site.site_name, canopy_cfg.recipe),
                         )
                         if canopy_cfg
                         else None
@@ -1381,7 +1384,9 @@ class SingleReceiverProcessor:
             self.receiver_name,
             self.data_dir,
             self.yyyydoy.to_str(),
-            receiver_cfg.recipe if receiver_cfg else None,
+            recipe_file(self.site.site_name, receiver_cfg.recipe)
+            if receiver_cfg
+            else None,
         )
         return [found.path for found in discover_files(day, self.reader_name)]
 

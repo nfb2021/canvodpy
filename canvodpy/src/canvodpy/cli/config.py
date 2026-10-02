@@ -150,7 +150,8 @@ def init(
 
     Creates:
       - config/canvod-settings.yaml
-      - config/recipes/*.yaml (example naming recipes)
+
+    Naming recipes are created per receiver with ``just naming-init SITE NAME``.
 
     Parameters
     ----------
@@ -202,20 +203,6 @@ def init(
     else:
         console.print(f"[yellow]⚠️  Template not found: {canvod_example}[/yellow]")
 
-    # Copy example recipe files (bundled as *.yaml.example, same convention
-    # as canvod-settings.yaml.example above — strip the suffix on copy).
-    recipes_src = template_dir / "recipes"
-    recipes_dest = config_dir / "recipes"
-    if recipes_src.exists():
-        recipes_dest.mkdir(parents=True, exist_ok=True)
-        for recipe_file in sorted(recipes_src.glob("*.yaml.example")):
-            dest = recipes_dest / recipe_file.name.removesuffix(".example")
-            if dest.exists() and not force:
-                files_skipped.append(dest)
-            else:
-                shutil.copy(recipe_file, dest)
-                files_created.append(dest)
-
     # Show results
     if files_created:
         console.print("[green]✓ Created:[/green]")
@@ -236,7 +223,8 @@ def init(
             "      export CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com"
         )
         console.print(
-            "  - Edit config/recipes/*.yaml if your receivers use non-canonical filenames\n"
+            "  - If a receiver writes non-canonical file names, create its naming "
+            "recipe with: just naming-init SITE NAME\n"
         )
         return
 
@@ -257,7 +245,10 @@ def init(
     console.print(
         "       export CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com"
     )
-    console.print("  3. Edit config/recipes/*.yaml to match your filename format")
+    console.print(
+        "  3. If a receiver writes non-canonical file names, create its naming "
+        "recipe with: just naming-init SITE NAME"
+    )
     console.print("  4. Run: canvodpy config validate\n")
 
 

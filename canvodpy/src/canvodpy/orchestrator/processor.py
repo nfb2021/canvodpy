@@ -61,6 +61,7 @@ from canvodpy.orchestrator.discovery import (
     ReceiverDay,
     canonical_name_for,
     discover_files,
+    recipe_file,
 )
 from canvodpy.orchestrator.interpolator import (
     ClockConfig,
@@ -1406,7 +1407,10 @@ class RinexDataProcessor:
         for name, cfg in site_config.receivers.items():
             if base / cfg.directory in (folder, folder.parent):
                 return ReceiverDay(
-                    name, folder, self.matched_data_dirs.yyyydoy.to_str(), cfg.recipe
+                    name,
+                    folder,
+                    self.matched_data_dirs.yyyydoy.to_str(),
+                    recipe_file(self.site.site_name, cfg.recipe),
                 )
         return ReceiverDay("", folder, self.matched_data_dirs.yyyydoy.to_str())
 
@@ -4705,7 +4709,12 @@ class RinexDataProcessor:
 
         def _day(name: str) -> ReceiverDay:
             cfg = site_config.receivers[name]
-            return ReceiverDay(name, base_path / cfg.directory, date_key, cfg.recipe)
+            return ReceiverDay(
+                name,
+                base_path / cfg.directory,
+                date_key,
+                recipe_file(self.site.site_name, cfg.recipe),
+            )
 
         canopy_days = {
             name: _day(name)

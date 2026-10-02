@@ -32,6 +32,7 @@ def _orchestrator(base: Path) -> PipelineOrchestrator:
     )
     orch = object.__new__(PipelineOrchestrator)
     orch.site = SimpleNamespace(
+        site_name="rosalia",
         _site_config=site_config,
         vod_analyses={
             "a": {"canopy_receiver": "canopy_01", "reference_receiver": "reference_01"}

@@ -38,7 +38,11 @@ def _check(tmp_path: Path, sampling_s: float | None = None, **cfg):
         return_value=sampling_s,
     ) as read:
         report = check_receiver_data(
-            "canopy_01", cfg, tmp_path, check_sampling=sampling_s is not None
+            "canopy_01",
+            cfg,
+            tmp_path,
+            "rosalia",
+            check_sampling=sampling_s is not None,
         )
     return report, read
 
@@ -121,7 +125,10 @@ def test_unreadable_file_is_a_warning(tmp_path: Path) -> None:
         side_effect=ValueError("broken"),
     ):
         report = check_receiver_data(
-            "canopy_01", {"directory": "rx", "reader_format": "rinex3"}, tmp_path
+            "canopy_01",
+            {"directory": "rx", "reader_format": "rinex3"},
+            tmp_path,
+            "rosalia",
         )
     assert report.errors == []
     assert "Could not read" in report.warnings[0]

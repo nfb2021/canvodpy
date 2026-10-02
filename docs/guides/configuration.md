@@ -469,11 +469,14 @@ sites:
   my_site:
     receivers:
       reference_01:
-        recipe: my_site_reference   # → config/recipes/my_site_reference.yaml
+        recipe: my_site_reference   # → <config dir>/recipes/my_site/my_site_reference.yaml
 ```
 
-`just config-init` copies recipe templates into `config/recipes/` alongside
-`canvod-settings.yaml`. The full recipe format and API are documented in the
+Recipe files are kept per site, in `<config dir>/recipes/<site>/<recipe>.yaml`.
+`just naming-init my_site my_site_reference` creates one from the template that
+ships with canvod-filemap. A recipe saved directly in `<config dir>/recipes/` is
+not used; the error message says where to move it. Recipes are user data and are
+not part of the canvodpy repository. The full recipe format and API are documented in the
 [canvod-filemap repository](https://github.com/nfb2021/canvodpy-extensions).
 
 ---

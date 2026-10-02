@@ -62,14 +62,15 @@ class ReceiverDay:
         The receiver's configured data directory (any layout below it).
     yyyydoy : str
         Day in ``YYYYDOY`` format.
-    recipe : str | None
-        Name of the receiver's naming recipe, if configured.
+    recipe : Path | None
+        The receiver's naming recipe file, if it has one (see
+        :func:`recipe_file`).
     """
 
     receiver: str
     directory: Path
     yyyydoy: str
-    recipe: str | None = None
+    recipe: Path | None = None
 
     def __str__(self) -> str:
         return f"{self.receiver} {self.yyyydoy} ({self.directory})"
@@ -93,27 +94,48 @@ def canonical_name_for(path: Path | str) -> str:
         return ""
 
 
-def resolve_recipe_path(recipe_name: str) -> Path:
-    """Resolve a recipe name to ``<config dir>/recipes/{recipe_name}.yaml``.
+def recipe_file(site: str, recipe: str | None) -> Path | None:
+    """The naming recipe file of a receiver of ``site``.
 
-    The configuration directory is the one the settings file is read from
-    (:func:`canvod.config.loader.get_default_config_dir`).
+    Recipes are read from ``<config dir>/recipes/<site>/<recipe>.yaml``, in
+    the configuration directory the settings file is read from
+    (:func:`canvod.config.loader.get_default_config_dir`). The lookup itself
+    is :func:`canvod.filemap.find_recipe`.
+
+    Parameters
+    ----------
+    site : str
+        Site name in the settings file.
+    recipe : str | None
+        The receiver's ``recipe:`` setting.
+
+    Returns
+    -------
+    Path | None
+        The recipe file, ``None`` if the receiver has no recipe.
 
     Raises
     ------
-    FileNotFoundError
-        If no recipe file with that name exists there.
+    DiscoveryError
+        If canvod-filemap is not installed or the recipe file does not exist.
     """
+    if not recipe:
+        return None
     from canvod.config.loader import get_default_config_dir
 
-    path = get_default_config_dir() / "recipes" / f"{recipe_name}.yaml"
-    if path.exists():
-        return path
-    msg = (
-        f"Recipe file not found for '{recipe_name}': {path}\n"
-        f"Create it with: just naming-init {recipe_name}"
-    )
-    raise FileNotFoundError(msg)
+    try:
+        from canvod.filemap import RecipeNotFoundError, find_recipe
+    except ImportError as exc:
+        msg = (
+            f"Recipe '{recipe}' requires canvod-filemap, but it is not "
+            f"installed. Install it with: uv sync --extra filemap"
+        )
+        raise DiscoveryError(msg) from exc
+    try:
+        return find_recipe(get_default_config_dir(), site, recipe)
+    except RecipeNotFoundError as exc:
+        msg = f"{exc}\nCreate it with: just naming-init {site} {recipe}"
+        raise DiscoveryError(msg) from exc
 
 
 @lru_cache(maxsize=32)
@@ -132,18 +154,15 @@ _READER_FILE_TYPES: dict[str | None, frozenset[str]] = {
 _ALL_FILE_TYPES = frozenset({"rnx", "sbf"})
 
 
-def _receiver_identity(cfg: dict[str, Any], base_path: Path) -> str | None:
+def _receiver_identity(cfg: dict[str, Any], base_path: Path, site: str) -> str | None:
     """Canonical receiver identity (e.g. ``ROSA01TUW``) of one receiver.
 
     Taken from the receiver's recipe if it has one, otherwise from the
     canonical names of the files in its directory (``None`` if it has none).
     """
-    recipe_name = cfg.get("recipe")
-    if recipe_name:
-        try:
-            recipe = _load_recipe(resolve_recipe_path(recipe_name))
-        except FileNotFoundError as exc:
-            raise DiscoveryError(str(exc)) from exc
+    path = recipe_file(site, cfg.get("recipe"))
+    if path is not None:
+        recipe = _load_recipe(path)
         role = "R" if recipe.receiver_type == "reference" else "A"
         return f"{recipe.site}{role}{recipe.receiver_number:02d}{recipe.agency}"
     try:
@@ -152,7 +171,9 @@ def _receiver_identity(cfg: dict[str, Any], base_path: Path) -> str | None:
         return None  # reported when the receiver's files are read
 
 
-def check_receivers(receivers: dict[str, dict[str, Any]], base_path: Path) -> None:
+def check_receivers(
+    receivers: dict[str, dict[str, Any]], base_path: Path, site: str
+) -> None:
     """Check that the files of each receiver can be told apart.
 
     The canonical name of a file starts with the receiver identity (site,
@@ -170,6 +191,8 @@ def check_receivers(receivers: dict[str, dict[str, Any]], base_path: Path) -> No
         ``recipe``).
     base_path : Path
         The site's data root, which receiver directories are relative to.
+    site : str
+        Site name in the settings file, which selects the recipe folder.
 
     Raises
     ------
@@ -192,7 +215,7 @@ def check_receivers(receivers: dict[str, dict[str, Any]], base_path: Path) -> No
     owner: dict[str, str] = {}
     problems: list[str] = []
     for name, cfg in receivers.items():
-        identity = _receiver_identity(cfg, base_path)
+        identity = _receiver_identity(cfg, base_path, site)
         if identity is None:
             continue
         source = f"its recipe '{cfg['recipe']}'" if cfg.get("recipe") else "its files"
@@ -262,7 +285,7 @@ class DirectoryScan:
     unrecognized: tuple[Path, ...]
 
 
-def scan_directory(directory: Path, recipe: str | None = None) -> DirectoryScan:
+def scan_directory(directory: Path, recipe: Path | None = None) -> DirectoryScan:
     """Scan a receiver directory as a run does.
 
     Cached for the run; :func:`clear_discovery_cache` forgets the result so
@@ -278,11 +301,11 @@ def scan_directory(directory: Path, recipe: str | None = None) -> DirectoryScan:
 
 
 @lru_cache(maxsize=64)
-def _scan_directory(directory: Path, recipe: str | None) -> DirectoryScan:
+def _scan_directory(directory: Path, recipe: Path | None) -> DirectoryScan:
     from canvod.preflight.convention import CanVODFilename, find_overlaps
 
     try:
-        naming_recipe = _load_recipe(resolve_recipe_path(recipe)) if recipe else None
+        naming_recipe = _load_recipe(recipe) if recipe else None
     except (FileNotFoundError, ImportError) as exc:
         raise DiscoveryError(str(exc)) from exc
     found: list[DiscoveredFile] = []
@@ -364,7 +387,7 @@ def clear_discovery_cache() -> None:
 
 
 def _of_format(
-    files: tuple[DiscoveredFile, ...], reader_format: str | None, recipe: str | None
+    files: tuple[DiscoveredFile, ...], reader_format: str | None, recipe: Path | None
 ) -> list[DiscoveredFile]:
     if recipe:  # the recipe's file_type already selects the files
         return list(files)
@@ -376,7 +399,7 @@ def receiver_days(
     receiver: str,
     directory: Path,
     reader_format: str | None = None,
-    recipe: str | None = None,
+    recipe: Path | None = None,
 ) -> list[ReceiverDay]:
     """All days for which ``directory`` holds files of the receiver, sorted."""
     index = _scan_directory(Path(directory), recipe).days

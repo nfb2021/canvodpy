@@ -58,7 +58,7 @@ class ReceiverConfig(_StrictModel):
         None,
         description=(
             "Name of a naming recipe (e.g. 'examplesite_reference'). "
-            "Resolved from config/recipes/{recipe}.yaml. "
+            "Read from <config dir>/recipes/<site>/{recipe}.yaml. "
             "When set, replaces the 'naming' block for file discovery."
         ),
     )

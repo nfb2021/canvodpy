@@ -266,8 +266,8 @@ requires-dist = [
 
 [[package]]
 name = "canvod-filemap"
-version = "0.3.0"
-source = { git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap&tag=v0.1.0#2e914ba8706cfc63fb0b7ab254a69323fee4f7f5" }
+version = "0.1.0"
+source = { git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap&branch=feat%2Ffilemap-recipes#753db564850611e4e43671f10ef51c0e71beb322" }
 dependencies = [
     { name = "natsort" },
     { name = "pydantic" },
@@ -648,7 +648,7 @@ requires-dist = [
     { name = "altair", specifier = ">=6.0.0" },
     { name = "canvod-auxiliary", editable = "packages/canvod-auxiliary" },
     { name = "canvod-config", editable = "packages/canvod-config" },
-    { name = "canvod-filemap", marker = "extra == 'filemap'", git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap&tag=v0.1.0" },
+    { name = "canvod-filemap", marker = "extra == 'filemap'", git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap&branch=feat%2Ffilemap-recipes" },
     { name = "canvod-grids", editable = "packages/canvod-grids" },
     { name = "canvod-ops", editable = "packages/canvod-ops" },
     { name = "canvod-preflight", editable = "packages/canvod-preflight" },

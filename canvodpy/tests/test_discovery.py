@@ -17,7 +17,7 @@ from canvodpy.orchestrator.discovery import (
     detect_reader_format,
     discover_files,
     receiver_days,
-    resolve_recipe_path,
+    recipe_file,
     scan_directory,
 )
 
@@ -156,24 +156,38 @@ def test_index_is_rescanned_after_clearing(tmp_path: Path) -> None:
     assert len(receiver_days("rx", tmp_path)) == 2
 
 
-def test_recipes_are_read_from_the_config_dir_only(
+def test_recipes_are_read_from_the_site_folder_of_the_config_dir(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    pytest.importorskip("canvod.filemap.recipe_files")
+    _touch(tmp_path / "recipes" / "rosalia", "ref.yaml")
+    monkeypatch.setenv("CANVOD_CONFIG_DIR", str(tmp_path))
+    assert (
+        recipe_file("rosalia", "ref") == tmp_path / "recipes" / "rosalia" / "ref.yaml"
+    )
+    assert recipe_file("rosalia", None) is None
+    # No fallback to the checkout's config/recipes/
+    with pytest.raises(DiscoveryError, match="just naming-init rosalia _template"):
+        recipe_file("rosalia", "_template")
+
+
+def test_recipe_outside_its_site_folder_is_an_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pytest.importorskip("canvod.filemap.recipe_files")
     _touch(tmp_path / "recipes", "ref.yaml")
     monkeypatch.setenv("CANVOD_CONFIG_DIR", str(tmp_path))
-    assert resolve_recipe_path("ref") == tmp_path / "recipes" / "ref.yaml"
-    # No fallback to the checkout's config/recipes/
-    with pytest.raises(FileNotFoundError, match=str(tmp_path / "recipes")):
-        resolve_recipe_path("_template")
+    with pytest.raises(DiscoveryError, match=r"Move .* to .*rosalia"):
+        recipe_file("rosalia", "ref")
 
 
 def test_recipe_drives_discovery(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A receiver recipe selects non-canonical files and maps their names."""
-    pytest.importorskip("canvod.filemap.recipe")
-    (tmp_path / "recipes").mkdir()
-    (tmp_path / "recipes" / "ros_ref.yaml").write_text(
+    pytest.importorskip("canvod.filemap.recipe_files")
+    (tmp_path / "recipes" / "rosalia").mkdir(parents=True)
+    (tmp_path / "recipes" / "rosalia" / "ros_ref.yaml").write_text(
         "name: ros_ref\n"
         "site: ROS\n"
         "agency: TUW\n"
@@ -197,7 +211,8 @@ def test_recipe_drives_discovery(
     _touch(data_dir / "25001", "rref001a15.25o", CANONICAL)
     _touch(data_dir, "rref002a00.25o")  # a different day, outside day folders
 
-    days = receiver_days("reference_01", data_dir, recipe="ros_ref")
+    recipe = recipe_file("rosalia", "ros_ref")
+    days = receiver_days("reference_01", data_dir, recipe=recipe)
     assert [d.yyyydoy for d in days] == ["2025001", "2025002"]
     found = discover_files(days[0], "rinex3")
 
@@ -209,8 +224,8 @@ def _recipes(**recipes: SimpleNamespace):
     """Patch recipe loading to return the given recipes by name."""
     return (
         mock.patch(
-            "canvodpy.orchestrator.discovery.resolve_recipe_path",
-            side_effect=lambda name: name,
+            "canvodpy.orchestrator.discovery.recipe_file",
+            side_effect=lambda site, name: name,
         ),
         mock.patch(
             "canvodpy.orchestrator.discovery._load_recipe",
@@ -238,7 +253,7 @@ def test_recipe_receivers_with_distinct_identities_pass(tmp_path: Path) -> None:
         can2=_recipe("canopy", 2),
     )
     with a, b, mock.patch.dict("sys.modules", {"canvod.filemap": SimpleNamespace()}):
-        check_receivers(receivers, tmp_path)
+        check_receivers(receivers, tmp_path, "rosalia")
 
 
 def test_shared_recipe_identity_is_rejected(tmp_path: Path) -> None:
@@ -254,7 +269,7 @@ def test_shared_recipe_identity_is_rejected(tmp_path: Path) -> None:
         mock.patch.dict("sys.modules", {"canvod.filemap": SimpleNamespace()}),
         pytest.raises(DiscoveryError, match="ROSA01TUW"),
     ):
-        check_receivers(receivers, tmp_path)
+        check_receivers(receivers, tmp_path, "rosalia")
 
 
 def test_recipe_receiver_type_must_match(tmp_path: Path) -> None:
@@ -266,7 +281,7 @@ def test_recipe_receiver_type_must_match(tmp_path: Path) -> None:
         mock.patch.dict("sys.modules", {"canvod.filemap": SimpleNamespace()}),
         pytest.raises(DiscoveryError, match="ROSR01TUW, the identity of a reference"),
     ):
-        check_receivers(receivers, tmp_path)
+        check_receivers(receivers, tmp_path, "rosalia")
 
 
 def test_recipe_without_filemap_is_an_error(tmp_path: Path) -> None:
@@ -278,7 +293,7 @@ def test_recipe_without_filemap_is_an_error(tmp_path: Path) -> None:
         mock.patch.dict("sys.modules", {"canvod.filemap": None}),
         pytest.raises(DiscoveryError, match="uv sync --extra filemap") as exc_info,
     ):
-        check_receivers(receivers, tmp_path)
+        check_receivers(receivers, tmp_path, "rosalia")
     assert "canopy_01" in str(exc_info.value)
     assert "reference_01" not in str(exc_info.value)
 
@@ -286,13 +301,11 @@ def test_recipe_without_filemap_is_an_error(tmp_path: Path) -> None:
 def test_missing_recipe_file_is_an_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    pytest.importorskip("canvod.filemap.recipe_files")
     monkeypatch.setenv("CANVOD_CONFIG_DIR", str(tmp_path))
     receivers = {"canopy_01": {"type": "canopy", "directory": "c", "recipe": "nope"}}
-    with (
-        mock.patch.dict("sys.modules", {"canvod.filemap": SimpleNamespace()}),
-        pytest.raises(DiscoveryError, match="Recipe file not found for 'nope'"),
-    ):
-        check_receivers(receivers, tmp_path)
+    with pytest.raises(DiscoveryError, match="Recipe file not found for 'nope'"):
+        check_receivers(receivers, tmp_path, "rosalia")
 
 
 def test_canonical_receivers_with_the_same_identity_are_rejected(
@@ -305,14 +318,14 @@ def test_canonical_receivers_with_the_same_identity_are_rejected(
         "canopy_02": {"type": "canopy", "directory": "c2"},
     }
     with pytest.raises(DiscoveryError, match="'canopy_01' and 'canopy_02'"):
-        check_receivers(receivers, tmp_path)
+        check_receivers(receivers, tmp_path, "rosalia")
 
 
 def test_canonical_receiver_role_must_match_type(tmp_path: Path) -> None:
     _touch(tmp_path / "r", DAY1)  # ROSA01TUW: a canopy identity
     receivers = {"reference_01": {"type": "reference", "directory": "r"}}
     with pytest.raises(DiscoveryError, match="configured as 'reference'"):
-        check_receivers(receivers, tmp_path)
+        check_receivers(receivers, tmp_path, "rosalia")
 
 
 def test_receivers_without_files_pass(tmp_path: Path) -> None:
@@ -320,7 +333,7 @@ def test_receivers_without_files_pass(tmp_path: Path) -> None:
         "canopy_01": {"type": "canopy", "directory": "absent"},
         "canopy_02": {"type": "canopy", "directory": "absent_too"},
     }
-    check_receivers(receivers, tmp_path)
+    check_receivers(receivers, tmp_path, "rosalia")
 
 
 def test_scan_reports_unrecognized_files(tmp_path: Path) -> None:

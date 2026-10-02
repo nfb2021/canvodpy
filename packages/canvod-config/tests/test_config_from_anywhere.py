@@ -100,7 +100,6 @@ class TestGetTemplateDir:
         template_dir = loader_module.get_template_dir()
         assert template_dir.exists()
         assert (template_dir / "canvod-settings.yaml.example").exists()
-        assert (template_dir / "recipes" / "_template.yaml.example").exists()
 
     def test_template_dir_independent_of_monorepo_lookup(self):
         """Even if monorepo-root discovery fails, templates are still found."""

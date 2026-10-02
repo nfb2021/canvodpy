@@ -110,7 +110,7 @@ sites:
   my_site:
     receivers:
       reference_01:
-        recipe: my_site_reference   # → config/recipes/my_site_reference.yaml
+        recipe: my_site_reference   # → <config dir>/recipes/my_site/my_site_reference.yaml
 ```
 
 ### NamingRecipe YAML format
@@ -150,8 +150,9 @@ fields:
 | `minute` | Minute (0--59) |
 | `skip` | Ignore N characters |
 
-`uv run canvodpy config init` copies recipe templates to `config/recipes/`
-alongside `canvod-settings.yaml`. See the
+Recipe files are kept per site, in `<config dir>/recipes/<site>/<recipe>.yaml`.
+`just naming-init my_site my_site_reference` creates one from the template that
+ships with canvod-filemap. See the
 [canvod-filemap documentation](https://github.com/nfb2021/canvodpy-extensions)
 for the full API (`FilenameMapper`, `VirtualFile`, `FilenameCatalog`).
 

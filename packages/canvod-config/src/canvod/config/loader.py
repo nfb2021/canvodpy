@@ -119,8 +119,7 @@ def get_template_dir() -> Path:
     Returns
     -------
     Path
-        Directory containing ``canvod-settings.yaml.example`` and
-        ``recipes/*.yaml.example``.
+        Directory containing ``canvod-settings.yaml.example``.
     """
     return Path(__file__).parent / "templates"
 

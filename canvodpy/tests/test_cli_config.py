@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest import mock
 
 import canvodpy.cli.config as cfg
+import pytest
 import typer
 import yaml
 from typer.testing import CliRunner
@@ -176,7 +177,8 @@ class TestValidateRecipeWithoutFilemap:
 
 class TestConfigDirOption:
     def test_selects_the_settings_and_the_recipes(self, tmp_path):
-        from canvodpy.orchestrator.discovery import resolve_recipe_path
+        pytest.importorskip("canvod.filemap.recipe_files")
+        from canvodpy.orchestrator.discovery import recipe_file
 
         from canvod.config.loader import get_default_config_dir
 
@@ -189,8 +191,11 @@ class TestConfigDirOption:
 
         # Every later lookup in the same process uses that directory
         assert get_default_config_dir() == config_dir.resolve()
-        (config_dir / "recipes" / "rx.yaml").write_text("")
-        assert resolve_recipe_path("rx") == config_dir.resolve() / "recipes" / "rx.yaml"
+        (config_dir / "recipes" / "rosalia").mkdir(parents=True)
+        (config_dir / "recipes" / "rosalia" / "rx.yaml").write_text("")
+        assert recipe_file("rosalia", "rx") == (
+            config_dir.resolve() / "recipes" / "rosalia" / "rx.yaml"
+        )
 
     def test_every_command_offers_it(self):
         from canvodpy.cli.app import main_app

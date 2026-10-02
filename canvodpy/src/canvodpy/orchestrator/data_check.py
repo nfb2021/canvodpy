@@ -26,6 +26,7 @@ from canvodpy.orchestrator.discovery import (
     detect_reader_format,
     discover_files,
     receiver_days,
+    recipe_file,
     scan_directory,
 )
 
@@ -177,6 +178,7 @@ def check_receiver_data(
     name: str,
     cfg: dict[str, Any],
     base_path: Path,
+    site: str,
     check_sampling: bool = True,
     reader_options: dict[str, Any] | None = None,
 ) -> ReceiverReport:
@@ -190,6 +192,8 @@ def check_receiver_data(
         Receiver configuration (``directory``, ``reader_format``, ``recipe``).
     base_path : Path
         The site's data root, which receiver directories are relative to.
+    site : str
+        Site name in the settings file, which selects the recipe folder.
     check_sampling : bool
         Read the first file of the first and of the last day and compare
         the sampling interval of the data with the one in the file's
@@ -206,9 +210,10 @@ def check_receiver_data(
         report.errors.append(f"Directory not found: {directory}")
         return report
     try:
-        scan = scan_directory(directory, recipe)
+        recipe_path = recipe_file(site, recipe)
+        scan = scan_directory(directory, recipe_path)
         reader_format = None if configured_format == "auto" else configured_format
-        days = receiver_days(name, directory, reader_format, recipe)
+        days = receiver_days(name, directory, reader_format, recipe_path)
     except DiscoveryError as exc:
         report.errors.append(str(exc))
         return report
@@ -287,11 +292,11 @@ def check_site_data(
     clear_discovery_cache()
     report = SiteReport(site)
     try:
-        check_receivers(receivers, base_path)
+        check_receivers(receivers, base_path, site)
     except DiscoveryError as exc:
         report.errors.append(str(exc))
     for name, cfg in receivers.items():
         report.receivers[name] = check_receiver_data(
-            name, cfg, base_path, check_sampling, reader_options
+            name, cfg, base_path, site, check_sampling, reader_options
         )
     return report

@@ -246,9 +246,10 @@ processing:
 # Sites
 # =============================================================================
 # Each top-level key is a site name.  Receivers go under each site.
-# Recipe files live in config/recipes/{recipe_name}.yaml.
-# If canvod-virtualiconvname is installed, recipe files map physical filenames
-# to the canVOD naming convention. Without it, files must already conform.
+# Recipe files live in <config dir>/recipes/<site>/<recipe>.yaml; create one
+# with: just naming-init <site> <recipe>. With canvod-filemap installed, a
+# recipe maps physical filenames to the canVOD naming convention. Without a
+# recipe, files must already follow the convention.
 
 sites:
   my_site:
@@ -268,7 +269,7 @@ sites:
         reader_format: auto          # 'auto', 'rinex3', or 'sbf'
         paired_canopies: all         # 'all' or list of canopy receiver names
         description: null
-        # recipe: my_site_reference  # → config/recipes/my_site_reference.yaml
+        # recipe: my_site_reference  # → <config dir>/recipes/my_site/my_site_reference.yaml
         #                            #   (requires canvod-virtualiconvname)
 
       canopy_01:
@@ -276,7 +277,7 @@ sites:
         directory: 02_canopy
         reader_format: auto
         description: null
-        # recipe: my_site_canopy     # → config/recipes/my_site_canopy.yaml
+        # recipe: my_site_canopy     # → <config dir>/recipes/my_site/my_site_canopy.yaml
 
     vod_analyses:
       canopy_01_vs_reference_01:

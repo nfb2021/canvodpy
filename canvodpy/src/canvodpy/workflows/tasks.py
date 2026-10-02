@@ -336,19 +336,24 @@ def check_sbf(site: str, yyyydoy: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_recipe(recipe_name: str) -> Path:
+def _resolve_recipe(site: str, recipe_name: str) -> Path:
     """Resolve a recipe name to its YAML file path.
 
-    Same lookup as the pipeline's file discovery: the active config
-    directory's ``recipes/`` first, then ``config/recipes/`` in the monorepo
-    root (see :func:`canvodpy.orchestrator.discovery.resolve_recipe_path`).
+    Same lookup as the pipeline's file discovery:
+    ``<config dir>/recipes/<site>/<recipe_name>.yaml`` (see
+    :func:`canvodpy.orchestrator.discovery.recipe_file`).
     """
-    from canvodpy.orchestrator.discovery import resolve_recipe_path
+    from canvodpy.orchestrator.discovery import recipe_file
 
-    return resolve_recipe_path(recipe_name)
+    path = recipe_file(site, recipe_name)
+    if path is None:
+        msg = "No recipe name given"
+        raise ValueError(msg)
+    return path
 
 
 def _validate_receiver_with_recipe(
+    site: str,
     recipe_name: str,
     receiver_base_dir: Path,
     reader_format: str | None,
@@ -362,7 +367,7 @@ def _validate_receiver_with_recipe(
 
     from canvod.filemap.recipe import NamingRecipe
 
-    recipe_path = _resolve_recipe(recipe_name)
+    recipe_path = _resolve_recipe(site, recipe_name)
     recipe = NamingRecipe.load(recipe_path)
 
     # Discover files using the recipe's glob pattern
@@ -444,7 +449,8 @@ def validate_data_dirs(site: str) -> dict:
 
     Supports two validation modes per receiver:
     - **Recipe mode**: when ``recipe`` is set in the receiver config,
-      loads a ``NamingRecipe`` from ``config/recipes/{recipe}.yaml``
+      loads a ``NamingRecipe`` from
+      ``<config dir>/recipes/<site>/{recipe}.yaml``
     - **Legacy mode**: when ``naming`` dict is set, uses
       ``SiteNamingConfig`` + ``ReceiverNamingConfig`` + ``DataDirectoryValidator``
 
@@ -486,6 +492,7 @@ def validate_data_dirs(site: str) -> dict:
         if rcfg.recipe:
             try:
                 receivers_result[name] = _validate_receiver_with_recipe(
+                    site=site,
                     recipe_name=rcfg.recipe,
                     receiver_base_dir=receiver_base_dir,
                     reader_format=reader_format,

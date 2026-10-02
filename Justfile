@@ -132,26 +132,26 @@ config-check-data SITE:
 run SITE START END:
     uv run canvodpy run --site {{ SITE }} --start {{ START }} --end {{ END }} {{ config_flag }}
 
-# create a naming recipe from the template (for receivers with non-canonical filenames)
-naming-init NAME:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    template="config/recipes/_template.yaml.example"
-    dest="config/recipes/{{ NAME }}.yaml"
-    if [ ! -f "$template" ]; then
-        echo "Template not found: $template"
-        exit 1
-    fi
-    if [ -f "$dest" ]; then
-        echo "Already exists: $dest -- edit it directly, or delete it first to re-scaffold."
-        exit 1
-    fi
-    mkdir -p config/recipes
-    if [[ "{{ NAME }}" == *canopy* ]]; then recv_type="canopy"; else recv_type="reference"; fi
-    sed -e "s/name: CHANGEME/name: {{ NAME }}/" -e "s/receiver_type: reference/receiver_type: $recv_type/" "$template" > "$dest"
-    echo -e "{{ GREEN }}Created $dest{{ NORMAL }}"
-    echo "Next: edit it to match your actual filenames (see the worked examples"
-    echo "in the file), then test with: just config-check-data <site>"
+# create naming recipe NAME of SITE in <config dir>/recipes/SITE/ (non-canonical filenames)
+naming-init SITE NAME:
+    #!/usr/bin/env -S uv run python
+    import os
+    import sys
+
+    os.environ["CANVOD_CONFIG_DIR"] = {{ quote(config_dir) }}
+    from canvod.config.loader import get_default_config_dir
+
+    try:
+        from canvod.filemap import create_recipe
+    except ImportError:
+        sys.exit("Naming recipes need canvod-filemap. Install it with: uv sync --extra filemap")
+    try:
+        path = create_recipe(get_default_config_dir(), {{ quote(SITE) }}, {{ quote(NAME) }})
+    except FileExistsError as exc:
+        sys.exit(f"{exc}. Edit it directly, or delete it first to start over.")
+    print(f"Created {path}")
+    print("Next: fill in the receiver identity and the fields of your file names,")
+    print("then check them with: just config-check-data {{ SITE }}")
 
 # show the current configuration
 config-show:
