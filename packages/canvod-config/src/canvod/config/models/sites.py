@@ -38,7 +38,10 @@ class ReceiverConfig(_StrictModel):
     )
     naming: dict | None = Field(
         None,
-        description="Naming configuration (validated by canvod-filemap package)",
+        description=(
+            "Deprecated, not used for file discovery. Set 'recipe' for "
+            "non-canonical filenames instead."
+        ),
     )
     metadata: dict[str, str | int | float | bool] | None = Field(
         None,
@@ -59,7 +62,8 @@ class ReceiverConfig(_StrictModel):
         description=(
             "Name of a naming recipe (e.g. 'examplesite_reference'). "
             "Read from <config dir>/recipes/<site>/{recipe}.yaml. "
-            "When set, replaces the 'naming' block for file discovery."
+            "Without a recipe, only files with canonical canVOD names are "
+            "processed."
         ),
     )
 
@@ -79,6 +83,20 @@ class ReceiverConfig(_StrictModel):
             data["paired_canopies"] = data.pop("scs_from")
         return data
 
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_naming(cls, data: object) -> object:
+        if isinstance(data, dict) and data.get("naming") is not None:
+            import warnings
+
+            warnings.warn(
+                "The receiver setting 'naming' is left over from development and will be removed with the next major version. "
+                "Use 'recipe' instead (create one with: just naming-init <site> <recipe>).",
+                FutureWarning,
+                stacklevel=2,
+            )
+        return data
+
     @model_validator(mode="after")
     def validate_paired_canopies(self) -> ReceiverConfig:
         """Validate paired_canopies is required for reference, forbidden for canopy."""
@@ -87,23 +105,6 @@ class ReceiverConfig(_StrictModel):
             raise ValueError(msg)
         if self.type == "canopy" and self.paired_canopies is not None:
             msg = "paired_canopies must not be set for canopy receivers"
-            raise ValueError(msg)
-        return self
-
-    @model_validator(mode="after")
-    def validate_naming_recipe_exclusive(self) -> ReceiverConfig:
-        """Reject a receiver configuring both recipe and naming.
-
-        recipe's own description says it "replaces the naming block for
-        file discovery" — but nothing enforced that until now, so both
-        could be set with no indication of which one actually takes effect.
-        """
-        if self.recipe is not None and self.naming is not None:
-            msg = (
-                "recipe and naming are mutually exclusive on a receiver — "
-                "recipe replaces the naming block for file discovery, so "
-                "having both set is ambiguous. Remove one."
-            )
             raise ValueError(msg)
         return self
 
@@ -178,8 +179,25 @@ class SiteConfig(_StrictModel):
     )
     naming: dict | None = Field(
         None,
-        description="Naming configuration (validated by canvod-filemap package)",
+        description=(
+            "Deprecated, not used for file discovery. Set 'recipe' on each "
+            "receiver with non-canonical filenames instead."
+        ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_naming(cls, data: object) -> object:
+        if isinstance(data, dict) and data.get("naming") is not None:
+            import warnings
+
+            warnings.warn(
+                "The site setting 'naming' is left over from development and will be removed with the next major version. "
+                "Use 'recipe' on each receiver instead (create one with: just naming-init <site> <recipe>).",
+                FutureWarning,
+                stacklevel=2,
+            )
+        return data
 
     @model_validator(mode="after")
     def validate_paired_canopies_targets(self) -> SiteConfig:

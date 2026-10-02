@@ -303,26 +303,26 @@ class TestReceiverConfig:
         assert any(issubclass(x.category, FutureWarning) for x in w)
         assert rc.paired_canopies == "all"
 
-    def test_recipe_and_naming_both_set_raises(self):
-        with pytest.raises(ValidationError, match="mutually exclusive"):
-            ReceiverConfig(
-                type="canopy",
-                directory="can/raw",
-                recipe="rosalia_canopy",
-                naming={"source_pattern": "auto"},
-            )
-
     def test_recipe_only_is_valid(self):
         rc = ReceiverConfig(type="canopy", directory="can/raw", recipe="rosalia_canopy")
         assert rc.recipe == "rosalia_canopy"
         assert rc.naming is None
 
-    def test_naming_only_is_valid(self):
-        rc = ReceiverConfig(
-            type="canopy", directory="can/raw", naming={"source_pattern": "auto"}
-        )
+    def test_naming_is_deprecated(self):
+        with pytest.warns(FutureWarning, match="receiver setting 'naming'.*recipe"):
+            rc = ReceiverConfig(
+                type="canopy", directory="can/raw", naming={"source_pattern": "auto"}
+            )
         assert rc.naming == {"source_pattern": "auto"}
         assert rc.recipe is None
+
+    def test_site_naming_is_deprecated(self):
+        with pytest.warns(FutureWarning, match="site setting 'naming'.*recipe"):
+            SiteConfig(
+                gnss_site_data_root="/data",
+                receivers={"canopy_01": {"type": "canopy", "directory": "c"}},
+                naming={"site_id": "ROS", "agency": "TUW"},
+            )
 
 
 # ===================================================================
