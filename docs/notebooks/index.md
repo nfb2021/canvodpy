@@ -36,16 +36,15 @@ and live editing.
 | 08 | Icechunk Store | Versioned Icechunk/Zarr storage | [Notebook](_build/08_icechunk_store.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/08_icechunk_store.py) |
 | 09 | Store Metadata & FAIR Compliance | DataCite/ACDD/STAC provenance | [Notebook](_build/09_store_metadata.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/09_store_metadata.py) |
 | 10 | Visualization | 2D/3D hemispheric plots | [Notebook](_build/10_visualization.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/10_visualization.py) |
-| 11 | Configuration & Diagnostics | Pydantic configuration models, two-track logging, `stage_timer` diagnostics | [Notebook](_build/11_configuration.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/11_configuration.py) |
+| 11 | Configuration & Utilities | Pydantic configuration models, `canvodpy config` commands, `stage_timer` stage timing | [Notebook](_build/11_configuration.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/11_configuration.py) |
 
 ### API notebooks
 
 | # | Notebook | Topic | Try it |
 |---|---|---|---|
-| 12 | API Overview | The CLI, `Site.pipeline()`, and the deprecated surfaces side by side | [Notebook](_build/12_api_overview.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/12_api_overview.py) |
+| 12 | API Overview | The CLI and `Site.pipeline()`, and what replaced the deprecated surfaces | [Notebook](_build/12_api_overview.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/12_api_overview.py) |
 | 13 | CLI Pipeline | `canvodpy run` — raw GNSS files to a versioned VOD store with one command | [Notebook](_build/13_cli_pipeline.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/13_cli_pipeline.py) |
 | 14 | Site Pipeline | `Site().pipeline().process_range()` — the path the CLI wraps | [Notebook](_build/14_site_pipeline.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/14_site_pipeline.py) |
-| 15 | Functional API | L4 — `canvodpy.functional` (deprecated: no longer maintained, gives different results than `canvodpy run`) | [Notebook](_build/15_functional_api.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/15_functional_api.py) |
 
 ### Workflow notebooks
 
@@ -57,7 +56,7 @@ and live editing.
 | 19 | Grid Exploration | Interactive hemispheric grid explorer | [Notebook](_build/19_grid_exploration.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/19_grid_exploration.py) |
 | 20 | 3D Grid Gallery | 3D gallery comparing all hemispheric grid types | [Notebook](_build/20_grid_3d_gallery.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/20_grid_3d_gallery.py) |
 
-All 21 notebooks are rendered. See
+All 20 notebooks are rendered. See
 `dev/notebook_docs_integration_plan.md` in the repo for the full technical
 writeup, and `scripts/export_demo_notebooks.sh` / `just docs-export-notebooks`
 for how these are rebuilt.
