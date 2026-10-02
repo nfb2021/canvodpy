@@ -11,6 +11,12 @@ GREEN := '\033[0;32m'
 BOLD := '\033[1m'
 NORMAL := '\033[0m'
 
+# Configuration directory for the canvodpy commands below, e.g.
+#   just config_dir=~/my_config config-check-data rosalia
+# Empty: $CANVOD_CONFIG_DIR, else config/, else ~/.config/canvodpy.
+config_dir := ""
+config_flag := if config_dir != "" { "--config-dir " + quote(config_dir) } else { "" }
+
 # Default command lists all available recipes
 _default:
     @just --list --unsorted
@@ -116,11 +122,15 @@ ci PYTHON="3.13":
 
 # validate canvod-settings.yaml and the receiver data of all sites
 config-validate:
-    uv run canvodpy config validate
+    uv run canvodpy config validate {{ config_flag }}
 
 # check one site's receiver data (alias of: canvodpy config validate --site SITE)
 config-check-data SITE:
-    uv run canvodpy config validate --site {{ SITE }}
+    uv run canvodpy config validate --site {{ SITE }} {{ config_flag }}
+
+# process a site's GNSS data and compute VOD for days START to END (YYYYDOY)
+run SITE START END:
+    uv run canvodpy run --site {{ SITE }} --start {{ START }} --end {{ END }} {{ config_flag }}
 
 # create a naming recipe from the template (for receivers with non-canonical filenames)
 naming-init NAME:
@@ -145,23 +155,23 @@ naming-init NAME:
 
 # show the current configuration
 config-show:
-    uv run canvodpy config show
+    uv run canvodpy config show {{ config_flag }}
 
 # initialize configuration from template
 config-init:
-    uv run canvodpy config init
+    uv run canvodpy config init {{ config_flag }}
 
 # initialize configuration via guided interactive wizard
 config-init-interactive:
-    uv run canvodpy config init --interactive
+    uv run canvodpy config init --interactive {{ config_flag }}
 
 # open canvod-settings.yaml in $EDITOR
 config-edit:
-    uv run canvodpy config edit
+    uv run canvodpy config edit {{ config_flag }}
 
 # report canvodpy's version, environment, and config resolution
 doctor:
-    uv run canvodpy doctor
+    uv run canvodpy doctor {{ config_flag }}
 
 # delete canvod-settings.yaml (destructive, requires typed confirmation)
 config-delete CONFIG_DIR="config":
@@ -187,23 +197,23 @@ config-delete CONFIG_DIR="config":
 
 # list every configured site's gnss/vod store paths and status
 store-list:
-    uv run canvodpy store list
+    uv run canvodpy store list {{ config_flag }}
 
 # show branches, groups, and stats for one site's store (STORE: gnss|vod)
 store-info SITE STORE="gnss":
-    uv run canvodpy store info {{ SITE }} --store {{ STORE }}
+    uv run canvodpy store info {{ SITE }} --store {{ STORE }} {{ config_flag }}
 
 # show a group's full dataset + metadata table for one site's store
 store-info-group SITE GROUP STORE="gnss":
-    uv run canvodpy store info {{ SITE }} --store {{ STORE }} --group {{ GROUP }}
+    uv run canvodpy store info {{ SITE }} --store {{ STORE }} --group {{ GROUP }} {{ config_flag }}
 
 # show commit history as a graph for one site's store (STORE: gnss|vod)
 store-log SITE STORE="gnss":
-    uv run canvodpy store log {{ SITE }} --store {{ STORE }}
+    uv run canvodpy store log {{ SITE }} --store {{ STORE }} {{ config_flag }}
 
 # show the ops audit trail for one site's store (STORE: gnss|vod)
 store-ops SITE STORE="gnss":
-    uv run canvodpy store log {{ SITE }} --store {{ STORE }} --ops
+    uv run canvodpy store log {{ SITE }} --store {{ STORE }} --ops {{ config_flag }}
 
 # ============================================================================
 # Store Metadata

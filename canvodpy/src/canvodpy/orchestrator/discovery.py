@@ -94,36 +94,23 @@ def canonical_name_for(path: Path | str) -> str:
 
 
 def resolve_recipe_path(recipe_name: str) -> Path:
-    """Resolve a recipe name to ``recipes/{recipe_name}.yaml``.
+    """Resolve a recipe name to ``<config dir>/recipes/{recipe_name}.yaml``.
 
-    Searches the active config directory (``CANVOD_CONFIG_DIR``) first, then
-    ``config/recipes/`` in the monorepo root.
+    The configuration directory is the one the settings file is read from
+    (:func:`canvod.config.loader.get_default_config_dir`).
 
     Raises
     ------
     FileNotFoundError
-        If no recipe file with that name exists in either location.
+        If no recipe file with that name exists there.
     """
-    candidates: list[Path] = []
-    env_dir = os.environ.get("CANVOD_CONFIG_DIR")
-    if env_dir:
-        candidates.append(Path(env_dir) / "recipes" / f"{recipe_name}.yaml")
-    try:
-        from canvod.config.loader import find_monorepo_root
+    from canvod.config.loader import get_default_config_dir
 
-        candidates.append(
-            find_monorepo_root() / "config" / "recipes" / f"{recipe_name}.yaml"
-        )
-    except RuntimeError:
-        pass
-
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-
-    searched = ", ".join(str(c) for c in candidates) or "(no search location)"
+    path = get_default_config_dir() / "recipes" / f"{recipe_name}.yaml"
+    if path.exists():
+        return path
     msg = (
-        f"Recipe file not found for '{recipe_name}' (searched: {searched})\n"
+        f"Recipe file not found for '{recipe_name}': {path}\n"
         f"Create it with: just naming-init {recipe_name}"
     )
     raise FileNotFoundError(msg)

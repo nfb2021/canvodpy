@@ -100,7 +100,7 @@ Two environment variables control *where* configuration is read from:
 
 | Variable             | Effect                                                           |
 | -------------------- | ---------------------------------------------------------------- |
-| `CANVOD_CONFIG_DIR`  | Use a different config directory (default: `{repo_root}/config`) |
+| `CANVOD_CONFIG_DIR`  | Use a different config directory, for the settings file and the recipes; same as the `--config-dir` option (default: `{repo_root}/config`) |
 | `CANVOD_CONFIG_FILE` | Apply an overlay YAML on top of the main `canvod-settings.yaml`  |
 
 ---

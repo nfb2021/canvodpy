@@ -114,6 +114,19 @@ class TestGetTemplateDir:
 class TestGetDefaultConfigDir:
     """XDG-first default, with dev-checkout convenience when available."""
 
+    @pytest.fixture(autouse=True)
+    def _no_env_override(self, monkeypatch):
+        monkeypatch.delenv("CANVOD_CONFIG_DIR", raising=False)
+
+    def test_env_var_wins_over_the_checkout_config(self, tmp_path, monkeypatch):
+        """CANVOD_CONFIG_DIR (also set by --config-dir) comes first."""
+        fake_root = tmp_path / "checkout"
+        (fake_root / "config").mkdir(parents=True)
+        monkeypatch.setenv("CANVOD_CONFIG_DIR", str(tmp_path / "mine"))
+        with patch.object(loader_module, "find_monorepo_root", return_value=fake_root):
+            result = loader_module.get_default_config_dir()
+        assert result == tmp_path / "mine"
+
     def test_falls_back_to_xdg_when_no_monorepo_found(self, tmp_path, monkeypatch):
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
         with patch.object(

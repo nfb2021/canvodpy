@@ -172,3 +172,43 @@ class TestValidateRecipeWithoutFilemap:
         )
 
         assert "uv sync --extra filemap" not in result.output
+
+
+class TestConfigDirOption:
+    def test_selects_the_settings_and_the_recipes(self, tmp_path):
+        from canvodpy.orchestrator.discovery import resolve_recipe_path
+
+        from canvod.config.loader import get_default_config_dir
+
+        config_dir = tmp_path / "my_config"
+        result = runner.invoke(
+            _app(), ["config", "init", "--config-dir", str(config_dir)]
+        )
+        assert result.exit_code == 0, result.output
+        assert (config_dir / "canvod-settings.yaml").exists()
+
+        # Every later lookup in the same process uses that directory
+        assert get_default_config_dir() == config_dir.resolve()
+        (config_dir / "recipes" / "rx.yaml").write_text("")
+        assert resolve_recipe_path("rx") == config_dir.resolve() / "recipes" / "rx.yaml"
+
+    def test_every_command_offers_it(self):
+        from canvodpy.cli.app import main_app
+
+        for command in (
+            ["run"],
+            ["vod"],
+            ["vod-reconcile"],
+            ["doctor"],
+            ["store", "list"],
+            ["store", "info"],
+            ["store", "log"],
+            ["store", "maintain"],
+            ["store", "maintain-due"],
+            ["config", "init"],
+            ["config", "validate"],
+            ["config", "show"],
+            ["config", "edit"],
+        ):
+            result = runner.invoke(main_app, [*command, "--help"])
+            assert "--config-dir" in result.output, command

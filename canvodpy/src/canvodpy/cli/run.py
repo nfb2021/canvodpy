@@ -46,6 +46,7 @@ import typer
 import xarray as xr
 
 from canvod.config.models import reference_store_group
+from canvodpy.cli.options import CONFIG_DIR_OPTION
 from canvodpy.logging import emit_run_summary
 from canvodpy.logging.run_context import reset_run_id, set_run_id
 from canvodpy.logging.stage_timer import reset_run_stats
@@ -640,6 +641,7 @@ def run(
             help="Number of DOYs per loky wave (default: from config).",
         ),
     ] = None,
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
     config: Annotated[
         str | None,
         typer.Option(

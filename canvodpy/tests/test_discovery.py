@@ -156,14 +156,15 @@ def test_index_is_rescanned_after_clearing(tmp_path: Path) -> None:
     assert len(receiver_days("rx", tmp_path)) == 2
 
 
-def test_resolve_recipe_path_prefers_config_dir(
+def test_recipes_are_read_from_the_config_dir_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _touch(tmp_path / "recipes", "ref.yaml")
     monkeypatch.setenv("CANVOD_CONFIG_DIR", str(tmp_path))
     assert resolve_recipe_path("ref") == tmp_path / "recipes" / "ref.yaml"
-    with pytest.raises(FileNotFoundError):
-        resolve_recipe_path("does_not_exist")
+    # No fallback to the checkout's config/recipes/
+    with pytest.raises(FileNotFoundError, match=str(tmp_path / "recipes")):
+        resolve_recipe_path("_template")
 
 
 def test_recipe_drives_discovery(

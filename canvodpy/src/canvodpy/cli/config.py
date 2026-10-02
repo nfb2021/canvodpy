@@ -32,6 +32,7 @@ from canvod.config.models import (
     SitesConfig,
     reference_store_group,
 )
+from canvodpy.cli.options import CONFIG_DIR_OPTION
 
 # Config subcommand
 config_app = typer.Typer(
@@ -41,16 +42,6 @@ config_app = typer.Typer(
 )
 
 console = Console()
-
-# Dev-checkout config/ if present, else XDG (~/.config/canvodpy) — see
-# get_default_config_dir()'s docstring for the full precedence rule.
-DEFAULT_CONFIG_DIR = get_default_config_dir()
-
-CONFIG_DIR_OPTION = typer.Option(
-    "--config-dir",
-    "-c",
-    help="Configuration directory",
-)
 
 
 @config_app.callback()
@@ -141,7 +132,7 @@ def _run_interactive_wizard(canvod_dest: Path) -> None:
 
 @config_app.command()
 def init(
-    config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
     force: bool = typer.Option(
         False,
         "--force",
@@ -163,8 +154,9 @@ def init(
 
     Parameters
     ----------
-    config_dir : Path
-        Directory where configuration files are created.
+    config_dir : Path | None
+        Directory where configuration files are created (see
+        ``--config-dir``).
     force : bool
         Overwrite existing files.
     interactive : bool
@@ -175,6 +167,7 @@ def init(
     -------
     None
     """
+    config_dir = get_default_config_dir()
     console.print("\n[bold]Initializing canvodpy configuration...[/bold]\n")
 
     # Create config directory
@@ -308,7 +301,7 @@ def _print_site_report(report) -> None:
 
 @config_app.command()
 def validate(
-    config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
     site: Annotated[
         list[str] | None,
         typer.Option(
@@ -335,8 +328,8 @@ def validate(
 
     Parameters
     ----------
-    config_dir : Path
-        Directory containing config files.
+    config_dir : Path | None
+        Directory containing config files (see ``--config-dir``).
     site : list[str] | None
         Sites whose data to check; ``None`` checks all sites.
     check_sampling : bool
@@ -349,7 +342,8 @@ def validate(
     from canvod.config.loader import load_config
     from canvodpy.orchestrator.data_check import check_site_data
 
-    console.print("\n[bold]Validating configuration...[/bold]\n")
+    config_dir = get_default_config_dir()
+    console.print(f"\n[bold]Validating configuration in {config_dir}...[/bold]\n")
 
     try:
         config = load_config(config_dir)
@@ -411,7 +405,7 @@ def validate(
 
 @config_app.command()
 def show(
-    config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
     section: str = typer.Option(
         None,
         "--section",
@@ -423,8 +417,8 @@ def show(
 
     Parameters
     ----------
-    config_dir : Path
-        Directory containing config files.
+    config_dir : Path | None
+        Directory containing config files (see ``--config-dir``).
     section : str
         Optional section name (processing, sites, sids).
 
@@ -434,6 +428,7 @@ def show(
     """
     from canvod.config.loader import load_config
 
+    config_dir = get_default_config_dir()
     try:
         config = load_config(config_dir)
     except ConfigValidationError as e:
@@ -461,14 +456,14 @@ def show(
 
 @config_app.command()
 def edit(
-    config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
 ) -> None:
     """Open canvod-settings.yaml in $EDITOR.
 
     Parameters
     ----------
-    config_dir : Path
-        Directory containing config files.
+    config_dir : Path | None
+        Directory containing config files (see ``--config-dir``).
 
     Returns
     -------
@@ -476,6 +471,7 @@ def edit(
     """
     import os
 
+    config_dir = get_default_config_dir()
     file_path = config_dir / "canvod-settings.yaml"
 
     if not file_path.exists():

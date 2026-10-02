@@ -45,11 +45,13 @@ User values override package defaults for any specified keys. Unset keys fall ba
 
 ## Where the settings file lives
 
-`get_default_config_dir()` resolves the settings directory in this order:
+`get_default_config_dir()` resolves the configuration directory. The settings file and the naming recipes (`recipes/`) are both read from it, in this order:
 
-1. A dev checkout — `{monorepo_root}/config`, if run from inside a canvodpy checkout
-2. `$XDG_CONFIG_HOME/canvodpy` (or `~/.config/canvodpy` if unset) — everywhere else
-3. Overridden explicitly via the `CANVOD_CONFIG_DIR` environment variable
+1. The `--config-dir` option of any `canvodpy` command, or the `CANVOD_CONFIG_DIR` environment variable
+2. A dev checkout: `{monorepo_root}/config`, if run from inside a canvodpy checkout
+3. `$XDG_CONFIG_HOME/canvodpy` (or `~/.config/canvodpy` if unset), everywhere else
+
+With `just`, pass the directory as `just config_dir=<dir> <recipe>`, e.g. `just config_dir=~/my_config config-check-data rosalia`.
 
 `canvodpy doctor` reports which of these was used for the current run.
 
