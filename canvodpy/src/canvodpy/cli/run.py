@@ -701,7 +701,20 @@ def run(
         dashboard_host=dashboard_host,
         dashboard_port=dashboard_port,
     )
-    raise typer.Exit(code=_main_impl(args))
+    from canvodpy.orchestrator.discovery import DiscoveryError
+
+    try:
+        code = _main_impl(args)
+    except DiscoveryError as e:
+        # The receiver data cannot be assigned unambiguously; the message
+        # says what to change, a traceback would only hide it.
+        print(
+            f"Error: {e}\n\nRun 'canvodpy config validate' to check all "
+            f"receivers at once.",
+            file=sys.stderr,
+        )
+        code = 1
+    raise typer.Exit(code=code)
 
 
 if __name__ == "__main__":

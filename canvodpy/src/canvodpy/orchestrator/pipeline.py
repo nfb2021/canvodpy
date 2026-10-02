@@ -44,7 +44,7 @@ from canvodpy.logging import get_logger
 from canvodpy.logging.run_context import get_run_id
 from canvodpy.orchestrator.discovery import (
     ReceiverDay,
-    check_recipe_receivers,
+    check_receivers,
     clear_discovery_cache,
     detect_reader_format,
     discover_files,
@@ -59,30 +59,6 @@ from canvodpy.orchestrator.processor import (
 )
 from canvodpy.orchestrator.resources import MemoryMonitor
 from canvodpy.orchestrator.store_retry import STORE_ERROR_TYPES, call_with_store_retries
-
-
-def _check_recipe_receivers_have_filemap(receivers: dict[str, dict]) -> None:
-    """Fail fast if any receiver configures a naming recipe but canvod-filemap
-    isn't installed.
-
-    Recipes are meaningless without canvod-filemap to resolve them — letting
-    this surface only as a silent canonical-glob fallback deep inside a run
-    (a confusing "no files found" warning per receiver-day) hides the actual
-    cause. Raise once, at pipeline construction, before any processing starts.
-    """
-    recipe_receivers = [name for name, cfg in receivers.items() if cfg.get("recipe")]
-    if not recipe_receivers:
-        return
-    try:
-        import canvod.filemap  # noqa: F401
-    except ImportError as exc:
-        names = ", ".join(recipe_receivers)
-        raise ImportError(
-            f"Receiver(s) {names} configure a naming recipe, which requires "
-            f"canvod-filemap, but it is not installed. Install with: "
-            f"uv sync --extra filemap"
-        ) from exc
-
 
 # Old-style TypeVar (not PEP 695 `def f[T](...)`): CodeQL's Python analysis
 # doesn't yet understand the newer generic syntax and flags T as a
@@ -255,8 +231,9 @@ class PipelineOrchestrator:
         threads_per_worker: int | None = None,
         on_group_written: Callable[[str], None] | None = None,
     ) -> None:
-        _check_recipe_receivers_have_filemap(site.receivers)
-        check_recipe_receivers(site.receivers)
+        # A new run sees files added since the previous one.
+        clear_discovery_cache()
+        check_receivers(site.receivers, site._site_config.get_base_path())
 
         self.site = site
         self.n_max_workers = n_max_workers
@@ -290,9 +267,6 @@ class PipelineOrchestrator:
                 detected_cores=os.cpu_count(),
                 threads_per_worker=threads_per_worker,
             )
-
-        # A new run sees files added since the previous one.
-        clear_discovery_cache()
 
         self._logger.info(
             "pipeline_initialized",

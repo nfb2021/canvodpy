@@ -114,13 +114,13 @@ ci PYTHON="3.13":
 # Configuration
 # ============================================================================
 
-# validate canvod-settings.yaml configuration
+# validate canvod-settings.yaml and the receiver data of all sites
 config-validate:
     uv run canvodpy config validate
 
-# validate data directories against naming convention (pre-flight check)
+# check one site's receiver data (alias of: canvodpy config validate --site SITE)
 config-check-data SITE:
-    uv run python -c "from canvodpy.workflows.tasks import validate_data_dirs; import json; print(json.dumps(validate_data_dirs('{{ SITE }}'), indent=2))"
+    uv run canvodpy config validate --site {{ SITE }}
 
 # create a naming recipe from the template (for receivers with non-canonical filenames)
 naming-init NAME:

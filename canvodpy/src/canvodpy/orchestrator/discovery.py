@@ -145,50 +145,89 @@ _READER_FILE_TYPES: dict[str | None, frozenset[str]] = {
 _ALL_FILE_TYPES = frozenset({"rnx", "sbf"})
 
 
-def check_recipe_receivers(receivers: dict[str, dict[str, Any]]) -> None:
-    """Check that each receiver's recipe gives it its own canonical identity.
+def _receiver_identity(cfg: dict[str, Any], base_path: Path) -> str | None:
+    """Canonical receiver identity (e.g. ``ROSA01TUW``) of one receiver.
 
-    The canonical name of a file starts with the receiver identity
-    (site, receiver type, receiver number, agency, e.g. ``ROSA01TUW``). Two
-    receivers whose recipes produce the same identity cannot be told apart
-    in the store, and a recipe whose receiver type differs from the
-    receiver's configured type would label the files with the wrong role.
+    Taken from the receiver's recipe if it has one, otherwise from the
+    canonical names of the files in its directory (``None`` if it has none).
+    """
+    recipe_name = cfg.get("recipe")
+    if recipe_name:
+        try:
+            recipe = _load_recipe(resolve_recipe_path(recipe_name))
+        except FileNotFoundError as exc:
+            raise DiscoveryError(str(exc)) from exc
+        role = "R" if recipe.receiver_type == "reference" else "A"
+        return f"{recipe.site}{role}{recipe.receiver_number:02d}{recipe.agency}"
+    try:
+        return _scan_directory(base_path / cfg["directory"], None).identity
+    except DiscoveryError:
+        return None  # reported when the receiver's files are read
+
+
+def check_receivers(receivers: dict[str, dict[str, Any]], base_path: Path) -> None:
+    """Check that the files of each receiver can be told apart.
+
+    The canonical name of a file starts with the receiver identity (site,
+    role, receiver number, agency, e.g. ``ROSA01TUW``). A receiver's identity
+    comes from its naming recipe if it has one, otherwise from the canonical
+    names of its files. Two receivers with the same identity cannot be told
+    apart in the store, and an identity whose role (``R`` reference, ``A``
+    canopy) differs from the receiver's configured type would label the
+    files with the wrong role.
 
     Parameters
     ----------
     receivers : dict[str, dict]
-        Receiver name to receiver configuration (``type``, ``recipe``).
+        Receiver name to receiver configuration (``type``, ``directory``,
+        ``recipe``).
+    base_path : Path
+        The site's data root, which receiver directories are relative to.
 
     Raises
     ------
-    ValueError
-        Listing every problem found.
+    DiscoveryError
+        Listing every problem found, or if a receiver's directory or recipe
+        cannot be read (see :func:`receiver_days`).
     """
+    recipe_receivers = [name for name, cfg in receivers.items() if cfg.get("recipe")]
+    if recipe_receivers:
+        try:
+            import canvod.filemap  # noqa: F401
+        except ImportError as exc:
+            msg = (
+                f"Receiver(s) {', '.join(recipe_receivers)} use a naming recipe, "
+                f"which requires canvod-filemap, but it is not installed. "
+                f"Install it with: uv sync --extra filemap"
+            )
+            raise DiscoveryError(msg) from exc
+
     owner: dict[str, str] = {}
     problems: list[str] = []
     for name, cfg in receivers.items():
-        recipe_name = cfg.get("recipe")
-        if not recipe_name:
+        identity = _receiver_identity(cfg, base_path)
+        if identity is None:
             continue
-        recipe = _load_recipe(resolve_recipe_path(recipe_name))
-        if recipe.receiver_type != cfg.get("type"):
+        source = f"its recipe '{cfg['recipe']}'" if cfg.get("recipe") else "its files"
+        expected_role = "R" if cfg.get("type") == "reference" else "A"
+        if identity[3] != expected_role:
             problems.append(
-                f"Receiver '{name}' is configured as '{cfg.get('type')}', but its "
-                f"recipe '{recipe_name}' sets receiver_type '{recipe.receiver_type}'."
+                f"Receiver '{name}' is configured as '{cfg.get('type')}', but "
+                f"{source} name it {identity}, the identity of a "
+                f"{'reference' if identity[3] == 'R' else 'canopy'} receiver."
             )
-        role = "R" if recipe.receiver_type == "reference" else "A"
-        identity = f"{recipe.site}{role}{recipe.receiver_number:02d}{recipe.agency}"
         if identity in owner:
             problems.append(
                 f"Receivers '{owner[identity]}' and '{name}' both get canonical "
                 f"names starting with {identity}. Give each receiver its own "
-                f"recipe with a distinct receiver_number."
+                f"directory, and each receiver with a recipe its own "
+                f"receiver_number."
             )
         else:
             owner[identity] = name
     if problems:
-        msg = "Naming recipe problems:\n  - " + "\n  - ".join(problems)
-        raise ValueError(msg)
+        msg = "Receiver identity problems:\n  - " + "\n  - ".join(problems)
+        raise DiscoveryError(msg)
 
 
 def _canonical_file(path: Path, file_types: frozenset[str]) -> DiscoveredFile | None:
@@ -215,19 +254,52 @@ def _recipe_file(path: Path, naming_recipe: Any) -> DiscoveredFile | None:
     )
 
 
-@lru_cache(maxsize=64)
-def _scan_directory(
-    directory: Path, recipe: str | None
-) -> dict[str, tuple[DiscoveredFile, ...]]:
-    """Index a receiver directory: day (``YYYYDOY``) to its files.
+@dataclass(frozen=True)
+class DirectoryScan:
+    """The files found in one receiver directory.
 
-    Cached for the run; :func:`clear_discovery_cache` forgets the index so
-    a new run sees files added since.
+    Attributes
+    ----------
+    days : dict[str, tuple[DiscoveredFile, ...]]
+        Day (``YYYYDOY``) to the files starting on it, naturally sorted.
+    identity : str | None
+        Receiver identity of the files (e.g. ``ROSA01TUW``), ``None`` if
+        there are none.
+    unrecognized : tuple[Path, ...]
+        Files neither the recipe nor the naming convention recognizes, and
+        which are therefore never processed.
     """
+
+    days: dict[str, tuple[DiscoveredFile, ...]]
+    identity: str | None
+    unrecognized: tuple[Path, ...]
+
+
+def scan_directory(directory: Path, recipe: str | None = None) -> DirectoryScan:
+    """Scan a receiver directory as a run does.
+
+    Cached for the run; :func:`clear_discovery_cache` forgets the result so
+    a new run sees files added since.
+
+    Raises
+    ------
+    DiscoveryError
+        If the files cannot be assigned unambiguously (see the module
+        docstring), or if the recipe file does not exist.
+    """
+    return _scan_directory(Path(directory), recipe)
+
+
+@lru_cache(maxsize=64)
+def _scan_directory(directory: Path, recipe: str | None) -> DirectoryScan:
     from canvod.preflight.convention import CanVODFilename, find_overlaps
 
-    naming_recipe = _load_recipe(resolve_recipe_path(recipe)) if recipe else None
+    try:
+        naming_recipe = _load_recipe(resolve_recipe_path(recipe)) if recipe else None
+    except (FileNotFoundError, ImportError) as exc:
+        raise DiscoveryError(str(exc)) from exc
     found: list[DiscoveredFile] = []
+    unrecognized: list[Path] = []
     if directory.is_dir():
         for dirpath, dirnames, filenames in os.walk(directory, followlinks=False):
             dirnames[:] = [d for d in dirnames if not d.startswith(".")]
@@ -242,6 +314,8 @@ def _scan_directory(
                 )
                 if discovered is not None:
                     found.append(discovered)
+                else:
+                    unrecognized.append(path)
 
     by_name: dict[str, list[Path]] = defaultdict(list)
     for f in found:
@@ -287,10 +361,14 @@ def _scan_directory(
     for f in found:
         parsed = parsed_names[f.canonical_name]
         by_day[f"{parsed.year:04d}{parsed.doy:03d}"].append(f)
-    return {
-        day: tuple(natsorted(files, key=lambda d: str(d.path)))
-        for day, files in by_day.items()
-    }
+    return DirectoryScan(
+        days={
+            day: tuple(natsorted(files, key=lambda d: str(d.path)))
+            for day, files in by_day.items()
+        },
+        identity=identities[0] if identities else None,
+        unrecognized=tuple(natsorted(unrecognized, key=str)),
+    )
 
 
 def clear_discovery_cache() -> None:
@@ -314,7 +392,7 @@ def receiver_days(
     recipe: str | None = None,
 ) -> list[ReceiverDay]:
     """All days for which ``directory`` holds files of the receiver, sorted."""
-    index = _scan_directory(Path(directory), recipe)
+    index = _scan_directory(Path(directory), recipe).days
     return [
         ReceiverDay(receiver, Path(directory), day, recipe)
         for day in sorted(index)
@@ -341,7 +419,7 @@ def discover_files(
     list[DiscoveredFile]
         Naturally sorted by physical path.
     """
-    index = _scan_directory(Path(day.directory), day.recipe)
+    index = _scan_directory(Path(day.directory), day.recipe).days
     return _of_format(index.get(day.yyyydoy, ()), reader_format, day.recipe)
 
 
