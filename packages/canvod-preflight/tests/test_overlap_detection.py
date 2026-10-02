@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from canvod.preflight import CanVODFilename, FilenameMapper
+from canvod.preflight import CanVODFilename, FilenameMapper, find_overlaps
 from canvod.preflight.mapping import VirtualFile
 
 
@@ -99,3 +99,48 @@ class TestOverlapDetection:
         ]
         overlaps = FilenameMapper.detect_overlaps(vfs)
         assert len(overlaps) == 0
+
+
+def _cn(name: str) -> CanVODFilename:
+    return CanVODFilename.from_filename(name)
+
+
+class TestFindOverlaps:
+    """Test find_overlaps, the one overlap check on canonical names."""
+
+    def test_named_span(self):
+        cn = _cn("ROSR01TUW_R_20250012345_15M_05S_AA.rnx")
+        assert (cn.start.isoformat(), cn.end.isoformat()) == (
+            "2025-01-01T23:45:00",
+            "2025-01-02T00:00:00",
+        )
+
+    def test_equal_spans_overlap(self):
+        a = _cn("ROSR01TUW_R_20250010000_15M_05S_AA.rnx")
+        b = _cn("ROSR01TUW_R_20250010000_15M_01S_AA.rnx")
+        assert find_overlaps([a, b]) == [(a, b)]
+
+    def test_partial_overlap(self):
+        a = _cn("ROSR01TUW_R_20250010000_01H_05S_AA.rnx")
+        b = _cn("ROSR01TUW_R_20250010030_01H_05S_AA.rnx")
+        assert find_overlaps([b, a]) == [(a, b)]
+
+    def test_span_past_midnight_overlaps_next_day(self):
+        a = _cn("ROSR01TUW_R_20250011200_01D_05S_AA.rnx")
+        b = _cn("ROSR01TUW_R_20250020000_15M_05S_AA.rnx")
+        assert find_overlaps([a, b]) == [(a, b)]
+
+    def test_file_types_and_receivers_are_separate(self):
+        names = [
+            "ROSR01TUW_R_20250010000_01D_05S_AA.rnx",
+            "ROSR01TUW_R_20250010000_01D_05S_AA.sbf",
+            "ROSA01TUW_R_20250010000_01D_05S_AA.rnx",
+        ]
+        assert find_overlaps([_cn(n) for n in names]) == []
+
+    def test_key_maps_items_to_names(self):
+        names = [
+            "ROSR01TUW_R_20250010000_01D_05S_AA.rnx",
+            "ROSR01TUW_R_20250010600_15M_05S_AA.rnx",
+        ]
+        assert find_overlaps(names, key=_cn) == [tuple(names)]

@@ -14,6 +14,7 @@ from .convention import (
     FileType,
     ReceiverType,
     SiteId,
+    find_overlaps,
 )
 
 # Mapping engine — physical filenames -> canonical names
@@ -42,5 +43,6 @@ __all__ = [
     "SourcePattern",
     "ValidationReport",
     "VirtualFile",
+    "find_overlaps",
     "match_pattern",
 ]

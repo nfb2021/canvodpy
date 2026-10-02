@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import re
-from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -17,7 +16,7 @@ from typing import Literal
 from natsort import natsorted
 
 from .config_models import DirectoryLayout, ReceiverNamingConfig, SiteNamingConfig
-from .convention import CanVODFilename, FileType, ReceiverType
+from .convention import CanVODFilename, FileType, ReceiverType, find_overlaps
 from .patterns import (
     BUILTIN_PATTERNS,
     auto_match_order,
@@ -265,31 +264,11 @@ class FilenameMapper:
     def detect_overlaps(
         vfs: list[VirtualFile],
     ) -> list[tuple[VirtualFile, VirtualFile]]:
-        """Detect temporal overlaps among virtual files."""
-        by_date: dict[tuple[int, int], list[VirtualFile]] = defaultdict(list)
-        for vf in vfs:
-            cn = vf.conventional_name
-            by_date[(cn.year, cn.doy)].append(vf)
+        """Detect pairs of files whose named time spans overlap.
 
-        overlaps: list[tuple[VirtualFile, VirtualFile]] = []
-        for group in by_date.values():
-            if len(group) < 2:
-                continue
-            ranges: list[tuple[int, int, VirtualFile]] = []
-            for vf in group:
-                cn = vf.conventional_name
-                start_min = cn.hour * 60 + cn.minute
-                duration_sec = int(cn.batch_duration.total_seconds())
-                end_min = start_min + duration_sec // 60
-                ranges.append((start_min, end_min, vf))
-
-            for i in range(len(ranges)):
-                for j in range(i + 1, len(ranges)):
-                    s_i, e_i, vf_i = ranges[i]
-                    s_j, e_j, vf_j = ranges[j]
-                    if s_i < e_j and s_j < e_i:
-                        overlaps.append((vf_i, vf_j))
-        return overlaps
+        See :func:`canvod.preflight.convention.find_overlaps`.
+        """
+        return find_overlaps(vfs, key=lambda vf: vf.conventional_name)
 
     # -- Private helpers ------------------------------------------------------
 

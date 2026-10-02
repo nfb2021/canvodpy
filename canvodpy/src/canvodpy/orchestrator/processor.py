@@ -2373,44 +2373,35 @@ class RinexDataProcessor:
                     )
                     existing_hashes |= temporal_overlaps
 
-        # Check 3: intra-batch overlap detection
-        # If a file's time range fully contains other files' ranges,
-        # it's a concatenation file — flag it as redundant.
+        # Check 3: intra-batch overlap. Files are taken in order of their
+        # first epoch (on ties, the shorter file first) and a file whose
+        # epochs touch those of a file already taken is skipped, the same
+        # rule check 2 applies against the store. Discovery already rejects
+        # files whose *names* overlap; this catches data that disagrees with
+        # its name.
         intervals = []
         for fname, ds in augmented_datasets:
             h = file_hash_map[fname]
             if h and h not in existing_hashes:
-                intervals.append(
-                    (
-                        h,
-                        np.datetime64(ds.epoch.min().values),
-                        np.datetime64(ds.epoch.max().values),
-                        len(ds.epoch),
-                    )
-                )
+                start = np.datetime64(ds.epoch.min().values)
+                end = np.datetime64(ds.epoch.max().values)
+                intervals.append((start, end, len(intervals), h, fname))
+        intervals.sort()
 
-        if len(intervals) > 1:
-            intra_overlaps: set[str] = set()
-            for i, (h_i, s_i, e_i, n_i) in enumerate(intervals):
-                for j, (h_j, s_j, e_j, n_j) in enumerate(intervals):
-                    if i == j:
-                        continue
-                    # Check if file i fully contains file j
-                    if s_i <= s_j and e_i >= e_j:
-                        # File i contains file j — flag the larger file
-                        # (prefer keeping the smaller sub-files)
-                        intra_overlaps.add(h_i)
-                        self._logger.warning(
-                            "intra_batch_overlap",
-                            container_hash=h_i[:16],
-                            container_epochs=n_i,
-                            contained_hash=h_j[:16],
-                            contained_epochs=n_j,
-                            message="Skipping concatenation file that "
-                            "contains sub-files in same batch",
-                        )
-                        break  # Once flagged, no need to check more
-            existing_hashes |= intra_overlaps
+        kept: tuple[np.datetime64, Path] | None = None
+        for start, end, _, h, fname in intervals:
+            if kept is not None and start <= kept[0]:
+                existing_hashes.add(h)
+                self._logger.warning(
+                    "intra_batch_overlap",
+                    file=Path(fname).name,
+                    overlaps=kept[1].name,
+                    file_range=f"{start} → {end}",
+                    message="Skipping file whose epochs overlap another "
+                    "file of the same batch",
+                )
+                continue
+            kept = (end, Path(fname))
 
         return existing_hashes
 

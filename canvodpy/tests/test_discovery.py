@@ -255,3 +255,24 @@ def test_recipe_receiver_type_must_match() -> None:
     a, b = _recipes(ref=_recipe("reference", 1))
     with a, b, pytest.raises(ValueError, match="receiver_type 'reference'"):
         check_recipe_receivers(receivers)
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        "ROSA01TUW_R_20250010000_01D_05S_AA.rnx",  # daily next to sub-daily
+        "ROSA01TUW_R_20250010000_15M_01S_AA.rnx",  # same span, other sampling
+        "ROSA01TUW_R_20250010010_15M_05S_AA.rnx",  # partial overlap
+    ],
+    ids=["daily", "equal", "partial"],
+)
+def test_overlapping_files_are_an_error(tmp_path: Path, extra: str) -> None:
+    _touch(tmp_path / "25001", DAY1, "ROSA01TUW_R_20250010015_15M_05S_AA.rnx")
+    _touch(tmp_path / "other", extra)
+    with pytest.raises(DiscoveryError, match=r"overlaps .*\n.*not both"):
+        receiver_days("rx", tmp_path)
+
+
+def test_sbf_next_to_its_rinex_is_no_overlap(tmp_path: Path) -> None:
+    _touch(tmp_path, DAY1, DAY1.replace(".rnx", ".sbf"))
+    assert _names(tmp_path, "sbf") == [DAY1.replace(".rnx", ".sbf")]

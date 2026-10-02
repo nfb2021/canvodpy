@@ -24,7 +24,9 @@ Which files count:
 
 Each receiver needs its own directory: a directory whose canonical files
 belong to more than one receiver identity is an error, and so are two files
-that map to the same canonical name.
+that map to the same canonical name and two files of the same type whose
+named time spans overlap (e.g. a daily file next to the 15-minute files of
+the same day).
 """
 
 from __future__ import annotations
@@ -222,7 +224,7 @@ def _scan_directory(
     Cached for the run; :func:`clear_discovery_cache` forgets the index so
     a new run sees files added since.
     """
-    from canvod.preflight.convention import CanVODFilename
+    from canvod.preflight.convention import CanVODFilename, find_overlaps
 
     naming_recipe = _load_recipe(resolve_recipe_path(recipe)) if recipe else None
     found: list[DiscoveredFile] = []
@@ -264,9 +266,26 @@ def _scan_directory(
         )
         raise DiscoveryError(msg)
 
+    parsed_names = {
+        f.canonical_name: CanVODFilename.from_filename(f.canonical_name) for f in found
+    }
+    overlaps = find_overlaps(found, key=lambda f: parsed_names[f.canonical_name])
+    if overlaps:
+        lines = [f"{a.path} overlaps {b.path}" for a, b in overlaps[:5]]
+        if len(overlaps) > 5:
+            lines.append(f"... and {len(overlaps) - 5} more")
+        msg = (
+            f"In {directory}, {len(overlaps)} pair(s) of files cover the same "
+            f"time according to their names, so that data would be read "
+            f"twice:\n  - " + "\n  - ".join(lines) + "\nKeep one file of each "
+            "pair in the receiver directory, for example either the daily file "
+            "or the 15-minute files of a day, not both."
+        )
+        raise DiscoveryError(msg)
+
     by_day: dict[str, list[DiscoveredFile]] = defaultdict(list)
     for f in found:
-        parsed = CanVODFilename.from_filename(f.canonical_name)
+        parsed = parsed_names[f.canonical_name]
         by_day[f"{parsed.year:04d}{parsed.doy:03d}"].append(f)
     return {
         day: tuple(natsorted(files, key=lambda d: str(d.path)))
