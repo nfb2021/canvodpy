@@ -20,8 +20,8 @@ class LoggingConfig(_StrictModel):
     log_dir: Path | None = Field(
         None,
         description=(
-            "Directory for log files. "
-            "Defaults to .logs/ next to config directory if not set."
+            "Directory for log files. If not set, .logs/ in the root of "
+            "the git repository the command runs in (the canvodpy checkout)."
         ),
     )
     log_file_name: str = Field(
@@ -46,7 +46,8 @@ class LoggingConfig(_StrictModel):
         if self.log_dir is not None:
             d = self.log_dir
         else:
-            # Default: .logs/ next to the config directory (monorepo root)
+            # Default: .logs/ in the repository root, independent of the
+            # configuration directory.
             from ..loader import find_monorepo_root
 
             d = find_monorepo_root() / ".logs"
