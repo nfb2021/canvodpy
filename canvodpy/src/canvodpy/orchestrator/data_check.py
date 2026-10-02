@@ -10,6 +10,8 @@ and files whose named sampling interval differs from that of their data.
 
 from __future__ import annotations
 
+import re
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -42,6 +44,9 @@ class ReceiverReport:
         Configured reader format (``"auto"`` resolved from the files).
     recipe : str | None
         Naming recipe, if configured.
+    identity : str | None
+        Receiver identity of the files (e.g. ``ROSA01TUW``), from the
+        recipe or the canonical file names.
     days : list[str]
         Days (``YYYYDOY``) with files to process, sorted.
     files : int
@@ -49,6 +54,9 @@ class ReceiverReport:
     unrecognized : list[Path]
         Files that are never processed: neither the recipe nor the naming
         convention recognizes them, or they are of another reader format.
+    sampling_checked : list[float]
+        Sampling intervals (seconds) of the data files whose sampling was
+        checked and agrees with their canonical name.
     errors : list[str]
         Problems that stop a run or make its results wrong.
     warnings : list[str]
@@ -59,9 +67,11 @@ class ReceiverReport:
     directory: Path
     reader_format: str
     recipe: str | None
+    identity: str | None = None
     days: list[str] = field(default_factory=list)
     files: int = 0
     unrecognized: list[Path] = field(default_factory=list)
+    sampling_checked: list[float] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -89,6 +99,33 @@ class SiteReport:
     def ok(self) -> bool:
         """``True`` if nothing would stop a run or make its results wrong."""
         return not self.errors and not any(r.errors for r in self.receivers.values())
+
+
+_COMPRESSION_SUFFIXES = {".gz", ".z", ".zip", ".bz2", ".xz"}
+
+
+def file_type(path: Path) -> str:
+    """Extension of a file with its digits replaced by ``#``.
+
+    Groups names that differ only in date digits, e.g. ``.24o`` and ``.25o``
+    both give ``.##o``. A compression suffix is kept with the extension
+    before it (``.rnx.gz``).
+    """
+    suffixes = path.suffixes
+    if len(suffixes) >= 2 and suffixes[-1].lower() in _COMPRESSION_SUFFIXES:
+        suffix = "".join(suffixes[-2:])
+    else:
+        suffix = path.suffix
+    return re.sub(r"\d", "#", suffix) if suffix else "(no extension)"
+
+
+def group_by_file_type(paths: list[Path]) -> list[tuple[str, int, Path]]:
+    """``(file type, count, example)`` per :func:`file_type`, largest first."""
+    counts = Counter(file_type(p) for p in paths)
+    examples: dict[str, Path] = {}
+    for p in paths:
+        examples.setdefault(file_type(p), p)
+    return [(t, n, examples[t]) for t, n in counts.most_common()]
 
 
 def data_sampling_seconds(
@@ -132,6 +169,8 @@ def _check_sampling(
             f"{file.path} is named with sampling {named.sampling} by its "
             f"{source}, but its data are sampled every {data_s:g} s."
         )
+    else:
+        report.sampling_checked.append(data_s)
 
 
 def check_receiver_data(
@@ -174,6 +213,7 @@ def check_receiver_data(
         report.errors.append(str(exc))
         return report
 
+    report.identity = scan.identity
     files_of_day = {day.yyyydoy: discover_files(day, reader_format) for day in days}
     report.days = sorted(files_of_day)
     report.files = sum(len(files) for files in files_of_day.values())

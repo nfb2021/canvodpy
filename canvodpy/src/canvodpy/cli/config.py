@@ -269,6 +269,8 @@ def _print_site_report(report) -> None:
 
     from rich.markup import escape
 
+    from canvodpy.orchestrator.data_check import group_by_file_type
+
     def say(text: str) -> None:
         console.print(text, soft_wrap=True, highlight=False)
 
@@ -281,9 +283,18 @@ def _print_site_report(report) -> None:
         elif rx.files:
             recipe = f", recipe '{rx.recipe}'" if rx.recipe else ""
             say(
-                f"  [green]✓ {label}: {rx.files} files on {len(rx.days)} days, "
-                f"{rx.days[0]} to {rx.days[-1]} ({rx.reader_format}{recipe})[/green]"
+                f"  [green]✓ {label} ({rx.identity}): {rx.files} files on "
+                f"{len(rx.days)} days, {rx.days[0]} to {rx.days[-1]} "
+                f"({rx.reader_format}{recipe})[/green]"
             )
+            if rx.sampling_checked:
+                intervals = ", ".join(
+                    f"{s:g} s" for s in dict.fromkeys(rx.sampling_checked)
+                )
+                say(
+                    f"      Sampling matches the file names in "
+                    f"{len(rx.sampling_checked)} file(s) checked: {intervals}"
+                )
         else:
             say(f"  [yellow]⚠️  {label}[/yellow]")
         for error in rx.errors:
@@ -291,12 +302,9 @@ def _print_site_report(report) -> None:
         for warning in rx.warnings:
             say(f"      [yellow]{escape(warning)}[/yellow]")
         if rx.unrecognized:
-            shown = escape(", ".join(p.name for p in rx.unrecognized[:5]))
-            more = len(rx.unrecognized) - 5
-            say(
-                f"      Not processed: {shown}"
-                + (f" and {more} more" if more > 0 else "")
-            )
+            say("      Not processed, by file type:")
+            for kind, count, example in group_by_file_type(rx.unrecognized):
+                say(f"        {escape(kind)}: {count} (e.g. {escape(example.name)})")
 
 
 @config_app.command()

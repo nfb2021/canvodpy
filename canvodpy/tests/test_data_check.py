@@ -6,7 +6,11 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-from canvodpy.orchestrator.data_check import check_receiver_data
+from canvodpy.orchestrator.data_check import (
+    check_receiver_data,
+    file_type,
+    group_by_file_type,
+)
 from canvodpy.orchestrator.discovery import clear_discovery_cache
 
 DAY1 = "ROSA01TUW_R_20250010000_15M_05S_AA.rnx"
@@ -46,6 +50,7 @@ def test_counts_what_a_run_reads(tmp_path: Path) -> None:
     assert report.errors == []
     assert report.days == ["2025001", "2025002"]
     assert report.files == 3
+    assert report.identity == "ROSA01TUW"
     assert report.unrecognized == []
 
 
@@ -95,6 +100,7 @@ def test_matching_sampling_passes(tmp_path: Path) -> None:
     _touch(tmp_path / "rx", DAY1, DAY1_LATE, DAY2)
     report, read = _check(tmp_path, sampling_s=5.0)
     assert report.errors == []
+    assert report.sampling_checked == [5.0, 5.0]
     # The first file of the first and of the last day
     assert [c.args[0].name for c in read.call_args_list] == [DAY1, DAY2]
 
@@ -119,3 +125,26 @@ def test_unreadable_file_is_a_warning(tmp_path: Path) -> None:
         )
     assert report.errors == []
     assert "Could not read" in report.warnings[0]
+
+
+@pytest.mark.parametrize(
+    ("name", "kind"),
+    [
+        ("rref129p45.24_", ".##_"),
+        ("rref129p45.25p", ".##p"),
+        ("rref0000.001", ".###"),
+        ("ROSA01TUW_R_20250010000_15M_05S_AA.rnx.gz", ".rnx.gz"),
+        ("README", "(no extension)"),
+    ],
+)
+def test_file_type_ignores_digits(name: str, kind: str) -> None:
+    assert file_type(Path(name)) == kind
+
+
+def test_unprocessed_files_are_grouped_by_type() -> None:
+    paths = [Path(n) for n in ("a.24_", "b.25_", "c.24p", "d.txt", "e.25_")]
+    assert group_by_file_type(paths) == [
+        (".##_", 3, Path("a.24_")),
+        (".##p", 1, Path("c.24p")),
+        (".txt", 1, Path("d.txt")),
+    ]

@@ -508,13 +508,17 @@ class PipelineOrchestrator:
 
         """
         filtered = []
+        before = [d for d in sorted(grouped) if start_from and d < start_from]
+        if before:
+            self._logger.info(
+                "dates_skipped_before_range",
+                n_dates=len(before),
+                first=before[0],
+                last=before[-1],
+                start_from=start_from,
+            )
         for date_key, receivers in sorted(grouped.items()):
             if start_from and date_key < start_from:
-                self._logger.info(
-                    "date_skipped_before_range",
-                    date=date_key,
-                    start_from=start_from,
-                )
                 continue
             if end_at and date_key > end_at:
                 self._logger.info(
