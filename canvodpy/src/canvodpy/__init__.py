@@ -16,9 +16,9 @@ Quick Start
     ...     data = pipeline.process_date("2025001")
     >>> vod = site.vod.compute_day_all(data)  # every configured analysis
 
-**Single-step functions** (read, augment, grid or compute VOD on datasets)
-    >>> from canvodpy.functional import calculate_vod
-    >>> vod = calculate_vod(canopy_ds, sky_ds, calculator="tau_omega")
+The single-step functions of ``canvodpy.functional`` (``read_rinex`` and
+the others) are deprecated: they are no longer maintained and give different
+results than ``canvodpy run``.
 
 Community Extensions
 --------------------
@@ -73,7 +73,7 @@ from canvodpy.factories import (
 # Fluent workflow API (deferred execution)
 from canvodpy.fluent import FluentWorkflow
 
-# Functional API (Airflow-compatible)
+# Functional API (deprecated, see canvodpy.functional)
 from canvodpy.functional import (
     assign_grid_cells,
     assign_grid_cells_to_file,

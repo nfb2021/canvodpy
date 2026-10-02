@@ -142,18 +142,6 @@ pip install canvodpy
     vod = site.vod.compute_day_all(data)  # every configured analysis
     ```
 
-=== "Functional — component-level"
-
-    Stateless functions for custom pipelines, Airflow, and analysis:
-
-    ```python
-    from canvodpy.functional import read_rinex, augment_with_ephemeris, calculate_vod
-
-    ds = read_rinex("ROSA01TUW_R_20250010000_15M_05S_AA.rnx")
-    ds = augment_with_ephemeris(ds, rx_pos, source="final", date="2025001", site_config=cfg)
-    vod = calculate_vod(canopy_ds, reference_ds)
-    ```
-
 ---
 
 ## Processing Pipeline

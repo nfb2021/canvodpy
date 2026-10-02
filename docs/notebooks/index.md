@@ -42,10 +42,10 @@ and live editing.
 
 | # | Notebook | Topic | Try it |
 |---|---|---|---|
-| 12 | API Overview | The CLI, `Site.pipeline()`, and the functional API side by side | [Notebook](_build/12_api_overview.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/12_api_overview.py) |
+| 12 | API Overview | The CLI, `Site.pipeline()`, and the deprecated surfaces side by side | [Notebook](_build/12_api_overview.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/12_api_overview.py) |
 | 13 | CLI Pipeline | `canvodpy run` — raw GNSS files to a versioned VOD store with one command | [Notebook](_build/13_cli_pipeline.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/13_cli_pipeline.py) |
 | 14 | Site Pipeline | `Site().pipeline().process_range()` — the path the CLI wraps | [Notebook](_build/14_site_pipeline.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/14_site_pipeline.py) |
-| 15 | Functional API | L4 — pure functions in `canvodpy.functional` for custom pipelines | [Notebook](_build/15_functional_api.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/15_functional_api.py) |
+| 15 | Functional API | L4 — `canvodpy.functional` (deprecated: no longer maintained, gives different results than `canvodpy run`) | [Notebook](_build/15_functional_api.html){target=_blank} · [source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/15_functional_api.py) |
 
 ### Workflow notebooks
 

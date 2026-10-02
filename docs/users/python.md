@@ -1,6 +1,6 @@
 ---
 title: Python Quickstart
-description: Drive canVODpy from Python — Site.pipeline() for scripted runs, or the functional building blocks for custom pipelines.
+description: Drive canVODpy from Python with Site.pipeline() for scripted runs.
 ---
 
 # Python Quickstart
@@ -9,8 +9,7 @@ description: Drive canVODpy from Python — Site.pipeline() for scripted runs, o
 
     Most users should start with the [CLI](cli.md) instead — it's the
     recommended, complete entrypoint, especially for unattended/HPC runs.
-    Come here if you're scripting around canVODpy or building custom
-    pipeline logic in Python.
+    Come here if you're scripting around canVODpy in Python.
 
 ## Installation
 
@@ -48,7 +47,7 @@ CLI-specific.
 
 ---
 
-## 2. Process your first day of data — two Python surfaces
+## 2. Process your first day of data
 
 ### `Site.pipeline()` — scripted, stateful runs
 
@@ -69,24 +68,13 @@ vod = site.vod.compute_day_all(data)  # every configured analysis
 `pipeline.process_range(start, end)` and options like `n_workers` on
 `.pipeline()` are also available — see the [API Levels guide](../guides/api-levels.md).
 
-### `canvodpy.functional` — stateless building blocks
+!!! warning "Deprecated: `canvodpy.functional`"
 
-Pure, stateless functions for assembling your own custom pipeline, or for
-component-level scripting and analysis (e.g. in a notebook) where you don't
-want the full `Site`/`Pipeline` orchestration:
-
-```python
-from canvodpy.functional import read_rinex, augment_with_ephemeris, calculate_vod
-
-ds = read_rinex("ROSA01TUW_R_20250010000_15M_05S_AA.rnx")
-ds = augment_with_ephemeris(ds, rx_pos, source="final", date="2025001", site_config=cfg)
-vod = calculate_vod(canopy_ds, reference_ds)
-```
-
-Use this when you need to compose the pipeline's individual steps
-differently than `Site.pipeline()` does — custom orchestration, alternative
-control flow, or analysis code that only needs one or two steps rather than
-the full pipeline.
+    The single-step functions of `canvodpy.functional` (`read_rinex()`,
+    `augment_with_ephemeris()`, ...) are left over from development and will
+    be removed with the next major version. They are no longer maintained and
+    give different results than `canvodpy run`; see the
+    [API Levels guide](../guides/api-levels.md#deprecated-canvodpyfunctional).
 
 ### Dates: the `YYYYDDD` format
 

@@ -341,16 +341,16 @@ VOD maps.
 
 ### API levels
 
-Two supported surfaces, plus the CLI on top of one of them:
+One supported surface, plus the CLI on top of it:
 
 | Surface | Entry point | Use case |
 |-------|-------------|----------|
 | CLI | `canvodpy run --site ...` | Running the pipeline — recommended |
 | `Site.pipeline()` (L3) | `Site(name).pipeline()` | Python-native configured pipeline runs — what the CLI wraps |
-| Functional (L4) | `canvodpy.functional.*` | Pure functions for custom pipelines, testing, and analysis |
 
 `FluentWorkflow` (L2), the flat `process_date()`/`calculate_vod()`/`preview_processing()`
-functions (L1), and `VODWorkflow` are deprecated — see [API Levels](guides/api-levels.md)
+functions (L1), `VODWorkflow`, and the single-step functions of `canvodpy.functional` (L4)
+are deprecated — see [API Levels](guides/api-levels.md)
 for details and migration notes.
 
 ---

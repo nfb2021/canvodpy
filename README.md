@@ -205,7 +205,7 @@ with site.pipeline(n_workers=8) as pipeline:
         site.vod.compute_day(datasets, "canopy_01_vs_reference_01")
 ```
 
-Two supported Python surfaces, plus the CLI on top of one of them:
+One supported Python surface, plus the CLI on top of it:
 
 ```mermaid
 flowchart TD
@@ -218,14 +218,6 @@ flowchart TD
         L3A --> L3B[".pipeline(n_workers=8)"]
         L3B --> L3C[".process_range(start, end)"]
         L3A --> L3E["site.vod.compute_bulk(...)"]
-    end
-
-    subgraph L4["canvodpy.functional — stateless components"]
-        L4A["read_rinex('file.rnx')"]
-        L4A --> L4B["augment_with_ephemeris(ds)"]
-        L4B --> L4G["assign_grid_cells(ds)"]
-        L4G --> L4C["calculate_vod(canopy, ref)"]
-        L4C --> L4H["write_to_store(ds, group)"]
     end
 
     subgraph Shared["Shared Components"]
@@ -243,17 +235,14 @@ flowchart TD
     L3C --> READER
     L3C --> STORE
     L3E --> VOD
-
-    L4A --> READER
-    L4B --> EP
-    L4H --> STORE
 ```
 
 The optional `canvod-airflow` extension builds its DAGs on
 `canvodpy.workflows.tasks`, a dedicated set of Airflow-compatible task
-functions — not `canvodpy.functional` directly. `FluentWorkflow`, the flat `process_date()` /
-`calculate_vod()` / `preview_processing()` functions, and `VODWorkflow` are
-deprecated (`DeprecationWarning` on use) — kept working, no longer taught;
+functions. `FluentWorkflow`, the flat `process_date()` /
+`calculate_vod()` / `preview_processing()` functions, `VODWorkflow`, and the
+single-step functions of `canvodpy.functional` are deprecated (`FutureWarning`
+on use) — kept working until the next major version, no longer taught;
 `VODWorkflow` additionally has a broken augmentation step and shouldn't be
 used regardless. See the
 [API Levels guide](https://nfb2021.github.io/canvodpy/guides/api-levels/) for details.

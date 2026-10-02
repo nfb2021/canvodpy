@@ -3,7 +3,7 @@
 Composes the config/run/doctor/store subcommands into a single Typer
 app. All CLI code lives in this package — the entry point, ``config``,
 ``run``, ``doctor``, and ``store`` — matching where the rest of
-canvodpy's user-facing surface (``Site``, ``Pipeline``, the functional API)
+canvodpy's user-facing surface (``Site``, ``Pipeline``)
 already lives.
 """
 

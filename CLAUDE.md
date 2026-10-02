@@ -116,17 +116,17 @@ part of this monorepo's workspace):
 
 ### API levels
 
-Two supported surfaces, plus the CLI on top of one of them. The rest are
-deprecated (`DeprecationWarning` on use) — kept working, no longer taught.
+One supported surface, plus the CLI on top of it. The rest are
+deprecated (`FutureWarning` on use) — kept working until the next major version, no longer taught.
 
 | Level | Style | Entry point | Use case | Status |
 |---|---|---|---|---|
 | CLI | Command-line | `canvodpy run --site ... --start ... --end ...` | Running the pipeline — recommended | Active |
 | L3 | Site pipeline (OOP) | `Site(site).pipeline()` | Python-native configured pipeline runs — what the CLI wraps | Active |
-| L4 | Functional | `canvodpy.functional.*` | Component-level scripting/analysis; also used by Airflow (stateless) | Active |
 | L1 | Convenience | `process_date()`, `calculate_vod()`, `preview_processing()` | Superseded by `Site(site).pipeline()` | Deprecated |
-| L2 | Fluent | `FluentWorkflow().read().augment().grid().vod()` | Superseded by `Site.pipeline()` / functional | Deprecated |
+| L2 | Fluent | `FluentWorkflow().read().augment().grid().vod()` | Superseded by `Site.pipeline()` | Deprecated |
 | — | `VODWorkflow` | `VODWorkflow(site=...)` | Broken augmentation step (no-op) — do not use | Deprecated |
+| L4 | Functional | `canvodpy.functional.*` | No longer maintained; gives different results than `canvodpy run` | Deprecated |
 
 ### Data contracts
 
@@ -299,7 +299,7 @@ to package-specific details.
 1. `docs/guides/ai-development.md` — **start here**: Claude Code setup, skills, workflows
 2. `docs/architecture.md` — system architecture and data flow
 3. `docs/principles.md` — design principles and philosophy
-4. `docs/guides/api-levels.md` — CLI, `Site.pipeline()`, and the functional API explained
+4. `docs/guides/api-levels.md` — CLI and `Site.pipeline()` explained, deprecated surfaces
 5. `docs/guides/getting-started.md` — setup and first run
 6. `docs/findings/` — scientific comparison results and findings
 7. `docs/packages/*/overview.md` — per-package deep dives
@@ -315,9 +315,9 @@ it resumes automatically from the last processed date when `--start` is
 omitted. Use `Site(site).pipeline()` only when the user needs Python-native
 scripting (looping over sites, embedding in a notebook). Do not suggest
 `FluentWorkflow`, the flat `process_date()`/`calculate_vod()` functions, or
-`VODWorkflow` — all three are deprecated (see `docs/guides/api-levels.md`).
-For analysis/visualization of already-ingested data, `canvodpy.functional` and
-the viz/analysis packages remain the recommended Python surface.
+`VODWorkflow`, or `canvodpy.functional` — all are deprecated (see
+`docs/guides/api-levels.md`). For analysis/visualization of already-ingested
+data, the viz/analysis packages remain the recommended Python surface.
 
 ## AI-assisted development
 

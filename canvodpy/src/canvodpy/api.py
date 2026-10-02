@@ -6,8 +6,9 @@ Recommended surfaces:
 - Run the pipeline via the ``canvodpy`` CLI (production runs, resumable).
 - Script a configured pipeline run in Python via ``Site.pipeline()``
   (``Pipeline`` class) — this is what the CLI wraps internally.
-- Component-level scripting/analysis (custom readers, ephemeris source,
-  grid, VOD calculator) via ``canvodpy.functional``.
+
+``canvodpy.functional`` is deprecated: it is no longer maintained and gives
+different results than ``canvodpy run``.
 
 ``process_date()``, ``calculate_vod()``, and ``preview_processing()`` below
 are deprecated convenience wrappers around ``Pipeline`` — use

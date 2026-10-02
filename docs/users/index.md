@@ -10,10 +10,8 @@ entrypoint designed to run unattended: cron jobs, HPC/remote machines,
 scheduled batch processing. Most users should start there, even if they
 plan to wrap it in their own scripts later.
 
-Python gives you two more targeted alternatives when you need to go beyond
-running the pipeline as-is: `Site.pipeline()` for scripted/notebook-driven
-runs, and the stateless `canvodpy.functional` building blocks if you're
-building your own custom pipeline logic in Python.
+From Python, `Site.pipeline()` runs the same processing for scripted or
+notebook-driven runs and gives the same results.
 
 <div class="grid cards" markdown>
 
@@ -26,13 +24,12 @@ building your own custom pipeline logic in Python.
 
     [:octicons-arrow-right-24: CLI Quickstart](cli.md){ .md-button .md-button--primary }
 
--   :fontawesome-brands-python: &nbsp; **Python — for scripting & custom pipelines**
+-   :fontawesome-brands-python: &nbsp; **Python — for scripting**
 
     ---
 
-    `Site.pipeline()` for scripted/notebook-driven runs, or the functional
-    building blocks (`read_rinex`, `augment_with_ephemeris`, ...) if you're
-    assembling your own custom pipeline.
+    `Site.pipeline()` for scripted/notebook-driven runs, with the same
+    results as the CLI.
 
     [:octicons-arrow-right-24: Python Quickstart](python.md){ .md-button .md-button--primary }
 
