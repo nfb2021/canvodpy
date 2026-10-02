@@ -425,15 +425,13 @@ receiver directory exists and contains data files:
 just config-validate
 ```
 
-**Data directory validation** checks the file names inside a receiver directory against
-the canVOD naming convention before any data is read:
+**Data check** finds each receiver's files exactly as `canvodpy run` does, in any folder
+layout, and reports the days and files a run would process, files it would pass over,
+and problems that would stop it (for example two files covering the same time):
 
 ```bash
-canvod-preflight validate /data/examplesite/02_canopy \
-    --site ROS --agency TUW --receiver 1 --role canopy
+just config-check-data <site>
 ```
-
-For a site already defined in `canvod-settings.yaml`: `just config-check-data <site>`.
 
 ---
 
@@ -442,7 +440,7 @@ For a site already defined in `canvod-settings.yaml`: `just config-check-data <s
 !!! warning "This deviates from the community-agreed GNSS-T file naming convention"
     The standard pipeline expects every GNSS data file to follow the
     [community-agreed  filename convention](../packages/naming/overview.md),
-    which is enforced by `canvod-preflight` before any data is read.
+    and processes only files that follow it.
 
     If your receiver outputs files in a proprietary or legacy format —
     Septentrio SBF with firmware-generated names, RINEX v2 short names,

@@ -44,29 +44,29 @@ missing hash causes a hard error, not a silent skip.
 
 ## 2. Validation as a hard gate
 
-**What:** Before any file is read or stored, `DataDirectoryValidator` checks every
-receiver directory. If any file cannot be mapped to the naming convention, or if
-any two files overlap in time, the pipeline stops and prints a diagnostic listing
-the problem files. There is no "skip and continue" mode.
+**What:** Before any file is read or stored, `canvodpy run` finds every receiver's
+files and checks them. If two files map to the same canonical name, if two files
+overlap in time, or if one directory holds files of more than one receiver, the run
+stops and prints a diagnostic listing the problem files. There is no "skip and
+continue" mode for these cases.
 
-**Why (scientific):** An unrecognized file is probably data — ignoring it would
-create a silent gap in the archive. Two files covering the same time window would
-double-count epochs, biasing SNR statistics and corrupting VOD. The cost of a
-false alarm (manual inspection) is far lower than the cost of silently wrong data.
+**Why (scientific):** Two files covering the same time window would double-count
+epochs, biasing SNR statistics and corrupting VOD. Files of two receivers in one
+directory would be stored under the wrong receiver. The cost of a false alarm
+(manual inspection) is far lower than the cost of silently wrong data.
 
-**Why (engineering):** Fail-loud design. The validator returns a `ValidationReport`
-with `is_valid`, `unmatched` (list of unrecognized paths), and `overlaps` (list of
-conflicting pairs), so the error message always tells the operator exactly what to
-fix.
+**Why (engineering):** Fail-loud design. The error message always names the files,
+so it tells the operator exactly what to fix.
 
-**How:** `DataDirectoryValidator.validate_receiver()` in `canvod-filemap`.
-Called by `validate_data_dirs()` in the orchestrator before any reading begins.
+**How:** `canvodpy.orchestrator.discovery`, used by `canvodpy run`, `Site.pipeline()`
+and the Airflow tasks alike. `canvodpy config validate` (and `validate_data_dirs()` in
+Airflow) runs the same discovery before processing and additionally lists the files a
+run passes over because neither the naming convention nor a recipe recognizes them.
 
 !!! warning "The naming convention is a hard gate, not an overridable default"
-    `DataDirectoryValidator` has no "permissive" or "warn-only" mode. Files that
-    do not match a recognized pattern or recipe are always rejected. Configuring a
-    `NamingRecipe` for non-standard filenames is the correct response to a
-    validation failure — not disabling the check.
+    Without a naming recipe, only files that follow the naming convention are
+    processed. Configuring a `NamingRecipe` for non-standard filenames is the
+    correct response to data that is not recognized, not renaming files by hand.
 
 ---
 
@@ -116,9 +116,9 @@ without the full pipeline. Upward-free dependencies make this possible: install
 without a store, a reader, or an internet connection. The store can be tested
 without running readers. Circular imports are structurally impossible.
 
-**How:** Declared in each package's `pyproject.toml`. Four packages have no
-inter-package dependencies at all: `canvod-utils`, `canvod-vod`,
-`canvod-filemap`, and `canvod-preflight`. See
+**How:** Declared in each package's `pyproject.toml`. `canvod-utils` has no
+inter-package dependencies at all, and most packages depend only on it and
+`canvod-config`. See
 [Architecture → Dependency Graph](architecture.md#dependency-graph) for the full
 declaration.
 
@@ -146,9 +146,8 @@ without additional configuration:
 - **Store keying** — each group in the Icechunk store is addressed by canonical
   name, so temporal range queries are computable from filenames alone.
 
-**How:** `canvod-filemap`. Physical files are never renamed — a virtual
-mapping layer (`FilenameMapper` + `VirtualFile`) attaches a canonical name to each
-physical path. All downstream processing uses the canonical name; the physical path
+**How:** `canvod-filemap`. Physical files are never renamed — a naming recipe
+attaches a canonical name to each physical path. All downstream processing uses the canonical name; the physical path
 is retained only for opening the file.
 
 ---

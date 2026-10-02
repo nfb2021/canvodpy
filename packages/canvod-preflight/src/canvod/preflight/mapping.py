@@ -3,6 +3,12 @@
 The ``FilenameMapper`` discovers files on disk according to the configured
 directory layout and source pattern, then wraps each in a ``VirtualFile``
 that pairs the physical path with its canVOD conventional name.
+
+.. deprecated::
+    ``FilenameMapper`` is left over from development and will be removed
+    with the next major version. Naming recipes (``canvod-filemap``) map
+    non-canonical filenames, and ``canvodpy run`` finds the files in any
+    folder layout (:mod:`canvodpy.orchestrator.discovery`).
 """
 
 from __future__ import annotations
@@ -14,6 +20,8 @@ from pathlib import Path
 from typing import Literal
 
 from natsort import natsorted
+
+from canvod.utils.tools import deprecated
 
 from .config_models import DirectoryLayout, ReceiverNamingConfig, SiteNamingConfig
 from .convention import CanVODFilename, FileType, ReceiverType, find_overlaps
@@ -91,6 +99,10 @@ def _detect_file_type(path: Path) -> tuple[FileType, str | None]:
     raise ValueError(f"Cannot detect file type for {path.name}")
 
 
+@deprecated(
+    "FilenameMapper is left over from development and will be removed with the next major version. "
+    "Use a naming recipe (the receiver setting 'recipe', see canvod-filemap) instead; canvodpy run finds the files in any folder layout."
+)
 class FilenameMapper:
     """Maps physical files to canVOD conventional names.
 

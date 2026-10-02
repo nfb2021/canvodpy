@@ -1,4 +1,17 @@
-"""canvod-preflight: Pre-flight validation for GNSS-T data directories."""
+"""canvod-preflight: the canVOD filename convention.
+
+``CanVODFilename`` parses and builds canonical canVOD filenames, and
+``find_overlaps`` finds files whose named time spans overlap. Both are used
+by the file discovery of ``canvodpy run``.
+
+.. deprecated::
+    The mapping and validation API (``FilenameMapper``, ``VirtualFile``,
+    ``DataDirectoryValidator``, ``ValidationReport``, ``SiteNamingConfig``,
+    ``ReceiverNamingConfig``, ``DirectoryLayout``, the pattern registry and
+    the ``canvod-preflight`` command) is left over from development
+    and will be removed with the next major version. Use naming recipes
+    (``canvod-filemap``) and ``canvodpy config validate`` instead.
+"""
 
 __version__ = "0.1.0"
 

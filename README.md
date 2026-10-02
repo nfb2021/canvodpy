@@ -71,7 +71,7 @@ graph TB
 
     subgraph InfraPkg[Infrastructure Packages]
         Ops["⚙️ canvod-ops<br/>Preprocessing Pipeline"]
-        Preflight["🚦 canvod-preflight<br/>Naming Convention & Validation"]
+        Preflight["🚦 canvod-preflight<br/>Naming Convention"]
     end
 
     subgraph ExtPkg["Optional Extensions (canvodpy-extensions repo)"]
@@ -229,7 +229,7 @@ flowchart TD
     end
 
     subgraph Shared["Shared Components"]
-        FM["FilenameMapper"]
+        FM["File discovery"]
         EP["EphemerisProvider"]
         READER["GNSSDataReader"]
         STORE["Icechunk Store"]
@@ -319,7 +319,7 @@ canvodpy/                       # Monorepo root
 │   ├── canvod-ops/             #   Preprocessing pipeline
 │   ├── canvod-config/          #   Configuration management
 │   ├── canvod-utils/           #   Date/time utilities & diagnostics
-│   └── canvod-preflight/       #   Naming convention & pre-flight validation
+│   └── canvod-preflight/       #   Naming convention
 ├── canvodpy/                   # Umbrella package + orchestrator
 ├── demo/                       # marimo notebooks (submodule)
 ├── config/                     # YAML configuration files

@@ -4,8 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from canvod.preflight import CanVODFilename, FilenameMapper, find_overlaps
 from canvod.preflight.mapping import VirtualFile
+
+# Tests of the deprecated mapping and validation API, see test_deprecations.py.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:.*left over from development:FutureWarning"
+)
 
 
 def _vf(

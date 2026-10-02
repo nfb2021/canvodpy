@@ -1,8 +1,8 @@
 # canvod-preflight
 
-`canvod-preflight` enforces the canVOD filename convention at the pipeline boundary.
-Before any data is read, it validates that every file in a receiver directory can be
-unambiguously identified and that no two files cover the same time window.
+`canvod-preflight` defines the canVOD filename convention: `CanVODFilename` parses and
+builds canonical names, and `find_overlaps` finds files whose named time spans overlap.
+`canvodpy run` uses both to decide which files it processes.
 
 ---
 
@@ -64,27 +64,30 @@ ROSR01TUW_R_20250010000_01D_05S_AA.rnx
 
 ---
 
-## Pre-pipeline validation
+## Which files a run processes
 
-`canvod-preflight` is a **mandatory hard gate** that runs before any data is read.
-It checks two things for each receiver directory:
+`canvodpy run` scans each receiver's `directory` recursively, in any folder layout (all
+files in one folder, one folder per day, or deeper nesting). A file's day comes from the
+date in its name, not from its folder. Without a naming recipe, only files that follow
+the convention are processed. A run stops before reading any data if
 
-1. **Every file can be identified** — each filename matches a known naming pattern.
-   Unrecognised files block processing with a diagnostic listing the problem files.
-2. **No temporal overlaps** — no two files cover the same time window.
-   Overlapping files are ambiguous; they block processing until resolved.
+1. a directory holds files of more than one receiver,
+2. two files map to the same canonical name, or
+3. two files cover the same time, for example a daily file next to the 15-minute files
+   of the same day.
+
+Check a site before processing it; the check finds the files exactly as a run does and
+also lists the files a run would pass over:
 
 ```bash
-# CLI — validate a single receiver directory
-canvod-preflight validate /data/my_site/01_reference \
-    --site ROS --agency TUW --receiver 1 --role reference
-
-# Shortcut for a site configured in canvod-settings.yaml
-just config-check-data <site>
+just config-check-data <site>   # canvodpy config validate --site <site>
 ```
 
-Validation is also triggered automatically by `just config-validate` (which calls
-`uv run canvodpy config validate`).
+!!! note "Deprecated"
+    The `canvod-preflight` command and the mapping and validation classes of this
+    package (`FilenameMapper`, `DataDirectoryValidator`, `SiteNamingConfig`,
+    `ReceiverNamingConfig`) are left over from development and will be removed with the
+    next major version. Use `canvodpy config validate` and naming recipes instead.
 
 ---
 
@@ -115,7 +118,7 @@ sites:
 
 ### NamingRecipe YAML format
 
-A recipe tells the mapper how to extract canonical fields from a physical filename:
+A recipe tells canvodpy how to extract canonical fields from a physical filename:
 
 ```yaml
 name: examplesite_reference
@@ -127,7 +130,6 @@ receiver_type: reference
 sampling: "05S"
 period: "15M"
 file_type: rnx
-layout: yyddd_subdirs   # or yyyyddd_subdirs, flat
 glob: "*.??o"
 fields:
   - skip: 4          # "rref"
@@ -154,7 +156,7 @@ Recipe files are kept per site, in `<config dir>/recipes/<site>/<recipe>.yaml`.
 `just naming-init my_site my_site_reference` creates one from the template that
 ships with canvod-filemap. See the
 [canvod-filemap documentation](https://github.com/nfb2021/canvodpy-extensions)
-for the full API (`FilenameMapper`, `VirtualFile`, `FilenameCatalog`).
+for the full recipe API.
 
 ---
 

@@ -14,7 +14,7 @@ Main application package — orchestrates the full GNSS → VOD pipeline.
 | `workflow.py` | `VODWorkflow` (**deprecated** — `_augment_data` is a no-op stub, never applies ephemeris augmentation) |
 | `vod_computer.py` | `VodComputer` — `compute_day()` (inline) + `compute_bulk()` (from store) |
 | `factories.py` | `ReaderFactory`, `GridFactory`, `VODFactory`, `AugmentationFactory` |
-| `workflows/` | Task definitions, `validate_data_dirs()` pre-flight check |
+| `workflows/` | Airflow task functions; file discovery via `orchestrator/discovery.py`, `validate_data_dirs()` = `config validate` |
 | `orchestrator/resources.py` | `MemoryMonitor`, `DaskClusterManager` |
 
 ## API levels
@@ -50,10 +50,10 @@ Files → DataDirectoryValidator → GNSSDataReader → AuxDataAugmenter → Gri
   utility library — no CLI code, no `typer`/`rich` deps — consistent with what
   its own `CLAUDE.md` always described it as. See `dev/cli_home_and_flags_plan.md`
   for the full rationale.
-- `PipelineOrchestrator`/`RinexDataProcessor` (the CLI/`Site.pipeline()` path) discover
-  files via `canvod-filemap`'s `BUILTIN_PATTERNS` when installed, falling back to
-  canonical canVOD-only globs (`*.rnx`/`*.sbf`) otherwise — see §12 in `dev/todo_later.md`
-- `FluentWorkflow.read()` (**deprecated**) uses `FilenameMapper` when naming config is available
+- `canvodpy run`, `Site.pipeline()` and the Airflow tasks all discover files via
+  `orchestrator/discovery.py`: the receiver's recipe (`canvod-filemap`,
+  `<config dir>/recipes/<site>/<name>.yaml`) or canonical names only, any folder layout
+- `FluentWorkflow.read()` (**deprecated**) still uses the deprecated `naming:` block
 - Receiver position from RINEX header via `ECEFPosition.from_ds_metadata(ds)`
 - Factory API: `fpath=` (not `path=`), `.to_ds()` (not `.read()`)
 - `vod_analyses` returns `dict[str, VodAnalysisConfig]` (Pydantic models, attribute access)

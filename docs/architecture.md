@@ -93,7 +93,7 @@ graph TD
 | **Persistence** | canvod-store, canvod-store-metadata | Icechunk versioned storage, three-layer deduplication, provenance metadata (DataCite/ACDD/STAC) |
 | **Data I/O** | canvod-readers, canvod-auxiliary | RINEX/SBF parsing, SP3/CLK retrieval |
 | **Presentation** | canvod-viz | 2D polar projections, 3D interactive surfaces, store viewer |
-| **Quality Assurance** | canvod-preflight | Naming convention parsing and pre-run data checks |
+| **Quality Assurance** | canvod-preflight | Naming convention parsing and overlap detection |
 | **Foundation** | canvod-config, canvod-utils | Configuration loading/validation; date utilities and diagnostics |
 
 Two more packages — `canvod-filemap` (non-canonical filename mapping) and
@@ -198,13 +198,13 @@ canvodpy/                           # Repository root
 Inter-package dependencies as declared in each package's `pyproject.toml`:
 
 ```
-canvod-config           ──── no inter-package deps
-canvod-preflight        ──── no inter-package deps
 canvod-utils            ──── no inter-package deps
-canvod-vod              ──── no inter-package deps
+canvod-config           ──── depends on canvod-utils
+canvod-preflight        ──── depends on canvod-utils
+canvod-vod              ──── depends on canvod-utils
 canvod-readers          ──── depends on canvod-config, canvod-utils
 canvod-auxiliary        ──── depends on canvod-config, canvod-readers, canvod-utils
-canvod-grids            ──── depends on canvod-store (workflow adapters)
+canvod-grids            ──── depends on canvod-store, canvod-utils
 canvod-store            ──── depends on canvod-auxiliary, canvod-config, canvod-grids,
                               canvod-readers, canvod-utils, canvod-vod
 canvod-store-metadata   ──── depends on canvod-config
@@ -237,10 +237,10 @@ flowchart TD
     end
 
     subgraph DISCOVERY["Data Discovery"]
-        VALIDATOR["`**DataDirectoryValidator**
-        pre-flight gate`"]
-        MAPPER["`**FilenameMapper**
-        VirtualFiles`"]
+        MAPPER["`**File discovery**
+        canonical names or recipe`"]
+        VALIDATOR["`**Receiver checks**
+        no duplicates or overlaps`"]
         SCHEDULE["Processing Schedule"]
     end
 
@@ -284,7 +284,7 @@ flowchart TD
     YAML --> PYDANTIC --> SITE
     SITE --> RINEX_STORE & VOD_STORE
 
-    PYDANTIC --> VALIDATOR --> MAPPER --> SCHEDULE
+    PYDANTIC --> MAPPER --> VALIDATOR --> SCHEDULE
 
     SCHEDULE --> FTP --> HERMITE & LINEAR --> AUX_ZARR
 
@@ -302,7 +302,7 @@ flowchart TD
 | Stage | What it does | Why it matters scientifically |
 |-------|--------------|-------------------------------|
 | **Configuration** | A single `canvod-settings.yaml` is validated by `CanvodConfig`, a Pydantic `BaseSettings` model; any field can be overridden via `CANVOD__`-prefixed environment variables | Every run is fully described by one validated document — a prerequisite for reproducible processing |
-| **Data discovery** | `DataDirectoryValidator` blocks runs with unrecognized or temporally overlapping files; `FilenameMapper` maps physical filenames to the IGS-style naming convention | Overlapping input files would double-count observations and bias SNR statistics; the gate makes this impossible |
+| **Data discovery** | Each receiver directory is scanned in any folder layout; files are selected by their canonical names or mapped to them by a naming recipe; runs with duplicate or temporally overlapping files, or with files of two receivers in one directory, are stopped | Overlapping input files would double-count observations and bias SNR statistics; the gate makes this impossible |
 | **Auxiliary pipeline** | Downloads agency orbit (SP3) and, by default, clock (CLK) products from public data centers (ESA primary, NASA CDDIS fallback), then interpolates: Hermite splines for orbits, piecewise linear for clocks | Satellite positions are needed to compute where each signal pierced the canopy (θ, φ); receivers only record *what* they saw, not *where from*. Alternatively, SBF files carry broadcast ephemeris, avoiding the download. Clock is orbit-independent and unused by the VOD formula — disable with `aux_data.fetch_clock: false` to skip its download/interpolation entirely |
 | **Reading & transform** | RINEX v2/v3 or SBF files are parsed into `xarray.Dataset(epoch, sid)`; satellite ECEF positions become receiver-relative spherical coordinates (r, θ, φ) | The polar angle θ enters the VOD formula directly; azimuth φ locates the observation on the hemisphere for gridding |
 | **Storage** | Datasets are appended to an Icechunk store; three deduplication layers (file-hash match, temporal overlap vs. store metadata, intra-batch overlap) guard every write; one commit per receiver-day | Duplicate epochs would corrupt the canopy/reference alignment. Each commit is an immutable, citable snapshot of the archive |

@@ -221,7 +221,7 @@ vod_ds = calculate_vod(canopy_ds, reference_ds)
 
 With the functional API, file discovery is the caller's job — pass explicit
 paths (e.g. from your own `Path.glob`, a workflow scheduler, or the optional
-`canvod.filemap.FilenameMapper` if your site uses non-canonical filenames —
+`canvod.filemap.NamingRecipe` if your site uses non-canonical filenames —
 see [Optional Extensions](extensions.md)).
 
 ---

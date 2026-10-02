@@ -371,6 +371,7 @@ name = "canvod-preflight"
 version = "0.4.0"
 source = { editable = "packages/canvod-preflight" }
 dependencies = [
+    { name = "canvod-utils" },
     { name = "natsort" },
     { name = "pydantic" },
     { name = "typer" },
@@ -378,6 +379,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "canvod-utils", editable = "packages/canvod-utils" },
     { name = "natsort", specifier = ">=8.4.0" },
     { name = "pydantic", specifier = ">=2.5.0" },
     { name = "typer", specifier = ">=0.12" },
