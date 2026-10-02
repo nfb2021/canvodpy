@@ -225,6 +225,11 @@ class DataDirMatcher:
             raise FileNotFoundError(msg)
 
 
+@deprecated(
+    "PairDataDirMatcher is left over from development and will be removed with the next major version. "
+    "It only finds data in YYDDD day folders. Use canvodpy.Site(<site>).pipeline() or the "
+    "`canvodpy run` command instead, which find each file's day from its name in any folder layout."
+)
 class PairDataDirMatcher:
     """Match RINEX directories for receiver pairs across dates.
 

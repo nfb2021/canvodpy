@@ -391,11 +391,8 @@ class TestPairDataDirMatcher:
         assert [r.yyyydoy.to_str() for r in results] == ["2025002"]
         assert set(calls) == {"canopy_01", "reference_01"}
 
-    def test_not_deprecated(self, pair_setup):
-        """The pipeline uses PairDataDirMatcher, so it must not warn."""
-        import warnings
-
+    def test_is_deprecated(self, pair_setup):
+        """The pipeline finds days through its own discovery now."""
         base, receivers, pairs = pair_setup
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
+        with pytest.warns(FutureWarning, match="left over from development"):
             PairDataDirMatcher(base, receivers, pairs)

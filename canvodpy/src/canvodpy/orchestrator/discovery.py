@@ -1,26 +1,38 @@
 """GNSS data-file discovery shared by the pipeline run and its dry-run preview.
 
-One code path decides which files in a receiver's per-day directory are
-processed, so ``canvodpy run --dry-run`` reports exactly the files a real run
-would ingest.
+One code path decides which files of a receiver are processed for a day, so
+``canvodpy run --dry-run`` reports exactly the files a real run would ingest.
 
-Discovery per receiver:
+Each receiver's configured ``directory`` is scanned recursively once per run.
+Hidden directories are skipped and symbolic links are not followed. A file's
+day comes from the date in its (canonical) name, not from the folder it sits
+in, so any folder layout works: all files in one folder, one folder per day
+(``YYDDD`` or ``YYYYDDD``), or deeper nesting. A file belongs to the day it
+starts on.
+
+Which files count:
 
 1. **Recipe** -- when the receiver config sets ``recipe:``, the naming recipe
    (``canvod-filemap``) selects the files and maps each to its canonical
-   canVOD name. This is the only way non-canonical filenames are processed.
+   canVOD name. This is the only way non-canonical filenames are processed,
+   and the recipe sets the receiver identity (e.g. ``ROSA01TUW``).
 2. **Canonical convention** -- otherwise, only files whose names follow the
    canVOD naming convention (``canvod-preflight``) are processed, restricted
-   by ``reader_format``. Other files in the directory are ignored. Compressed
-   files are not selected, because the readers do not decompress.
+   by ``reader_format``. Compressed files are not selected, because the
+   readers do not decompress. Whether ``canvod-filemap`` is installed does
+   not change this.
 
-Whether ``canvod-filemap`` is installed does not change (2).
+Each receiver needs its own directory: a directory whose canonical files
+belong to more than one receiver identity is an error, and so are two files
+that map to the same canonical name.
 """
 
 from __future__ import annotations
 
 import os
+from collections import defaultdict
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -34,6 +46,35 @@ class DiscoveredFile:
 
     path: Path
     canonical_name: str
+
+
+@dataclass(frozen=True)
+class ReceiverDay:
+    """One receiver's data for one day, the unit a run processes.
+
+    Parameters
+    ----------
+    receiver : str
+        Receiver name in the site configuration.
+    directory : Path
+        The receiver's configured data directory (any layout below it).
+    yyyydoy : str
+        Day in ``YYYYDOY`` format.
+    recipe : str | None
+        Name of the receiver's naming recipe, if configured.
+    """
+
+    receiver: str
+    directory: Path
+    yyyydoy: str
+    recipe: str | None = None
+
+    def __str__(self) -> str:
+        return f"{self.receiver} {self.yyyydoy} ({self.directory})"
+
+
+class DiscoveryError(ValueError):
+    """A receiver directory's files cannot be assigned unambiguously."""
 
 
 def canonical_name_for(path: Path | str) -> str:
@@ -161,52 +202,128 @@ def _canonical_file(path: Path, file_types: frozenset[str]) -> DiscoveredFile | 
     return DiscoveredFile(path=path, canonical_name=parsed.name)
 
 
-def discover_files(
-    data_dir: Path,
+def _recipe_file(path: Path, naming_recipe: Any) -> DiscoveredFile | None:
+    """``path`` as a discovered file if the recipe recognizes its name."""
+    if not fnmatch(path.name, naming_recipe.glob) or not naming_recipe.matches(
+        path.name
+    ):
+        return None
+    return DiscoveredFile(
+        path=path, canonical_name=naming_recipe.to_virtual_file(path).canonical_str
+    )
+
+
+@lru_cache(maxsize=64)
+def _scan_directory(
+    directory: Path, recipe: str | None
+) -> dict[str, tuple[DiscoveredFile, ...]]:
+    """Index a receiver directory: day (``YYYYDOY``) to its files.
+
+    Cached for the run; :func:`clear_discovery_cache` forgets the index so
+    a new run sees files added since.
+    """
+    from canvod.preflight.convention import CanVODFilename
+
+    naming_recipe = _load_recipe(resolve_recipe_path(recipe)) if recipe else None
+    found: list[DiscoveredFile] = []
+    if directory.is_dir():
+        for dirpath, dirnames, filenames in os.walk(directory, followlinks=False):
+            dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+            for name in filenames:
+                if name.startswith("."):
+                    continue
+                path = Path(dirpath) / name
+                discovered = (
+                    _recipe_file(path, naming_recipe)
+                    if naming_recipe is not None
+                    else _canonical_file(path, _ALL_FILE_TYPES)
+                )
+                if discovered is not None:
+                    found.append(discovered)
+
+    by_name: dict[str, list[Path]] = defaultdict(list)
+    for f in found:
+        by_name[f.canonical_name].append(f.path)
+    duplicates = {n: p for n, p in by_name.items() if len(p) > 1}
+    if duplicates:
+        lines = [
+            f"{name}: " + ", ".join(str(p) for p in natsorted(paths))
+            for name, paths in sorted(duplicates.items())[:5]
+        ]
+        msg = (
+            f"In {directory}, several files map to the same canonical name, so "
+            f"it is unclear which one to process:\n  - " + "\n  - ".join(lines)
+        )
+        raise DiscoveryError(msg)
+
+    identities = sorted({f.canonical_name[:9] for f in found})
+    if len(identities) > 1:
+        msg = (
+            f"{directory} contains files of {len(identities)} receivers "
+            f"({', '.join(identities)}). Give each receiver its own directory."
+        )
+        raise DiscoveryError(msg)
+
+    by_day: dict[str, list[DiscoveredFile]] = defaultdict(list)
+    for f in found:
+        parsed = CanVODFilename.from_filename(f.canonical_name)
+        by_day[f"{parsed.year:04d}{parsed.doy:03d}"].append(f)
+    return {
+        day: tuple(natsorted(files, key=lambda d: str(d.path)))
+        for day, files in by_day.items()
+    }
+
+
+def clear_discovery_cache() -> None:
+    """Forget the scanned directories, so the next lookup rescans them."""
+    _scan_directory.cache_clear()
+
+
+def _of_format(
+    files: tuple[DiscoveredFile, ...], reader_format: str | None, recipe: str | None
+) -> list[DiscoveredFile]:
+    if recipe:  # the recipe's file_type already selects the files
+        return list(files)
+    file_types = _READER_FILE_TYPES.get(reader_format, _ALL_FILE_TYPES)
+    return [f for f in files if Path(f.canonical_name).suffix[1:] in file_types]
+
+
+def receiver_days(
+    receiver: str,
+    directory: Path,
     reader_format: str | None = None,
     recipe: str | None = None,
+) -> list[ReceiverDay]:
+    """All days for which ``directory`` holds files of the receiver, sorted."""
+    index = _scan_directory(Path(directory), recipe)
+    return [
+        ReceiverDay(receiver, Path(directory), day, recipe)
+        for day in sorted(index)
+        if _of_format(index[day], reader_format, recipe)
+    ]
+
+
+def discover_files(
+    day: ReceiverDay, reader_format: str | None = None
 ) -> list[DiscoveredFile]:
-    """Select the GNSS data files in ``data_dir`` that a run processes.
+    """Select the GNSS data files that a run processes for ``day``.
 
     Parameters
     ----------
-    data_dir : Path
-        A receiver's per-day data directory.
+    day : ReceiverDay
+        Receiver, its directory, the day and its recipe.
     reader_format : str | None
         Receiver reader format (``"rinex3"``, ``"rinex"``, ``"sbf"``, or
-        ``None``/``"auto"`` for all recognized types). Ignored in recipe mode,
-        where the recipe's glob selects the files.
-    recipe : str | None
-        Name of the receiver's naming recipe, if configured.
+        ``None``/``"auto"`` for all recognized types). Ignored with a recipe,
+        whose ``file_type`` selects the files.
 
     Returns
     -------
     list[DiscoveredFile]
         Naturally sorted by physical path.
     """
-    if not data_dir.exists():
-        return []
-
-    if recipe:
-        naming_recipe = _load_recipe(resolve_recipe_path(recipe))
-        found = [
-            DiscoveredFile(
-                path=f,
-                canonical_name=naming_recipe.to_virtual_file(f).canonical_str,
-            )
-            for f in data_dir.glob(naming_recipe.glob)
-            if f.is_file() and naming_recipe.matches(f.name)
-        ]
-        return natsorted(found, key=lambda d: str(d.path))
-
-    file_types = _READER_FILE_TYPES.get(reader_format, _ALL_FILE_TYPES)
-    found = [
-        discovered
-        for path in data_dir.iterdir()
-        if path.is_file()
-        and (discovered := _canonical_file(path, file_types)) is not None
-    ]
-    return natsorted(found, key=lambda d: str(d.path))
+    index = _scan_directory(Path(day.directory), day.recipe)
+    return _of_format(index.get(day.yyyydoy, ()), reader_format, day.recipe)
 
 
 def detect_reader_format(files: list[DiscoveredFile]) -> str:
@@ -219,16 +336,3 @@ def detect_reader_format(files: list[DiscoveredFile]) -> str:
     if suffixes == {".sbf"}:
         return "sbf"
     return "rinex3"
-
-
-def recipe_for_data_dir(site_config: Any, data_dir: Path) -> str | None:
-    """Return the recipe of the receiver whose per-day directories hold ``data_dir``.
-
-    Per-day directories sit at ``{gnss_site_data_root}/{receiver.directory}/{YYDDD}``.
-    """
-    base = site_config.get_base_path()
-    parent = Path(data_dir).parent
-    for receiver_cfg in site_config.receivers.values():
-        if (base / receiver_cfg.directory) == parent:
-            return receiver_cfg.recipe
-    return None

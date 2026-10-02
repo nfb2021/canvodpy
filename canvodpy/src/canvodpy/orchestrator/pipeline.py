@@ -26,7 +26,7 @@ import xarray as xr
 
 from canvod.config import load_config
 from canvod.config.models import reference_store_group
-from canvod.readers import MatchedDirs, PairDataDirMatcher
+from canvod.readers import MatchedDirs
 from canvod.readers.gnss_specs.constants import UREG
 from canvod.store import GnssResearchSite
 from canvod.utils.tools import YYYYDOY
@@ -43,10 +43,12 @@ from canvod.utils.tools import deprecated
 from canvodpy.logging import get_logger
 from canvodpy.logging.run_context import get_run_id
 from canvodpy.orchestrator.discovery import (
+    ReceiverDay,
     check_recipe_receivers,
+    clear_discovery_cache,
     detect_reader_format,
     discover_files,
-    recipe_for_data_dir,
+    receiver_days,
 )
 from canvodpy.orchestrator.processor import (
     RinexDataProcessor,
@@ -289,15 +291,8 @@ class PipelineOrchestrator:
                 threads_per_worker=threads_per_worker,
             )
 
-        self.pair_matcher = PairDataDirMatcher(
-            base_dir=site.site_config["gnss_site_data_root"],
-            receivers=site.receivers,
-            analysis_pairs={
-                name: cfg.model_dump() if hasattr(cfg, "model_dump") else cfg
-                for name, cfg in site.vod_analyses.items()
-            },
-            has_data=self._day_has_data,
-        )
+        # A new run sees files added since the previous one.
+        clear_discovery_cache()
 
         self._logger.info(
             "pipeline_initialized",
@@ -318,113 +313,119 @@ class PipelineOrchestrator:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
-    def _day_has_data(self, receiver_name: str, day_dir: Path) -> bool:
-        """Whether the run would process any file in a receiver's day directory.
+    def _receiver_days(self, receiver_name: str) -> dict[str, ReceiverDay]:
+        """Days with files to process for one receiver, keyed by ``YYYYDOY``.
 
         Uses the run's file discovery (recipe, otherwise canonical names), so
-        a day is scheduled only if files would actually be read from it.
+        a day is scheduled only if files would actually be read for it.
         """
-        receiver_cfg = self.site._site_config.receivers.get(receiver_name)
-        reader_format = receiver_cfg.reader_format if receiver_cfg else None
-        recipe = receiver_cfg.recipe if receiver_cfg else None
-        return bool(discover_files(day_dir, reader_format, recipe=recipe))
+        site_config = self.site._site_config
+        cfg = site_config.receivers[receiver_name]
+        reader_format = None if cfg.reader_format == "auto" else cfg.reader_format
+        days = receiver_days(
+            receiver_name,
+            site_config.get_base_path() / cfg.directory,
+            reader_format,
+            cfg.recipe,
+        )
+        return {day.yyyydoy: day for day in days}
 
-    def _detect_reader_format(self, data_dir: Path) -> str:
-        """Detect reader format from files in a directory.
-
-        Parameters
-        ----------
-        data_dir : Path
-            Directory containing GNSS data files.
+    @staticmethod
+    def _detect_reader_format(day: ReceiverDay) -> str:
+        """Detect the reader format of a receiver configured as ``auto``.
 
         Returns
         -------
         str
-            ``"sbf"`` if all files a run would process are SBF, otherwise
-            ``"rinex3"``.
-
-        Notes
-        -----
-        Uses the same file selection as the run
-        (:func:`canvodpy.orchestrator.discovery.discover_files`): the
-        receiver's naming recipe when configured, otherwise canonical
-        canVOD names only.
-
+            ``"sbf"`` if all files a run would process for ``day`` are SBF,
+            otherwise ``"rinex3"``.
         """
-        files = discover_files(
-            data_dir, recipe=recipe_for_data_dir(self.site._site_config, data_dir)
-        )
-        return detect_reader_format(files)
+        return detect_reader_format(discover_files(day))
 
     def _group_by_date_and_receiver(
         self,
-    ) -> dict[str, dict[str, tuple[Path, str, Path | None, str]]]:
-        """Group receivers by date, expanding references per canopy via scs_from.
+    ) -> dict[str, dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]]]:
+        """Group receivers by date, expanding references per paired canopy.
 
-        Canopy receivers are deduplicated (processed once with own position).
-        Reference receivers are expanded: one entry per canopy in scs_from,
-        stored as ``{ref_name}_{canopy_name}`` with position_data_dir pointing
-        to the canopy's RINEX directory.
+        A date is scheduled for an analysis when both its canopy and its
+        reference receiver have files for that day (see
+        :mod:`canvodpy.orchestrator.discovery`). Canopy receivers are
+        deduplicated (processed once with own position). Reference receivers
+        are expanded: one entry per paired canopy, stored as
+        ``{ref_name}_{canopy_name}``, with the canopy's day as position
+        source.
 
         Returns
         -------
-        dict[str, dict[str, tuple[Path, str, Path | None, str]]]
-            {date: {store_group_name: (data_dir, receiver_type, position_data_dir, reader_format)}}
+        dict[str, dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]]]
+            {date: {store_group_name: (day, receiver_type, position_day, reader_format)}}
 
         """
-        grouped: dict[str, dict[str, tuple[Path, str, Path | None, str]]] = defaultdict(
-            dict
-        )
+        grouped: dict[
+            str, dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]]
+        ] = defaultdict(dict)
         site_config = self.site._site_config
 
-        for pair_dirs in self.pair_matcher:
-            date_key = pair_dirs.yyyydoy.to_str()
+        analyses = [
+            cfg.model_dump() if hasattr(cfg, "model_dump") else cfg
+            for cfg in self.site.vod_analyses.values()
+        ]
+        days_of: dict[str, dict[str, ReceiverDay]] = {}
+        for analysis in analyses:
+            for name in (analysis["canopy_receiver"], analysis["reference_receiver"]):
+                if name not in days_of:
+                    days_of[name] = self._receiver_days(name)
 
-            # Add canopy receiver if not already present (uses own position)
-            if pair_dirs.canopy_receiver not in grouped[date_key]:
-                canopy_cfg = site_config.receivers.get(pair_dirs.canopy_receiver)
-                canopy_fmt = canopy_cfg.reader_format if canopy_cfg else "auto"
-                if canopy_fmt == "auto":
-                    canopy_fmt = self._detect_reader_format(pair_dirs.canopy_data_dir)
-                grouped[date_key][pair_dirs.canopy_receiver] = (
-                    pair_dirs.canopy_data_dir,
-                    "canopy",
-                    None,
-                    canopy_fmt,
-                )
+        for analysis in analyses:
+            canopy_rx = analysis["canopy_receiver"]
+            ref_name = analysis["reference_receiver"]
+            common = sorted(set(days_of[canopy_rx]) & set(days_of[ref_name]))
+            for date_key in common:
+                canopy_day = days_of[canopy_rx][date_key]
+                reference_day = days_of[ref_name][date_key]
 
-            # Expand reference receiver per canopy in scs_from
-            ref_name = pair_dirs.reference_receiver
-            ref_cfg = site_config.receivers.get(ref_name)
-            if ref_cfg and ref_cfg.type == "reference":
+                # Add canopy receiver if not already present (uses own position)
+                if canopy_rx not in grouped[date_key]:
+                    canopy_cfg = site_config.receivers.get(canopy_rx)
+                    canopy_fmt = canopy_cfg.reader_format if canopy_cfg else "auto"
+                    if canopy_fmt == "auto":
+                        canopy_fmt = self._detect_reader_format(canopy_day)
+                    grouped[date_key][canopy_rx] = (
+                        canopy_day,
+                        "canopy",
+                        None,
+                        canopy_fmt,
+                    )
+
+                # Expand reference receiver per paired canopy
+                ref_cfg = site_config.receivers.get(ref_name)
+                if not (ref_cfg and ref_cfg.type == "reference"):
+                    continue
                 ref_fmt = ref_cfg.reader_format
                 if ref_fmt == "auto":
-                    ref_fmt = self._detect_reader_format(pair_dirs.reference_data_dir)
-                canopy_names = site_config.resolve_paired_canopies(ref_name)
-                for canopy_name in canopy_names:
+                    ref_fmt = self._detect_reader_format(reference_day)
+                for canopy_name in site_config.resolve_paired_canopies(ref_name):
                     store_group = reference_store_group(ref_name, canopy_name)
-                    if store_group not in grouped[date_key]:
-                        # Get canopy data dir for position computation
-                        canopy_cfg = site_config.receivers.get(canopy_name)
-                        if canopy_cfg:
-                            _yydoy = pair_dirs.yyyydoy.yydoy
-                            canopy_position_dir = (
-                                (
-                                    site_config.get_base_path()
-                                    / canopy_cfg.directory
-                                    / _yydoy
-                                )
-                                if _yydoy is not None
-                                else None
-                            )
-                        else:
-                            canopy_position_dir = None
-                        grouped[date_key][store_group] = (
-                            pair_dirs.reference_data_dir,
-                            "reference",
-                            canopy_position_dir,
-                            ref_fmt,
+                    if store_group in grouped[date_key]:
+                        continue
+                    # The canopy's files of the same day give the position
+                    canopy_cfg = site_config.receivers.get(canopy_name)
+                    canopy_position_day = (
+                        ReceiverDay(
+                            canopy_name,
+                            site_config.get_base_path() / canopy_cfg.directory,
+                            date_key,
+                            canopy_cfg.recipe,
                         )
+                        if canopy_cfg
+                        else None
+                    )
+                    grouped[date_key][store_group] = (
+                        reference_day,
+                        "reference",
+                        canopy_position_day,
+                        ref_fmt,
+                    )
 
         return grouped
 
@@ -463,21 +464,17 @@ class PipelineOrchestrator:
         for date_key, receivers in dates:
             date_info = {"date": date_key, "receivers": []}
 
-            for receiver_name, (data_dir, receiver_type, _pos_dir, fmt) in sorted(
+            for receiver_name, (day, receiver_type, _pos_day, fmt) in sorted(
                 receivers.items()
             ):
                 # Same selection as the real run (processor._get_rinex_files).
-                files = discover_files(
-                    data_dir,
-                    fmt,
-                    recipe=recipe_for_data_dir(self.site._site_config, data_dir),
-                )
+                files = discover_files(day, fmt)
 
                 receiver_info = {
                     "name": receiver_name,
                     "type": receiver_type,
                     "files": len(files),
-                    "dir": str(data_dir),
+                    "dir": str(day.directory),
                 }
 
                 date_info["receivers"].append(receiver_info)
@@ -515,10 +512,10 @@ class PipelineOrchestrator:
 
     def _filter_dates(
         self,
-        grouped: dict[str, dict[str, tuple[Path, str, Path | None, str]]],
+        grouped: dict[str, dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]]],
         start_from: str | None,
         end_at: str | None,
-    ) -> list[tuple[str, dict[str, tuple[Path, str, Path | None, str]]]]:
+    ) -> list[tuple[str, dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]]]]:
         """Filter and sort dates within the requested range.
 
         Parameters
@@ -558,7 +555,7 @@ class PipelineOrchestrator:
     def _process_single_date(
         self,
         date_key: str,
-        receivers: dict[str, tuple[Path, str, Path | None, str]],
+        receivers: dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]],
         keep_vars: list[str] | None,
     ) -> tuple[str, dict[str, xr.Dataset], dict[str, float]] | None:
         """Process all receivers for a single date (one DOY).
@@ -672,8 +669,8 @@ class PipelineOrchestrator:
 
     @staticmethod
     def _build_receiver_configs(
-        receivers: dict[str, tuple[Path, str, Path | None, str]],
-    ) -> list[tuple[str, str, Path, Path | None, str]]:
+        receivers: dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]],
+    ) -> list[tuple[str, str, ReceiverDay, ReceiverDay | None, str]]:
         """Build sorted receiver config tuples from the receivers dict.
 
         Parameters
@@ -683,7 +680,7 @@ class PipelineOrchestrator:
 
         Returns
         -------
-        list[tuple[str, str, Path, Path | None, str]]
+        list[tuple[str, str, ReceiverDay, ReceiverDay | None, str]]
             ``(receiver_name, receiver_type, data_dir, position_data_dir, reader_format)`` tuples.
 
         """
@@ -695,7 +692,7 @@ class PipelineOrchestrator:
     def _create_processor_for_date(
         self,
         date_key: str,
-        receivers: dict[str, tuple[Path, str, Path | None, str]],
+        receivers: dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]],
     ) -> RinexDataProcessor:
         """Create a RinexDataProcessor for a single DOY.
 
@@ -727,7 +724,7 @@ class PipelineOrchestrator:
     def _prepare_single_date(
         self,
         date_key: str,
-        receivers: dict[str, tuple[Path, str, Path | None, str]],
+        receivers: dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]],
         keep_vars: list[str] | None,
     ) -> tuple[RinexDataProcessor, list[tuple], list[tuple[str, list[Path]]]] | None:
         """Prepare one DOY for flat loky submission (Phase 1 helper).
@@ -759,7 +756,9 @@ class PipelineOrchestrator:
 
     def _process_multi_day_batches(
         self,
-        filtered_dates: list[tuple[str, dict[str, tuple[Path, str, Path | None, str]]]],
+        filtered_dates: list[
+            tuple[str, dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]]]
+        ],
         keep_vars: list[str] | None,
     ) -> Generator[tuple[str, dict[str, xr.Dataset], dict[str, float]]]:
         """Process dates in multi-day batches (days_per_batch > 1).
@@ -1399,11 +1398,14 @@ class SingleReceiverProcessor:
 
         Delegates to :func:`canvodpy.orchestrator.discovery.discover_files`.
         """
-        recipe = recipe_for_data_dir(self.site._site_config, self.data_dir)
-        return [
-            found.path
-            for found in discover_files(self.data_dir, self.reader_name, recipe=recipe)
-        ]
+        receiver_cfg = self.site._site_config.receivers.get(self.receiver_name)
+        day = ReceiverDay(
+            self.receiver_name,
+            self.data_dir,
+            self.yyyydoy.to_str(),
+            receiver_cfg.recipe if receiver_cfg else None,
+        )
+        return [found.path for found in discover_files(day, self.reader_name)]
 
     def process(self, keep_vars: list[str] | None = None) -> xr.Dataset:
         """Process all RINEX files for this receiver and write to Icechunk.

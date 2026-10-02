@@ -1,4 +1,4 @@
-"""Tests for the warning when the ephemeris grid is coarser than the data."""
+"""Tests for warnings when filenames disagree with the data they hold."""
 
 from __future__ import annotations
 
@@ -30,4 +30,20 @@ def test_silent_when_grid_matches_or_is_finer() -> None:
     _warn_if_aux_grid_coarser(log, Path("f.rnx"), _epochs(5), _epochs(5))
     _warn_if_aux_grid_coarser(log, Path("f.rnx"), _epochs(30), _epochs(5))
     _warn_if_aux_grid_coarser(log, Path("f.rnx"), _epochs(5, n=1), _epochs(5))
+    log.warning.assert_not_called()
+
+
+def test_warns_when_first_epoch_is_outside_named_span() -> None:
+    from canvodpy.orchestrator.processor import _warn_if_name_disagrees_with_data
+
+    name = "ROSA01TUW_R_20250010015_15M_05S_AA.rnx"  # 00:15 to 00:30
+    log = mock.Mock()
+    ok = _epochs(5)  # starts 00:00, outside 00:15 to 00:30
+    _warn_if_name_disagrees_with_data(log, Path("f"), name, ok)
+    log.warning.assert_called_once()
+
+    log = mock.Mock()
+    inside = ok.assign_coords(epoch=ok.epoch + np.timedelta64(15 * 60 - 3, "s"))
+    _warn_if_name_disagrees_with_data(log, Path("f"), name, inside)  # 3 s early
+    _warn_if_name_disagrees_with_data(log, Path("f"), "", ok)  # no name
     log.warning.assert_not_called()

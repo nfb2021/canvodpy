@@ -9,21 +9,38 @@ from unittest import mock
 import pytest
 from canvodpy.orchestrator.discovery import (
     DiscoveredFile,
+    DiscoveryError,
+    ReceiverDay,
     canonical_name_for,
     check_recipe_receivers,
+    clear_discovery_cache,
     detect_reader_format,
     discover_files,
-    recipe_for_data_dir,
+    receiver_days,
     resolve_recipe_path,
 )
 
 CANONICAL = "ROSA01TUW_R_20250010000_15M_05S_AA.rnx"
+DAY = "2025001"
+
+
+@pytest.fixture(autouse=True)
+def _fresh_index():
+    """Each test scans its directories anew."""
+    clear_discovery_cache()
+    yield
+    clear_discovery_cache()
 
 
 def _touch(directory: Path, *names: str) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     for name in names:
         (directory / name).write_text("")
+
+
+def _names(directory: Path, reader_format: str | None = None, day: str = DAY):
+    found = discover_files(ReceiverDay("rx", directory, day), reader_format)
+    return [f.path.name for f in found]
 
 
 def test_canonical_name_for() -> None:
@@ -33,13 +50,11 @@ def test_canonical_name_for() -> None:
 
 def test_convention_discovery_by_reader_format(tmp_path: Path) -> None:
     _touch(tmp_path, CANONICAL, "ROSA01TUW_R_20250010000_15M_05S_AA.sbf", "x.txt")
-    rnx = discover_files(tmp_path, "rinex3")
-    sbf = discover_files(tmp_path, "sbf")
-    both = discover_files(tmp_path, "auto")
-    assert [f.path.name for f in rnx] == [CANONICAL]
-    assert rnx[0].canonical_name == CANONICAL
-    assert [f.path.suffix for f in sbf] == [".sbf"]
-    assert len(both) == 2
+    assert _names(tmp_path, "rinex3") == [CANONICAL]
+    assert _names(tmp_path, "sbf") == ["ROSA01TUW_R_20250010000_15M_05S_AA.sbf"]
+    assert len(_names(tmp_path, "auto")) == 2
+    found = discover_files(ReceiverDay("rx", tmp_path, DAY), "rinex3")
+    assert found[0].canonical_name == CANONICAL
 
 
 def test_non_canonical_files_are_ignored(tmp_path: Path) -> None:
@@ -54,7 +69,7 @@ def test_non_canonical_files_are_ignored(tmp_path: Path) -> None:
         "ROSA01TUW_R_20250010015_15M_05S_AA.rnx.gz",  # compressed
         "ROSA01TUW_R_20250010030_15M_05S_AA.ubx",  # no reader
     )
-    assert [f.path.name for f in discover_files(tmp_path, None)] == [CANONICAL]
+    assert _names(tmp_path) == [CANONICAL]
 
 
 def test_installed_filemap_does_not_widen_discovery(tmp_path: Path) -> None:
@@ -65,8 +80,7 @@ def test_installed_filemap_does_not_widen_discovery(tmp_path: Path) -> None:
         auto_match_order=lambda: ("any",),
     )
     with mock.patch.dict("sys.modules", {"canvod.filemap.patterns": fake_patterns}):
-        found = discover_files(tmp_path, None)
-    assert [f.path.name for f in found] == [CANONICAL]
+        assert _names(tmp_path) == [CANONICAL]
 
 
 def test_detect_reader_format() -> None:
@@ -78,22 +92,67 @@ def test_detect_reader_format() -> None:
 
 
 def test_missing_directory_yields_nothing(tmp_path: Path) -> None:
-    assert discover_files(tmp_path / "absent", "rinex3") == []
+    assert _names(tmp_path / "absent") == []
+    assert receiver_days("rx", tmp_path / "absent") == []
 
 
-def test_recipe_for_data_dir(tmp_path: Path) -> None:
-    site_config = SimpleNamespace(
-        get_base_path=lambda: tmp_path,
-        receivers={
-            "reference_01": SimpleNamespace(directory="01_reference", recipe="ref"),
-            "canopy_01": SimpleNamespace(directory="02_canopy", recipe=None),
-        },
-    )
-    assert (
-        recipe_for_data_dir(site_config, tmp_path / "01_reference" / "25001") == "ref"
-    )
-    assert recipe_for_data_dir(site_config, tmp_path / "02_canopy" / "25001") is None
-    assert recipe_for_data_dir(site_config, tmp_path / "other" / "25001") is None
+# -- Folder layouts ------------------------------------------------------------
+
+DAY1 = "ROSA01TUW_R_20250010000_15M_05S_AA.rnx"
+DAY1_LATE = "ROSA01TUW_R_20250012345_15M_05S_AA.rnx"
+DAY2 = "ROSA01TUW_R_20250020000_15M_05S_AA.rnx"
+
+
+@pytest.mark.parametrize(
+    "layout",
+    [
+        {"": [DAY1, DAY1_LATE, DAY2]},  # flat
+        {"25001": [DAY1, DAY1_LATE], "25002": [DAY2]},  # YYDDD folders
+        {"2025001": [DAY1, DAY1_LATE], "2025002": [DAY2]},  # YYYYDDD folders
+        {"2025/001": [DAY1], "2025/001/late": [DAY1_LATE], "2025/002": [DAY2]},
+        {"25001": [DAY1, DAY2], "misc": [DAY1_LATE]},  # misfiled day
+    ],
+    ids=["flat", "yyddd", "yyyyddd", "nested", "misfiled"],
+)
+def test_day_comes_from_filename_not_folder(
+    tmp_path: Path, layout: dict[str, list[str]]
+) -> None:
+    for folder, names in layout.items():
+        _touch(tmp_path / folder, *names)
+    days = receiver_days("rx", tmp_path)
+    assert [d.yyyydoy for d in days] == ["2025001", "2025002"]
+    assert _names(tmp_path, day="2025001") == [DAY1, DAY1_LATE]
+    assert _names(tmp_path, day="2025002") == [DAY2]
+
+
+def test_hidden_folders_and_symlinks_are_skipped(tmp_path: Path) -> None:
+    _touch(tmp_path / "data", DAY1)
+    _touch(tmp_path / ".snapshot", DAY1_LATE)
+    _touch(tmp_path / "elsewhere", DAY2)
+    (tmp_path / "data" / "link").symlink_to(tmp_path / "elsewhere")
+    assert [d.yyyydoy for d in receiver_days("rx", tmp_path / "data")] == [DAY]
+
+
+def test_same_canonical_name_twice_is_an_error(tmp_path: Path) -> None:
+    _touch(tmp_path / "25001", DAY1)
+    _touch(tmp_path / "backup", DAY1)
+    with pytest.raises(DiscoveryError, match="same canonical name"):
+        receiver_days("rx", tmp_path)
+
+
+def test_several_receivers_in_one_folder_is_an_error(tmp_path: Path) -> None:
+    _touch(tmp_path, DAY1, "ROSR01TUW_R_20250010000_15M_05S_AA.rnx")
+    with pytest.raises(DiscoveryError, match="its own directory"):
+        receiver_days("rx", tmp_path)
+
+
+def test_index_is_rescanned_after_clearing(tmp_path: Path) -> None:
+    _touch(tmp_path, DAY1)
+    assert len(receiver_days("rx", tmp_path)) == 1
+    _touch(tmp_path, DAY2)
+    assert len(receiver_days("rx", tmp_path)) == 1  # cached for the run
+    clear_discovery_cache()
+    assert len(receiver_days("rx", tmp_path)) == 2
 
 
 def test_resolve_recipe_path_prefers_config_dir(
@@ -132,10 +191,13 @@ def test_recipe_drives_discovery(
         "  - skip: 1\n"
     )
     monkeypatch.setenv("CANVOD_CONFIG_DIR", str(tmp_path))
-    data_dir = tmp_path / "01_reference" / "25001"
-    _touch(data_dir, "rref001a15.25o", CANONICAL)
+    data_dir = tmp_path / "01_reference"
+    _touch(data_dir / "25001", "rref001a15.25o", CANONICAL)
+    _touch(data_dir, "rref002a00.25o")  # a different day, outside day folders
 
-    found = discover_files(data_dir, "rinex3", recipe="ros_ref")
+    days = receiver_days("reference_01", data_dir, recipe="ros_ref")
+    assert [d.yyyydoy for d in days] == ["2025001", "2025002"]
+    found = discover_files(days[0], "rinex3")
 
     assert [f.path.name for f in found] == ["rref001a15.25o"]
     assert found[0].canonical_name == "ROSR01TUW_R_20250010015_15M_05S_AA.rnx"

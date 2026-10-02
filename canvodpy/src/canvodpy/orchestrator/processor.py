@@ -58,9 +58,9 @@ from canvod.utils.tools import (
 from canvodpy.logging import get_logger, stage_timer
 from canvodpy.logging.run_context import get_run_id, set_run_id
 from canvodpy.orchestrator.discovery import (
+    ReceiverDay,
     canonical_name_for,
     discover_files,
-    recipe_for_data_dir,
 )
 from canvodpy.orchestrator.interpolator import (
     ClockConfig,
@@ -103,6 +103,46 @@ def _processing_progress(disable: bool = False) -> Progress:
         TimeRemainingColumn(),
         disable=disable,
     )
+
+
+def _warn_if_name_disagrees_with_data(
+    log: Any, fname: Path, canonical_name: str, ds: xr.Dataset
+) -> None:
+    """Warn if a file's first epoch lies outside the time span of its name.
+
+    The day a file is processed for comes from its (canonical) name, so a
+    wrong name puts the file on the wrong day. A first epoch up to 60 s
+    before the named start is accepted, because some receivers sample on a
+    grid offset by a few seconds from the start of the file.
+    """
+    from canvod.preflight.convention import CanVODFilename
+
+    if not canonical_name or ds.sizes.get("epoch", 0) == 0:
+        return
+    try:
+        named = CanVODFilename.from_filename(canonical_name)
+    except ValueError:
+        return
+    start = (
+        np.datetime64(f"{named.year:04d}-01-01T00:00", "s")
+        + np.timedelta64(named.doy - 1, "D")
+        + np.timedelta64(named.hour, "h")
+        + np.timedelta64(named.minute, "m")
+    )
+    end = start + np.timedelta64(int(named.batch_duration.total_seconds()), "s")
+    first = np.datetime64(ds.epoch.min().values, "s")
+    if not start - np.timedelta64(60, "s") <= first < end:
+        log.warning(
+            "file_time_differs_from_name",
+            file=str(Path(fname).name),
+            canonical_name=canonical_name,
+            named_start=str(start),
+            first_epoch=str(first),
+            hint=(
+                "The file is processed for the day in its name. Check the "
+                "filename or the naming recipe."
+            ),
+        )
 
 
 def _warn_if_aux_grid_coarser(
@@ -1352,35 +1392,50 @@ class RinexDataProcessor:
 
         return sampling_interval
 
+    def _as_receiver_day(self, location: ReceiverDay | Path) -> ReceiverDay:
+        """``location`` as a receiver day.
+
+        Deprecated entry points still pass a receiver's day folder; its
+        receiver and recipe are looked up in the site configuration.
+        """
+        if isinstance(location, ReceiverDay):
+            return location
+        folder = Path(location)
+        site_config = self._get_site_config()
+        base = site_config.get_base_path()
+        for name, cfg in site_config.receivers.items():
+            if base / cfg.directory in (folder, folder.parent):
+                return ReceiverDay(
+                    name, folder, self.matched_data_dirs.yyyydoy.to_str(), cfg.recipe
+                )
+        return ReceiverDay("", folder, self.matched_data_dirs.yyyydoy.to_str())
+
     def _get_rinex_files(
-        self, rinex_dir: Path, reader_format: str | None = None
+        self, day: ReceiverDay | Path, reader_format: str | None = None
     ) -> list[Path]:
-        """Get the sorted GNSS data files a run processes from ``rinex_dir``.
+        """Get the sorted GNSS data files a run processes for ``day``.
 
         Delegates to :func:`canvodpy.orchestrator.discovery.discover_files`
         (the same selection the dry-run preview reports): the receiver's
         naming recipe when configured, otherwise canonical canVOD names
-        only. Each file's canonical name is cached for the log book (see
-        :meth:`_canonical_name`).
+        only, found anywhere below the receiver's directory by the date in
+        their names. Each file's canonical name is cached for the log book
+        (see :meth:`_canonical_name`).
 
         Parameters
         ----------
-        rinex_dir : Path
-            Directory to search.
+        day : ReceiverDay | Path
+            Receiver and day to collect files for (a folder path only from
+            deprecated entry points).
         reader_format : str | None
             If ``"sbf"``, restrict to SBF files; if ``"rinex3"``/``"rinex"``,
             to RINEX files. Otherwise discovers both.
 
         """
-        if not rinex_dir.exists():
-            self._logger.warning("Directory does not exist: %s", rinex_dir)
-            return []
-
-        try:
-            recipe = recipe_for_data_dir(self._get_site_config(), rinex_dir)
-        except ValueError:
-            recipe = None
-        discovered = discover_files(rinex_dir, reader_format, recipe=recipe)
+        day = self._as_receiver_day(day)
+        discovered = discover_files(day, reader_format)
+        if not discovered:
+            self._logger.warning("no_files_for_day", day=str(day))
         for found in discovered:
             self._canonical_names[found.path] = found.canonical_name
         return [found.path for found in discovered]
@@ -1412,6 +1467,8 @@ class RinexDataProcessor:
         recovered from the repository ancestry: its message equals
         ``commit_msg`` and its metadata lists the row's ``rinex_hash``.
         """
+        canonical_name = ds.attrs.get("canonical_name") or self._canonical_name(fname)
+        _warn_if_name_disagrees_with_data(self._logger, fname, canonical_name, ds)
         return {
             "fname": fname,
             "rinex_hash": rinex_hash,
@@ -1420,8 +1477,7 @@ class RinexDataProcessor:
             "dataset_attrs": ds.attrs.copy(),
             "exists": exists,
             "rel_path": rel_path,
-            "canonical_name": ds.attrs.get("canonical_name")
-            or self._canonical_name(fname),
+            "canonical_name": canonical_name,
             "physical_path": ds.attrs.get("physical_path") or str(fname),
             "action": action,
             "write_strategy": self._gnss_store_strategy,
@@ -4204,7 +4260,7 @@ class RinexDataProcessor:
                 continue
 
             effective_reader = reader_format or self._reader_name
-            reference_lane_key = f"reference:{data_dir.name}"
+            reference_lane_key = f"reference:{data_dir.yyyydoy}"
             for rnx_file in rinex_files:
                 task_descriptors.append(
                     (
@@ -4634,48 +4690,48 @@ class RinexDataProcessor:
 
     def _get_default_receiver_configs(
         self,
-    ) -> list[tuple[str, str, Path, Path | None]]:
-        """Get default receiver configs from matched_data_dirs.
+    ) -> list[tuple[str, str, ReceiverDay, ReceiverDay | None]]:
+        """Get default receiver configs for the day of matched_data_dirs.
 
-        Returns a list of (store_group_name, receiver_type, data_dir,
-        position_data_dir) tuples. For canopy receivers, position_data_dir
-        is None (use own files). For reference receivers, one entry is
-        created per canopy in scs_from, with position_data_dir pointing
-        to the canopy's RINEX directory.
+        Returns a list of (store_group_name, receiver_type, day,
+        position_day) tuples. For canopy receivers, position_day is None
+        (use own files). For reference receivers, one entry is created per
+        paired canopy, with position_day the canopy's same day.
 
         Returns
         -------
-        list[tuple[str, str, Path, Path | None]]
+        list[tuple[str, str, ReceiverDay, ReceiverDay | None]]
             Receiver processing configurations.
         """
-        configs: list[tuple[str, str, Path, Path | None]] = []
+        configs: list[tuple[str, str, ReceiverDay, ReceiverDay | None]] = []
         site_config = self.site._site_config
-
-        # Collect canopy data dirs for resolving position sources
-        canopy_data_dirs: dict[str, Path] = {}
         base_path = site_config.get_base_path()
+        date_key = self.matched_data_dirs.yyyydoy.to_str()
 
-        _yydoy = self.matched_data_dirs.yyyydoy.yydoy
-        assert _yydoy is not None, "yyyydoy.yydoy must not be None"
-        for name, cfg in site_config.receivers.items():
-            if cfg.type == "canopy":
-                canopy_data_dirs[name] = base_path / cfg.directory / _yydoy
+        def _day(name: str) -> ReceiverDay:
+            cfg = site_config.receivers[name]
+            return ReceiverDay(name, base_path / cfg.directory, date_key, cfg.recipe)
+
+        canopy_days = {
+            name: _day(name)
+            for name, cfg in site_config.receivers.items()
+            if cfg.type == "canopy"
+        }
 
         # Add all canopy receivers (each uses own position)
-        for name, cfg in site_config.receivers.items():
-            if cfg.type == "canopy" and name in canopy_data_dirs:
-                configs.append((name, "canopy", canopy_data_dirs[name], None))
+        for name, day in canopy_days.items():
+            configs.append((name, "canopy", day, None))
 
         # Add reference receivers — one entry per canopy in paired_canopies
         for name, cfg in site_config.receivers.items():
             if cfg.type != "reference":
                 continue
-            ref_data_dir = base_path / cfg.directory / _yydoy
-            canopy_names = site_config.resolve_paired_canopies(name)
-            for canopy_name in canopy_names:
+            ref_day = _day(name)
+            for canopy_name in site_config.resolve_paired_canopies(name):
                 store_group = reference_store_group(name, canopy_name)
-                position_dir = canopy_data_dirs.get(canopy_name)
-                configs.append((store_group, "reference", ref_data_dir, position_dir))
+                configs.append(
+                    (store_group, "reference", ref_day, canopy_days.get(canopy_name))
+                )
 
         return configs
 
@@ -4968,6 +5024,10 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
 
         return [f.name for f in rinex_files_sorted]  # ty: ignore[invalid-return-type]
 
+    @deprecated(
+        "parsed_rinex_data_gen_parallel() is left over from development and will be removed with the next major version. "
+        "Use canvodpy.Site(<site>).pipeline() instead."
+    )
     def parsed_rinex_data_gen_parallel(
         self,
         keep_vars: list[str] | None = None,

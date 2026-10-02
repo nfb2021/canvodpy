@@ -21,6 +21,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from canvodpy.orchestrator.discovery import ReceiverDay
 from canvodpy.orchestrator.pipeline import PipelineOrchestrator
 
 
@@ -39,7 +40,14 @@ def _fake_orchestrator(
 
 def _grouped_fixture(tmp_path: Path) -> dict:
     return {
-        date: {"canopy_01": (tmp_path, "canopy", None, "sbf")}
+        date: {
+            "canopy_01": (
+                ReceiverDay("canopy_01", tmp_path, date),
+                "canopy",
+                None,
+                "sbf",
+            )
+        }
         for date in ("2025001", "2025002", "2025003")
     }
 
@@ -88,8 +96,18 @@ def test_preview_counts_files_like_the_run(tmp_path: Path) -> None:
     _touch(sbf_dir, "ROSR01TUW_R_20250010000_15M_05S_AA.sbf")
     grouped = {
         "2025001": {
-            "canopy_01": (rnx_dir, "canopy", None, "rinex3"),
-            "reference_01_canopy_01": (sbf_dir, "reference", None, "sbf"),
+            "canopy_01": (
+                ReceiverDay("canopy_01", rnx_dir, "2025001"),
+                "canopy",
+                None,
+                "rinex3",
+            ),
+            "reference_01_canopy_01": (
+                ReceiverDay("reference_01", sbf_dir, "2025001"),
+                "reference",
+                None,
+                "sbf",
+            ),
         }
     }
     orch = _fake_orchestrator(grouped)
