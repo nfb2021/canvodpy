@@ -3980,7 +3980,7 @@ class RinexDataProcessor:
     def prepare_batch_tasks(
         self,
         keep_vars: list[str] | None,
-        receiver_configs: list[tuple[str, str, Path, Path | None, str]],
+        receiver_configs: list[tuple[str, str, ReceiverDay, ReceiverDay | None, str]],
     ) -> tuple[list[tuple], list[tuple[str, list[Path]]]]:
         """Prepare aux Zarr and task descriptors for flat loky submission.
 
@@ -3992,7 +3992,7 @@ class RinexDataProcessor:
         ----------
         keep_vars : list[str] | None
             Variables to keep in datasets.
-        receiver_configs : list[tuple[str, str, Path, Path | None, str]]
+        receiver_configs : list[tuple[str, str, ReceiverDay, ReceiverDay | None, str]]
             ``(receiver_name, receiver_type, data_dir, position_data_dir, reader_format)``
             tuples.
 
@@ -4087,7 +4087,9 @@ class RinexDataProcessor:
         # Hermite-aux path: use_sbf_geometry pairs a reference with its own
         # SBF geometry per canopy via broadcast_canopy_file, a separate
         # mechanism left untouched.
-        reference_groups: dict[tuple[Path, str], list[tuple[str, Path | None]]] = {}
+        reference_groups: dict[
+            tuple[ReceiverDay, str], list[tuple[str, ReceiverDay | None]]
+        ] = {}
         if not self.use_sbf_geometry:
             for (
                 receiver_name,
@@ -4284,9 +4286,9 @@ class RinexDataProcessor:
     def parsed_rinex_data_gen(
         self,
         keep_vars: list[str] | None = None,
-        receiver_configs: list[tuple[str, str, Path]]
-        | list[tuple[str, str, Path, Path | None]]
-        | list[tuple[str, str, Path, Path | None, str]]
+        receiver_configs: list[tuple[str, str, ReceiverDay]]
+        | list[tuple[str, str, ReceiverDay, ReceiverDay | None]]
+        | list[tuple[str, str, ReceiverDay, ReceiverDay | None, str]]
         | None = None,
     ) -> Generator[tuple[str, xr.Dataset, float]]:
         """Generate datasets from RINEX files and append to Icechunk stores.
@@ -4322,7 +4324,9 @@ class RinexDataProcessor:
             receiver_configs = self._get_default_receiver_configs()
 
         # Normalize to 5-tuples
-        normalized_configs: list[tuple[str, str, Path, Path | None, str]] = []
+        normalized_configs: list[
+            tuple[str, str, ReceiverDay, ReceiverDay | None, str]
+        ] = []
         for cfg in receiver_configs:
             if len(cfg) == 3:
                 normalized_configs.append((*cfg, None, self._reader_name))

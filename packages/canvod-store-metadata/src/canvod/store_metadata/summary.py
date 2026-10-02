@@ -49,6 +49,15 @@ def _decode_epochs(arr: zarr.Array) -> np.ndarray:
     return ref + values.astype("i8").astype(f"m8[{_CF_UNITS[unit.strip()]}]")
 
 
+def _array(group: zarr.Group, path: str) -> zarr.Array:
+    """The array at ``path`` in ``group``."""
+    member = group[path]
+    if not isinstance(member, zarr.Array):
+        msg = f"{path} in {group.path or '/'} is a group, not an array"
+        raise TypeError(msg)
+    return member
+
+
 def _iso(t: np.datetime64) -> str:
     return f"{np.datetime_as_string(t, unit='s')}Z"
 
@@ -67,11 +76,11 @@ def _data_groups(root: zarr.Group) -> dict[str, zarr.Group]:
 
 
 def _group_summary(group: zarr.Group) -> dict[str, Any]:
-    epochs = np.unique(_decode_epochs(group["epoch"]))
+    epochs = np.unique(_decode_epochs(_array(group, "epoch")))
     variables = sorted(name for name, arr in group.arrays() if len(arr.shape) >= 2)
-    sids = np.asarray(group["sid"][...]) if "sid" in group else np.array([])
+    sids = np.asarray(_array(group, "sid")[...]) if "sid" in group else np.array([])
     systems = (
-        {str(s) for s in np.asarray(group["system"][...])}
+        {str(s) for s in np.asarray(_array(group, "system")[...])}
         if "system" in group
         else set()
     )
@@ -88,10 +97,14 @@ def _stored_file_count(group: zarr.Group) -> int | None:
     if "metadata/table" not in group:
         return None
     table = group["metadata/table"]
-    if "rinex_hash" not in table or "action" not in table:
+    if (
+        not isinstance(table, zarr.Group)
+        or "rinex_hash" not in table
+        or "action" not in table
+    ):
         return None
-    hashes = np.asarray(table["rinex_hash"][...])
-    actions = np.asarray(table["action"][...])
+    hashes = np.asarray(_array(table, "rinex_hash")[...])
+    actions = np.asarray(_array(table, "action")[...])
     return len(
         {str(h) for h, a in zip(hashes, actions, strict=True) if a in _STORED_ACTIONS}
     )
@@ -128,7 +141,8 @@ def summarize_store(
     """
     session = _open_repo(store_path).readonly_session(branch=branch)
     root = zarr.open_group(session.store, mode="r")
-    groups = {name: _group_summary(g) for name, g in _data_groups(root).items()}
+    data_groups = _data_groups(root)
+    groups = {name: _group_summary(g) for name, g in data_groups.items()}
     if not groups:
         return {}
 
@@ -138,7 +152,9 @@ def summarize_store(
     resolution = float(np.median(steps)) if steps.size else None
     systems = set().union(*(g["systems"] for g in groups.values()))
     file_counts = [
-        n for n in (_stored_file_count(root[name]) for name in groups) if n is not None
+        n
+        for n in (_stored_file_count(g) for g in data_groups.values())
+        if n is not None
     ]
 
     updates: dict[str, Any] = {

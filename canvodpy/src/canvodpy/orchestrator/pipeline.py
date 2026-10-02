@@ -570,8 +570,8 @@ class PipelineOrchestrator:
 
         first_data_dir = receiver_configs[0][2]
         matched_dirs = MatchedDirs(
-            canopy_data_dir=first_data_dir,
-            reference_data_dir=first_data_dir,
+            canopy_data_dir=first_data_dir.directory,
+            reference_data_dir=first_data_dir.directory,
             yyyydoy=YYYYDOY.from_str(date_key),
         )
 
@@ -685,8 +685,8 @@ class PipelineOrchestrator:
         receiver_configs = self._build_receiver_configs(receivers)
         first_data_dir = receiver_configs[0][2]
         matched_dirs = MatchedDirs(
-            canopy_data_dir=first_data_dir,
-            reference_data_dir=first_data_dir,
+            canopy_data_dir=first_data_dir.directory,
+            reference_data_dir=first_data_dir.directory,
             yyyydoy=YYYYDOY.from_str(date_key),
         )
         return RinexDataProcessor(
