@@ -12,15 +12,40 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 import xarray as xr
+from canvodpy.orchestrator.discovery import DiscoveryError
 from canvodpy.workflows.tasks import (
-    _discover_files_for_date,
     _resolve_date,
     check_rinex,
     check_sbf,
     cleanup,
     parse_sampling_interval_from_filename,
+    validate_data_dirs,
     validate_ingest,
 )
+
+from canvod.config.models import SiteConfig
+
+CANOPY_RNX = "ROSA01TUW_R_20250010000_15M_05S_AA.rnx"
+REFERENCE_RNX = "ROSR01TUW_R_20250010000_15M_05S_AA.rnx"
+
+
+def _site_config(tmp_path) -> MagicMock:
+    """A loaded configuration with one canopy and one reference receiver."""
+    site_cfg = SiteConfig(
+        gnss_site_data_root=str(tmp_path),
+        receivers={
+            "canopy_01": {"type": "canopy", "directory": "canopy"},
+            "reference_01": {
+                "type": "reference",
+                "directory": "reference",
+                "paired_canopies": "all",
+            },
+        },
+    )
+    config = MagicMock()
+    config.sites.sites = {"TestSite": site_cfg}
+    return config
+
 
 # ---------------------------------------------------------------------------
 # Utility tests
@@ -91,36 +116,12 @@ class TestCheckRinex:
 
     @pytest.fixture()
     def mock_site(self, tmp_path):
-        """Create a mock site config and data directory."""
-        # Create receiver directories with test files
-        canopy_dir = tmp_path / "canopy" / "25001"
-        canopy_dir.mkdir(parents=True)
-        (canopy_dir / "ROSA01TUW_R_20250010000_15M_05S_AA.rnx").touch()
-
-        ref_dir = tmp_path / "reference" / "25001"
-        ref_dir.mkdir(parents=True)
-        (ref_dir / "ROSR01TUW_R_20250010000_15M_05S_AA.rnx").touch()
-
-        # Mock config
-        canopy_cfg = MagicMock()
-        canopy_cfg.directory = "canopy"
-        canopy_cfg.type = "canopy"
-        canopy_cfg.naming = None
-
-        ref_cfg = MagicMock()
-        ref_cfg.directory = "reference"
-        ref_cfg.type = "reference"
-        ref_cfg.naming = None
-
-        site_cfg = MagicMock()
-        site_cfg.receivers = {"canopy_01": canopy_cfg, "reference_01": ref_cfg}
-        site_cfg.get_base_path.return_value = tmp_path
-        site_cfg.naming = None
-
-        config = MagicMock()
-        config.sites.sites = {"TestSite": site_cfg}
-
-        return config
+        """Create a site config and one file per receiver in YYDDD folders."""
+        for directory, name in (("canopy", CANOPY_RNX), ("reference", REFERENCE_RNX)):
+            day_dir = tmp_path / directory / "25001"
+            day_dir.mkdir(parents=True)
+            (day_dir / name).touch()
+        return _site_config(tmp_path)
 
     def test_all_files_present(self, mock_site):
         with patch("canvodpy.workflows.tasks.load_config", return_value=mock_site):
@@ -139,38 +140,47 @@ class TestCheckRinex:
             with pytest.raises(RuntimeError, match="missing receivers"):
                 check_rinex("TestSite", "2025001")
 
+    def test_any_folder_layout(self, tmp_path):
+        """Files are found by the date in their names, not by their folder."""
+        for directory, name in (("canopy", CANOPY_RNX), ("reference", REFERENCE_RNX)):
+            (tmp_path / directory / "2025" / "jan").mkdir(parents=True)
+            (tmp_path / directory / "2025" / "jan" / name).touch()
+        config = _site_config(tmp_path)
+        with patch("canvodpy.workflows.tasks.load_config", return_value=config):
+            result = check_rinex("TestSite", "2025-01-01")
+        assert result["receivers"]["canopy_01"]["files"] == [
+            str(tmp_path / "canopy" / "2025" / "jan" / CANOPY_RNX)
+        ]
+
+    def test_overlapping_files_are_an_error(self, mock_site):
+        """A daily file next to a 15-minute file of the same day stops the run."""
+        base = mock_site.sites.sites["TestSite"].get_base_path()
+        daily = CANOPY_RNX.replace("_15M_", "_01D_")
+        (base / "canopy" / "25001" / daily).touch()
+        with patch("canvodpy.workflows.tasks.load_config", return_value=mock_site):
+            with pytest.raises(DiscoveryError, match="cover the same time"):
+                check_rinex("TestSite", "2025001")
+
+    def test_receiver_role_mismatch_is_an_error(self, mock_site):
+        """Canopy files in the reference directory are not processed."""
+        base = mock_site.sites.sites["TestSite"].get_base_path()
+        ref = base / "reference" / "25001" / REFERENCE_RNX
+        ref.rename(ref.with_name(CANOPY_RNX.replace("ROSA01", "ROSA02")))
+        with patch("canvodpy.workflows.tasks.load_config", return_value=mock_site):
+            with pytest.raises(DiscoveryError, match="configured as 'reference'"):
+                check_rinex("TestSite", "2025001")
+
 
 class TestCheckSbf:
     """Test check_sbf with mock config and filesystem."""
 
     @pytest.fixture()
     def mock_site_sbf(self, tmp_path):
-        canopy_dir = tmp_path / "canopy" / "25001"
-        canopy_dir.mkdir(parents=True)
-        (canopy_dir / "ROSA01TUW_R_20250010000_15M_05S_AA.sbf").touch()
-
-        ref_dir = tmp_path / "reference" / "25001"
-        ref_dir.mkdir(parents=True)
-        (ref_dir / "ROSR01TUW_R_20250010000_15M_05S_AA.sbf").touch()
-
-        canopy_cfg = MagicMock()
-        canopy_cfg.directory = "canopy"
-        canopy_cfg.type = "canopy"
-        canopy_cfg.naming = None
-
-        ref_cfg = MagicMock()
-        ref_cfg.directory = "reference"
-        ref_cfg.type = "reference"
-        ref_cfg.naming = None
-
-        site_cfg = MagicMock()
-        site_cfg.receivers = {"canopy_01": canopy_cfg, "reference_01": ref_cfg}
-        site_cfg.get_base_path.return_value = tmp_path
-        site_cfg.naming = None
-
-        config = MagicMock()
-        config.sites.sites = {"TestSite": site_cfg}
-        return config
+        for directory, name in (("canopy", CANOPY_RNX), ("reference", REFERENCE_RNX)):
+            day_dir = tmp_path / directory / "25001"
+            day_dir.mkdir(parents=True)
+            (day_dir / name.replace(".rnx", ".sbf")).touch()
+        return _site_config(tmp_path)
 
     def test_sbf_files_found(self, mock_site_sbf):
         with patch("canvodpy.workflows.tasks.load_config", return_value=mock_site_sbf):
@@ -348,66 +358,54 @@ class TestCleanup:
 
 
 # ---------------------------------------------------------------------------
-# _discover_files_for_date tests
+# validate_data_dirs tests
 # ---------------------------------------------------------------------------
 
 
-class TestDiscoverFilesForDate:
-    """Test FilenameMapper integration with glob fallback."""
+class TestValidateDataDirs:
+    """validate_data_dirs runs the check of ``canvodpy config validate``."""
 
-    def test_glob_fallback_when_no_naming(self, tmp_path):
-        """Without naming config, falls back to raw glob."""
-        recv_dir = tmp_path / "canopy" / "25001"
-        recv_dir.mkdir(parents=True)
-        (recv_dir / "TEST01TUW_R_20250010000_15M_05S_AA.rnx").touch()
-        (recv_dir / "TEST01TUW_R_20250010000_01D_01S_MO.sbf").touch()
+    @staticmethod
+    def _validate(config):
+        with (
+            patch("canvod.config.load_config", return_value=config),
+            patch("canvodpy.workflows.tasks.load_config", return_value=config),
+        ):
+            return validate_data_dirs("TestSite")
 
-        site_cfg = MagicMock()
-        site_cfg.naming = None
+    def test_valid_site(self, tmp_path):
+        for directory, name in (("canopy", CANOPY_RNX), ("reference", REFERENCE_RNX)):
+            (tmp_path / directory).mkdir()
+            (tmp_path / directory / name).touch()
+            (tmp_path / directory / "notes.txt").touch()
+        config = _site_config(tmp_path)
+        config.processing.params.aggregate_glonass_fdma = False
+        with patch(
+            "canvodpy.orchestrator.data_check.data_sampling_seconds",
+            return_value=5.0,
+        ):
+            result = self._validate(config)
+        assert result["valid"] is True
+        canopy = result["receivers"]["canopy_01"]
+        assert canopy["identity"] == "ROSA01TUW"
+        assert (canopy["days"], canopy["files"], canopy["unrecognized"]) == (1, 1, 1)
 
-        rcfg = MagicMock()
-        rcfg.naming = None
-        rcfg.directory = "canopy"
-        rcfg.type = "canopy"
+    def test_missing_directory_fails(self, tmp_path):
+        (tmp_path / "canopy").mkdir()
+        (tmp_path / "canopy" / CANOPY_RNX).touch()
+        config = _site_config(tmp_path)
+        config.processing.params.aggregate_glonass_fdma = False
+        with patch(
+            "canvodpy.orchestrator.data_check.data_sampling_seconds",
+            return_value=5.0,
+        ):
+            with pytest.raises(ValueError, match=r"\[reference_01\] Directory not"):
+                self._validate(config)
 
-        date_obj = _resolve_date("2025001")
-        files, warnings = _discover_files_for_date(
-            site_cfg, rcfg, "canopy_01", date_obj, tmp_path
-        )
-
-        assert len(files) >= 1  # Should find at least rnx or sbf
-
-    def test_empty_dir_returns_empty(self, tmp_path):
-        recv_dir = tmp_path / "canopy" / "25001"
-        recv_dir.mkdir(parents=True)
-
-        site_cfg = MagicMock()
-        site_cfg.naming = None
-
-        rcfg = MagicMock()
-        rcfg.naming = None
-        rcfg.directory = "canopy"
-        rcfg.type = "canopy"
-
-        date_obj = _resolve_date("2025001")
-        files, warnings = _discover_files_for_date(
-            site_cfg, rcfg, "canopy_01", date_obj, tmp_path
-        )
-
-        assert files == []
-
-    def test_nonexistent_dir_returns_empty(self, tmp_path):
-        site_cfg = MagicMock()
-        site_cfg.naming = None
-
-        rcfg = MagicMock()
-        rcfg.naming = None
-        rcfg.directory = "nonexistent"
-        rcfg.type = "canopy"
-
-        date_obj = _resolve_date("2025001")
-        files, warnings = _discover_files_for_date(
-            site_cfg, rcfg, "canopy_01", date_obj, tmp_path
-        )
-
-        assert files == []
+    def test_unknown_site(self, tmp_path):
+        with pytest.raises(KeyError, match="Unknown site"):
+            with patch(
+                "canvodpy.workflows.tasks.load_config",
+                return_value=_site_config(tmp_path),
+            ):
+                validate_data_dirs("Elsewhere")

@@ -30,6 +30,7 @@ from canvod.config import load_config
 from canvod.config.models import reference_store_group
 from canvod.readers import MatchedDirs
 from canvod.utils.tools import YYYYDOY
+from canvodpy.orchestrator.discovery import DiscoveredFile
 from canvodpy.orchestrator.interpolator import (
     ClockConfig,
     ClockInterpolationStrategy,
@@ -59,21 +60,6 @@ def _cap_blas_threads(n: int = 1) -> None:
     ):
         if var not in os.environ:
             os.environ[var] = s
-
-
-# GNSS file glob patterns — sourced from canvod-filemap BUILTIN_PATTERNS
-# when that optional package is installed. Falls back to canonical
-# canVOD-only names (*.rnx, *.sbf) otherwise.
-def _get_gnss_globs() -> list[str]:
-    try:
-        from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
-
-        globs: set[str] = set()
-        for name in auto_match_order():
-            globs.update(BUILTIN_PATTERNS[name].file_globs)
-        return sorted(globs)
-    except ImportError:
-        return sorted({"*.rnx", "*.RNX", "*.sbf", "*.SBF"})
 
 
 # ---------------------------------------------------------------------------
@@ -121,81 +107,122 @@ def _resolve_date(yyyydoy: str) -> YYYYDOY:
     return YYYYDOY.from_str(yyyydoy)
 
 
-def _get_rinex_files(directory: Path) -> list[Path]:
-    """Glob GNSS data files from *directory* using BUILTIN_PATTERNS globs."""
-    from natsort import natsorted
-
-    if not directory.exists():
-        return []
-
-    files: list[Path] = []
-    seen: set[Path] = set()
-    for pattern in _get_gnss_globs():
-        for path in directory.glob(pattern):
-            if path.is_file() and path not in seen:
-                seen.add(path)
-                files.append(path)
-    return natsorted(files)
-
-
-# ---------------------------------------------------------------------------
-# Task 1 — check_rinex
-# ---------------------------------------------------------------------------
-
-
-def _discover_files_for_date(
-    site_cfg,
-    rcfg,
-    receiver_name: str,
+def _day_files(
+    site: str,
+    site_cfg: Any,
     date_obj: YYYYDOY,
-    base: Path,
-) -> tuple[list[Path], list[str]]:
-    """Discover files for a receiver+date using FilenameMapper or glob fallback.
+    reader_format: str | None,
+) -> dict[str, list[DiscoveredFile]]:
+    """The files of each receiver of *site* that a run processes for one day.
 
-    Returns (file_paths, warnings).
+    Same discovery and the same receiver checks as ``canvodpy run`` (see
+    :mod:`canvodpy.orchestrator.discovery`): the receiver's naming recipe if
+    it has one, otherwise canonical canVOD names only, found anywhere below
+    the receiver's directory by the date in their names.
+
+    Parameters
+    ----------
+    site : str
+        Site name in the configuration.
+    site_cfg : SiteConfig
+        The site's configuration.
+    date_obj : YYYYDOY
+        The day.
+    reader_format : str | None
+        ``"rinex3"`` or ``"sbf"`` to select one file type, ``None`` for all.
+
+    Returns
+    -------
+    dict[str, list[DiscoveredFile]]
+        Receiver name to its files of the day (empty if there are none).
+
+    Raises
+    ------
+    DiscoveryError
+        If the receivers' files cannot be assigned unambiguously.
     """
-    warnings: list[str] = []
+    from canvodpy.orchestrator.discovery import (
+        ReceiverDay,
+        check_receivers,
+        clear_discovery_cache,
+        discover_files,
+        recipe_file,
+    )
 
-    # Prefer FilenameMapper when naming config is available
-    if site_cfg.naming and rcfg.naming:
-        try:
-            from canvod.filemap import (
-                FilenameMapper,
-                ReceiverNamingConfig,
-                SiteNamingConfig,
-            )
+    base = site_cfg.get_base_path()
+    # Files may have arrived since the previous task in this process.
+    clear_discovery_cache()
+    check_receivers(
+        {name: rcfg.model_dump() for name, rcfg in site_cfg.receivers.items()},
+        base,
+        site,
+    )
+    return {
+        name: discover_files(
+            ReceiverDay(
+                name,
+                base / rcfg.directory,
+                date_obj.to_str(),
+                recipe_file(site, rcfg.recipe),
+            ),
+            reader_format,
+        )
+        for name, rcfg in site_cfg.receivers.items()
+    }
 
-            mapper = FilenameMapper(
-                site_naming=SiteNamingConfig(**site_cfg.naming),
-                receiver_naming=ReceiverNamingConfig(**rcfg.naming),
-                receiver_type=rcfg.type,
-                receiver_base_dir=base / rcfg.directory,
-            )
-            vfs = mapper.discover_for_date(date_obj.year, date_obj.doy)
-            overlaps = FilenameMapper.detect_overlaps(vfs)
-            if overlaps:
-                warnings.append(
-                    f"{receiver_name}: {len(overlaps)} temporal overlaps detected"
-                )
-                overlap_paths = {vf.physical_path for pair in overlaps for vf in pair}
-                vfs = [vf for vf in vfs if vf.physical_path not in overlap_paths]
-            return [vf.physical_path for vf in vfs], warnings
-        except Exception:
-            # Fall back to glob if naming config is invalid
-            pass
 
-    # Fallback: raw glob
-    recv_dir = base / rcfg.directory / date_obj.yydoy
-    files = _get_rinex_files(recv_dir)
-    return files, warnings
+# ---------------------------------------------------------------------------
+# Task 1 — check_rinex / check_sbf
+# ---------------------------------------------------------------------------
+
+
+def _check_files(site: str, yyyydoy: str, reader_format: str, kind: str) -> dict:
+    """Shared body of :func:`check_rinex` and :func:`check_sbf`."""
+    config = load_config()
+    site_cfg = config.sites.sites[site]
+    date_obj = _resolve_date(yyyydoy)
+    base = site_cfg.get_base_path()
+    day_files = _day_files(site, site_cfg, date_obj, reader_format)
+
+    receivers = {
+        name: {
+            "directory": str(base / rcfg.directory),
+            "has_files": bool(day_files[name]),
+            "files": [str(f.path) for f in day_files[name]],
+            "count": len(day_files[name]),
+        }
+        for name, rcfg in site_cfg.receivers.items()
+    }
+    missing = [n for n, r in receivers.items() if not r["has_files"]]
+    if missing:
+        msg = (
+            f"{kind} files not yet available for {site} {date_obj.to_str()}: "
+            f"missing receivers {missing}"
+        )
+        logger.warning(msg)
+        raise RuntimeError(msg)
+
+    logger.info(
+        "check_%s: %s %s — all receivers ready",
+        kind.lower(),
+        site,
+        date_obj.to_str(),
+    )
+    return {
+        "site": site,
+        "yyyydoy": date_obj.to_str(),
+        "ready": True,
+        "receivers": receivers,
+    }
 
 
 def check_rinex(site: str, yyyydoy: str) -> dict:
     """Check whether RINEX files exist for all receivers on the given date.
 
-    Uses ``FilenameMapper`` when naming config is available (prevents
-    duplicate ingest from daily+sub-daily files). Falls back to raw
-    glob when naming config is absent.
+    The files are those ``canvodpy run`` would process for the day (see
+    :mod:`canvodpy.orchestrator.discovery`): selected by the receiver's
+    naming recipe or by canonical canVOD names, anywhere below the
+    receiver's directory.
 
     Parameters
     ----------
@@ -207,67 +234,27 @@ def check_rinex(site: str, yyyydoy: str) -> dict:
     Returns
     -------
     dict
-        ``{"site", "yyyydoy", "ready": bool, "receivers": {...}}``
+        ``{"site", "yyyydoy", "ready": True, "receivers": {name:
+        {"directory", "has_files", "files", "count"}}}``
 
     Raises
     ------
     RuntimeError
         If RINEX files are missing for any receiver (stops the DAG run
         so Airflow can retry later).
+    DiscoveryError
+        If the receivers' files cannot be assigned unambiguously, e.g. two
+        files cover the same time. Retrying does not help; the data
+        directory has to be fixed.
     """
-    config = load_config()
-    site_cfg = config.sites.sites[site]
-    date_obj = _resolve_date(yyyydoy)
-    base = site_cfg.get_base_path()
-
-    receivers: dict[str, dict] = {}
-    all_ready = True
-
-    for name, rcfg in site_cfg.receivers.items():
-        files, file_warnings = _discover_files_for_date(
-            site_cfg, rcfg, name, date_obj, base
-        )
-        has_files = len(files) > 0
-        receivers[name] = {
-            "directory": str(base / rcfg.directory),
-            "has_files": has_files,
-            "files": [str(f) for f in files],
-            "count": len(files),
-            "warnings": file_warnings,
-        }
-        if not has_files:
-            all_ready = False
-
-    result = {
-        "site": site,
-        "yyyydoy": date_obj.to_str(),
-        "ready": all_ready,
-        "receivers": receivers,
-    }
-
-    if not all_ready:
-        missing = [n for n, r in receivers.items() if not r["has_files"]]
-        msg = (
-            f"RINEX files not yet available for {site} {date_obj.to_str()}: "
-            f"missing receivers {missing}"
-        )
-        logger.warning(msg)
-        raise RuntimeError(msg)
-
-    logger.info("check_rinex: %s %s — all receivers ready", site, date_obj.to_str())
-    return result
-
-
-# ---------------------------------------------------------------------------
-# Task 1a-sbf — check_sbf
-# ---------------------------------------------------------------------------
+    return _check_files(site, yyyydoy, "rinex3", "RINEX")
 
 
 def check_sbf(site: str, yyyydoy: str) -> dict:
     """Check whether SBF files exist for all receivers on the given date.
 
-    Same logic as :func:`check_rinex` but for SBF binary data. SBF files
-    are available immediately after receiver transfer (no sensor wait needed).
+    Same as :func:`check_rinex`, for SBF binary data. SBF files are
+    available immediately after receiver transfer (no sensor wait needed).
 
     Parameters
     ----------
@@ -279,56 +266,16 @@ def check_sbf(site: str, yyyydoy: str) -> dict:
     Returns
     -------
     dict
-        ``{"site", "yyyydoy", "ready": bool, "receivers": {...}}``
+        See :func:`check_rinex`.
 
     Raises
     ------
     RuntimeError
         If SBF files are missing for any receiver.
+    DiscoveryError
+        See :func:`check_rinex`.
     """
-    config = load_config()
-    site_cfg = config.sites.sites[site]
-    date_obj = _resolve_date(yyyydoy)
-    base = site_cfg.get_base_path()
-
-    receivers: dict[str, dict] = {}
-    all_ready = True
-
-    for name, rcfg in site_cfg.receivers.items():
-        files, file_warnings = _discover_files_for_date(
-            site_cfg, rcfg, name, date_obj, base
-        )
-        # Filter to SBF files only
-        sbf_files = [f for f in files if f.suffix.lower() == ".sbf"]
-        has_files = len(sbf_files) > 0
-        receivers[name] = {
-            "directory": str(base / rcfg.directory),
-            "has_files": has_files,
-            "files": [str(f) for f in sbf_files],
-            "count": len(sbf_files),
-            "warnings": file_warnings,
-        }
-        if not has_files:
-            all_ready = False
-
-    result = {
-        "site": site,
-        "yyyydoy": date_obj.to_str(),
-        "ready": all_ready,
-        "receivers": receivers,
-    }
-
-    if not all_ready:
-        missing = [n for n, r in receivers.items() if not r["has_files"]]
-        msg = (
-            f"SBF files not yet available for {site} {date_obj.to_str()}: "
-            f"missing receivers {missing}"
-        )
-        logger.warning(msg)
-        raise RuntimeError(msg)
-
-    logger.info("check_sbf: %s %s — all receivers ready", site, date_obj.to_str())
-    return result
+    return _check_files(site, yyyydoy, "sbf", "SBF")
 
 
 # ---------------------------------------------------------------------------
@@ -336,126 +283,17 @@ def check_sbf(site: str, yyyydoy: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_recipe(site: str, recipe_name: str) -> Path:
-    """Resolve a recipe name to its YAML file path.
-
-    Same lookup as the pipeline's file discovery:
-    ``<config dir>/recipes/<site>/<recipe_name>.yaml`` (see
-    :func:`canvodpy.orchestrator.discovery.recipe_file`).
-    """
-    from canvodpy.orchestrator.discovery import recipe_file
-
-    path = recipe_file(site, recipe_name)
-    if path is None:
-        msg = "No recipe name given"
-        raise ValueError(msg)
-    return path
-
-
-def _validate_receiver_with_recipe(
-    site: str,
-    recipe_name: str,
-    receiver_base_dir: Path,
-    reader_format: str | None,
-) -> dict:
-    """Validate a receiver's data directory using a NamingRecipe.
-
-    Returns a result dict with status, counts, and sample canonical names.
-    Raises ValueError on validation failure.
-    """
-    from natsort import natsorted
-
-    from canvod.filemap.recipe import NamingRecipe
-
-    recipe_path = _resolve_recipe(site, recipe_name)
-    recipe = NamingRecipe.load(recipe_path)
-
-    # Discover files using the recipe's glob pattern
-    if not receiver_base_dir.exists():
-        return {
-            "status": "valid",
-            "matched": 0,
-            "skipped_format": 0,
-            "unmatched": 0,
-            "overlaps": 0,
-            "warnings": [f"Directory does not exist: {receiver_base_dir}"],
-            "sample_canonical_names": [],
-        }
-
-    # Walk subdirectories or flat depending on layout
-    all_files: list[Path] = []
-    for f in receiver_base_dir.rglob(recipe.glob):
-        if f.is_file():
-            all_files.append(f)
-    all_files = natsorted(all_files)
-
-    matched = []
-    skipped = []
-    unmatched = []
-    errors = []
-
-    for f in all_files:
-        if not recipe.matches(f.name):
-            skipped.append(f)
-            continue
-        try:
-            vf = recipe.to_virtual_file(f)
-            matched.append(vf)
-        except ValueError as exc:
-            unmatched.append(f)
-            errors.append(f"  {f.name}: {exc}")
-
-    # Check for temporal overlaps (same canonical name = duplicate)
-    canonical_counts: dict[str, list[Path]] = {}
-    for vf in matched:
-        key = vf.canonical_str
-        canonical_counts.setdefault(key, []).append(vf.physical_path)
-    duplicates = {k: v for k, v in canonical_counts.items() if len(v) > 1}
-
-    warnings: list[str] = []
-    if duplicates:
-        for cn, paths in duplicates.items():
-            warnings.append(
-                f"Duplicate canonical name {cn}: " + ", ".join(p.name for p in paths)
-            )
-
-    if unmatched:
-        detail = "\n".join(errors[:20])
-        if len(errors) > 20:
-            detail += f"\n  ... and {len(errors) - 20} more"
-        raise ValueError(
-            f"{len(unmatched)} files could not be parsed by recipe "
-            f"'{recipe_name}':\n{detail}"
-        )
-
-    return {
-        "status": "valid",
-        "matched": len(matched),
-        "skipped": len(skipped),
-        "unmatched": 0,
-        "overlaps": len(duplicates),
-        "warnings": warnings,
-        "sample_canonical_names": [vf.canonical_str for vf in matched[:5]],
-    }
-
-
 def validate_data_dirs(site: str) -> dict:
     """Pre-flight validation of all receiver data directories for a site.
 
-    Checks every receiver's data directory against the naming convention:
-    - All files must map to a canonical ``CanVODFilename``
-    - No temporal overlaps (e.g. daily + sub-daily files for the same day)
-    - Duplicate canonical names are flagged
-
-    Supports two validation modes per receiver:
-    - **Recipe mode**: when ``recipe`` is set in the receiver config,
-      loads a ``NamingRecipe`` from
-      ``<config dir>/recipes/<site>/{recipe}.yaml``
-    - **Legacy mode**: when ``naming`` dict is set, uses
-      ``SiteNamingConfig`` + ``ReceiverNamingConfig`` + ``DataDirectoryValidator``
-
-    Run this **before** starting a processing campaign to catch data
-    quality issues early.
+    The same check as ``canvodpy config validate`` (see
+    :func:`canvodpy.orchestrator.data_check.check_site_data`), which applies
+    the file discovery of ``canvodpy run``. It reports, per receiver, the
+    days and files a run would process, and fails on everything that would
+    stop a run or make its results wrong: a missing directory or recipe,
+    files that cannot be told apart or cover the same time, two receivers
+    with the same identity, and a sampling interval in a file name that
+    differs from that of the data.
 
     Parameters
     ----------
@@ -465,124 +303,58 @@ def validate_data_dirs(site: str) -> dict:
     Returns
     -------
     dict
-        ``{"site": str, "valid": bool, "receivers": {name: {status, ...}}}``
+        ``{"site": str, "valid": True, "receivers": {name: {"directory",
+        "recipe", "identity", "days", "files", "unrecognized",
+        "warnings"}}}``. ``days`` is the number of days with files;
+        ``unrecognized`` counts files that are never processed.
 
     Raises
     ------
+    KeyError
+        If *site* is not in the configuration.
     ValueError
-        If any receiver directory has validation errors.
+        Listing every problem found, if a run would stop or produce wrong
+        results.
     """
+    from canvodpy.orchestrator.data_check import check_site_data
+
     config = load_config()
-    available = list(config.sites.sites.keys())
     if site not in config.sites.sites:
-        msg = f"Unknown site '{site}'. Available sites: {', '.join(available) or '(none)'}"
+        available = ", ".join(config.sites.sites) or "(none)"
+        msg = f"Unknown site '{site}'. Available sites: {available}"
         raise KeyError(msg)
-    site_cfg = config.sites.sites[site]
-    base = site_cfg.get_base_path()
 
-    receivers_result: dict[str, dict] = {}
-    all_valid = True
-    errors: list[str] = []
-
-    for name, rcfg in site_cfg.receivers.items():
-        receiver_base_dir = base / rcfg.directory
-        reader_format = rcfg.reader_format
-
-        # Recipe-based validation (preferred)
-        if rcfg.recipe:
-            try:
-                receivers_result[name] = _validate_receiver_with_recipe(
-                    site=site,
-                    recipe_name=rcfg.recipe,
-                    receiver_base_dir=receiver_base_dir,
-                    reader_format=reader_format,
-                )
-                logger.info(
-                    "validate_data_dirs: %s/%s — %d files via recipe '%s'",
-                    site,
-                    name,
-                    receivers_result[name]["matched"],
-                    rcfg.recipe,
-                )
-            except (ValueError, FileNotFoundError) as exc:
-                all_valid = False
-                errors.append(f"[{name}] {exc}")
-                receivers_result[name] = {"status": "invalid", "error": str(exc)}
-                logger.error("validate_data_dirs: %s/%s — FAILED: %s", site, name, exc)
-            continue
-
-        # Legacy naming-dict validation
-        if rcfg.naming:
-            from canvod.filemap import (
-                DataDirectoryValidator,
-                ReceiverNamingConfig,
-                SiteNamingConfig,
-            )
-
-            if not site_cfg.naming:
-                msg = (
-                    f"Receiver '{name}' uses naming dict but site '{site}' "
-                    "has no site-level naming config."
-                )
-                raise ValueError(msg)
-
-            site_naming = SiteNamingConfig(**site_cfg.naming)
-            receiver_naming = ReceiverNamingConfig(**rcfg.naming)
-            validator = DataDirectoryValidator()
-
-            try:
-                report = validator.validate_receiver(
-                    site_naming=site_naming,
-                    receiver_naming=receiver_naming,
-                    receiver_type=rcfg.type,
-                    receiver_base_dir=receiver_base_dir,
-                    reader_format=reader_format,
-                )
-                receivers_result[name] = {
-                    "status": "valid",
-                    "matched": len(report.matched),
-                    "skipped_format": len(report.skipped_format),
-                    "unmatched": 0,
-                    "overlaps": 0,
-                    "warnings": report.warnings,
-                    "sample_canonical_names": [
-                        vf.canonical_str for vf in report.matched[:5]
-                    ],
-                }
-                logger.info(
-                    "validate_data_dirs: %s/%s — %d files, all valid",
-                    site,
-                    name,
-                    len(report.matched),
-                )
-            except ValueError as exc:
-                all_valid = False
-                errors.append(f"[{name}] {exc}")
-                receivers_result[name] = {"status": "invalid", "error": str(exc)}
-                logger.error("validate_data_dirs: %s/%s — FAILED: %s", site, name, exc)
-            continue
-
-        # No recipe and no naming — skip
-        receivers_result[name] = {
-            "status": "skipped",
-            "reason": "no recipe or naming config",
+    report = check_site_data(site, config)
+    receivers_result = {
+        name: {
+            "directory": str(r.directory),
+            "recipe": r.recipe,
+            "identity": r.identity,
+            "days": len(r.days),
+            "files": r.files,
+            "unrecognized": len(r.unrecognized),
+            "warnings": r.warnings,
         }
-        logger.warning("Receiver '%s' has no recipe or naming config, skipping", name)
-
-    result = {
-        "site": site,
-        "valid": all_valid,
-        "receivers": receivers_result,
+        for name, r in report.receivers.items()
     }
+    for name, r in report.receivers.items():
+        for warning in r.warnings:
+            logger.warning("validate_data_dirs: %s/%s — %s", site, name, warning)
 
-    if not all_valid:
-        full_report = "\n\n".join(errors)
-        raise ValueError(
-            f"Data directory validation failed for site '{site}':\n\n{full_report}"
+    if not report.ok:
+        problems = report.errors + [
+            f"[{name}] {error}"
+            for name, r in report.receivers.items()
+            for error in r.errors
+        ]
+        msg = f"Data directory validation failed for site '{site}':\n\n" + (
+            "\n\n".join(problems)
         )
+        logger.error(msg)
+        raise ValueError(msg)
 
     logger.info("validate_data_dirs: %s — all receivers valid", site)
-    return result
+    return {"site": site, "valid": True, "receivers": receivers_result}
 
 
 # ---------------------------------------------------------------------------
@@ -728,18 +500,12 @@ def fetch_aux_data(
     ephem_ds = pipeline.get("ephemerides")
     clock_ds = pipeline.get("clock")
 
-    # 2. Detect sampling interval from RINEX filename
+    # 2. Detect sampling interval from the canonical name of the first file
     if sampling_interval_s is None:
-        yydoy = date_obj.yydoy
-        if yydoy is None:
-            msg = f"Missing YYDOY for date {date_obj.to_str()}"
-            raise ValueError(msg)
-        for _name, rcfg in site_cfg.receivers.items():
-            recv_dir = base / rcfg.directory / yydoy
-            rnx_files = _get_rinex_files(recv_dir)
-            if rnx_files:
+        for files in _day_files(site, site_cfg, date_obj, None).values():
+            if files:
                 sampling_interval_s = parse_sampling_interval_from_filename(
-                    rnx_files[0].name,
+                    files[0].canonical_name,
                 )
                 if sampling_interval_s is not None:
                     break
@@ -816,7 +582,8 @@ def process_rinex(
         Path to the pre-processed auxiliary Zarr store (from ``fetch_aux_data``).
     receiver_files : dict, optional
         ``{receiver_name: {"files": [str, ...], "count": N}}`` from
-        ``check_rinex``.  When ``None``, files are discovered from disk.
+        ``check_rinex``.  When ``None``, the files are discovered as
+        :func:`check_rinex` does.
 
     Returns
     -------
@@ -835,21 +602,17 @@ def process_rinex(
     date_obj = _resolve_date(yyyydoy)
     keep_vars = config.processing.params.keep_gnss_observables
     keep_sids = config.sids.get_sids()
-    base = site_cfg.get_base_path()
     aux_path = Path(aux_zarr_path)
 
     research_site = GnssResearchSite(site)
     receivers_processed: list[str] = []
     total_files_written = 0
+    # Discovered only if the files are not passed in from check_rinex/check_sbf
+    day_files: dict[str, list[DiscoveredFile]] | None = None
 
     # Iterate over configured receivers
     for recv_name, rcfg in site_cfg.receivers.items():
         recv_type = rcfg.type
-        yydoy = date_obj.yydoy
-        if yydoy is None:
-            msg = f"Missing YYDOY for date {date_obj.to_str()}"
-            raise ValueError(msg)
-        recv_dir = base / rcfg.directory / yydoy
 
         # Determine store groups for this receiver
         if recv_type == "canopy":
@@ -863,7 +626,9 @@ def process_rinex(
         if receiver_files and recv_name in receiver_files:
             rnx_files = [Path(f) for f in receiver_files[recv_name]["files"]]
         else:
-            rnx_files = _get_rinex_files(recv_dir)
+            if day_files is None:
+                day_files = _day_files(site, site_cfg, date_obj, "rinex3")
+            rnx_files = [f.path for f in day_files[recv_name]]
 
         if not rnx_files:
             logger.warning("process_rinex: no files for %s, skipping", recv_name)
@@ -986,7 +751,8 @@ def process_sbf(
         Date in ``YYYYDDD`` format **or** Airflow ``ds`` (``YYYY-MM-DD``).
     receiver_files : dict, optional
         ``{receiver_name: {"files": [str, ...], "count": N}}`` from
-        ``check_sbf``.  When ``None``, files are discovered from disk.
+        ``check_sbf``.  When ``None``, the files are discovered as
+        :func:`check_sbf` does.
     aux_zarr_path : str or None, optional
         Path to the Hermite-interpolated auxiliary Zarr store produced by
         ``fetch_aux_data``.  When ``None``, broadcast geometry is used.
@@ -1006,7 +772,6 @@ def process_sbf(
     date_obj = _resolve_date(yyyydoy)
     keep_vars = config.processing.params.keep_gnss_observables
     keep_sids = config.sids.get_sids()
-    base = site_cfg.get_base_path()
 
     use_broadcast = aux_zarr_path is None
     # preprocess_with_hermite_aux always requires an aux path argument;
@@ -1016,6 +781,8 @@ def process_sbf(
     research_site = GnssResearchSite(site)
     receivers_processed: list[str] = []
     total_files_written = 0
+    # Discovered only if the files are not passed in from check_rinex/check_sbf
+    day_files: dict[str, list[DiscoveredFile]] | None = None
     sbf_obs_written = False
 
     for recv_name, rcfg in site_cfg.receivers.items():
@@ -1032,10 +799,9 @@ def process_sbf(
         if receiver_files and recv_name in receiver_files:
             sbf_files = [Path(f) for f in receiver_files[recv_name]["files"]]
         else:
-            files, _ = _discover_files_for_date(
-                site_cfg, rcfg, recv_name, date_obj, base
-            )
-            sbf_files = [f for f in files if f.suffix.lower() == ".sbf"]
+            if day_files is None:
+                day_files = _day_files(site, site_cfg, date_obj, "sbf")
+            sbf_files = [f.path for f in day_files[recv_name]]
 
         if not sbf_files:
             logger.warning("process_sbf: no SBF files for %s, skipping", recv_name)
