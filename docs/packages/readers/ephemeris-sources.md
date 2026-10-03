@@ -77,16 +77,19 @@ The production path used by the orchestrator (Levels 1 and 3).
 
 ```
 1. AuxDataPipeline: download SP3 (+ CLK, if aux_data.fetch_clock) from FTP (CODE/ESA/IGS)
-2. Hermite interpolation: SP3 positions → target epoch grid
-3. Clock piecewise linear interpolation (skipped if fetch_clock=False)
-4. Write Zarr cache: aux_{date}.zarr
-5. Per file: open Zarr → sel(epoch) → compute_spherical_coordinates()
-6. Output: ds["theta"], ds["phi"], ds["r"]
+2. Epoch grid of the day: 00:00 plus multiples of the sampling interval of the
+   observations (1 s with a shared aux cache)
+3. Hermite interpolation: SP3 positions → epoch grid
+4. Clock piecewise linear interpolation (skipped if fetch_clock=False)
+5. Write Zarr cache: aux_{date}.zarr
+6. Per file: open Zarr → nearest grid epoch per observation epoch
+   → compute_spherical_coordinates()
+7. Output: ds["theta"], ds["phi"], ds["r"]
 ```
 
 CLK is not consumed by the VOD formula (`VOD = -ln(T) · cos(θ)` — only
 transmittance and polar angle). Set `aux_data.fetch_clock: false` to skip
-steps 1's clock download and step 3 entirely.
+step 1's clock download and step 4 entirely.
 
 ### Configuration
 

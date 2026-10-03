@@ -122,17 +122,25 @@ class AgencyEphemerisProvider(EphemerisProvider):
         self.keep_sids = keep_sids
         self.store_radial_distance = store_radial_distance
         self.fetch_clock = fetch_clock
-        self._aux_zarr_path: Path | None = None
+        self._date: str | None = None
+        self._aux_dir: Path | None = None
+        self._ephem_ds: xr.Dataset | None = None
+        self._clock_ds: xr.Dataset | None = None
+        self._aux_zarr_paths: dict[float, Path] = {}
 
     def preprocess_day(
         self,
         date: str,
         site_config: Any,
     ) -> Path | None:
-        """Download SP3/CLK and interpolate to observation epochs.
+        """Download and read the SP3 (and CLK) products of one day.
 
-        Creates a Zarr store with interpolated satellite positions (X, Y, Z)
-        and clock corrections at the observation sampling rate.
+        The products are interpolated later, in :meth:`augment_dataset`,
+        onto the day's epoch grid at the sampling interval of the dataset
+        being augmented, the same grid ``canvodpy run`` uses (see
+        :mod:`canvod.auxiliary.interpolation.day_grid`). The interpolated
+        day is written once per sampling interval to
+        ``aux_<date>_<interval>s.zarr`` in the returned directory.
 
         Parameters
         ----------
@@ -144,41 +152,20 @@ class AgencyEphemerisProvider(EphemerisProvider):
         Returns
         -------
         Path
-            Path to the preprocessed aux Zarr store.
+            Directory of the interpolated aux Zarr stores.
         """
-        import shutil
-
-        import numpy as np
-        import xarray as xr
-
-        from canvod.auxiliary.interpolation import (
-            ClockConfig,
-            ClockInterpolationStrategy,
-            Sp3Config,
-            Sp3InterpolationStrategy,
-        )
         from canvod.auxiliary.pipeline import AuxDataPipeline
 
-        year = int(date[:4])
-        doy = int(date[4:])
-
-        # Determine aux output directory
         aux_dir = self.aux_data_dir or Path(site_config.gnss_site_data_root)
-        aux_zarr_path = aux_dir / f"aux_{date}.zarr"
-
-        # Always reprocess (cheap; avoids stale caches)
-        if aux_zarr_path.exists():
-            shutil.rmtree(aux_zarr_path)
 
         # Build MatchedDirs stub (only yyyydoy is used by the pipeline)
         from canvod.readers.matching.models import MatchedDirs
         from canvod.utils.tools import YYYYDOY
 
-        yyyydoy = YYYYDOY.from_str(date)
         matched_dirs = MatchedDirs(
             canopy_data_dir=aux_dir,
             reference_data_dir=aux_dir,
-            yyyydoy=yyyydoy,
+            yyyydoy=YYYYDOY.from_str(date),
         )
 
         pipeline = AuxDataPipeline.create_standard(
@@ -191,39 +178,38 @@ class AgencyEphemerisProvider(EphemerisProvider):
         )
         pipeline.load_all()
 
-        # Generate target epoch grid (5s default)
-        sampling_interval = 5.0
-        day_start = np.datetime64(f"{year:04d}-01-01", "D") + np.timedelta64(
-            doy - 1,
-            "D",
+        self._date = date
+        self._aux_dir = aux_dir
+        self._ephem_ds = pipeline.get("ephemerides")
+        self._clock_ds = pipeline.get("clock") if pipeline.is_loaded("clock") else None
+        self._aux_zarr_paths = {}
+        return aux_dir
+
+    def _aux_store(self, interval_s: float) -> Path:
+        """Interpolated aux store of the day at ``interval_s``, built once."""
+        import shutil
+
+        import numpy as np
+        from canvod.utils.tools import YYYYDOY
+
+        from canvod.auxiliary.interpolation import aux_epoch_grid, interpolate_aux_day
+
+        path = self._aux_zarr_paths.get(interval_s)
+        if path is not None:
+            return path
+
+        assert self._aux_dir is not None and self._ephem_ds is not None
+        path = self._aux_dir / f"aux_{self._date}_{interval_s:g}s.zarr"
+        # Always reprocess (cheap; avoids stale caches)
+        if path.exists():
+            shutil.rmtree(path)
+        day_start = np.datetime64(YYYYDOY.from_str(str(self._date)).date, "D")
+        aux = interpolate_aux_day(
+            self._ephem_ds, self._clock_ds, aux_epoch_grid(day_start, interval_s)
         )
-        n_epochs = int(24 * 3600 / sampling_interval)
-        target_epochs = day_start + np.arange(n_epochs) * np.timedelta64(
-            int(sampling_interval), "s"
-        )
-
-        # Interpolate ephemerides (Hermite cubic)
-        sp3_config = Sp3Config(use_velocities=True, fallback_method="linear")
-        sp3_interp = Sp3InterpolationStrategy(config=sp3_config)
-        ephem_ds = pipeline.get("ephemerides")
-        ephem_interp = sp3_interp.interpolate(ephem_ds, target_epochs)
-
-        # Interpolate clock (piecewise linear), unless disabled
-        if pipeline.is_loaded("clock"):
-            clock_config = ClockConfig(window_size=9, jump_threshold=1e-6)
-            clock_interp_strategy = ClockInterpolationStrategy(config=clock_config)
-            clock_ds = pipeline.get("clock")
-            clock_interp = clock_interp_strategy.interpolate(clock_ds, target_epochs)
-            aux_processed = xr.merge([ephem_interp, clock_interp])
-        else:
-            aux_processed = ephem_interp
-
-        # Merge and write
-        aux_processed = aux_processed.dropna(dim="epoch", how="all")
-        aux_processed.to_zarr(aux_zarr_path, mode="w", consolidated=False)
-
-        self._aux_zarr_path = aux_zarr_path
-        return aux_zarr_path
+        aux.to_zarr(path, mode="w", consolidated=False)
+        self._aux_zarr_paths[interval_s] = path
+        return path
 
     def augment_dataset(
         self,
@@ -251,20 +237,23 @@ class AgencyEphemerisProvider(EphemerisProvider):
         """
         import xarray as xr
 
+        from canvod.auxiliary.interpolation import sampling_interval_from_epochs
         from canvod.auxiliary.position.spherical_coords import (
             add_spherical_coords_to_dataset,
             compute_spherical_coordinates,
         )
 
-        if self._aux_zarr_path is None:
+        if self._ephem_ds is None:
             raise RuntimeError(
                 "Call preprocess_day() before augment_dataset(). "
                 "The aux data must be prepared first."
             )
 
-        # Open preprocessed aux data and align to observation epochs
+        # Interpolated day at the dataset's sampling interval; each
+        # observation epoch takes the nearest grid epoch.
+        interval_s = sampling_interval_from_epochs(ds.epoch.values)
         aux_store = xr.open_zarr(
-            self._aux_zarr_path, decode_timedelta=False, consolidated=False
+            self._aux_store(interval_s), decode_timedelta=False, consolidated=False
         )
         aux_slice = aux_store.sel(epoch=ds.epoch, method="nearest").load()
 

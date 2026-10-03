@@ -22,21 +22,18 @@ from typing import Any
 
 import numpy as np
 import structlog
-import xarray as xr
 
-from canvod.auxiliary.interpolation import (
-    ClockConfig,
-    ClockInterpolationStrategy,
-    Sp3Config,
-    Sp3InterpolationStrategy,
-)
+from canvod.auxiliary.interpolation import aux_epoch_grid, interpolate_aux_day
 from canvod.auxiliary.pipeline import AuxDataPipeline
 from canvod.auxiliary.position import ECEFPosition
 from canvod.config import load_config
 from canvod.config.models import reference_store_group
 from canvod.readers import MatchedDirs
 from canvod.utils.tools import YYYYDOY
-from canvodpy.orchestrator.discovery import DiscoveredFile
+from canvodpy.orchestrator.discovery import (
+    DiscoveredFile,
+    parse_sampling_interval_from_filename,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -60,44 +57,6 @@ def _cap_blas_threads(n: int = 1) -> None:
     ):
         if var not in os.environ:
             os.environ[var] = s
-
-
-# ---------------------------------------------------------------------------
-# Utility extracted from RinexDataProcessor._parse_sampling_interval_from_filename
-# ---------------------------------------------------------------------------
-
-
-def parse_sampling_interval_from_filename(filename: str) -> float | None:
-    """Extract sampling interval from a RINEX v3 long filename.
-
-    RINEX v3.04 long filenames encode the data frequency at a fixed
-    position, e.g. ``ROSA01TUW_R_20250020000_01D_05S_AA.rnx`` where
-    ``05S`` means 5-second sampling.
-
-    Parameters
-    ----------
-    filename : str
-        RINEX filename (stem or full name).
-
-    Returns
-    -------
-    float or None
-        Sampling interval in seconds, or ``None`` if parsing fails.
-    """
-    import re
-
-    parts = Path(filename).stem.split("_")
-    if len(parts) >= 5:
-        freq = parts[4]  # e.g. "05S", "30S", "01Z" (1 Hz)
-        m = re.match(r"^(\d+)([SMHDZC])$", freq)
-        if m:
-            value, unit = int(m.group(1)), m.group(2)
-            multipliers = {"S": 1, "M": 60, "H": 3600, "D": 86400}
-            if unit == "Z":  # Hz -> seconds
-                return 1.0 / value if value else None
-            if unit in multipliers:
-                return float(value * multipliers[unit])
-    return None
 
 
 def _resolve_date(yyyydoy: str) -> YYYYDOY:
@@ -510,32 +469,19 @@ def fetch_aux_data(
                 if sampling_interval_s is not None:
                     break
     if sampling_interval_s is None:
-        sampling_interval_s = 30.0  # safe default
+        msg = (
+            f"No file of {site} on {date_obj.to_str()} names its sampling "
+            "interval; pass sampling_interval_s."
+        )
+        raise ValueError(msg)
 
-    # 3. Generate full-day target epoch grid
-    day_start = np.datetime64(date_obj.date, "D")
-    n_epochs = int(24 * 3600 / sampling_interval_s)
-    target_epochs = day_start + np.arange(n_epochs) * np.timedelta64(
-        int(sampling_interval_s),
-        "s",
+    # 3. Interpolate onto the day's grid at the sampling interval
+    target_epochs = aux_epoch_grid(
+        np.datetime64(date_obj.date, "D"), sampling_interval_s
     )
+    aux_processed = interpolate_aux_day(ephem_ds, clock_ds, target_epochs)
 
-    # 4. Hermite interpolation for ephemerides
-    sp3_interp = Sp3InterpolationStrategy(
-        config=Sp3Config(use_velocities=True, fallback_method="linear"),
-    )
-    ephem_interp = sp3_interp.interpolate(ephem_ds, target_epochs)
-    ephem_interp.attrs["interpolator_config"] = sp3_interp.to_attrs()
-
-    # 5. Piecewise-linear interpolation for clocks
-    clock_interp = ClockInterpolationStrategy(
-        config=ClockConfig(window_size=9, jump_threshold=1e-6),
-    )
-    clock_interp_ds = clock_interp.interpolate(clock_ds, target_epochs)
-    clock_interp_ds.attrs["interpolator_config"] = clock_interp.to_attrs()
-
-    # 6. Merge and write to Zarr
-    aux_processed = xr.merge([ephem_interp, clock_interp_ds])
+    # 4. Write to Zarr
     aux_dir = config.processing.storage.get_aux_data_dir()
     aux_zarr_path = aux_dir / f"aux_{date_obj.to_str()}.zarr"
 

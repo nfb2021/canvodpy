@@ -151,12 +151,10 @@ above.
     The single-step functions `read_rinex()`, `augment_with_ephemeris()`,
     `create_grid()`, `assign_grid_cells()`, `calculate_vod()` and their
     `*_to_file` twins are left over from development and will be removed with
-    the next major version. They are no longer maintained and give different
-    results than `canvodpy run`:
+    the next major version. They are no longer maintained, and some give
+    different results than `canvodpy run`:
 
     - `read_rinex()` reads without the configured observables and signals.
-    - `augment_with_ephemeris()` interpolates the orbits on a fixed 5 s epoch
-      grid, with a separate implementation of the interpolation.
     - `calculate_vod()` skips the configured VOD output options.
 
     Use `canvodpy run` or `Site.pipeline()` to process data, and `site.vod`
@@ -222,12 +220,12 @@ class EphemerisProvider(ABC):
 
     @abstractmethod
     def preprocess_day(self, date, site_config) -> Path | None:
-        """Download/prepare ephemeris for a day. Returns cache path or None."""
+        """Download/prepare ephemeris for a day. Returns a cache directory or None."""
 ```
 
 | Provider | `preprocess_day()` | `augment_dataset()` |
 |----------|-------------------|---------------------|
-| `AgencyEphemerisProvider` | Downloads SP3 (+ CLK, unless `fetch_clock=False`), Hermite interpolation → Zarr cache | Opens cache, selects epochs, computes spherical coordinates |
+| `AgencyEphemerisProvider` | Downloads and reads SP3 (+ CLK, unless `fetch_clock=False`) | Interpolates the day onto the grid at the dataset's sampling interval (Hermite, once per interval, written to Zarr), takes the nearest grid epoch for each observation, computes spherical coordinates |
 | `SbfBroadcastProvider` | No-op (geometry embedded in file) | Extracts theta/phi from the SBF `sbf_obs` auxiliary dataset |
 
 ---

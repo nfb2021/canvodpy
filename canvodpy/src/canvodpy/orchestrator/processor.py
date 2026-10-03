@@ -39,10 +39,9 @@ from canvod.auxiliary.cache_fingerprint import (
     compute_aux_cache_fingerprint,
 )
 from canvod.auxiliary.interpolation import (
-    ClockConfig,
-    ClockInterpolationStrategy,
-    Sp3Config,
-    Sp3InterpolationStrategy,
+    aux_epoch_grid,
+    interpolate_aux_day,
+    sampling_interval_from_epochs,
 )
 from canvod.auxiliary.pipeline import AuxDataPipeline
 from canvod.auxiliary.position import (
@@ -67,6 +66,7 @@ from canvodpy.orchestrator.discovery import (
     ReceiverDay,
     canonical_name_for,
     discover_files,
+    parse_sampling_interval_from_filename,
     recipe_file,
 )
 
@@ -1112,41 +1112,9 @@ class RinexDataProcessor:
             aggregate_glonass_fdma=aggregate,
         )
 
-    @staticmethod
-    def _parse_sampling_interval_from_filename(filename: str) -> float | None:
-        """Extract sampling interval from RINEX v3 long filename.
-
-        RINEX v3.04 long filenames encode the data frequency at a fixed
-        position, e.g. ``ROSA01TUW_R_20250020000_01D_05S_AA.rnx`` where
-        ``05S`` means 5-second sampling.
-
-        Parameters
-        ----------
-        filename : str
-            RINEX filename (stem or full name).
-
-        Returns
-        -------
-        float or None
-            Sampling interval in seconds, or None if parsing fails.
-
-        """
-        import re
-
-        # RINEX v3 long filename: XXXXNNXXX_R_YYYYDDDHHMM_DUR_FREQ_AA.rnx
-        # The frequency field is the 5th underscore-separated component
-        parts = Path(filename).stem.split("_")
-        if len(parts) >= 5:
-            freq = parts[4]  # e.g. "05S", "30S", "01Z" (1 Hz)
-            m = re.match(r"^(\d+)([SMHDZC])$", freq)
-            if m:
-                value, unit = int(m.group(1)), m.group(2)
-                multipliers = {"S": 1, "M": 60, "H": 3600, "D": 86400}
-                if unit == "Z":  # Hz -> seconds
-                    return 1.0 / value if value else None
-                if unit in multipliers:
-                    return float(value * multipliers[unit])
-        return None
+    _parse_sampling_interval_from_filename = staticmethod(
+        parse_sampling_interval_from_filename
+    )
 
     def _preprocess_aux_data_with_hermite(
         self,
@@ -1180,7 +1148,7 @@ class RinexDataProcessor:
             interpolation_method="hermite_cubic",
         )
 
-        # 1. Detect sampling interval from filename (fast path)
+        # 1. Sampling interval: from the file name, else from the first file
         sampling_interval = self._parse_sampling_interval_from_filename(
             rinex_files[0].name,
         )
@@ -1209,23 +1177,21 @@ class RinexDataProcessor:
                 write_global_attrs=True,
             )
             t1 = time.perf_counter()
-            time_diff = (first_ds.epoch[1] - first_ds.epoch[0]).values
-            sampling_interval = float(time_diff / np.timedelta64(1, "s"))
-            # day_start stays as derived from the known YYYYDOY (line ~1134)
-            # -- do NOT re-derive it from first_ds.epoch here. SBF files
-            # (the only ones that hit this fallback, since their filenames
-            # never match the RINEX v3 pattern _parse_sampling_interval_
-            # from_filename() expects) sample on a grid offset by a few
-            # seconds from the day boundary, so the very first file of a
-            # day can have its first epoch fall a few seconds into the
-            # *previous* UTC day. Truncating that epoch to a date used to
-            # silently shift the whole day's target_epochs grid back by
-            # 24h, which pushed nearly every real observation epoch outside
-            # the aux data's interpolated range -- .sel(..., method=
-            # "nearest") then clamped every one of them to the grid's last
-            # (wrong-day) point, producing a single constant, usually-wrong
-            # satellite position reused for the entire day (canvodpy
-            # #geometry-augmentation-bug round 2, 2026-08).
+            sampling_interval = sampling_interval_from_epochs(first_ds.epoch.values)
+            # day_start stays as derived from the known YYYYDOY -- do NOT
+            # re-derive it from first_ds.epoch here. SBF files (the only ones
+            # that hit this fallback, since their filenames never match the
+            # RINEX v3 pattern parse_sampling_interval_from_filename()
+            # expects) sample on a grid offset by a few seconds from the day
+            # boundary, so the very first file of a day can have its first
+            # epoch fall a few seconds into the *previous* UTC day.
+            # Truncating that epoch to a date used to silently shift the whole
+            # day's target_epochs grid back by 24h, which pushed nearly every
+            # real observation epoch outside the aux data's interpolated range
+            # -- .sel(..., method="nearest") then clamped every one of them to
+            # the grid's last (wrong-day) point, producing a single constant,
+            # usually-wrong satellite position reused for the entire day
+            # (canvodpy #geometry-augmentation-bug round 2, 2026-08).
             self._logger.info(
                 "sampling_detected",
                 sampling_interval_seconds=sampling_interval,
@@ -1233,31 +1199,21 @@ class RinexDataProcessor:
                 rinex_read_seconds=round(t1 - t0, 2),
             )
 
-        self._logger.debug(
-            "day_boundaries_detected",
-            day_start=str(day_start),
-            sampling_interval=sampling_interval,
-        )
-
         effective_grid_seconds = (
             grid_seconds if grid_seconds is not None else sampling_interval
         )
-        n_epochs = int(24 * 3600 / effective_grid_seconds)
-        target_epochs = day_start + np.arange(n_epochs) * np.timedelta64(
-            int(effective_grid_seconds), "s"
-        )
+        target_epochs = aux_epoch_grid(day_start, effective_grid_seconds)
 
         self._logger.info(
             "epoch_grid_generated",
             n_epochs=len(target_epochs),
+            grid_seconds=effective_grid_seconds,
             day_start=str(target_epochs[0]),
             day_end=str(target_epochs[-1]),
-            coverage_hours=24,
         )
 
-        # 4. Get auxiliary datasets from pipeline
-        t2 = time.perf_counter()
-        self._logger.debug("fetching_auxiliary_datasets")
+        # 2. Interpolate orbits (Hermite) and clocks (piecewise linear,
+        # unless fetch_clock is disabled -- see AuxDataConfig.fetch_clock)
         assert self.aux_pipeline is not None, "aux_pipeline must be initialized"
         ephem_ds = self.aux_pipeline.get("ephemerides")
         clock_ds = (
@@ -1265,80 +1221,16 @@ class RinexDataProcessor:
             if self.aux_pipeline.is_loaded("clock")
             else None
         )
+        t2 = time.perf_counter()
+        aux_processed = interpolate_aux_day(ephem_ds, clock_ds, target_epochs)
         t3 = time.perf_counter()
-        self._logger.debug(
-            "auxiliary_datasets_fetched",
-            duration_seconds=round(t3 - t2, 4),
-            ephemeris_dims=dict(ephem_ds.sizes) if ephem_ds else None,
-            clock_dims=dict(clock_ds.sizes) if clock_ds is not None else None,
-            ephemeris_vars=list(ephem_ds.data_vars.keys()) if ephem_ds else [],
-            clock_vars=list(clock_ds.data_vars.keys()) if clock_ds is not None else [],
-        )
-
-        # 5. Interpolate ephemerides using Hermite splines
         self._logger.info(
-            "ephemeris_interpolation_started",
-            method="hermite_cubic_with_velocities",
-            target_epochs=len(target_epochs),
+            "aux_interpolation_complete",
+            duration_seconds=round(t3 - t2, 2),
+            clock=clock_ds is not None,
+            final_dims=dict(aux_processed.sizes),
+            final_vars=list(aux_processed.data_vars.keys()),
         )
-        sp3_config = Sp3Config(use_velocities=True, fallback_method="linear")
-        sp3_interpolator = Sp3InterpolationStrategy(config=sp3_config)
-
-        t4 = time.perf_counter()
-        ephem_interp = sp3_interpolator.interpolate(ephem_ds, target_epochs)
-        t5 = time.perf_counter()
-
-        self._logger.info(
-            "ephemeris_interpolation_complete",
-            duration_seconds=round(t5 - t4, 2),
-            output_shape=dict(ephem_interp.sizes),
-            sids=len(ephem_interp.sid),
-        )
-
-        # Store interpolation metadata
-        ephem_interp.attrs["interpolator_config"] = sp3_interpolator.to_attrs()
-
-        # 6. Interpolate clock corrections using piecewise linear (unless
-        # fetch_clock is disabled in config — see AuxDataConfig.fetch_clock)
-        t6 = time.perf_counter()
-        if clock_ds is not None:
-            self._logger.info(
-                "clock_interpolation_started",
-                method="piecewise_linear",
-                target_epochs=len(target_epochs),
-            )
-            clock_config = ClockConfig(window_size=9, jump_threshold=1e-6)
-            clock_interpolator = ClockInterpolationStrategy(config=clock_config)
-
-            clock_interp = clock_interpolator.interpolate(clock_ds, target_epochs)
-            t7 = time.perf_counter()
-
-            self._logger.info(
-                "clock_interpolation_complete",
-                duration_seconds=round(t7 - t6, 2),
-                output_shape=dict(clock_interp.sizes),
-            )
-
-            # Store interpolation metadata
-            clock_interp.attrs["interpolator_config"] = clock_interpolator.to_attrs()
-
-            # 7. Merge ephemerides and clock into single dataset
-            self._logger.debug("merging_auxiliary_datasets")
-            aux_processed = xr.merge([ephem_interp, clock_interp])
-            t8 = time.perf_counter()
-            self._logger.debug(
-                "merge_complete",
-                duration_seconds=round(t8 - t7, 4),
-                final_dims=dict(aux_processed.sizes),
-                final_vars=list(aux_processed.data_vars.keys()),
-            )
-        else:
-            self._logger.info(
-                "clock_interpolation_skipped", reason="fetch_clock disabled"
-            )
-            t7 = t6
-            aux_processed = ephem_interp
-            t8 = time.perf_counter()
 
         # 8. Write to Zarr
         self._logger.info(
@@ -1353,17 +1245,14 @@ class RinexDataProcessor:
             aux_processed.to_zarr(
                 output_path, group=group, mode="w", consolidated=False
             )
-        t9 = time.perf_counter()
+        t4 = time.perf_counter()
 
         self._logger.info(
             "aux_preprocessing_complete",
-            total_seconds=round(t9 - t0, 2),
+            total_seconds=round(t4 - t0, 2),
             rinex_read_seconds=round(t1 - t0, 2),
-            aux_fetch_seconds=round(t3 - t2, 4),
-            ephem_interp_seconds=round(t5 - t4, 2),
-            clock_interp_seconds=round(t7 - t6, 2),
-            merge_seconds=round(t8 - t7, 4),
-            zarr_write_seconds=round(t9 - t8, 2),
+            interpolation_seconds=round(t3 - t2, 2),
+            zarr_write_seconds=round(t4 - t3, 2),
             data_size=dict(aux_processed.sizes),
             output_path=str(output_path),
         )

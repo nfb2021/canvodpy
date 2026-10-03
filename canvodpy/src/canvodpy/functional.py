@@ -5,8 +5,7 @@ Functional API for VOD workflow.
     Left over from development and removed with the next major version.
     It is no longer maintained and gives different results than
     ``canvodpy run``: it reads without the configured observables and
-    signals, interpolates the orbits on a fixed 5 s epoch grid with a
-    separate implementation, and skips the configured VOD output options.
+    signals, and skips the configured VOD output options.
     Use the terminal command ``canvodpy run`` or ``canvodpy.Site`` instead.
 
 Provides pure functions for Airflow integration and interactive use.
@@ -129,9 +128,7 @@ def read_rinex(
 @deprecated(
     "canvodpy.functional.augment_with_ephemeris() is left over from "
     "development and will be removed with the next major version. It is no "
-    "longer maintained and gives different results than `canvodpy run`, "
-    "because it interpolates the orbits on a fixed 5 s epoch grid with a "
-    "separate implementation. Use the terminal command `canvodpy run` or "
+    "longer maintained. Use the terminal command `canvodpy run` or "
     "canvodpy.Site(<site>).pipeline().process_date(<date>) instead."
 )
 def augment_with_ephemeris(

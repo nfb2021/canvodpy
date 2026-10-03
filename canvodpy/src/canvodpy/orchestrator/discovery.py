@@ -50,6 +50,40 @@ class DiscoveredFile:
     canonical_name: str
 
 
+def parse_sampling_interval_from_filename(filename: str) -> float | None:
+    """Sampling interval from the data-frequency field of a RINEX v3 long name.
+
+    E.g. ``ROSA01TUW_R_20250020000_01D_05S_AA.rnx``: ``05S`` is 5 s
+    (RINEX 3.04, Section 4: units S, M, H, D, Z for hertz, C for 100 Hz,
+    U for unspecified).
+
+    Parameters
+    ----------
+    filename : str
+        File name (stem or full name).
+
+    Returns
+    -------
+    float or None
+        Sampling interval in seconds, or ``None`` if the name has no
+        data-frequency field or its unit is C or U (the caller then reads
+        the interval from the data).
+    """
+    import re
+
+    parts = Path(filename).stem.split("_")
+    if len(parts) >= 5:
+        m = re.match(r"^(\d+)([SMHDZC])$", parts[4])
+        if m:
+            value, unit = int(m.group(1)), m.group(2)
+            multipliers = {"S": 1, "M": 60, "H": 3600, "D": 86400}
+            if unit == "Z":  # Hz -> seconds
+                return 1.0 / value if value else None
+            if unit in multipliers:
+                return float(value * multipliers[unit])
+    return None
+
+
 @dataclass(frozen=True)
 class ReceiverDay:
     """One receiver's data for one day, the unit a run processes.
