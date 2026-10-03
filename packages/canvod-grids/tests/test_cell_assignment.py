@@ -4,8 +4,8 @@ Tests the core functionality of assigning VOD observations to grid cells
 using KDTree-based nearest-neighbor lookups.
 
 Tests cover:
-- add_cell_ids_to_vod_fast() - KDTree-based assignment
-- add_cell_ids_to_ds_fast() - Dask variant
+- add_cell_ids_to_ds_fast() - KDTree-based assignment, eager and dask
+- the deprecated add_cell_ids_to_vod_fast() / add_cell_ids_to_vod()
 - KDTree construction and functionality
 - Edge case coordinates (zenith, horizon, wrapping)
 """
@@ -20,6 +20,7 @@ from canvod.grids import create_hemigrid
 from canvod.grids.operations import (
     _build_kdtree,
     add_cell_ids_to_ds_fast,
+    add_cell_ids_to_vod,
     add_cell_ids_to_vod_fast,
 )
 
@@ -60,7 +61,7 @@ class TestCellAssignmentBasic:
 
     def test_add_cell_ids_to_vod_fast(self, sample_grid, sample_vod_dataset) -> None:
         """Test KDTree-based cell assignment."""
-        result = add_cell_ids_to_vod_fast(sample_vod_dataset, sample_grid, "test_grid")
+        result = add_cell_ids_to_ds_fast(sample_vod_dataset, sample_grid, "test_grid")
 
         # Should return Dataset with cell_id variable
         assert isinstance(result, xr.Dataset)
@@ -79,7 +80,7 @@ class TestCellAssignmentBasic:
         self, sample_grid, sample_vod_dataset
     ) -> None:
         """Verify original data is preserved."""
-        result = add_cell_ids_to_vod_fast(sample_vod_dataset, sample_grid, "test_grid")
+        result = add_cell_ids_to_ds_fast(sample_vod_dataset, sample_grid, "test_grid")
 
         # Original variables should be present
         assert "VOD" in result.variables
@@ -142,7 +143,7 @@ class TestAddCellIdsToDsFast:
             },
         )
 
-        result = add_cell_ids_to_ds_fast(ds, sample_grid, "test_grid", data_var="vod")
+        result = add_cell_ids_to_ds_fast(ds, sample_grid, "test_grid")
 
         # Should have cell_id variable
         assert "cell_id_test_grid" in result.variables
@@ -175,7 +176,7 @@ class TestEdgeCaseCoordinates:
             },
         )
 
-        result = add_cell_ids_to_vod_fast(zenith_ds, sample_grid, "test")
+        result = add_cell_ids_to_ds_fast(zenith_ds, sample_grid, "test")
 
         # Should be assigned to valid cell
         cell_id = result["cell_id_test"].values[0, 0]
@@ -197,7 +198,7 @@ class TestEdgeCaseCoordinates:
             },
         )
 
-        result = add_cell_ids_to_vod_fast(horizon_ds, sample_grid, "test")
+        result = add_cell_ids_to_ds_fast(horizon_ds, sample_grid, "test")
 
         # All should be assigned
         cell_ids = result["cell_id_test"].values[0, :]
@@ -220,7 +221,7 @@ class TestEdgeCaseCoordinates:
             },
         )
 
-        result = add_cell_ids_to_vod_fast(wrap_ds, sample_grid, "test")
+        result = add_cell_ids_to_ds_fast(wrap_ds, sample_grid, "test")
 
         # Should handle wrapping correctly
         cell_ids = result["cell_id_test"].values[0, :]
@@ -243,7 +244,7 @@ class TestEdgeCaseCoordinates:
             },
         )
 
-        result = add_cell_ids_to_vod_fast(nan_ds, sample_grid, "test")
+        result = add_cell_ids_to_ds_fast(nan_ds, sample_grid, "test")
 
         cell_ids = result["cell_id_test"].values[0, :]
 
@@ -251,3 +252,49 @@ class TestEdgeCaseCoordinates:
         assert np.isfinite(cell_ids[0])
         assert np.isnan(cell_ids[1])
         assert np.isnan(cell_ids[2])
+
+
+class TestSingleImplementation:
+    """One implementation: dtype, dimension order, deprecated names."""
+
+    def test_float64(self, sample_grid, sample_vod_dataset) -> None:
+        result = add_cell_ids_to_ds_fast(sample_vod_dataset, sample_grid, "g")
+        assert result["cell_id_g"].dtype == np.float64
+
+    def test_data_variables_and_sid_epoch_order(
+        self, sample_grid, sample_vod_dataset
+    ) -> None:
+        expected = add_cell_ids_to_ds_fast(sample_vod_dataset.copy(), sample_grid, "g")[
+            "cell_id_g"
+        ]
+        as_vars = sample_vod_dataset.reset_coords(["phi", "theta"])
+        as_vars["phi"] = as_vars["phi"].transpose("sid", "epoch")
+        result = add_cell_ids_to_ds_fast(as_vars, sample_grid, "g")["cell_id_g"]
+        assert result.dims == ("epoch", "sid")
+        np.testing.assert_array_equal(result.values, expected.values)
+
+    def test_dask_matches_eager(self, sample_grid, sample_vod_dataset) -> None:
+        expected = add_cell_ids_to_ds_fast(sample_vod_dataset.copy(), sample_grid, "g")[
+            "cell_id_g"
+        ]
+        lazy = sample_vod_dataset.chunk({"epoch": 3})
+        result = add_cell_ids_to_ds_fast(lazy, sample_grid, "g")["cell_id_g"]
+        assert result.chunks is not None
+        np.testing.assert_array_equal(result.values, expected.values)
+
+    def test_data_var_argument_deprecated(
+        self, sample_grid, sample_vod_dataset
+    ) -> None:
+        with pytest.warns(FutureWarning, match="data_var"):
+            add_cell_ids_to_ds_fast(sample_vod_dataset, sample_grid, "g", "VOD")
+
+    @pytest.mark.parametrize("func", [add_cell_ids_to_vod_fast, add_cell_ids_to_vod])
+    def test_deprecated_names_delegate(
+        self, func, sample_grid, sample_vod_dataset
+    ) -> None:
+        expected = add_cell_ids_to_ds_fast(sample_vod_dataset.copy(), sample_grid, "g")[
+            "cell_id_g"
+        ]
+        with pytest.warns(FutureWarning, match="add_cell_ids_to_ds_fast"):
+            result = func(sample_vod_dataset.copy(), sample_grid, "g")
+        np.testing.assert_array_equal(result["cell_id_g"].values, expected.values)

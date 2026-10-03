@@ -26,7 +26,7 @@ Notes
   ``astropy.stats.mad_std``.
 * Both top-level functions expect a ``cell_id_<grid_name>`` variable
   already present in the input dataset (see
-  :func:`canvod.grids.add_cell_ids_to_vod_fast`).
+  :func:`canvod.grids.add_cell_ids_to_ds_fast`).
 
 """
 
@@ -265,7 +265,7 @@ def astropy_hampel_vectorized_fast(
     if cell_id_var not in vod_ds:
         raise ValueError(
             f"Cell ID variable '{cell_id_var}' not found in dataset. "
-            "Run add_cell_ids_to_vod_fast() first."
+            "Run add_cell_ids_to_ds_fast() first."
         )
 
     logger.info(
@@ -439,7 +439,7 @@ def astropy_hampel_ultra_fast(
     if cell_id_var not in vod_ds:
         raise ValueError(
             f"Cell ID variable '{cell_id_var}' not found in dataset. "
-            "Run add_cell_ids_to_vod_fast() first."
+            "Run add_cell_ids_to_ds_fast() first."
         )
 
     logger.info(

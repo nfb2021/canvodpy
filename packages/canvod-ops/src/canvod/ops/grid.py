@@ -3,7 +3,6 @@
 import time
 from typing import Any, cast
 
-import numpy as np
 import structlog
 import xarray as xr
 
@@ -79,40 +78,10 @@ class GridAssignment(Op):
         grid = self._get_grid()
         grid_name = f"{self._grid_type}_{self._angular_resolution}deg"
 
-        # Inline cell assignment using KDTree (avoids add_cell_ids_to_vod_fast
-        # which assumes a "VOD" data variable exists).
-        from canvod.grids.operations import _build_kdtree, _query_points
+        from canvod.grids.operations import add_cell_ids_to_ds_fast
 
-        tree = _build_kdtree(grid)
-        cell_id_col = grid.grid["cell_id"].to_numpy()
-
-        phi = ds["phi"].transpose("epoch", "sid")
-        phi_vals = phi.values.ravel()
-        theta_vals = ds["theta"].transpose("epoch", "sid").values.ravel()
-        valid = np.isfinite(phi_vals) & np.isfinite(theta_vals)
-
-        cell_ids = np.full(len(phi_vals), np.nan, dtype=np.float64)
-        if np.any(valid):
-            cell_ids[valid] = _query_points(
-                tree, cell_id_col, phi_vals[valid], theta_vals[valid]
-            )
-
-        shape_2d = phi.shape
-        cell_ids_2d = cell_ids.reshape(shape_2d)
-
-        coord_name = f"cell_id_{grid_name}"
-        ds[coord_name] = (("epoch", "sid"), cell_ids_2d)
-
-        n_assigned = int(np.sum(np.isfinite(cell_ids_2d)))
-        n_unique = len(np.unique(cell_ids[np.isfinite(cell_ids)]))
+        ds = add_cell_ids_to_ds_fast(ds, grid, grid_name)
         duration = time.perf_counter() - t0
-
-        logger.info(
-            "grid_assignment_complete",
-            n_cells=n_unique,
-            n_assigned=n_assigned,
-            duration_s=round(duration, 2),
-        )
 
         output_shape = {str(k): int(v) for k, v in dict(ds.sizes).items()}
         result = OpResult(

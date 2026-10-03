@@ -942,7 +942,7 @@ def store_vod_with_grids(
     """Store VOD dataset (with cell-ID mappings) to icechunk.
 
     The dataset is expected to already carry ``cell_id_<grid_name>``
-    variables as added by :func:`canvod.grids.operations.add_cell_ids_to_vod_fast`.
+    variables as added by :func:`canvod.grids.operations.add_cell_ids_to_ds_fast`.
 
     Parameters
     ----------

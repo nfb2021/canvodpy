@@ -31,7 +31,7 @@ import numpy as np
 import structlog
 import xarray as xr
 
-from canvod.grids import add_cell_ids_to_vod_fast, create_hemigrid
+from canvod.grids import add_cell_ids_to_ds_fast, create_hemigrid
 from canvod.utils.tools import deprecated
 
 logger = structlog.get_logger(__name__)
@@ -502,7 +502,7 @@ def aggr_hampel_cell_sid_parallelized(
     cell_id_var = f"cell_id_{grid_name}"
     if cell_id_var not in vod_ds:
         logger.info("No '%s' in input dataset — assigning now.", cell_id_var)
-        vod_ds = add_cell_ids_to_vod_fast(vod_ds, grid=grid, grid_name=grid_name)
+        vod_ds = add_cell_ids_to_ds_fast(vod_ds, grid=grid, grid_name=grid_name)
 
     vod_values = vod_ds["VOD"].values
     cell_ids = vod_ds[cell_id_var].values
@@ -629,7 +629,7 @@ def aggr_hampel_cell_sid_parallelized(
 
     # Reassign cell IDs consistently
     logger.info("Reassigning cell IDs for output dataset.")
-    result_ds = add_cell_ids_to_vod_fast(result_ds, grid=grid, grid_name=grid_name)
+    result_ds = add_cell_ids_to_ds_fast(result_ds, grid=grid, grid_name=grid_name)
 
     # Metadata
     result_ds.attrs.update(
