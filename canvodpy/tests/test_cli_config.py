@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from unittest import mock
 
 import canvodpy.cli.config as cfg
@@ -215,5 +216,10 @@ class TestConfigDirOption:
             ["config", "show"],
             ["config", "edit"],
         ):
-            result = runner.invoke(main_app, [*command, "--help"])
-            assert "--config-dir" in result.output, command
+            # Wide help text, ANSI codes removed: on GitHub Actions typer
+            # forces a colored terminal, and the codes split option names.
+            result = runner.invoke(
+                main_app, [*command, "--help"], env={"COLUMNS": "200"}
+            )
+            plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+            assert "--config-dir" in plain, command
