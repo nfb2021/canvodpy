@@ -653,17 +653,20 @@ _V_ACCURACY_ATTRS: dict[str, object] = {
 _PVT_MODE_ATTRS: dict[str, object] = {
     "long_name": "PVT solution mode",
     "units": "1",
-    "flag_values": [0, 1, 2, 3, 4, 5, 6, 10],
+    "flag_values": [0, 1, 2, 3, 4, 5, 6, 7, 8, 10],
     "flag_meanings": (
         "no_pvt stand_alone differential fixed_location "
-        "rtk_fixed_ambiguities rtk_float_ambiguities sbas_aided ppp"
+        "rtk_fixed_ambiguities rtk_float_ambiguities sbas_aided "
+        "moving_base_rtk_fixed_ambiguities moving_base_rtk_float_ambiguities ppp"
     ),
     "source": "SBF PVTGeodetic block (Block 4007) — reported by receiver firmware",
     "comment": (
         "Bits 0-3 of PVTGeodetic.Mode (u1). "
         "0 = No PVT; 1 = Stand-Alone; 2 = Differential (DGNSS); "
         "3 = Fixed location; 4 = RTK fixed ambiguities; "
-        "5 = RTK float ambiguities; 6 = SBAS-aided; 10 = PPP. "
+        "5 = RTK float ambiguities; 6 = SBAS-aided; "
+        "7 = moving-base RTK fixed ambiguities; "
+        "8 = moving-base RTK float ambiguities; 10 = PPP. "
         "Fill value -1 (int8) indicates not available."
     ),
     "references": (
@@ -729,10 +732,11 @@ _RX_ERROR_ATTRS: dict[str, object] = {
     "long_name": "Receiver error status bit field",
     "units": "1",
     # CF bitmask convention: test each flag with (value & mask) != 0
-    # Bit positions: 3=8, 4=16, 5=32, 6=64, 9=512, 10=1024, 11=2048
-    "flag_masks": [8, 16, 32, 64, 512, 1024, 2048],
+    # Bit positions: 3=8, 4=16, 5=32, 6=64, 8=256, 9=512, 10=1024, 11=2048
+    "flag_masks": [8, 16, 32, 64, 256, 512, 1024, 2048],
     "flag_meanings": (
-        "software watchdog antenna congestion cpuoverload invalidconfig outofgeofence"
+        "software watchdog antenna congestion missedevent cpuoverload "
+        "invalidconfig outofgeofence"
     ),
     "source": "SBF ReceiverStatus block — reported by receiver firmware",
     "comment": (
