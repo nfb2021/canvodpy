@@ -454,6 +454,21 @@ class TestSbfObsDataset:
         unexpected = unique_vals - {-1, 0, 1}
         assert not unexpected, f"Unexpected rise_set values: {unexpected}"
 
+    def test_sbf_obs_broadcast_angle_source_values(self, meta_ds: xr.Dataset) -> None:
+        """broadcast_angle_source only holds {-1, 1, 2}: fill, almanac, ephemeris."""
+        src = meta_ds["broadcast_angle_source"].values
+        assert src.dtype == np.int8
+        unexpected = set(np.unique(src).tolist()) - {-1, 1, 2}
+        assert not unexpected, f"Unexpected broadcast_angle_source: {unexpected}"
+
+    def test_sbf_obs_broadcast_angle_source_has_geometry(
+        self, meta_ds: xr.Dataset
+    ) -> None:
+        """Every almanac/ephemeris cell carries a reported elevation."""
+        src = meta_ds["broadcast_angle_source"].values
+        theta = meta_ds["broadcast_theta"].values
+        assert not np.isnan(theta[src > 0]).any()
+
     def test_sbf_obs_epoch_coords(self, meta_ds: xr.Dataset) -> None:
         for coord in ("pdop", "hdop", "n_sv"):
             assert coord in meta_ds.coords, f"Missing epoch coord: {coord}"
@@ -468,7 +483,13 @@ class TestSbfObsDataset:
             )
 
     def test_sbf_obs_data_vars(self, meta_ds: xr.Dataset) -> None:
-        for var in ("broadcast_theta", "broadcast_phi", "rise_set", "mp_correction_m"):
+        for var in (
+            "broadcast_theta",
+            "broadcast_phi",
+            "broadcast_angle_source",
+            "rise_set",
+            "mp_correction_m",
+        ):
             assert var in meta_ds.data_vars, f"Missing metadata data var: {var}"
 
     def test_sbf_obs_epoch_coord_dims(self, meta_ds: xr.Dataset) -> None:

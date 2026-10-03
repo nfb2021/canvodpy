@@ -289,7 +289,7 @@ def _get_bandwidth_mhz(system: str, band: str) -> float:
 # ---------------------------------------------------------------------------
 
 _BROADCAST_THETA_ATTRS: dict[str, str] = {
-    "long_name": "Satellite polar angle (broadcast ephemeris)",
+    "long_name": "Satellite polar angle reported by the receiver",
     "short_name": "θ_B",
     "standard_name": "sensor_polar_angle",
     "units": "rad",
@@ -298,7 +298,8 @@ _BROADCAST_THETA_ATTRS: dict[str, str] = {
         "Polar angle from vertical: 0 = overhead, π/2 = horizon. "
         "Derived from SatVisibility.SatInfo.Elevation (i2, scale 0.01 deg/LSB, "
         "Do-Not-Use -32768), converted to radians via theta = (90 - elevation_deg) * π/180. "
-        "Based on the receiver's internal broadcast navigation solution, "
+        "Computed by the receiver firmware from the satellite's broadcast "
+        "ephemeris or almanac, as given per value by broadcast_angle_source; "
         "NOT independently-computed satellite ephemerides (e.g. SP3/CLK)."
     ),
     "references": (
@@ -307,7 +308,7 @@ _BROADCAST_THETA_ATTRS: dict[str, str] = {
     ),
 }
 _BROADCAST_PHI_ATTRS: dict[str, str] = {
-    "long_name": "Satellite azimuth (broadcast ephemeris, geographic convention)",
+    "long_name": "Satellite azimuth reported by the receiver (geographic convention)",
     "short_name": "φ_B",
     "standard_name": "sensor_azimuth_angle",
     "units": "rad",
@@ -316,7 +317,8 @@ _BROADCAST_PHI_ATTRS: dict[str, str] = {
         "Geographic azimuth: 0 = North, π/2 = East (clockwise). "
         "Derived from SatVisibility.SatInfo.Azimuth (u2, scale 0.01 deg/LSB, "
         "Do-Not-Use 65535), converted to radians via phi = azimuth_deg * π/180. "
-        "Based on the receiver's internal broadcast navigation solution, "
+        "Computed by the receiver firmware from the satellite's broadcast "
+        "ephemeris or almanac, as given per value by broadcast_angle_source; "
         "NOT independently-computed satellite ephemerides (e.g. SP3/CLK)."
     ),
     "references": (
@@ -341,6 +343,26 @@ _RISE_SET_ATTRS: dict[str, object] = {
         "Septentrio AsteRx SB3 ProBase Firmware v4.14.0 Reference Guide, "
         "SatVisibility block (Block 4012), SatInfo sub-block, field RiseSet, p.400. "
         "Raw field: u1, scale 1; 0=setting, 1=rising, 255=unknown (→ stored as -1)."
+    ),
+}
+
+_BROADCAST_ANGLE_SOURCE_ATTRS: dict[str, object] = {
+    "long_name": "Orbit data behind broadcast_theta and broadcast_phi",
+    "flag_values": [1, 2],
+    "flag_meanings": "almanac ephemeris",
+    "source": "SBF SatVisibility block — reported by receiver firmware",
+    "comment": (
+        "Whether the receiver computed the azimuth/elevation of this "
+        "satellite from its almanac (1) or its broadcast ephemeris (2). "
+        "255 (raw) indicates unknown. Fill value -1 (int8) used for unknown "
+        "and missing values. Broadcast-mode geometry uses only values "
+        "computed from the ephemeris (2)."
+    ),
+    "references": (
+        "Septentrio AsteRx SB3 ProBase Firmware v4.14.0 Reference Guide, "
+        "SatVisibility block (Block 4012), SatInfo sub-block, field "
+        "SatelliteInfo, p.400. Raw field: u1; 1=almanac, 2=ephemeris, "
+        "255=unknown (→ stored as -1)."
     ),
 }
 
@@ -1854,8 +1876,9 @@ class SbfReader(GNSSDataReader):
         if meta_ds is not None:
             # Same sids as obs_ds; padded sids get the fill values.
             meta_ds = meta_ds.reindex(sid=obs_ds.sid, fill_value=np.nan)
-            if meta_ds["rise_set"].dtype != np.int8:
-                meta_ds["rise_set"] = meta_ds["rise_set"].fillna(-1).astype(np.int8)
+            for name in ("rise_set", "broadcast_angle_source"):
+                if meta_ds[name].dtype != np.int8:
+                    meta_ds[name] = meta_ds[name].fillna(-1).astype(np.int8)
             for name in ("tracking_status_raw", "pvt_status_raw"):
                 if meta_ds[name].dtype != np.uint16:
                     meta_ds[name] = meta_ds[name].fillna(0).astype(np.uint16)
@@ -1904,6 +1927,7 @@ class SbfReader(GNSSDataReader):
         theta_deg = np.full((n_epochs, n_sids), np.nan, dtype=np.float32)
         phi_deg = np.full((n_epochs, n_sids), np.nan, dtype=np.float32)
         rise_set_arr = np.full((n_epochs, n_sids), -1, dtype=np.int8)
+        angle_source_arr = np.full((n_epochs, n_sids), -1, dtype=np.int8)
         # ChannelStatus raw bitfields, broadcast per sv (0 = idle / no info)
         tracking_status_arr = np.zeros((n_epochs, n_sids), dtype=np.uint16)
         pvt_status_arr = np.zeros((n_epochs, n_sids), dtype=np.uint16)
@@ -1973,7 +1997,8 @@ class SbfReader(GNSSDataReader):
             if satvis is not None:
                 # RefGuide-4.14.0, SatVisibility p.400: Azimuth u2 0.01 deg,
                 # Do-Not-Use 65535; Elevation i2 0.01 deg, Do-Not-Use -32768;
-                # RiseSet 255 = unknown.
+                # RiseSet 255 = unknown; SatelliteInfo 1 = almanac,
+                # 2 = ephemeris, 255 = unknown.
                 for sat in satvis.get("SatInfo", []):
                     svid = int(sat["SVID"])
                     if svid in (_SVID_DNU, _SVID_GLONASS_UNKNOWN_SLOT):
@@ -1990,6 +2015,8 @@ class SbfReader(GNSSDataReader):
                     )
                     phi_deg[t, cols] = np.nan if azim == 65535 else azim * 0.01
                     rise_set_arr[t, cols] = -1 if rs == 255 else rs
+                    src = int(sat["SatelliteInfo"])
+                    angle_source_arr[t, cols] = -1 if src == 255 else src
 
             qualind = group.get("QualityInd")
             if qualind is not None:
@@ -2069,6 +2096,11 @@ class SbfReader(GNSSDataReader):
                 ),
                 "broadcast_phi": (dims, np.deg2rad(phi_deg), _BROADCAST_PHI_ATTRS),
                 "rise_set": (dims, rise_set_arr, _RISE_SET_ATTRS),
+                "broadcast_angle_source": (
+                    dims,
+                    angle_source_arr,
+                    _BROADCAST_ANGLE_SOURCE_ATTRS,
+                ),
                 "mp_correction_m": (
                     dims,
                     _f32(obs.mp_correction_m),

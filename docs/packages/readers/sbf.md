@@ -171,6 +171,7 @@ Icechunk store.
 | -------- | ---------- | ---------- | ----------- |
 | `broadcast_theta` | SatVisibility | `rad` | Polar angle θ (0 = overhead, π/2 = horizon) |
 | `broadcast_phi` | SatVisibility | `rad` | Geographic azimuth φ (0 = North, clockwise) |
+| `broadcast_angle_source` | SatVisibility | `1` | Orbit data behind θ/φ: 1 = almanac, 2 = ephemeris, -1 unknown |
 | `rise_set` | SatVisibility | `1` | 1 = rising, 0 = setting |
 | `mp_correction_m` | MeasExtra | `m` | Pseudorange multipath correction |
 | `smoothing_corr_m` | MeasExtra | `m` | Hatch-filter smoothing correction on pseudorange |
