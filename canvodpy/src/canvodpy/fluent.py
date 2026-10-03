@@ -36,10 +36,11 @@ from __future__ import annotations
 from functools import wraps
 from typing import TYPE_CHECKING, Any
 
+import structlog
+
 from canvod.utils.tools import deprecated
 from canvodpy.api import Site
 from canvodpy.factories import GridFactory, ReaderFactory, VODFactory
-from canvodpy.logging import get_logger
 
 if TYPE_CHECKING:
     import xarray as xr
@@ -179,7 +180,7 @@ class FluentWorkflow:
             keep_vars = load_config().processing.params.keep_gnss_observables
         self._keep_vars = keep_vars
 
-        self.log = get_logger(__name__).bind(site=self._site.name)
+        self.log = structlog.get_logger(__name__).bind(site=self._site.name)
 
     # ------------------------------------------------------------------
     # Steps (deferred)

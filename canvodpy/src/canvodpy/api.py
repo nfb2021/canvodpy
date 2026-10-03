@@ -335,9 +335,9 @@ class Pipeline:
         self.days_per_batch = days_per_batch
 
         # Setup logging
-        from canvodpy.logging import get_logger
+        import structlog
 
-        self.log = get_logger(__name__).bind(
+        self.log = structlog.get_logger(__name__).bind(
             site=site.name,
             component="pipeline",
         )

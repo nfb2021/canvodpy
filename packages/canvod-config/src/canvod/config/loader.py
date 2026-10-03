@@ -1,7 +1,6 @@
 """Configuration loader for canvodpy."""
 
 import functools
-import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -10,8 +9,6 @@ import yaml
 from pydantic import ValidationError
 
 from .models import CanvodConfig, ProcessingConfig, SidsConfig, SitesConfig
-
-logger = logging.getLogger("canvod.config")
 
 
 class ConfigValidationError(ValueError):

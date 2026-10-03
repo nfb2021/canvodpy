@@ -16,9 +16,18 @@ management lives in [canvod.config](canvod-config.md) instead.
         - isfloat
         - get_version_from_pyproject
 
-## Diagnostics
+## Logging
 
-Processing diagnostics and performance tracking now live in
-`canvodpy.logging` (see [canvodpy API Reference](canvodpy.md#configuration)
-and the [Diagnostics & Performance Monitoring guide](../guides/diagnostics.md))
-rather than in `canvod-utils` — `canvod.utils.diagnostics` was removed.
+The run identifier and the stage timing; the log output is configured by
+`canvodpy.setup_logging` (see the [Diagnostics & Performance Monitoring
+guide](../guides/diagnostics.md)).
+
+::: canvod.utils.logging
+    options:
+      members:
+        - get_run_id
+        - set_run_id
+        - reset_run_id
+        - stage_timer
+        - timed_stage
+        - emit_run_summary

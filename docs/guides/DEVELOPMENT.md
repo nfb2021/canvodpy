@@ -135,22 +135,16 @@ full picture (two-track logging, `run_id`, crash handling, `stage_timer`,
 the performance dashboard) — this section is the short "how do I add a log
 line" version.
 
-**Which logger to use:**
+**Which logger to use:** every module, in every package, gets its logger
+directly from structlog:
 
 ```python
-# Inside the canvodpy package itself:
-from canvodpy.logging import get_logger
-log = get_logger(__name__)
-
-# Inside a lower-level package that must not depend on canvodpy
-# (canvod-vod, canvod-grids, canvod-ops, ...):
 import structlog
 log = structlog.get_logger(__name__)
 ```
 
-Both are equivalent at runtime — `canvodpy.logging.get_logger` is a
-one-line passthrough to `structlog.get_logger`, kept only as the documented
-entry point for canvodpy's own code. `configure_logging()` installs
+`canvodpy.logging.get_logger` is deprecated. Only canvodpy configures
+logging; the canvod-* packages never do. `configure_logging()` installs
 structlog's processor chain *globally*, so **any** `structlog.get_logger()`
 call anywhere in the process — regardless of which package it's in —
 automatically gets routed through the two-track logging setup (human/agent
@@ -169,13 +163,13 @@ log.warning("sids_dropped_no_ephemeris", count=len(dropped), sids=sorted(dropped
 log.info(f"Started preprocessing {rnx_file.name} for {site_name}")
 ```
 
-**Timing:** use `stage_timer()`/`timed_stage()` from `canvodpy.logging`
+**Timing:** use `stage_timer()`/`timed_stage()` from `canvod.utils.logging`
 rather than hand-rolling `t0 = time.perf_counter(); ...; duration = ...` —
 it emits the canonical `stage_timing` event the performance dashboard
 reads, and still emits (with `status="error"`) if the block raises.
 
 ```python
-from canvodpy.logging import stage_timer
+from canvod.utils.logging import stage_timer
 
 with stage_timer("icechunk.write", group=group_name, size_mb=size_mb):
     to_icechunk(dataset, session, group=group_name)

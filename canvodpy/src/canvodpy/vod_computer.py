@@ -42,7 +42,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from canvodpy.logging import get_logger
+import structlog
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -66,7 +66,9 @@ def ensure_vod_store_metadata(site: Site, calculator_name: str) -> None:
     coverage and summaries describe the data just written. See
     dev/todo_later.md §29 item 4.
     """
-    log = get_logger(__name__).bind(site=site.name, calculator=calculator_name)
+    log = structlog.get_logger(__name__).bind(
+        site=site.name, calculator=calculator_name
+    )
     try:
         from canvod.config import load_config
         from canvod.store_metadata import (
@@ -156,7 +158,9 @@ class VodComputer:
         self._site = site
         self._calculator_name = calculator
         self._rechunk = rechunk or {"epoch": 17280, "sid": -1}
-        self.log = get_logger(__name__).bind(site=site.name, calculator=calculator)
+        self.log = structlog.get_logger(__name__).bind(
+            site=site.name, calculator=calculator
+        )
 
     @property
     def calculator_name(self) -> str:

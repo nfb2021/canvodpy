@@ -18,6 +18,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 import pydantic_core
+import structlog
 import xarray as xr
 import zarr
 import zarr.errors
@@ -55,14 +56,13 @@ from canvod.ops import preprocess_files
 from canvod.readers import DataDirMatcher, MatchedDirs
 from canvod.store import GnssResearchSite, scoped_zarr_concurrency
 from canvod.store.store import _with_run_id
+from canvod.utils.logging import get_run_id, set_run_id, stage_timer
 from canvod.utils.tools import (
     _worker_init,
     deprecated,
     get_version_from_pyproject,
     sanitize_directory,
 )
-from canvodpy.logging import get_logger, stage_timer
-from canvodpy.logging.run_context import get_run_id, set_run_id
 from canvodpy.orchestrator.discovery import (
     ReceiverDay,
     canonical_name_for,
@@ -235,7 +235,7 @@ def _preprocess_file(
     # this call's sid_issues reflects only its own pad_to_global_sid() calls.
     reset_sid_accumulators()
 
-    log = get_logger(__name__).bind(
+    log = structlog.get_logger(__name__).bind(
         file=str(rnx_file.name), receiver_type=receiver_type
     )
 
@@ -904,13 +904,13 @@ class RinexDataProcessor:
         self._reader_name = reader_name  # fallback; prefer per-receiver reader_format
         # use_sbf_geometry: explicit param wins, otherwise read from config
         self._use_sbf_geometry_override = use_sbf_geometry
-        self._logger = get_logger(__name__).bind(
+        self._logger = structlog.get_logger(__name__).bind(
             site=site.site_name,
             workers=self.n_max_workers or os.cpu_count(),
             component="processor",  # Enable component-specific logging
         )
         # Dedicated logger for icechunk store operations
-        self._icechunk_log = get_logger(__name__).bind(
+        self._icechunk_log = structlog.get_logger(__name__).bind(
             site=site.site_name,
             component="icechunk",
         )

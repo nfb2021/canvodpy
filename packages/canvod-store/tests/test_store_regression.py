@@ -354,7 +354,8 @@ class TestBugFixes:
         # After fix: logger must be assigned before it is used
         assert logger_assignment_pos < logger_usage_pos, (
             "B5: self._logger is used before it is assigned in __init__. "
-            "Move 'self._logger = get_logger(__name__)' to the top of __init__."
+            "Move 'self._logger = structlog.get_logger(__name__)' to the top of "
+            "__init__."
         )
 
 

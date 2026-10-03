@@ -7,13 +7,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import structlog
 import xarray as xr
 from canvod.utils.tools import deprecated
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from canvod.vod._internal import get_logger
-
-log = get_logger(__name__)
+log = structlog.get_logger(__name__)
 
 
 class VODCalculator(ABC, BaseModel):

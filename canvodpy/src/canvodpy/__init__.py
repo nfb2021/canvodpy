@@ -155,6 +155,8 @@ def __getattr__(name: str):
 # resolve the subpackage names that are lazily loaded via __getattr__ at runtime.
 from typing import TYPE_CHECKING
 
+import structlog
+
 if TYPE_CHECKING:
     import canvod.auxiliary as auxiliary
     import canvod.grids as grids
@@ -237,7 +239,7 @@ def _register_builtin_components() -> None:
     -----
     Uses lazy imports to avoid loading heavy dependencies unless needed.
     """
-    log = get_logger(__name__)
+    log = structlog.get_logger(__name__)
 
     # Set ABC classes for validation
     ReaderFactory._set_abc_class()

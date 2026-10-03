@@ -37,9 +37,9 @@ from __future__ import annotations
 from abc import ABC
 from typing import Any, ClassVar, TypeVar
 
-from canvodpy.logging import get_logger
+import structlog
 
-log = get_logger(__name__)
+log = structlog.get_logger(__name__)
 
 T = TypeVar("T", bound=ABC)
 

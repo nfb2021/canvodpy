@@ -46,10 +46,9 @@ import typer
 import xarray as xr
 
 from canvod.config.models import reference_store_group
+from canvod.utils.logging import reset_run_id, reset_run_stats, set_run_id
 from canvodpy.cli.options import CONFIG_DIR_OPTION
 from canvodpy.logging import emit_run_summary
-from canvodpy.logging.run_context import reset_run_id, set_run_id
-from canvodpy.logging.stage_timer import reset_run_stats
 from canvodpy.orchestrator.resources import ResourceSampler
 from canvodpy.orchestrator.store_retry import call_with_store_retries
 

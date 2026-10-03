@@ -43,11 +43,10 @@ def test_internal_utilities_import():
     """Test that internal utilities can be imported."""
     from canvod.utils.tools import YYYYDOY
 
-    from canvod.auxiliary._internal import UREG, get_logger
+    from canvod.auxiliary._internal import UREG
 
     assert UREG is not None
     assert YYYYDOY is not None
-    assert get_logger is not None
 
 
 def test_core_api_imports():

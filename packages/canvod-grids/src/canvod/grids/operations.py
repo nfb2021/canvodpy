@@ -19,16 +19,16 @@ import warnings
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import structlog
 import xarray as xr
 from scipy.spatial import cKDTree  # type: ignore[unresolved-import]
 
-from canvod.grids._internal import get_logger
 from canvod.utils.tools import deprecated
 
 if TYPE_CHECKING:
     from canvod.grids.core import GridData
 
-log = get_logger(__name__)
+log = structlog.get_logger(__name__)
 
 # Per-grid-type description of what ``angular_resolution`` controls.
 _RESOLUTION_DESCRIPTIONS: dict[str, str] = {

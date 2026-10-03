@@ -5,15 +5,9 @@ from typing import Any
 
 import numpy as np
 import polars as pl
+import structlog
 
 from canvod.grids.core.grid_data import GridData
-
-
-def _get_logger():
-    """Lazy import to avoid circular dependency."""
-    from canvod.grids._internal import get_logger
-
-    return get_logger(__name__)
 
 
 class BaseGridBuilder(ABC):
@@ -54,7 +48,7 @@ class BaseGridBuilder(ABC):
         self.cutoff_theta_rad = np.deg2rad(cutoff_theta)
         self.phi_rotation = phi_rotation
         self.phi_rotation_rad = np.deg2rad(phi_rotation)
-        self._logger = _get_logger()
+        self._logger = structlog.get_logger(__name__)
 
     @abstractmethod
     def _build_grid(

@@ -8,11 +8,11 @@ import time
 from pathlib import Path
 
 import psutil
+import structlog
 
-from canvodpy.logging import get_logger
-from canvodpy.logging.run_context import get_run_id, set_run_id
+from canvod.utils.logging import get_run_id, set_run_id
 
-logger = get_logger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class MemoryMonitor:

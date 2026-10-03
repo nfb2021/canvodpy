@@ -31,8 +31,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import structlog
 import xarray as xr
-from canvodpy.logging import get_logger
 from canvodpy.orchestrator.processor import RinexDataProcessor
 
 from canvod.store import MyIcechunkStore
@@ -89,8 +89,8 @@ class _TestProcessor(RinexDataProcessor):
     def __init__(self, store: MyIcechunkStore, strategy: str = "skip") -> None:
         self.site = _FakeSite(store)
         self.matched_data_dirs = _FakeMatchedDataDirs()
-        self._logger = get_logger(__name__)
-        self._icechunk_log = get_logger(__name__)
+        self._logger = structlog.get_logger(__name__)
+        self._icechunk_log = structlog.get_logger(__name__)
         self._gnss_store_strategy = strategy
         self._keeper_tags_enabled = False
         self._config = None  # STEP 8 (rich metadata) no-ops via `except Exception`

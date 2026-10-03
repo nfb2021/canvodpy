@@ -9,12 +9,12 @@ from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
+import structlog
 import xarray as xr
 from canvod.auxiliary.preprocessing import prep_aux_ds
 from canvod.config import load_config
 from canvod.readers import MatchedDirs, Rnxv3Obs
 from canvod.utils.tools import _worker_init, deprecated, get_version_from_pyproject
-from canvodpy.logging import get_logger
 from natsort import natsorted
 from tqdm import tqdm
 
@@ -47,7 +47,7 @@ def _process_single_rinex(
         The input file path and the processed dataset.
     """
 
-    log = get_logger(__name__).bind(file=str(rnx_file))
+    log = structlog.get_logger(__name__).bind(file=str(rnx_file))
     log.info("rinex_processing_started")
 
     try:
@@ -92,7 +92,7 @@ def preprocess_rnx(
     tuple[Path, xr.Dataset]
         The input file path and the processed dataset.
     """
-    log = get_logger(__name__).bind(file=str(rnx_file))
+    log = structlog.get_logger(__name__).bind(file=str(rnx_file))
     log.info("preprocessing_started")
 
     try:
@@ -189,7 +189,7 @@ class IcechunkDataReader:
         self.enable_gc = enable_gc
         self.gc_delay = gc_delay
 
-        self._logger = get_logger(__name__).bind(
+        self._logger = structlog.get_logger(__name__).bind(
             site=site_name,
             date=matched_dirs.yyyydoy.to_str(),
         )

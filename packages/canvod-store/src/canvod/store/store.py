@@ -14,12 +14,12 @@ from typing import TYPE_CHECKING, Any
 import icechunk
 import numpy as np
 import polars as pl
+import structlog
 import xarray as xr
 import zarr
 from canvod.config.models import PREPROCESSING_ATTR
+from canvod.utils.logging import get_run_id, stage_timer
 from canvod.utils.tools import get_version_from_pyproject, sanitize_directory
-from canvodpy.logging import get_logger, stage_timer
-from canvodpy.logging.run_context import get_run_id
 from icechunk.session import ForkSession
 from icechunk.xarray import to_icechunk
 from zarr.dtype import VariableLengthUTF8
@@ -74,7 +74,7 @@ def _with_run_id(commit_message: str) -> str:
 
     Lets a human or an agent correlate an Icechunk commit with the run
     that produced it, by grepping the same run_id across the commit log
-    and the agent-diagnostic log (see ``canvodpy.logging.run_context``).
+    and the agent-diagnostic log (see ``canvod.utils.logging.run_context``).
     Append-only: does not change caller-provided commit message content.
     """
     run_id = get_run_id()
@@ -287,7 +287,7 @@ class MyIcechunkStore:
         compression_algorithm : str | None, optional
             Override default compression algorithm.
         """
-        self._logger = get_logger(__name__)
+        self._logger = structlog.get_logger(__name__)
 
         try:
             from canvod.config import load_config
@@ -1143,7 +1143,7 @@ class MyIcechunkStore:
         num_variables = len(dataset.data_vars)
 
         # Write to Icechunk, timed via the lightweight stage_timer (see
-        # canvodpy/logging/stage_timer.py) -- replaces the removed
+        # canvod.utils.logging.stage_timer) -- replaces the removed
         # OpenTelemetry-based telemetry.py, which required an optional
         # dependency that was never actually installed.
         with stage_timer(

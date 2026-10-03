@@ -40,9 +40,10 @@ except ImportError:
     _HAS_LOKY = False
     _loky_reusable = None
 
+import structlog
+
+from canvod.utils.logging import get_run_id
 from canvod.utils.tools import deprecated
-from canvodpy.logging import get_logger
-from canvodpy.logging.run_context import get_run_id
 from canvodpy.orchestrator.discovery import (
     ReceiverDay,
     check_receivers,
@@ -251,7 +252,7 @@ class PipelineOrchestrator:
         self._nice_priority = nice_priority
         self._threads_per_worker = threads_per_worker
         self._memory_monitor = MemoryMonitor(max_memory_gb=max_memory_gb)
-        self._logger = get_logger(__name__).bind(site=site.site_name)
+        self._logger = structlog.get_logger(__name__).bind(site=site.site_name)
 
         if n_max_workers is not None:
             effective_workers: int | None = min(
@@ -1395,7 +1396,7 @@ class SingleReceiverProcessor:
         self.site = site
         self.n_max_workers = n_max_workers
         self.reader_name = reader_name
-        self._logger = get_logger(__name__).bind(
+        self._logger = structlog.get_logger(__name__).bind(
             receiver=receiver_name,
             date=yyyydoy.to_str(),
         )

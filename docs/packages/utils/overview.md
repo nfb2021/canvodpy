@@ -32,10 +32,12 @@ file_hash(path)                    # SHA-256 of a file, used by store dedup guar
 
 ## Diagnostics
 
-Processing diagnostics and performance tracking (`stage_timer`, `run_id`
-correlation, structured logging) live in `canvodpy.logging`, not in
-`canvod-utils` — see the [Diagnostics & Performance Monitoring
-guide](../../guides/diagnostics.md) for the current implementation.
+`canvod.utils.logging` holds the run identifier (`get_run_id`, `set_run_id`,
+`reset_run_id`) and the stage timing (`stage_timer`, `timed_stage`,
+`emit_run_summary`), so that every canvod package can use them without
+depending on canvodpy. The log output is configured by
+`canvodpy.logging.configure_logging`. See the [Diagnostics & Performance
+Monitoring guide](../../guides/diagnostics.md).
 
 ---
 

@@ -45,13 +45,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+import structlog
 import xarray as xr
 
 from canvod.utils.tools import deprecated
 from canvodpy.factories import GridFactory, ReaderFactory, VODFactory
-from canvodpy.logging import get_logger
 
-log = get_logger(__name__)
+log = structlog.get_logger(__name__)
 
 
 @contextmanager

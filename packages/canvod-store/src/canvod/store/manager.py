@@ -21,9 +21,9 @@ import zarr
 if TYPE_CHECKING:
     from canvod.vod import VODCalculator
 
+import structlog
 from canvod.config.models import VodAnalysisConfig
 from canvod.utils.tools import deprecated
-from canvodpy.logging import get_logger
 
 from canvod.store.store import (
     VodWriteItem,
@@ -84,7 +84,7 @@ class GnssResearchSite:
 
         self.site_name = site_name
         self._site_config = sites[site_name]
-        self._logger = get_logger(__name__).bind(site=site_name)
+        self._logger = structlog.get_logger(__name__).bind(site=site_name)
 
         gnss_store_path = config.processing.storage.get_gnss_store_path(site_name)
         vod_store_path = config.processing.storage.get_vod_store_path(site_name)

@@ -40,12 +40,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+import structlog
 import xarray as xr
 
 from canvod.utils.tools import deprecated
 from canvodpy.api import Site
 from canvodpy.factories import GridFactory, ReaderFactory, VODFactory
-from canvodpy.logging import get_logger
 
 if TYPE_CHECKING:
     from structlog.stdlib import BoundLogger
@@ -137,7 +137,7 @@ class VODWorkflow:
         self.site = Site(site) if isinstance(site, str) else site
 
         # Setup logging with site context
-        self.log: BoundLogger = get_logger(__name__).bind(site=site_name)
+        self.log: BoundLogger = structlog.get_logger(__name__).bind(site=site_name)
 
         # Store configuration
         self.reader_name = reader

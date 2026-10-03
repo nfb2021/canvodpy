@@ -530,10 +530,14 @@ version = "0.4.0"
 source = { editable = "packages/canvod-utils" }
 dependencies = [
     { name = "pydantic" },
+    { name = "structlog" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.0" }]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.0" },
+    { name = "structlog", specifier = ">=24.1.0" },
+]
 
 [[package]]
 name = "canvod-viz"

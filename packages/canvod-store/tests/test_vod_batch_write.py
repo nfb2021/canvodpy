@@ -219,7 +219,7 @@ def test_log_book_rows_match_their_commit(store: MyIcechunkStore) -> None:
     Covers the pre-pass (new group) and the fork/merge phase (existing
     group) in one mixed batch, inside a run context.
     """
-    from canvodpy.logging.run_context import reset_run_id, set_run_id
+    from canvod.utils.logging import reset_run_id, set_run_id
 
     store.write_or_append_vod_groups_batch(
         [_item("tau_omega/canopy_01_vs_reference_01", slot=0, source_id="seed")]

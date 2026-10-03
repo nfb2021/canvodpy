@@ -53,4 +53,5 @@ no-op stub — VOD computed through it uses un-augmented angles. Do not use.
 ## Configuration
 
 ::: canvodpy.setup_logging
-::: canvodpy.get_logger
+
+`canvodpy.get_logger` is deprecated: use `structlog.get_logger(__name__)`.
