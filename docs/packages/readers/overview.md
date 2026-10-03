@@ -60,7 +60,6 @@ The `canvod-readers` package provides validated parsers for [GNSS](https://gssc.
 | Extra metadata | Header only | Header only | PVT · DOP · quality |
 | `to_ds()` | ✓ | ✓ | ✓ |
 | `iter_epochs()` | ✓ | ✓ | ✓ |
-| `to_metadata_ds()` | — | — | ✓ |
 | `to_ds_and_auxiliary()` | `{}` aux | `{}` aux | `{"sbf_obs": meta_ds}` |
 
 !!! note "Consistent output structure"
@@ -160,6 +159,7 @@ Subclasses only need to inherit from `GNSSDataReader` — no separate `BaseModel
 === "SBF — quick-look (no downloads)"
 
     ```python
+    import numpy as np
     from canvod.readers.sbf import SbfReader
 
     reader = SbfReader(fpath="rref001a00.sbf")
@@ -167,7 +167,7 @@ Subclasses only need to inherit from `GNSSDataReader` — no separate `BaseModel
     meta_ds = aux["sbf_obs"]
 
     # Polar angle filter: elevation ≥ 20°
-    snr_filtered = obs_ds["SNR"].where(meta_ds["theta"] <= 70)
+    snr_filtered = obs_ds["SNR"].where(meta_ds["broadcast_theta"] <= np.deg2rad(70))
     ```
 
 === "Multi-constellation analysis"

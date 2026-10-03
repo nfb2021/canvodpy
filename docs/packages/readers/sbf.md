@@ -7,6 +7,12 @@ output of Septentrio GNSS receivers (AsteRx SB3, mosaic-X5, PolaRx, etc.).
 `SbfReader` in `canvod-readers` decodes SBF streams and produces two complementary
 `xarray.Dataset` objects from a **single file scan**.
 
+All blocks with the same receiver time stamp (TOW, WNc) belong to one epoch
+(RefGuide-4.14.0, Section 4.1.3). The reader groups them that way, so the
+MeasExtra, SatVisibility, PVT and status values of an epoch are stored with
+the observations of that same epoch. One decoder serves `iter_epochs()`,
+`to_ds()` and `to_ds_and_auxiliary()`; they give the same values.
+
 !!! tip "No ephemeris download needed"
 
     The SBF reader differs from `Rnxv3Obs` (RINEX) in one fundamental respect:
@@ -39,8 +45,8 @@ output of Septentrio GNSS receivers (AsteRx SB3, mosaic-X5, PolaRx, etc.).
 
     ---
 
-    GLONASS FDMA frequency-slot cache (`SVID → FreqNr`).
-    Pre-scanned before MeasEpoch decoding.
+    Per-satellite tracking and PVT-usage status bit fields
+    (`tracking_status_raw`, `pvt_status_raw`), main antenna.
 
 -   :fontawesome-solid-signal: &nbsp; **MeasEpoch**
 
@@ -79,8 +85,21 @@ output of Septentrio GNSS receivers (AsteRx SB3, mosaic-X5, PolaRx, etc.).
 
     ---
 
-    Extra per-signal quality: multipath path-delay correction,
-    code-phase and carrier-phase noise variance.
+    Extra per-signal quality: multipath and smoothing corrections,
+    code and carrier noise variance, lock time, CN0HighRes.
+
+-   :fontawesome-solid-gauge: &nbsp; **QualityInd**
+
+    ---
+
+    Receiver quality scores (0-10): overall, GNSS signals, RF power,
+    CPU headroom, scintillation (firmware ≥ 4.15.1).
+
+-   :fontawesome-solid-shield-halved: &nbsp; **RFStatus**
+
+    ---
+
+    Spoofing and navigation-message-authentication (NMA) flags.
 
 </div>
 
@@ -97,13 +116,31 @@ Identical structure to `Rnxv3Obs.to_ds()` — a drop-in replacement:
 | Dimensions | `(epoch, sid)` |
 | `epoch` coordinate | `datetime64[ns]`, UTC |
 | `sid` coordinate | `"SV\|Band\|Code"` string (e.g. `G07\|L1\|C`) |
-| Data variables | `SNR` (always), `Pseudorange`, `Phase`, `Doppler` (on request) |
+| Data variables | `SNR`, `Pseudorange`, `Phase`, `Doppler`, `SSI`, `Smoothing`, `HalfCycle` (select with `keep_data_vars`) |
 | Validation | Passes `validate_dataset()` |
 
-### Metadata dataset — `to_metadata_ds()`
+`SNR` includes the MeasExtra CN0HighRes value of the same epoch where
+MeasExtra is logged (0.03125 dB-Hz resolution instead of 0.25 dB-Hz).
+`SSI` is derived from `SNR` (RINEX 3.04 banding); SBF has no native SSI.
 
-A second dataset carrying receiver geometry and quality monitoring signals, stored
-under `{receiver}/metadata/sbf_obs` in the Icechunk store.
+`to_ds_and_auxiliary(store_raw_observables=True)` adds the observables before
+the receiver's corrections: `SNR_raw`, `Pseudorange_unsmoothed`,
+`Pseudorange_raw`, `Phase_raw` (NaN where MeasExtra is not logged).
+
+!!! note "Observations that are dropped"
+
+    SVID 62 marks a GLONASS satellite whose slot number the receiver does not
+    know (RefGuide-4.14.0, Section 4.1.9). It has no RINEX satellite code, and
+    several such satellites would share one identifier, so its observations
+    are not stored.
+
+### Metadata dataset — `sbf_obs`
+
+The second dataset returned by `to_ds_and_auxiliary()`, under the key
+`"sbf_obs"`. It has the same `epoch` and `sid` coordinates as the
+observations dataset and carries receiver geometry and quality monitoring
+signals. The pipeline stores it under `{receiver}/metadata/sbf_obs` in the
+Icechunk store.
 
 **Epoch-level scalar variables** (dimension: `epoch`):
 
@@ -113,13 +150,20 @@ under `{receiver}/metadata/sbf_obs` in the Icechunk store.
 | `hdop` | DOP block | `1` | Horizontal DOP |
 | `vdop` | DOP block | `1` | Vertical DOP |
 | `n_sv` | PVTGeodetic | `1` | Number of SVs used in fix |
-| `h_accuracy` | PVTGeodetic | `m` | 2DRMS horizontal accuracy (~95 %) |
-| `v_accuracy` | PVTGeodetic | `m` | 2σ vertical accuracy (~95 %) |
+| `h_accuracy_m` | PVTGeodetic | `m` | 2DRMS horizontal accuracy (~95 %) |
+| `v_accuracy_m` | PVTGeodetic | `m` | 2σ vertical accuracy (~95 %) |
 | `pvt_mode` | PVTGeodetic | `1` | Fix type (see flag table) |
-| `mean_corr_age` | PVTGeodetic | `s` | Age of differential corrections |
+| `mean_corr_age_s` | PVTGeodetic | `s` | Age of differential corrections |
 | `cpu_load` | ReceiverStatus | `percent` | Receiver CPU utilisation |
-| `temperature` | ReceiverStatus | `degC` | Board temperature |
+| `temperature_c` | ReceiverStatus | `degC` | Receiver temperature |
 | `rx_error` | ReceiverStatus | `1` | Error bit-field (see bitmask table) |
+| `qual_overall` | QualityInd | `1` | Overall quality score (0-10, -1 unknown) |
+| `qual_gnss_main` | QualityInd | `1` | GNSS signals, main antenna |
+| `qual_rf_main` | QualityInd | `1` | RF power level, main antenna |
+| `qual_cpu` | QualityInd | `1` | CPU headroom |
+| `qual_scintillation` | QualityInd | `1` | Scintillation score (firmware ≥ 4.15.1) |
+| `spoofing_flag` | RFStatus | `1` | 1 = signals may not be authentic |
+| `nma_fail_flag` | RFStatus | `1` | 1 = non-authentic navigation message detected (NMA) |
 
 **Per-signal variables** (dimensions: `epoch × sid`):
 
@@ -136,6 +180,8 @@ under `{receiver}/metadata/sbf_obs` in the Icechunk store.
 | `cum_loss_cont` | MeasExtra | `1` | Cycle-slip counter (modulo 256; Δ ≠ 0 → slip) |
 | `car_mp_corr_cycles` | MeasExtra | `cycles` | Carrier-phase multipath correction |
 | `cn0_highres_correction` | MeasExtra | `dB-Hz` | CN0HighRes sub-quantisation correction (applied to SNR automatically) |
+| `tracking_status_raw` | ChannelStatus | `1` | Tracking status bit field, 2 bits per signal (main antenna) |
+| `pvt_status_raw` | ChannelStatus | `1` | PVT usage bit field, 2 bits per signal (main antenna) |
 
 !!! tip "Field decoding formulas"
 
@@ -158,10 +204,12 @@ under `{receiver}/metadata/sbf_obs` in the Icechunk store.
 | `0` | No solution |
 | `1` | StandAlone — autonomous from broadcast ephemeris |
 | `2` | Differential GNSS (DGNSS) |
-| `3` | Fixed RTK |
-| `4` | Float RTK |
-| `5` | SBAS-aided |
-| `6` | MovingBase |
+| `3` | Fixed location |
+| `4` | RTK with fixed ambiguities |
+| `5` | RTK with float ambiguities |
+| `6` | SBAS-aided |
+| `7` | Moving-base RTK with fixed ambiguities |
+| `8` | Moving-base RTK with float ambiguities |
 | `10` | Precise Point Positioning (PPP) |
 
 !!! info "In the dataset"
@@ -169,10 +217,15 @@ under `{receiver}/metadata/sbf_obs` in the Icechunk store.
     ```python
     meta_ds["pvt_mode"].attrs
     # {
-    #     "long_name": "PVT fix mode",
-    #     "flag_values": [0, 1, 2, 3, 4, 5, 6, 10],
-    #     "flag_meanings": "no_solution standalone dgnss fixed_rtk float_rtk sbas moving_base ppp",
+    #     "long_name": "PVT solution mode",
     #     "units": "1",
+    #     "flag_values": [0, 1, 2, 3, 4, 5, 6, 7, 8, 10],
+    #     "flag_meanings": "no_pvt stand_alone differential fixed_location "
+    #                      "rtk_fixed_ambiguities rtk_float_ambiguities sbas_aided "
+    #                      "moving_base_rtk_fixed_ambiguities "
+    #                      "moving_base_rtk_float_ambiguities ppp",
+    #     "source": "SBF PVTGeodetic block (Block 4007) — reported by receiver firmware",
+    #     ...
     # }
     ```
 
@@ -187,30 +240,33 @@ Test a specific flag with `(rx_error & flag_mask) != 0`.
 
 | Bit mask | Flag meaning |
 | -------- | ------------ |
-| `8` (bit 3) | Software watchdog reset |
-| `16` (bit 4) | Antenna problem detected |
-| `32` (bit 5) | Receiver congestion |
-| `64` (bit 6) | CPU overload |
-| `512` (bit 9) | Invalid configuration |
-| `1024` (bit 10) | Out of geofence |
-| `2048` (bit 11) | Reserved |
+| `8` (bit 3) | Software warning or error |
+| `16` (bit 4) | Watchdog expired since power-on |
+| `32` (bit 5) | Antenna overcurrent |
+| `64` (bit 6) | Output data congestion |
+| `256` (bit 8) | Missed external events |
+| `512` (bit 9) | CPU load above 90 % |
+| `1024` (bit 10) | Invalid configuration |
+| `2048` (bit 11) | Out of geofence |
+
+Source: RefGuide-4.14.0, ReceiverStatus, field RxError, p.398.
 
 !!! example "Decoding the bitmask"
 
     ```python
     import numpy as np
 
-    rx_error = meta_ds["rx_error"].values          # int16 array (epoch,)
+    rx_error = meta_ds["rx_error"].values          # int32 array (epoch,)
 
-    sw_watchdog  = (rx_error & 8)   != 0            # bit 3
-    antenna_prob = (rx_error & 16)  != 0            # bit 4
-    cpu_overload = (rx_error & 64)  != 0            # bit 6
+    software     = (rx_error & 8)   != 0            # bit 3
+    antenna      = (rx_error & 32)  != 0            # bit 5
+    cpu_overload = (rx_error & 512) != 0            # bit 9
 
-    print(f"Epochs with software errors: {sw_watchdog.sum()}")
-    print(f"Epochs with antenna issues:  {antenna_prob.sum()}")
+    print(f"Epochs with software errors: {software.sum()}")
+    print(f"Epochs with antenna issues:  {antenna.sum()}")
     ```
 
-    `rx_error = 48` means both bit 4 (antenna) and bit 5 (congestion) are set simultaneously.
+    `rx_error = 48` means both bit 4 (watchdog) and bit 5 (antenna) are set simultaneously.
 
 ---
 
@@ -260,25 +316,26 @@ interoperability and scientific reproducibility.
     ```python
     meta_ds["pdop"].attrs
     # {
-    #     "long_name":     "Position Dilution of Precision",
-    #     "standard_name": "position_dilution_of_precision",
-    #     "units":         "1",
-    #     "source":        "SBF DOP block",
-    #     "comment":       "PDOP = sqrt(σ_x² + σ_y² + σ_z²) / σ_R ...",
-    #     "references":    "Septentrio AsteRx SB3 ProBase Firmware v4.14.0 ...",
+    #     "long_name":  "Position Dilution of Precision",
+    #     "units":      "1",
+    #     "source":     "SBF DOP block (Block 4001), reported by receiver firmware",
+    #     "comment":    "PDOP = √(Qxx + Qyy + Qzz), where Q is the position covariance ...",
+    #     "references": "Septentrio AsteRx SB3 ProBase Firmware v4.14.0 Reference Guide, ...",
     # }
     ```
 
-=== "theta"
+=== "broadcast_theta"
 
     ```python
-    meta_ds["theta"].attrs
+    meta_ds["broadcast_theta"].attrs
     # {
-    #     "long_name":     "Polar angle",
-    #     "standard_name": "polar_angle",
-    #     "units":         "degrees",
-    #     "source":        "SBF SatVisibility block",
-    #     "comment":       "theta = 90 - elevation; 0 = overhead, 90 = horizon",
+    #     "long_name":     "Satellite polar angle (broadcast ephemeris)",
+    #     "short_name":    "θ_B",
+    #     "standard_name": "sensor_polar_angle",
+    #     "units":         "rad",
+    #     "source":        "SBF SatVisibility block (Block 4012) — reported by receiver firmware",
+    #     "comment":       "Polar angle from vertical: 0 = overhead, π/2 = horizon. ...",
+    #     "references":    "Septentrio AsteRx SB3 ProBase Firmware v4.14.0 Reference Guide, ...",
     # }
     ```
 
@@ -289,9 +346,11 @@ interoperability and scientific reproducibility.
     # {
     #     "long_name":     "Receiver error status bit field",
     #     "units":         "1",
-    #     "flag_masks":    [8, 16, 32, 64, 512, 1024, 2048],
-    #     "flag_meanings": "software_watchdog antenna congestion cpu_overload ...",
-    #     "source":        "SBF ReceiverStatus block",
+    #     "flag_masks":    [8, 16, 32, 64, 256, 512, 1024, 2048],
+    #     "flag_meanings": "software watchdog antenna congestion missedevent cpuoverload "
+    #                      "invalidconfig outofgeofence",
+    #     "source":        "SBF ReceiverStatus block — reported by receiver firmware",
+    #     ...
     # }
     ```
 
@@ -300,11 +359,15 @@ interoperability and scientific reproducibility.
     ```python
     meta_ds["pvt_mode"].attrs
     # {
-    #     "long_name":     "PVT fix mode",
-    #     "units":         "1",
-    #     "flag_values":   [0, 1, 2, 3, 4, 5, 6, 10],
-    #     "flag_meanings": "no_solution standalone dgnss fixed_rtk float_rtk sbas moving_base ppp",
-    #     "source":        "SBF PVTGeodetic block",
+    #     "long_name": "PVT solution mode",
+    #     "units": "1",
+    #     "flag_values": [0, 1, 2, 3, 4, 5, 6, 7, 8, 10],
+    #     "flag_meanings": "no_pvt stand_alone differential fixed_location "
+    #                      "rtk_fixed_ambiguities rtk_float_ambiguities sbas_aided "
+    #                      "moving_base_rtk_fixed_ambiguities "
+    #                      "moving_base_rtk_float_ambiguities ppp",
+    #     "source": "SBF PVTGeodetic block (Block 4007) — reported by receiver firmware",
+    #     ...
     # }
     ```
 
@@ -327,22 +390,19 @@ interoperability and scientific reproducibility.
     print(reader.systems)              # ["E", "G", "R", ...]
 
     # Observations only
-    obs_ds = reader.to_ds(
-        keep_data_vars=["SNR", "Pseudorange", "Phase", "Doppler"],
-        write_global_attrs=True,
-    )
+    obs_ds = reader.to_ds(keep_data_vars=["SNR", "Pseudorange", "Phase", "Doppler"])
 
-    # Metadata only
-    meta_ds = reader.to_metadata_ds()
+    # Observations and metadata
+    obs_ds, aux = reader.to_ds_and_auxiliary()
+    meta_ds = aux["sbf_obs"]
     ```
 
 === "Combined single-pass (pipeline)"
 
     ```python
-    # Recommended: one binary scan, two datasets
+    # One binary scan, two datasets
     obs_ds, aux_dict = reader.to_ds_and_auxiliary(
         keep_data_vars=["SNR", "Pseudorange"],
-        write_global_attrs=True,
     )
     meta_ds = aux_dict["sbf_obs"]
     ```
@@ -367,6 +427,8 @@ interoperability and scientific reproducibility.
 === "SID filtering + geometry mask"
 
     ```python
+    import numpy as np
+
     # All GPS signals
     gps = daily_obs.sel(sid=[s for s in daily_obs.sid.values if s.startswith("G")])
 
@@ -374,7 +436,7 @@ interoperability and scientific reproducibility.
     l1c = daily_obs.sel(sid=[s for s in daily_obs.sid.values if "|L1C|" in s])
 
     # Polar angle filter: elevation ≥ 20° → theta ≤ 70°
-    theta_mask = daily_meta["theta"] <= 70
+    theta_mask = daily_meta["broadcast_theta"] <= np.deg2rad(70)
     snr_high_el = daily_obs["SNR"].where(theta_mask)
     ```
 
@@ -384,19 +446,21 @@ interoperability and scientific reproducibility.
 
 !!! info "Why a combined scan?"
 
-    The pipeline always calls `to_ds_and_auxiliary()` rather than making two
-    separate calls. This avoids reading and parsing the binary file twice.
+    The pipeline always calls `to_ds_and_auxiliary()`, which reads and parses
+    the binary file once and builds both datasets from the same decoded
+    observations.
 
 ```
 ┌─────────────────────────────────────────────────┐
 │                  SBF file                        │
 │  MeasEpoch  PVTGeodetic  DOP  SatVisibility …   │
 └───────────────────────┬─────────────────────────┘
-                        │ single parser.read() pass
+                        │ single parser.read() pass,
+                        │ blocks grouped by time stamp
         ┌───────────────┴────────────────┐
         ▼                                ▼
-  obs accumulators              metadata accumulators
-  (SNR, PR, phase, Doppler)     (DOP, PVT, theta, phi, …)
+  MeasEpoch + MeasExtra         SatVisibility, DOP, PVT,
+  (SNR, PR, phase, Doppler)     status, quality (same epoch)
         │                                │
         ▼                                ▼
    obs_ds (epoch × sid)        meta_ds (epoch × sid)
@@ -448,8 +512,8 @@ obs_ds, aux = reader.to_ds_and_auxiliary(keep_data_vars=["SNR"])
 sbf_obs = aux["sbf_obs"]
 
 # theta/phi are already in sbf_obs — no coordinate transform needed
-theta = sbf_obs["theta"]  # polar angle (degrees)
-phi = sbf_obs["phi"]      # geographic azimuth (degrees)
+theta = sbf_obs["broadcast_theta"]  # polar angle (rad)
+phi = sbf_obs["broadcast_phi"]      # geographic azimuth (rad)
 ```
 
 !!! tip "When to use broadcast vs agency final"
@@ -517,11 +581,10 @@ See [:octicons-arrow-right-24: Satellite Catalog](satellite-catalog.md) for the 
 | `source_format` | `"rinex3"` | `"sbf"` |
 | `to_ds()` | ✓ | ✓ |
 | `iter_epochs()` | ✓ | ✓ |
-| `to_metadata_ds()` | — | ✓ |
 | `to_ds_and_auxiliary()` | Returns `{}` aux | Returns `{"sbf_obs": meta_ds}` |
 | Broadcast ephemeris | Requires `.YYp` NAV file (planned) | Built-in via SatVisibility |
 | SID discovery | Header-based (all declared SVs) | Observation-based (tracked SVs only) |
-| SNR quantization | ~0.001 dB | 0.25 dB (hardware) |
+| SNR quantization | ~0.001 dB | 0.25 dB-Hz; 0.03125 dB-Hz with MeasExtra |
 
 ---
 
@@ -542,15 +605,16 @@ block is present.
 ## GLONASS FDMA Frequencies
 
 GLONASS signals use Frequency Division Multiple Access (FDMA). The centre
-frequency depends on the frequency slot number (FreqNr, K ∈ {−7, …, +6}):
+frequency depends on the frequency number K = FreqNr − 8
+(RefGuide-4.14.0: K ∈ {−7, …, +13}; RefGuide-4.15.1: K ∈ {−7, …, +6}):
 
 $$f_{L1} = 1602 \text{ MHz} + K \times 0.5625 \text{ MHz}$$
 $$f_{L2} = 1246 \text{ MHz} + K \times 0.4375 \text{ MHz}$$
 
-`SbfReader` pre-scans all `ChannelStatus` blocks to build a complete
-`SVID → FreqNr` cache before iterating `MeasEpoch` blocks. This ensures
-accurate frequency assignments even for GLONASS epochs near the start of
-the file, before the receiver has broadcast the ChannelStatus block.
+`SbfReader` takes FreqNr from bits 3-7 of the `ObsInfo` field of each
+MeasEpoch Type1 sub-block (RefGuide-4.14.0, p.262), so every GLONASS
+observation carries its own frequency number, from the first epoch of the
+file on. Type2 sub-blocks take it from their Type1 sub-block.
 
 ---
 

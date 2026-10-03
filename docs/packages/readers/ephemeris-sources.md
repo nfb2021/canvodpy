@@ -125,22 +125,26 @@ broadcast navigation message and embeds them in the `SatVisibility` block.
 ```
 1. SBF reader scans file: extracts SatVisibility blocks
 2. Azimuth and elevation are pre-computed by receiver firmware
-3. Stored in sbf_obs auxiliary dataset as theta/phi
-4. Aligned to observation epochs and SIDs
+3. Stored in the sbf_obs auxiliary dataset as broadcast_theta/broadcast_phi
+   (radians), on the epochs and SIDs of the observations: each value comes
+   from the SatVisibility block with the same time stamp as the observations
+4. Copied to theta/phi of the observations dataset
 5. No download, no Zarr cache, no coordinate transform needed
 ```
 
 !!! info "Theta and phi convention"
 
-    SBF SatVisibility provides polar angle (theta = 90° - elevation)
-    and geographic azimuth (0° = North, clockwise). Same convention
-    used throughout canvodpy — no conversion needed.
+    SBF SatVisibility provides elevation and geographic azimuth
+    (0° = North, clockwise). The reader converts elevation to the polar
+    angle (theta = 90° - elevation) and both angles to radians, the
+    convention used throughout canvodpy.
 
 ### Configuration
 
 ```yaml
 processing:
-  ephemeris_source: "broadcast"
+  params:
+    ephemeris_source: "broadcast"
   # reader_format must be "sbf" for this to work
 ```
 
