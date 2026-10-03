@@ -175,70 +175,59 @@ def _warn_if_aux_grid_coarser(
         )
 
 
-def preprocess_with_hermite_aux(
+def _preprocess_file(
     rnx_file: Path,
     keep_vars: list[str] | None,
     aux_zarr_path: Path,
-    receiver_position: ECEFPosition,
+    receiver_positions: dict[str, ECEFPosition],
     receiver_type: str,
-    keep_sids: list[str] | None = None,
-    reader_name: str = "rinex3",
+    keep_sids: list[str] | None,
+    reader_name: str,
+    store_radial_distance: bool,
+    store_sbf_raw_observables: bool,
+    pad_global_sid: bool,
+    aux_group: str | None,
     use_sbf_geometry: bool = False,
-    store_radial_distance: bool = False,
-    store_sbf_raw_observables: bool = True,
     broadcast_canopy_file: Path | None = None,
     broadcast_canopy_fmt: str | None = None,
-    pad_global_sid: bool = True,
-    aux_group: str | None = None,
-) -> tuple[Path, xr.Dataset, dict[str, xr.Dataset], dict[str, list[str]]]:
-    """Read RINEX and compute coordinates using Hermite-interpolated aux data from Zarr.
+) -> tuple[Path, dict[str, xr.Dataset], dict[str, xr.Dataset], dict[str, list[str]]]:
+    """Read one GNSS file once and add the geometry for each receiver position.
 
-    This function runs in separate processes, so it must be at module level.
-    The aux data has already been interpolated using proper Hermite splines.
+    The single implementation behind ``preprocess_with_hermite_aux`` (one
+    position) and ``preprocess_reference_with_hermite_aux_fanout`` (one
+    position per canopy pairing). Reading, the ephemeris join and the SID
+    filter run once; only the geometry step depends on the position.
 
     Parameters
     ----------
-    rnx_file : Path
-        RINEX file path
-    keep_vars : List[str]
-        Variables to keep
-    aux_zarr_path : Path
-        Path to preprocessed aux data Zarr store (with Hermite interpolation)
-    receiver_position : ECEFPosition
-        Receiver position (computed once)
-    receiver_type : str
-        Receiver type
-    keep_sids : list[str] | None, default None
-        List of specific SIDs to keep. If None, keeps all possible SIDs.
+    receiver_positions : dict[str, ECEFPosition]
+        ``{name: position}``; one augmented dataset is returned per entry.
     use_sbf_geometry : bool, default False
-        If True and reader_name is "sbf", skip external orbit/clock downloads
-        and transfer theta/phi directly from SBF SatVisibility blocks via
-        ``SbfBroadcastProvider`` (ephemeris-based angles only; raises if the
-        file has none).
-    store_radial_distance : bool, default False
-        If True, keep the radial distance variable ``r`` in the output.
-    broadcast_canopy_file : Path | None, default None
-        Path to the matching canopy SBF file. When provided (for reference
-        receivers in shared position mode), its sbf_obs theta/phi override
-        the reference file's own geometry.
-    broadcast_canopy_fmt : str | None, default None
-        Reader format for the canopy file (e.g. "sbf").
-    aux_group : str | None, default None
-        Zarr group within ``aux_zarr_path`` to read this day's aux data
-        from (§44 shared-cache mode). ``None`` reads the store root,
-        matching legacy per-site aux Zarr layout.
+        SBF files only, and only with a single position: take θ/φ from the
+        SBF SatVisibility blocks via ``SbfBroadcastProvider`` instead of the
+        aux data.
+
+    Other parameters are those of ``preprocess_with_hermite_aux``.
 
     Returns
     -------
-    tuple[Path, xr.Dataset, dict[str, xr.Dataset], dict[str, list[str]]]
-        File path, augmented dataset with phi/theta/r, auxiliary datasets dict,
-        and SID issue dict with keys ``not_in_global_space``, ``dropped_by_filter``,
-        ``dropped_no_ephemeris``.
+    tuple[Path, dict[str, xr.Dataset], dict[str, xr.Dataset], dict[str, list[str]]]
+        File path, ``{name: augmented dataset}``, auxiliary datasets dict,
+        and SID issue dict with keys ``not_in_global_space``,
+        ``dropped_by_filter``, ``dropped_no_ephemeris``.
 
     """
     import re
 
-    from canvod.readers.preprocessing import reset_sid_accumulators
+    from canvod.readers.preprocessing import (
+        flush_sid_accumulators,
+        reset_sid_accumulators,
+    )
+
+    sbf_geometry = reader_name == "sbf" and use_sbf_geometry
+    if sbf_geometry and len(receiver_positions) != 1:
+        msg = "SBF geometry supports exactly one receiver position per file"
+        raise ValueError(msg)
 
     # Clear any SID-issue accumulation left over from earlier work in this
     # process (e.g. aux/ephemeris padding during Phase 1 never flushes) so
@@ -254,7 +243,7 @@ def preprocess_with_hermite_aux(
     ):
         try:
             t0 = time.perf_counter()
-            log.info("rinex_preprocessing_started")
+            log.info("rinex_preprocessing_started", pairings=len(receiver_positions))
 
             # 1. Read GNSS file (reader selected via factory)
             log.debug("reading_gnss_file", file=str(rnx_file.name), reader=reader_name)
@@ -272,7 +261,7 @@ def preprocess_with_hermite_aux(
             t_rinex = time.perf_counter()
 
             # SBF-geometry fast path: use receiver-reported theta/phi, skip ephemeris
-            if reader_name == "sbf" and use_sbf_geometry:
+            if sbf_geometry:
                 from canvod.auxiliary.ephemeris.provider import SbfBroadcastProvider
 
                 # Reference receiver in shared position mode: the canopy
@@ -282,14 +271,13 @@ def preprocess_with_hermite_aux(
                     canopy_reader_format=broadcast_canopy_fmt or "sbf",
                     keep_sids=keep_sids,
                 )
+                ((name, receiver_position),) = receiver_positions.items()
                 ds = provider.augment_dataset(
                     ds, receiver_position, aux_datasets=aux_datasets
                 )
-                from canvod.readers.preprocessing import flush_sid_accumulators
-
                 sid_issues = flush_sid_accumulators()
                 sid_issues["dropped_no_ephemeris"] = []
-                return rnx_file, ds, aux_datasets, sid_issues
+                return rnx_file, {name: ds}, aux_datasets, sid_issues
             log.debug(
                 "rinex_loaded",
                 dims=dict(ds.sizes),
@@ -364,15 +352,20 @@ def preprocess_with_hermite_aux(
                     ),
                 )
 
-            # 4. Compute spherical coordinates (phi, theta, r) from ephemerides
+            # 4. Compute spherical coordinates (phi, theta, r) from
+            # ephemerides, once per receiver position: the only step that
+            # depends on the position.
             log.debug("computing_spherical_coordinates")
-            ds_augmented = _compute_spherical_coords_fast(
-                ds,
-                aux_slice,
-                receiver_position,
-            )
-            if not store_radial_distance and "r" in ds_augmented:
-                ds_augmented = ds_augmented.drop_vars("r")
+            ds_augmented: dict[str, xr.Dataset] = {}
+            for name, receiver_position in receiver_positions.items():
+                ds_name = _compute_spherical_coords_fast(
+                    ds,
+                    aux_slice,
+                    receiver_position,
+                )
+                if not store_radial_distance and "r" in ds_name:
+                    ds_name = ds_name.drop_vars("r")
+                ds_augmented[name] = ds_name
             t_coords = time.perf_counter()
 
             log.info(
@@ -382,7 +375,7 @@ def preprocess_with_hermite_aux(
                 aux_load_seconds=round(t_aux - t_rinex, 2),
                 sid_filter_seconds=round(t_sid - t_aux, 4),
                 coords_seconds=round(t_coords - t_sid, 2),
-                dataset_size=dict(ds_augmented.sizes),
+                pairings=len(receiver_positions),
             )
 
             # Additive stage_timing for the performance dashboard's
@@ -424,11 +417,89 @@ def preprocess_with_hermite_aux(
             )
             raise
 
-    from canvod.readers.preprocessing import flush_sid_accumulators
-
     sid_issues = flush_sid_accumulators()
     sid_issues["dropped_no_ephemeris"] = sorted(rinex_only)
     return rnx_file, ds_augmented, aux_datasets, sid_issues
+
+
+def preprocess_with_hermite_aux(
+    rnx_file: Path,
+    keep_vars: list[str] | None,
+    aux_zarr_path: Path,
+    receiver_position: ECEFPosition,
+    receiver_type: str,
+    keep_sids: list[str] | None = None,
+    reader_name: str = "rinex3",
+    use_sbf_geometry: bool = False,
+    store_radial_distance: bool = False,
+    store_sbf_raw_observables: bool = True,
+    broadcast_canopy_file: Path | None = None,
+    broadcast_canopy_fmt: str | None = None,
+    pad_global_sid: bool = True,
+    aux_group: str | None = None,
+) -> tuple[Path, xr.Dataset, dict[str, xr.Dataset], dict[str, list[str]]]:
+    """Read RINEX and compute coordinates using Hermite-interpolated aux data from Zarr.
+
+    This function runs in separate processes, so it must be at module level.
+    The aux data has already been interpolated using proper Hermite splines.
+
+    Parameters
+    ----------
+    rnx_file : Path
+        RINEX file path
+    keep_vars : List[str]
+        Variables to keep
+    aux_zarr_path : Path
+        Path to preprocessed aux data Zarr store (with Hermite interpolation)
+    receiver_position : ECEFPosition
+        Receiver position (computed once)
+    receiver_type : str
+        Receiver type
+    keep_sids : list[str] | None, default None
+        List of specific SIDs to keep. If None, keeps all possible SIDs.
+    use_sbf_geometry : bool, default False
+        If True and reader_name is "sbf", skip external orbit/clock downloads
+        and transfer theta/phi directly from SBF SatVisibility blocks via
+        ``SbfBroadcastProvider`` (ephemeris-based angles only; raises if the
+        file has none).
+    store_radial_distance : bool, default False
+        If True, keep the radial distance variable ``r`` in the output.
+    broadcast_canopy_file : Path | None, default None
+        Path to the matching canopy SBF file. When provided (for reference
+        receivers in shared position mode), its sbf_obs theta/phi override
+        the reference file's own geometry.
+    broadcast_canopy_fmt : str | None, default None
+        Reader format for the canopy file (e.g. "sbf").
+    aux_group : str | None, default None
+        Zarr group within ``aux_zarr_path`` to read this day's aux data
+        from (§44 shared-cache mode). ``None`` reads the store root,
+        matching legacy per-site aux Zarr layout.
+
+    Returns
+    -------
+    tuple[Path, xr.Dataset, dict[str, xr.Dataset], dict[str, list[str]]]
+        File path, augmented dataset with phi/theta/r, auxiliary datasets dict,
+        and SID issue dict with keys ``not_in_global_space``, ``dropped_by_filter``,
+        ``dropped_no_ephemeris``.
+
+    """
+    path, by_position, aux_datasets, sid_issues = _preprocess_file(
+        rnx_file,
+        keep_vars,
+        aux_zarr_path,
+        {receiver_type: receiver_position},
+        receiver_type,
+        keep_sids,
+        reader_name,
+        store_radial_distance,
+        store_sbf_raw_observables,
+        pad_global_sid,
+        aux_group,
+        use_sbf_geometry=use_sbf_geometry,
+        broadcast_canopy_file=broadcast_canopy_file,
+        broadcast_canopy_fmt=broadcast_canopy_fmt,
+    )
+    return path, by_position[receiver_type], aux_datasets, sid_issues
 
 
 def _task_args(func: Any, is_reference_fanout: bool, **kwargs: Any) -> tuple:
@@ -462,17 +533,16 @@ def preprocess_reference_with_hermite_aux_fanout(
     """Read a shared reference file once, then compute geometry per canopy pairing.
 
     A reference receiver paired with N canopies gets read, SID-filtered, and
-    ephemeris-joined identically for every pairing -- only the geometry step
+    ephemeris-joined identically for every pairing; only the geometry step
     (``_compute_spherical_coords_fast``, which substitutes in the paired
-    canopy's position) actually differs per pairing. Doing steps 1-3 once
-    here, inside a single worker call, avoids re-parsing the same file N
-    times (dev/todo_later.md §47) without serializing the parsed
-    intermediate across a process-pool boundary.
+    canopy's position) differs per pairing. Doing the shared steps once,
+    inside a single worker call, avoids re-parsing the same file N times
+    without serializing the parsed intermediate across a process-pool
+    boundary. Each pairing's dataset is identical to what
+    ``preprocess_with_hermite_aux`` returns for that canopy's position.
 
-    This intentionally omits the ``use_sbf_geometry``/broadcast-canopy fast
-    path from ``preprocess_with_hermite_aux`` -- confirmed out of scope,
-    no live deployment pairs ``use_sbf_geometry=True`` with shared position
-    mode.
+    The ``use_sbf_geometry`` path of ``preprocess_with_hermite_aux`` is not
+    available here: it takes θ/φ from one SBF file, not per position.
 
     Parameters
     ----------
@@ -484,6 +554,8 @@ def preprocess_reference_with_hermite_aux_fanout(
         Zarr group within ``aux_zarr_path`` to read this day's aux data
         from (§44 shared-cache mode). ``None`` reads the store root.
 
+    Other parameters are those of ``preprocess_with_hermite_aux``.
+
     Returns
     -------
     tuple[Path, dict[str, xr.Dataset], dict[str, xr.Dataset], dict[str, list[str]]]
@@ -491,164 +563,19 @@ def preprocess_reference_with_hermite_aux_fanout(
         ``canopy_positions``, auxiliary datasets dict, and SID issue dict.
 
     """
-    import re
-
-    from canvod.readers.preprocessing import reset_sid_accumulators
-
-    # Clear any SID-issue accumulation left over from earlier work in this
-    # process (e.g. aux/ephemeris padding during Phase 1 never flushes) so
-    # this call's sid_issues reflects only its own pad_to_global_sid() calls.
-    reset_sid_accumulators()
-
-    log = get_logger(__name__).bind(
-        file=str(rnx_file.name), receiver_type=receiver_type
+    return _preprocess_file(
+        rnx_file,
+        keep_vars,
+        aux_zarr_path,
+        canopy_positions,
+        receiver_type,
+        keep_sids,
+        reader_name,
+        store_radial_distance,
+        store_sbf_raw_observables,
+        pad_global_sid,
+        aux_group,
     )
-
-    with stage_timer(
-        "rinex.process_file", file=str(rnx_file.name), receiver=receiver_type
-    ):
-        try:
-            t0 = time.perf_counter()
-            log.info("rinex_preprocessing_started", pairings=len(canopy_positions))
-
-            # 1. Read GNSS file (reader selected via factory)
-            from canvodpy.factories import ReaderFactory
-
-            rnx = ReaderFactory.create(reader_name, fpath=rnx_file)
-            ds, aux_datasets = rnx.to_ds_and_auxiliary(
-                keep_data_vars=keep_vars,
-                write_global_attrs=True,
-                keep_sids=keep_sids,
-                store_raw_observables=store_sbf_raw_observables,
-                pad_global_sid=pad_global_sid,
-            )
-            ds.attrs["File Hash"] = rnx.file_hash
-            t_rinex = time.perf_counter()
-
-            if keep_vars:
-                available_vars = [var for var in keep_vars if var in ds.data_vars]
-                if available_vars:
-                    ds = ds[available_vars]
-
-            # 2. Open preprocessed aux data and select matching epochs
-            aux_store = xr.open_zarr(
-                aux_zarr_path,
-                group=aux_group,
-                decode_timedelta=True,
-                consolidated=False,
-            )
-            _warn_if_aux_grid_coarser(log, rnx_file, ds, aux_store)
-            aux_slice = aux_store.sel(epoch=ds.epoch, method="nearest")
-            aux_slice = aux_slice.load()
-            t_aux = time.perf_counter()
-
-            # 3. Find common SIDs between RINEX and aux data (inner join)
-            rinex_sids = set(ds.sid.values)
-            aux_sids = set(aux_slice.sid.values)
-            common_sids = sorted(rinex_sids.intersection(aux_sids))
-
-            if not common_sids:
-                log.error(
-                    "sid_intersection_empty",
-                    rinex_sids=len(rinex_sids),
-                    aux_sids=len(aux_sids),
-                )
-                raise ValueError(
-                    f"No common SIDs found between RINEX ({len(rinex_sids)} sids) "
-                    f"and aux data ({len(aux_sids)} sids)"
-                )
-
-            rinex_only = rinex_sids - aux_sids
-            aux_only = aux_sids - rinex_sids
-            ds = ds.sel(sid=common_sids)
-            aux_slice = aux_slice.sel(sid=common_sids)
-            t_sid = time.perf_counter()
-
-            log.debug(
-                "sid_filtering_complete",
-                rinex_sids=len(rinex_sids),
-                aux_sids=len(aux_sids),
-                common_sids=len(common_sids),
-                rinex_only=len(rinex_only),
-                aux_only=len(aux_only),
-            )
-            if rinex_only:
-                log.warning(
-                    "sids_dropped_no_ephemeris",
-                    file=str(rnx_file.name),
-                    count=len(rinex_only),
-                    sids=sorted(rinex_only),
-                    hint=(
-                        "These SIDs were observed in the file but have no matching "
-                        "entry in the ephemeris/clock aux data and will be absent "
-                        "from the stored dataset."
-                    ),
-                )
-
-            # 4. Compute spherical coordinates (phi, theta, r) once per
-            # pairing -- the only step that depends on which canopy's
-            # position is substituted in.
-            ds_augmented_by_pairing: dict[str, xr.Dataset] = {}
-            for pairing_name, receiver_position in canopy_positions.items():
-                ds_augmented = _compute_spherical_coords_fast(
-                    ds,
-                    aux_slice,
-                    receiver_position,
-                )
-                if not store_radial_distance and "r" in ds_augmented:
-                    ds_augmented = ds_augmented.drop_vars("r")
-                ds_augmented_by_pairing[pairing_name] = ds_augmented
-            t_coords = time.perf_counter()
-
-            log.info(
-                "rinex_preprocessing_complete",
-                total_seconds=round(t_coords - t0, 2),
-                rinex_read_seconds=round(t_rinex - t0, 2),
-                aux_load_seconds=round(t_aux - t_rinex, 2),
-                sid_filter_seconds=round(t_sid - t_aux, 4),
-                coords_seconds=round(t_coords - t_sid, 2),
-                pairings=len(canopy_positions),
-            )
-
-            _date_key_match = re.search(r"_R_(\d{7})\d{4}_", rnx_file.name)
-            _date_key = _date_key_match.group(1) if _date_key_match else None
-            _stage_ctx = {"receiver": receiver_type, "date_key": _date_key}
-            log.info(
-                "stage_timing",
-                stage="reading",
-                duration_seconds=round(t_rinex - t0, 2),
-                status="ok",
-                **_stage_ctx,
-            )
-            log.info(
-                "stage_timing",
-                stage="validating",
-                duration_seconds=round(t_sid - t_aux, 4),
-                status="ok",
-                **_stage_ctx,
-            )
-            log.info(
-                "stage_timing",
-                stage="augmenting",
-                duration_seconds=round((t_aux - t_rinex) + (t_coords - t_sid), 2),
-                status="ok",
-                **_stage_ctx,
-            )
-        except (OSError, RuntimeError, ValueError, ValidationError) as e:
-            log.error(
-                "rinex_preprocessing_failed",
-                error=str(e),
-                exception=type(e).__name__,
-                file=str(rnx_file.name),
-                traceback_available=True,
-            )
-            raise
-
-    from canvod.readers.preprocessing import flush_sid_accumulators
-
-    sid_issues = flush_sid_accumulators()
-    sid_issues["dropped_no_ephemeris"] = sorted(rinex_only)
-    return rnx_file, ds_augmented_by_pairing, aux_datasets, sid_issues
 
 
 def _compute_spherical_coords_fast(
