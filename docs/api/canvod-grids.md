@@ -19,7 +19,6 @@ Hemispheric grid implementations and spatial analysis tools.
         - FibonacciBuilder
         - HTMBuilder
         - CellAggregator
-        - AdaptedVODWorkflow
 
 ## Grid Core
 
@@ -75,14 +74,6 @@ Hemispheric grid implementations and spatial analysis tools.
 
 ::: canvod.grids.analysis.per_cell_filtering
 
-### Hampel Filtering
-
-::: canvod.grids.analysis.hampel_filtering
-
-### Sigma-Clip Filtering
-
-::: canvod.grids.analysis.sigma_clip_filter
-
 ### Masking
 
 ::: canvod.grids.analysis.masking
@@ -110,7 +101,3 @@ Hemispheric grid implementations and spatial analysis tools.
 ### Analysis Storage
 
 ::: canvod.grids.analysis.analysis_storage
-
-## Workflows
-
-::: canvod.grids.workflows.adapted_workflow

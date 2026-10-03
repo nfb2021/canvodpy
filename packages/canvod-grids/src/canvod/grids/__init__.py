@@ -36,17 +36,10 @@ from canvod.grids.operations import (
     store_dataset_with_cell_ids,
     store_grid,
 )
-from canvod.grids.workflows import (
-    AdaptedVODWorkflow,
-    check_processed_data_status,
-    get_workflow_for_store,
-)
 
 __version__ = "0.1.0"
 
 __all__ = [
-    # Workflows (require canvod-store at runtime)
-    "AdaptedVODWorkflow",
     # Core
     "BaseGridBuilder",
     # Aggregation
@@ -70,7 +63,6 @@ __all__ = [
     "aggregate_data_to_grid",
     "analyze_diurnal_patterns",
     "analyze_spatial_patterns",
-    "check_processed_data_status",
     "compute_global_average",
     "compute_hemisphere_percell",
     "compute_percell_timeseries",
@@ -78,7 +70,6 @@ __all__ = [
     "compute_zenith_percell",
     "create_hemigrid",
     "extract_grid_vertices",
-    "get_workflow_for_store",
     "grid_to_dataset",
     "load_grid",
     "store_dataset_with_cell_ids",

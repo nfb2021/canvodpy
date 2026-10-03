@@ -406,7 +406,6 @@ class VODWorkflow:
         # TODO: Use AugmentationFactory for preprocessing
         # For now, pass through
         # augmentations = [
-        #     AugmentationFactory.create("hampel", window=5),
         #     AugmentationFactory.create("interpolate", method="linear"),
         # ]
         # for aug in augmentations:

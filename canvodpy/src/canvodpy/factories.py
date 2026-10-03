@@ -396,13 +396,9 @@ class AugmentationFactory(ComponentFactory):
 
     Examples
     --------
-    >>> from canvod.auxiliary.augmentation import HampelFilter
-    >>> AugmentationFactory.register("hampel", HampelFilter)
-    >>> step = AugmentationFactory.create(
-    ...     "hampel",
-    ...     window_size=5,
-    ...     n_sigma=3.0,
-    ... )
+    >>> from canvod.auxiliary.augmentation import ClockCorrectionAugmentation
+    >>> AugmentationFactory.register("clock", ClockCorrectionAugmentation)
+    >>> step = AugmentationFactory.create("clock")
     """
 
     _registry: ClassVar[dict[str, type]] = {}

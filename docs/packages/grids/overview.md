@@ -191,8 +191,6 @@ The `GridData` object returned by all builders provides:
 | ------ | ------- |
 | `filtering` | Global IQR, Z-score, SID pattern filters |
 | `per_cell_filtering` | Per-cell variants of the above |
-| `hampel_filtering` | Hampel (median-MAD) outlier detection |
-| `sigma_clip_filter` | Numba-accelerated sigma-clipping |
 | `masking` | Spatial and temporal mask construction |
 | `weighting` | Per-cell weight calculators |
 | `solar` | Solar geometry (elevation, azimuth) |
