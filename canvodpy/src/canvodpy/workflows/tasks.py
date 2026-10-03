@@ -24,6 +24,12 @@ import numpy as np
 import structlog
 import xarray as xr
 
+from canvod.auxiliary.interpolation import (
+    ClockConfig,
+    ClockInterpolationStrategy,
+    Sp3Config,
+    Sp3InterpolationStrategy,
+)
 from canvod.auxiliary.pipeline import AuxDataPipeline
 from canvod.auxiliary.position import ECEFPosition
 from canvod.config import load_config
@@ -31,12 +37,6 @@ from canvod.config.models import reference_store_group
 from canvod.readers import MatchedDirs
 from canvod.utils.tools import YYYYDOY
 from canvodpy.orchestrator.discovery import DiscoveredFile
-from canvodpy.orchestrator.interpolator import (
-    ClockConfig,
-    ClockInterpolationStrategy,
-    Sp3Config,
-    Sp3InterpolationStrategy,
-)
 
 logger = structlog.get_logger(__name__)
 

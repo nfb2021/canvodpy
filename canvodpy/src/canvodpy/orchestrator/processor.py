@@ -38,6 +38,12 @@ from canvod.auxiliary.cache_fingerprint import (
     CANONICAL_AUX_GRID_SECONDS,
     compute_aux_cache_fingerprint,
 )
+from canvod.auxiliary.interpolation import (
+    ClockConfig,
+    ClockInterpolationStrategy,
+    Sp3Config,
+    Sp3InterpolationStrategy,
+)
 from canvod.auxiliary.pipeline import AuxDataPipeline
 from canvod.auxiliary.position import (
     ECEFPosition,
@@ -62,12 +68,6 @@ from canvodpy.orchestrator.discovery import (
     canonical_name_for,
     discover_files,
     recipe_file,
-)
-from canvodpy.orchestrator.interpolator import (
-    ClockConfig,
-    ClockInterpolationStrategy,
-    Sp3Config,
-    Sp3InterpolationStrategy,
 )
 
 # ============================================================================

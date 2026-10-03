@@ -64,9 +64,8 @@ Clock corrections are **not** smooth — receiver and satellite clock models are
 from canvod.auxiliary.interpolation import ClockConfig, ClockInterpolationStrategy
 
 config = ClockConfig(
-    window_size=9,          # number of knots to fit (odd, centred)
+    window_size=9,          # samples averaged on each side of a candidate jump
     jump_threshold=1e-6,    # discontinuity detection threshold (seconds)
-    extrapolation="nearest",
 )
 
 interpolator = ClockInterpolationStrategy(config=config)
@@ -74,33 +73,40 @@ result = interpolator.interpolate(clk_data, target_epochs)
 ```
 
 !!! warning "Jump detection"
-    When `|Δt| > jump_threshold` between consecutive CLK knots, the
-    interpolator treats the gap as a boundary and never interpolates
-    across it. The nearest valid knot value is used instead.
+    For each gap between consecutive CLK knots, the interpolator compares
+    the mean of up to `window_size` knots before the gap with the mean of
+    up to `window_size` knots after it. Where the difference exceeds
+    `jump_threshold`, the gap is a jump (for a run of flagged gaps, only the
+    one with the largest difference). The series is split at each jump and
+    interpolated linearly within each segment, never across a jump. Target
+    epochs inside a jump gap, outside the data, or in a segment of a single
+    knot are NaN. `window_size=1` compares the two neighbouring knots only.
 
 ---
 
 ## Custom Strategies
 
-Implement `InterpolationStrategy` to plug in custom interpolation logic:
+Subclass `Interpolator` to write your own interpolation:
 
 ```python
-from canvod.auxiliary.interpolation import InterpolationStrategy
+import numpy as np
 import xarray as xr
+from canvod.auxiliary.interpolation import Interpolator
 
-class CustomStrategy(InterpolationStrategy):
+class CustomStrategy(Interpolator):
     """Example: Lagrange polynomial interpolation."""
 
     def interpolate(
         self,
-        aux_ds: xr.Dataset,
-        target_epochs: xr.DataArray,
+        ds: xr.Dataset,
+        target_epochs: np.ndarray,
     ) -> xr.Dataset:
         # Your implementation here
         return interpolated_ds
 ```
 
-The strategy is injected into the auxiliary pipeline — no other changes required.
+`canvodpy run` always uses `Sp3InterpolationStrategy` and
+`ClockInterpolationStrategy`; a custom strategy is for your own scripts.
 
 ---
 

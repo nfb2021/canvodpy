@@ -108,8 +108,8 @@ processing:
 |-----------|---------|--------|
 | SP3/CLK download | canvod-auxiliary | `pipeline.py` |
 | FTP with fallback | canvod-auxiliary | `core/downloader.py` |
-| Hermite interpolation | canvodpy | `orchestrator/interpolator.py` |
-| Clock interpolation (optional, `aux_data.fetch_clock`) | canvodpy | `orchestrator/interpolator.py` |
+| Hermite interpolation | canvod-auxiliary | `interpolation/interpolator.py` |
+| Clock interpolation (optional, `aux_data.fetch_clock`) | canvod-auxiliary | `interpolation/interpolator.py` |
 | ECEF → theta/phi/r | canvod-auxiliary | `position/spherical_coords.py` |
 
 ---
