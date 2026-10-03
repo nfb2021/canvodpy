@@ -363,7 +363,7 @@ class AdaptedVODWorkflow:
         if "cell_id_equal_area_2deg" not in vod_ds_complete:
             grid = create_hemigrid(grid_type="equal_area", angular_resolution=2)
             vod_ds_complete = add_cell_ids_to_ds_fast(
-                vod_ds_complete, grid, "equal_area_2deg", data_var="VOD"
+                vod_ds_complete, grid, "equal_area_2deg"
             )
 
         logger.info("Dataset loaded: %s", dict(vod_ds_complete.sizes))
@@ -664,7 +664,7 @@ def _create_processed_data_fast_hampel(
     if "cell_id_equal_area_2deg" not in vod_ds_complete:
         grid = create_hemigrid(grid_type="equal_area", angular_resolution=2)
         vod_ds_complete = add_cell_ids_to_ds_fast(
-            vod_ds_complete, grid, "equal_area_2deg", data_var="VOD"
+            vod_ds_complete, grid, "equal_area_2deg"
         )
 
     logger.info("Dataset loaded: %s", dict(vod_ds_complete.sizes))
