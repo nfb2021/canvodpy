@@ -68,7 +68,11 @@ class HistogramBinsConfig(_StrictModel):
 
 
 class StatisticsConfig(_StrictModel):
-    """Streaming statistics configuration."""
+    """Streaming statistics configuration.
+
+    Reserved for a future release: no run reads this section yet, so setting
+    it has no effect.
+    """
 
     enabled: bool = Field(False, description="Enable streaming statistics collection")
     variables: list[str] = Field(
@@ -115,6 +119,7 @@ class PreprocessingConfig(_StrictModel):
     )
     statistics: StatisticsConfig = Field(
         default_factory=StatisticsConfig,
+        description="Streaming statistics; reserved, not read by any run yet",
     )
 
 
