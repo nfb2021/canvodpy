@@ -2318,6 +2318,45 @@ class RinexDataProcessor:
     # plan sidesteps for the other two strategies, and redesigning it is
     # separate future work).
 
+    def _write_sbf_obs(
+        self,
+        session: Any,
+        receiver_name: str,
+        aux_datasets: dict[Path, dict[str, xr.Dataset]] | None,
+        written_fnames: Sequence[Path],
+        *,
+        replace_overlaps: bool = False,
+    ) -> None:
+        """Add the ``sbf_obs`` of the written files into the observations' session.
+
+        Only files whose observations were written in *session* contribute,
+        so ``sbf_obs`` covers the same files as the observations and lands
+        in the same commit. Skipped with ``store_sbf_metadata: false``.
+        Errors propagate, so the caller does not commit either.
+        """
+        if not aux_datasets or not self._config.processing.params.store_sbf_metadata:
+            return
+        parts = [
+            aux_datasets[fname]["sbf_obs"]
+            for fname in written_fnames
+            if "sbf_obs" in aux_datasets.get(fname, {})
+        ]
+        if not parts:
+            return
+        n_epochs = self.site.gnss_store.write_metadata_parts(
+            parts,
+            receiver_name,
+            "sbf_obs",
+            session,
+            replace_overlaps=replace_overlaps,
+        )
+        self._logger.info(
+            "sbf_obs_written",
+            receiver=receiver_name,
+            files=len(parts),
+            epochs=n_epochs,
+        )
+
     def _prepare_group_write(
         self,
         augmented_datasets: list[tuple[Path, xr.Dataset]],
@@ -2382,6 +2421,7 @@ class RinexDataProcessor:
             reader_format=plan.reader_format,
         )
 
+        written_fnames: list[Path] = []
         for idx, (fname, ds) in enumerate(plan.augmented_datasets):
             try:
                 rel_path = self.site.gnss_store.rel_path_for_commit(fname)
@@ -2439,6 +2479,8 @@ class RinexDataProcessor:
                 result.metadata_records.append(
                     self._logbook_row(fname, ds, rinex_hash, exists, rel_path, action)
                 )
+                if action in ("written", "appended"):
+                    written_fnames.append(fname)
 
                 dt_file = time.perf_counter() - t_file
                 result.file_append_seconds.append(dt_file)
@@ -2459,6 +2501,10 @@ class RinexDataProcessor:
 
             except (OSError, RuntimeError, ValueError):  # fmt: skip
                 log.exception("Failed to process %s", fname.name)
+
+        self._write_sbf_obs(
+            fork_session, receiver_name, plan.aux_datasets, written_fnames
+        )
 
         # Log-book rows are written into this fork by the caller once the
         # batch commit message is known (_write_receiver_batch_forked).
@@ -2653,6 +2699,9 @@ class RinexDataProcessor:
                         prepass_session,
                         group=receiver_name,
                         encoding=self.site.gnss_store.chunk_encoding_for(ds_clean),
+                    )
+                    self._write_sbf_obs(
+                        prepass_session, receiver_name, aux_datasets, [first_fname]
                     )
                     row = self._logbook_row(
                         first_fname,
@@ -3005,32 +3054,6 @@ class RinexDataProcessor:
                 exc_info=True,
             )
 
-        # STEP 9: SBF metadata datasets (sbf_obs) per receiver, unchanged
-        # from `_append_to_icechunk`'s STEP 6 -- kept per-group since each
-        # group's aux_datasets differ.
-        for name, r in results.items():
-            if not r.aux_datasets:
-                continue
-            sbf_parts = [
-                aux_dict["sbf_obs"]
-                for aux_dict in r.aux_datasets.values()
-                if "sbf_obs" in aux_dict
-            ]
-            if sbf_parts:
-                try:
-                    self.site.gnss_store.append_metadata_datasets(
-                        sbf_parts, name, "sbf_obs", "main"
-                    )
-                    n_epochs = sum(p.sizes.get("epoch", 0) for p in sbf_parts)
-                    log.info(
-                        "Wrote sbf_obs metadata for %s (%d parts, %d epochs)",
-                        name,
-                        len(sbf_parts),
-                        n_epochs,
-                    )
-                except Exception:
-                    log.warning("Failed to write sbf_obs for %s", name, exc_info=True)
-
         return results
 
     def _append_to_icechunk(
@@ -3184,6 +3207,7 @@ class RinexDataProcessor:
                 "overwritten": 0,
             }
             metadata_records = []  # Collect metadata to write before commit
+            written_fnames: list[Path] = []  # files whose observations are stored
 
             try:
                 # STEP 3: Process all datasets using ONLY to_icechunk()
@@ -3319,6 +3343,8 @@ class RinexDataProcessor:
                                 fname, ds, rinex_hash, exists, rel_path, action
                             )
                         )
+                        if action in ("initial", "written", "appended", "overwritten"):
+                            written_fnames.append(fname)
 
                         # Per-file append timing (dev/todo_later.md perf-degradation
                         # investigation, 2026-07-14): breaks open the "process_data"
@@ -3348,7 +3374,17 @@ class RinexDataProcessor:
                 t6 = time.time()
                 log.info("Dataset processing complete in %.2fs", t6 - t5)
 
-                # STEP 4: Write metadata, then single commit for data + metadata
+                # STEP 4: Write sbf_obs and the log book, then a single commit
+                # for data + metadata. An overwrite rewrote the group with
+                # mode="w", which deletes its metadata/ subgroups, so sbf_obs
+                # is rebuilt from the session's base snapshot.
+                self._write_sbf_obs(
+                    session,
+                    receiver_name,
+                    aux_datasets,
+                    written_fnames,
+                    replace_overlaps=is_overwrite,
+                )
                 summary = ", ".join(f"{k}={v}" for k, v in actions.items() if v > 0)
                 commit_msg = _with_run_id(
                     f"[v{version}] {receiver_name} "
@@ -3620,35 +3656,6 @@ class RinexDataProcessor:
                 "canvod-store-metadata not available or write failed",
                 exc_info=True,
             )
-
-        # STEP 6: Write SBF metadata datasets (sbf_obs) per receiver
-        # Each file produces its own sbf_obs dataset.  We write them
-        # incrementally to the store (first=overwrite, rest=append) to
-        # avoid an expensive xr.concat in memory.
-        if aux_datasets:
-            sbf_parts = [
-                aux_dict["sbf_obs"]
-                for aux_dict in aux_datasets.values()
-                if "sbf_obs" in aux_dict
-            ]
-            if sbf_parts:
-                try:
-                    self.site.gnss_store.append_metadata_datasets(
-                        sbf_parts, receiver_name, "sbf_obs", branch
-                    )
-                    n_epochs = sum(p.sizes.get("epoch", 0) for p in sbf_parts)
-                    log.info(
-                        "Wrote sbf_obs metadata for %s (%d parts, %d epochs)",
-                        receiver_name,
-                        len(sbf_parts),
-                        n_epochs,
-                    )
-                except Exception:
-                    log.warning(
-                        "Failed to write sbf_obs for %s",
-                        receiver_name,
-                        exc_info=True,
-                    )
 
         # Promote temp branch to main after successful commit
         if is_overwrite and temp_branch:

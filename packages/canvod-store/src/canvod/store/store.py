@@ -1453,6 +1453,88 @@ class MyIcechunkStore:
                 _with_run_id(f"[v{version}] metadata/{name} for {group_name}")
             )
 
+    def write_metadata_parts(
+        self,
+        parts: list[xr.Dataset],
+        group_name: str,
+        name: str,
+        session: Any,
+        *,
+        replace_overlaps: bool = False,
+    ) -> int:
+        """Add per-file metadata datasets to *{group_name}/metadata/{name}*.
+
+        Writes into *session* without committing, so the caller commits the
+        metadata together with the observations it belongs to. Creates the
+        dataset if it does not exist yet, otherwise appends along ``epoch``.
+
+        Parameters
+        ----------
+        parts : list[xr.Dataset]
+            Per-file metadata datasets with an ``epoch`` dim, one per file
+            whose observations are written in the same session.
+        group_name : str
+            Target group (the observations' store group).
+        name : str
+            Dataset name under ``metadata/`` (e.g. ``"sbf_obs"``).
+        session : Session or ForkSession
+            Open writable session of the observations' write.
+        replace_overlaps : bool, default False
+            Rewrite the dataset from the session's base snapshot without
+            the stored epochs that fall in the epoch range of any part, as
+            the ``overwrite`` store strategy does for the observations.
+            Needed whenever the observation group was rewritten with
+            ``mode="w"`` in *session*, which deletes its ``metadata/``
+            subgroups.
+
+        Returns
+        -------
+        int
+            Number of epochs written.
+        """
+        if not parts:
+            msg = "parts list is empty"
+            raise ValueError(msg)
+
+        path = f"{group_name}/metadata/{name}"
+        clean = [
+            self._cleanse_dataset_attrs(self._normalize_encodings(part))
+            for part in parts
+        ]
+        if replace_overlaps:
+            # Read the stored dataset from the snapshot this session started
+            # from: rewriting the observation group with mode="w" (overwrite
+            # strategy) has already deleted its metadata/ subgroups in the
+            # session itself. Opened lazily, so only the rewrite streams it.
+            base = self.repo.readonly_session(snapshot_id=session.snapshot_id)
+            if zarr.open_group(base.store, mode="r").get(path) is not None:
+                stored = xr.open_zarr(base.store, group=path, consolidated=False)
+                epochs = stored["epoch"].values
+                keep = np.ones(epochs.size, dtype=bool)
+                for part in clean:
+                    start = part["epoch"].values.min()
+                    end = part["epoch"].values.max()
+                    keep &= (epochs < start) | (epochs > end)
+                rewrite = xr.concat(
+                    [stored.isel(epoch=keep), *clean],
+                    dim="epoch",
+                    combine_attrs="override",
+                ).sortby("epoch")
+                self._to_icechunk_throttled(
+                    self._normalize_encodings(rewrite), session, group=path, mode="w"
+                )
+                return sum(part.sizes.get("epoch", 0) for part in clean)
+
+        exists = zarr.open_group(session.store, mode="r").get(path) is not None
+        for i, part in enumerate(clean):
+            if i == 0 and not exists:
+                self._to_icechunk_throttled(part, session, group=path, mode="w")
+            else:
+                self._to_icechunk_throttled(
+                    part, session, group=path, append_dim="epoch"
+                )
+        return sum(part.sizes.get("epoch", 0) for part in clean)
+
     def append_metadata_datasets(
         self,
         parts: list[xr.Dataset],
@@ -1460,11 +1542,12 @@ class MyIcechunkStore:
         name: str,
         branch: str = "main",
     ) -> str:
-        """Write metadata datasets incrementally — no in-memory concat.
+        """Append metadata datasets in their own commit — no in-memory concat.
 
-        The first dataset initialises the group (``mode="w"``), subsequent
-        datasets are appended along ``epoch``.  All writes happen inside a
-        single session/commit so the operation is atomic.
+        Creates *{group_name}/metadata/{name}* if it does not exist yet,
+        otherwise appends along ``epoch``. Prefer
+        :meth:`write_metadata_parts` inside the session that writes the
+        observations, so both land in one commit.
 
         Parameters
         ----------
@@ -1482,26 +1565,9 @@ class MyIcechunkStore:
         str
             Icechunk snapshot ID.
         """
-        if not parts:
-            msg = "parts list is empty"
-            raise ValueError(msg)
-
         version = get_version_from_pyproject()
-        path = f"{group_name}/metadata/{name}"
-        total_epochs = 0
-
         with self.writable_session(branch) as session:
-            for i, part in enumerate(parts):
-                ds = self._normalize_encodings(part)
-                ds = self._cleanse_dataset_attrs(ds)
-                if i == 0:
-                    self._to_icechunk_throttled(ds, session, group=path, mode="w")
-                else:
-                    self._to_icechunk_throttled(
-                        ds, session, group=path, append_dim="epoch"
-                    )
-                total_epochs += ds.sizes.get("epoch", 0)
-
+            total_epochs = self.write_metadata_parts(parts, group_name, name, session)
             return session.commit(
                 _with_run_id(
                     f"[v{version}] metadata/{name} for {group_name} "
@@ -1762,6 +1828,7 @@ class MyIcechunkStore:
         branch: str = "main",
         commit_message: str | None = None,
         dedup: bool = False,
+        metadata_datasets: dict[str, xr.Dataset] | None = None,
     ) -> bool:
         """Write or append a dataset to a group.
 
@@ -1794,6 +1861,10 @@ class MyIcechunkStore:
             writing.  If the dataset would be a duplicate, the write is skipped,
             a warning is logged, and ``False`` is returned.  Set to ``True`` for
             RINEX/SBF ingest; leave ``False`` for VOD and derived-data stores.
+        metadata_datasets : dict[str, xr.Dataset] or None
+            Per-file metadata datasets (e.g. ``{"sbf_obs": meta_ds}``) added
+            to ``{group_name}/metadata/<name>`` in the same commit as
+            *dataset*, see :meth:`write_metadata_parts`.
 
         Returns
         -------
@@ -1828,6 +1899,8 @@ class MyIcechunkStore:
                 self._to_icechunk_throttled(
                     dataset, session, group=group_name, append_dim=append_dim
                 )
+                for name, meta_ds in (metadata_datasets or {}).items():
+                    self.write_metadata_parts([meta_ds], group_name, name, session)
                 if commit_message is None:
                     commit_message = f"Appended to group '{group_name}'"
                 session.commit(_with_run_id(commit_message))
@@ -1839,6 +1912,8 @@ class MyIcechunkStore:
                 self._to_icechunk_throttled(
                     dataset, session, group=group_name, mode="w"
                 )
+                for name, meta_ds in (metadata_datasets or {}).items():
+                    self.write_metadata_parts([meta_ds], group_name, name, session)
                 if commit_message is None:
                     commit_message = f"Created group '{group_name}'"
                 session.commit(_with_run_id(commit_message))

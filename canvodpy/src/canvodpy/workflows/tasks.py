@@ -18,7 +18,7 @@ from __future__ import annotations
 import datetime
 import shutil
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import structlog
@@ -740,8 +740,10 @@ def process_sbf(
       ``fetch_aux_data``).  Geometry quality matches the RINEX pipeline at
       the cost of a 12-18 day product lag.
 
-    In both modes SBF observables (SNR, Phase, Pseudorange, Doppler) and
-    metadata (PVT, DOP, SatVisibility as ``sbf_obs``) are written.
+    In both modes SBF observables (SNR, Phase, Pseudorange, Doppler) are
+    written, and with ``store_sbf_metadata`` (default) the file's metadata
+    (PVT, DOP, SatVisibility as ``sbf_obs``) goes into the same commit, under
+    ``{group}/metadata/sbf_obs`` of each store group the file is written to.
 
     Parameters
     ----------
@@ -772,6 +774,7 @@ def process_sbf(
     date_obj = _resolve_date(yyyydoy)
     keep_vars = config.processing.params.keep_gnss_observables
     keep_sids = config.sids.get_sids()
+    store_sbf_metadata = config.processing.params.store_sbf_metadata
 
     use_broadcast = aux_zarr_path is None
     # preprocess_with_hermite_aux always requires an aux path argument;
@@ -825,7 +828,6 @@ def process_sbf(
             continue
 
         # Process each SBF file
-        sbf_obs_parts: list[xr.Dataset] = []
         for sbf_file in sbf_files:
             try:
                 _path, augmented_ds, aux_datasets, _sid_issues = (
@@ -844,9 +846,12 @@ def process_sbf(
                 logger.exception("Failed to process SBF %s", sbf_file.name)
                 continue
 
-            # Collect sbf_obs metadata for later writing
-            if "sbf_obs" in aux_datasets:
-                sbf_obs_parts.append(aux_datasets["sbf_obs"])
+            # sbf_obs goes into the same commit as the file's observations
+            metadata_datasets = (
+                {"sbf_obs": aux_datasets["sbf_obs"]}
+                if store_sbf_metadata and "sbf_obs" in aux_datasets
+                else None
+            )
 
             file_hash = augmented_ds.attrs.get("File Hash")
             time_start = augmented_ds.epoch.min().values
@@ -873,29 +878,17 @@ def process_sbf(
                     )
                     continue
 
-                research_site.gnss_store.write_or_append_group(
+                written = research_site.gnss_store.write_or_append_group(
                     dataset=augmented_ds,
                     group_name=group,
                     commit_message=f"Airflow SBF ingest {sbf_file.name}",
                     dedup=True,
+                    metadata_datasets=metadata_datasets,
                 )
                 total_files_written += 1
-
-        # Write sbf_obs metadata per receiver — no in-memory concat
-        if sbf_obs_parts:
-            try:
-                gnss_store_any = cast(Any, research_site.gnss_store)
-                gnss_store_any.append_metadata_datasets(
-                    sbf_obs_parts, recv_name, "sbf_obs"
+                sbf_obs_written = sbf_obs_written or (
+                    written and metadata_datasets is not None
                 )
-                sbf_obs_written = True
-                logger.info(
-                    "process_sbf: wrote sbf_obs for %s (%d parts)",
-                    recv_name,
-                    len(sbf_obs_parts),
-                )
-            except Exception:
-                logger.exception("Failed to write sbf_obs for %s", recv_name)
 
         receivers_processed.append(recv_name)
         logger.info(

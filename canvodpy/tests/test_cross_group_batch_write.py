@@ -309,3 +309,64 @@ def test_case_c_fail_fast_no_partial_merge(
     assert ref_ds.sizes["epoch"] == 10  # still just the seed -- ref_2 never landed
     can_ds = store.read_group("canopy_01").compute()
     assert can_ds.sizes["epoch"] == 10  # still just the seed -- can_2 never landed
+
+
+class _SbfConfig:
+    """Just the processing.params.store_sbf_metadata switch."""
+
+    def __init__(self, store_sbf_metadata: bool) -> None:
+        params = type("P", (), {"store_sbf_metadata": store_sbf_metadata})()
+        self.processing = type("C", (), {"params": params})()
+
+
+def _sbf_obs_for(ds: xr.Dataset) -> xr.Dataset:
+    return xr.Dataset(
+        {"pdop": xr.DataArray(np.ones(ds.sizes["epoch"], np.float32), dims=["epoch"])},
+        coords={"epoch": ds["epoch"].values},
+    )
+
+
+def test_sbf_obs_lands_with_observations_and_is_not_duplicated(
+    store: MyIcechunkStore,
+) -> None:
+    """sbf_obs is written in the observations' commits, for written files only.
+
+    Day 1 creates the group (pre-pass + fork), day 2 appends; a rerun of
+    day 2 skips its files, so sbf_obs must not grow. Before, sbf_obs was
+    written in a separate commit after the data, and each call replaced
+    the whole dataset with the current day.
+    """
+    proc = _TestProcessor(store)
+    proc._config = _SbfConfig(store_sbf_metadata=True)
+
+    def batch(day: str, ids: list[str]):
+        files = [
+            (Path(f"{i}.sbf"), _make_ds(i, slot=n, day=day)) for n, i in enumerate(ids)
+        ]
+        aux = {fname: {"sbf_obs": _sbf_obs_for(ds)} for fname, ds in files}
+        return [("canopy_01", files, [f for f, _ in files], aux, None, "sbf")]
+
+    proc._write_receiver_batch_forked(batch("2025-03-28", ["d1a", "d1b"]))
+    proc._write_receiver_batch_forked(batch("2025-03-29", ["d2a", "d2b"]))
+    n_snapshots = len(list(store.repo.ancestry(branch="main")))
+    proc._write_receiver_batch_forked(batch("2025-03-29", ["d2a", "d2b"]))
+
+    obs = store.read_group("canopy_01")
+    meta = store.read_metadata_dataset("canopy_01", "sbf_obs").compute()
+    np.testing.assert_array_equal(
+        np.sort(meta["epoch"].values), np.sort(obs["epoch"].values)
+    )
+    assert meta.sizes["epoch"] == 4 * 10
+    # The skipped rerun commits only its log-book rows, no sbf_obs commit
+    assert len(list(store.repo.ancestry(branch="main"))) == n_snapshots + 1
+
+
+def test_store_sbf_metadata_false_skips_sbf_obs(store: MyIcechunkStore) -> None:
+    proc = _TestProcessor(store)
+    proc._config = _SbfConfig(store_sbf_metadata=False)
+    ds = _make_ds("only", slot=0)
+    aux = {Path("only.sbf"): {"sbf_obs": _sbf_obs_for(ds)}}
+    proc._write_receiver_batch_forked(
+        [("canopy_01", [(Path("only.sbf"), ds)], [Path("only.sbf")], aux, None, "sbf")]
+    )
+    assert not store.metadata_dataset_exists("canopy_01", "sbf_obs")

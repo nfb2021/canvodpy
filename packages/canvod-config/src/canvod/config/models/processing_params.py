@@ -154,6 +154,18 @@ class ProcessingParams(_StrictModel):
             "Set to False to reduce dataset size when raw quantities are not needed."
         ),
     )
+    store_sbf_metadata: bool = Field(
+        True,
+        description=(
+            "When reading SBF files, store the per-file SBF metadata dataset "
+            "(sbf_obs: SatVisibility geometry and its almanac/ephemeris source, "
+            "MeasExtra, PVT, DOP, receiver status and quality indicators) under "
+            "{group}/metadata/sbf_obs, in the same commit as the observations. "
+            "Set to False to save space; broadcast geometry "
+            "(ephemeris_source='broadcast') still works, since it uses sbf_obs "
+            "in memory."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_resource_mode(self) -> ProcessingParams:

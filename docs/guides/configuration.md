@@ -278,6 +278,8 @@ processing:
 | `params.days_per_batch`         | 1–30                     | Calendar days pooled per parallel processing wave.                                                                                                                                       |
 | `params.resource_mode`          | `auto`, `manual`         | `auto` detects available CPU cores and leaves two free for the operating system. `manual` enforces explicit limits (`n_max_threads` is then required) — use this on shared servers.      |
 | `params.store_radial_distance`  | `true`, `false`          | Whether to store satellite radial distance in the output.                                                                                                                                |
+| `params.store_sbf_raw_observables` | `true`, `false`       | SBF only: add the pre-correction observables (`SNR_raw`, `Pseudorange_unsmoothed`, `Pseudorange_raw`, `Phase_raw`) to the observations. Default `true`. |
+| `params.store_sbf_metadata`     | `true`, `false`          | SBF only: store the per-file metadata dataset `sbf_obs` (SatVisibility geometry, MeasExtra, PVT, DOP, receiver status) under `{group}/metadata/sbf_obs`, in the same commit as the observations. Default `true`. |
 | `storage.gnss_store_strategy`   | `skip`, `overwrite`, `unsafe_append` | What to do when a file already exists in the store. `skip` (default) is the normal case. See warning below before ever using `unsafe_append`.                              |
 
 For a full explanation of how `resource_mode`, `days_per_batch`, and `n_max_threads` interact

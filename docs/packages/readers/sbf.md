@@ -140,8 +140,12 @@ the receiver's corrections: `SNR_raw`, `Pseudorange_unsmoothed`,
 The second dataset returned by `to_ds_and_auxiliary()`, under the key
 `"sbf_obs"`. It has the same `epoch` and `sid` coordinates as the
 observations dataset and carries receiver geometry and quality monitoring
-signals. The pipeline stores it under `{receiver}/metadata/sbf_obs` in the
-Icechunk store.
+signals. The pipeline stores it under `{group}/metadata/sbf_obs` in the
+Icechunk store, in the same commit as the observations of the same files:
+a file whose observations are skipped as already stored adds no `sbf_obs`
+either, so `sbf_obs` covers exactly the stored observation files. Set
+`processing.params.store_sbf_metadata: false` to not store it; broadcast
+geometry still works, since it uses `sbf_obs` in memory.
 
 **Epoch-level scalar variables** (dimension: `epoch`):
 
