@@ -119,28 +119,21 @@ processing:
     #                            # negative needs root/CAP_SYS_NICE on Linux, else no-op)
 
   # ---------------------------------------------------------------------------
-  # Preprocessing Pipeline
+  # Preprocessing (optional; nothing is applied unless set)
   # ---------------------------------------------------------------------------
-  # NOTE (2026-07-10): temporal_aggregation and grid_assignment below only feed
-  # canvod-ops's build_default_pipeline()/Pipeline (TemporalAggregate,
-  # GridAssignment ops) — nothing in the live orchestrator (processor.py,
-  # workflows/tasks.py) or the CLI calls that pipeline yet. Grid-cell
-  # assignment for real ingested data currently happens ad hoc downstream
-  # instead (in whatever consumer reads the store), not from this
-  # angular_resolution value. Intent: once wired in, these become the
-  # community-agreed standard grid resolution + temporal aggregation applied
-  # uniformly across all sites, enforced (not just default) in a future
-  # version.
-  preprocessing:
-    temporal_aggregation:
-      enabled: true
-      freq: "1min"           # pandas offset alias: "1min", "30s", "5min", etc.
-      method: "mean"         # "mean" or "median"
-
-    grid_assignment:
-      enabled: true
-      grid_type: "equal_area"
-      angular_resolution: 2.0  # degrees (0 < value ≤ 90)
+  # `canvodpy run`, the Python API and Airflow apply these operations to each
+  # receiver's files of a day before writing them to the GNSS store: first the
+  # temporal aggregation, then the grid cell assignment. Time bins start at
+  # 00:00 and are labeled with their start; a bin spanning two files is
+  # aggregated from both. Keep the setting for the life of a store: writing
+  # differently preprocessed data into an existing store stops with an error.
+  # preprocessing:
+  #   temporal_aggregation:
+  #     freq: "1min"             # whole number + "s", "min" or "h"; divides one day
+  #     method: "median"         # "mean" or "median"
+  #   grid_assignment:
+  #     grid_type: "equal_area"
+  #     angular_resolution: 2.0  # degrees (0 < value <= 90)
 
   # ---------------------------------------------------------------------------
   # NetCDF Compression (used when writing intermediate .nc files)
@@ -212,9 +205,10 @@ processing:
 # Sites
 # =============================================================================
 # Each top-level key is a site name.  Receivers go under each site.
-# Recipe files live in config/recipes/{recipe_name}.yaml.
-# If canvod-virtualiconvname is installed, recipe files map physical filenames
-# to the canVOD naming convention. Without it, files must already conform.
+# Recipe files live in <config dir>/recipes/<site>/<recipe>.yaml; create one
+# with: just naming-init <site> <recipe>. With canvod-filemap installed, a
+# recipe maps physical filenames to the canVOD naming convention. Without a
+# recipe, files must already follow the convention.
 
 sites:
   my_site:
@@ -234,7 +228,7 @@ sites:
         reader_format: auto          # 'auto', 'rinex3', or 'sbf'
         paired_canopies: all         # 'all' or list of canopy receiver names
         description: null
-        # recipe: my_site_reference  # → config/recipes/my_site_reference.yaml
+        # recipe: my_site_reference  # → <config dir>/recipes/my_site/my_site_reference.yaml
         #                            #   (requires canvod-virtualiconvname)
 
       canopy_01:
@@ -242,7 +236,7 @@ sites:
         directory: 02_canopy
         reader_format: auto
         description: null
-        # recipe: my_site_canopy     # → config/recipes/my_site_canopy.yaml
+        # recipe: my_site_canopy     # → <config dir>/recipes/my_site/my_site_canopy.yaml
 
     vod_analyses:
       canopy_01_vs_reference_01:

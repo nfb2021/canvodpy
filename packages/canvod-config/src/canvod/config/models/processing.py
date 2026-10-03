@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import Field
 
+from canvod.utils.tools import deprecated
+
 from .aux_data import AuxDataConfig
 from .base import _StrictModel
 from .compression import IcechunkConfig, NetcdfCompressionConfig
@@ -32,8 +34,12 @@ class ProcessingConfig(_StrictModel):
     icechunk: IcechunkConfig = Field(default_factory=IcechunkConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
-    preprocessing: PreprocessingConfig = Field(
-        default_factory=PreprocessingConfig,
+    preprocessing: PreprocessingConfig | None = Field(
+        None,
+        description=(
+            "Operations applied to each receiver's data before it is written "
+            "to the GNSS store; none unless set"
+        ),
     )
     references: ReferencesConfig = Field(
         default_factory=ReferencesConfig,
@@ -41,25 +47,19 @@ class ProcessingConfig(_StrictModel):
     )
 
     @property
+    @deprecated(
+        "ProcessingConfig.processing is left over from development and will be removed with the next major version. "
+        "Use ProcessingConfig.params instead."
+    )
     def processing(self) -> ProcessingParams:
         """Deprecated: use .params instead."""
-        import warnings
-
-        warnings.warn(
-            "ProcessingConfig.processing is deprecated; use .params",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         return self.params
 
     @property
+    @deprecated(
+        "ProcessingConfig.compression is left over from development and will be removed with the next major version. "
+        "Use ProcessingConfig.netcdf_compression instead."
+    )
     def compression(self) -> NetcdfCompressionConfig:
         """Deprecated: use .netcdf_compression instead."""
-        import warnings
-
-        warnings.warn(
-            "ProcessingConfig.compression is deprecated; use .netcdf_compression",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         return self.netcdf_compression

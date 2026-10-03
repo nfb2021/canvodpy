@@ -401,7 +401,7 @@ class MyFormatReader(GNSSDataReader):
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `DatasetBuilder(reader)` | builder | Create a new builder |
+| `DatasetBuilder(reader, time_system=...)` | builder | Create a new builder; `time_system` is the time scale of the epochs you add (`"GPS"`, `"GAL"`, `"QZS"`, `"BDT"`, `"IRN"`, `"UTC"`), recorded in the epoch coordinate |
 | `add_epoch(timestamp)` | `int` | Register an epoch, returns its index |
 | `add_signal(sv, band, code)` | `SignalID` | Register a signal (idempotent — same args = same ID) |
 | `set_value(ei, sig, var, value)` | `None` | Set a value for epoch index + signal + variable |
@@ -428,7 +428,7 @@ The builder knows the dtype and metadata for these variables:
 
 | Variable | Dtype | Description |
 |----------|-------|-------------|
-| `SNR` | `float32` | Signal-to-Noise Ratio (dB-Hz) |
+| `SNR` | `float32` | Signal-to-Noise Ratio (dB) |
 | `CN0` | `float32` | Carrier-to-Noise density (dB-Hz) |
 | `Pseudorange` | `float64` | Pseudorange measurement (meters) |
 | `Phase` | `float64` | Carrier phase measurement (cycles) |
@@ -559,7 +559,7 @@ Band names must match what `SignalIDMapper` recognises for frequency resolution.
 | BeiDou | `B1I`, `B1C`, `B2a`, `B2b`, `B3I` |
 | QZSS | `L1`, `L2`, `L5`, `L6` |
 
-Code names are tracking codes (e.g., `C`, `P`, `W`, `I`, `Q`, `X`). The builder does not validate code names — they are stored as-is.
+Code names are RINEX 3 tracking codes (e.g., `C`, `P`, `W`, `I`, `Q`, `X`). The builder does not validate code names — they are stored as-is. Never guess a code your format does not record: the lowercase markers `p`, `l`, `u` exist for exactly that case (see [RINEX v2.11 Parsing](rinex-v2-format.md#lowercase-tracking-code-markers)) and are the only codes `pad_to_global_sid()` keeps besides the real RINEX 3 attributes.
 
 ---
 
@@ -580,7 +580,7 @@ Every reader must produce a Dataset that passes `validate_dataset()`. Here is th
 
 | Coordinate | Dtype | Indexed by | Description |
 |------------|-------|------------|-------------|
-| `epoch` | `datetime64[ns]` | `epoch` | Observation timestamps |
+| `epoch` | `datetime64[ns]` | `epoch` | Observation timestamps; attribute `time_system` gives their time scale |
 | `sid` | `object` (string) | `sid` | Signal ID strings (`"G01\|L1\|C"`) |
 | `sv` | `object` (string) | `sid` | Satellite vehicle (`"G01"`) |
 | `system` | `object` (string) | `sid` | System letter (`"G"`) |

@@ -14,6 +14,7 @@
 
 ```python
 from canvod.viz import HemisphereVisualizer
+
 viz = HemisphereVisualizer(grid_data, style="nordic")
 viz.plot_2d(variable="vod")
 viz.plot_3d(variable="vod")

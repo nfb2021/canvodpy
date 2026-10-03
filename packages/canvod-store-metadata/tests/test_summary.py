@@ -1,0 +1,94 @@
+"""Test the store summary that fills temporal coverage and summaries."""
+
+import icechunk
+import numpy as np
+import zarr
+from test_io import _make_metadata
+
+from canvod.store_metadata import (
+    apply_updates,
+    read_metadata,
+    summarize_store,
+    update_metadata,
+    write_metadata,
+)
+
+
+def _write_group(root: zarr.Group, name: str, n_epochs: int, sids: list[str]) -> None:
+    """A receiver group with CF-encoded epochs, as xarray writes it."""
+    g = root.create_group(name)
+    epoch = g.create_array("epoch", shape=(n_epochs,), dtype="i8")
+    epoch[:] = np.arange(n_epochs) * 5
+    epoch.attrs["units"] = "seconds since 2025-01-01 00:00:00"
+    g.create_array("sid", shape=(len(sids),), dtype=str)[:] = np.array(sids)
+    g.create_array("system", shape=(len(sids),), dtype=str)[:] = np.array(
+        [s[0] for s in sids]
+    )
+    g.create_array("SNR", shape=(n_epochs, len(sids)), dtype="f4")
+    table = g.create_group("metadata/table")
+    table.create_array("rinex_hash", shape=(3,), dtype=str)[:] = np.array(
+        ["a", "b", "b"]
+    )
+    table.create_array("action", shape=(3,), dtype=str)[:] = np.array(
+        ["initial", "appended", "skipped"]
+    )
+
+
+def _make_store(path):
+    repo = icechunk.Repository.create(icechunk.local_filesystem_storage(str(path)))
+    session = repo.writable_session("main")
+    root = zarr.open_group(session.store, mode="w")
+    _write_group(root, "canopy_01", 720, ["G01|L1|C", "E11|E1|C"])
+    _write_group(root, "reference_01_canopy_01", 360, ["G01|L1|C", "C11|B1I|I"])
+    session.commit("data")
+    return path
+
+
+def test_summarize_store(tmp_path):
+    store_path = _make_store(tmp_path / "store")
+
+    updates = summarize_store(
+        store_path, receivers={"canopy_01", "reference_01", "canopy_02"}
+    )
+
+    assert updates["temporal.time_coverage_start"] == "2025-01-01T00:00:00Z"
+    assert updates["temporal.time_coverage_end"] == "2025-01-01T00:59:55Z"
+    assert updates["temporal.time_coverage_duration"] == "PT3595S"
+    assert updates["temporal.time_coverage_resolution"] == "PT5S"
+    assert updates["summaries.total_epochs"] == 720
+    assert updates["summaries.total_sids"] == 3
+    assert updates["summaries.constellations"] == ["BeiDou", "GPS", "Galileo"]
+    assert updates["summaries.variables"] == ["SNR"]
+    assert updates["summaries.file_count"] == 4  # 2 stored files per group
+    assert updates["instruments.receivers.canopy_01.epochs"] == 720
+    assert updates["instruments.receivers.reference_01.epochs"] == 360
+    assert updates["instruments.receivers.reference_01.sids"] == 2
+    assert not any(k.startswith("instruments.receivers.canopy_02") for k in updates)
+
+
+def test_summary_written_into_metadata(tmp_path):
+    store_path = _make_store(tmp_path / "store")
+    write_metadata(store_path, _make_metadata())
+
+    update_metadata(store_path, summarize_store(store_path))
+
+    meta = read_metadata(store_path)
+    assert meta.temporal.collected_start == "2025-01-01T00:00:00Z"
+    assert meta.summaries.temporal_resolution_s == 5.0
+    assert meta.spatial.extent_temporal_interval == [
+        ["2025-01-01T00:00:00Z", "2025-01-01T00:59:55Z"]
+    ]
+
+
+def test_empty_store_gives_no_updates(tmp_path):
+    repo = icechunk.Repository.create(
+        icechunk.local_filesystem_storage(str(tmp_path / "s"))
+    )
+    session = repo.writable_session("main")
+    zarr.open_group(session.store, mode="w")
+    session.commit("init")
+
+    updates = summarize_store(tmp_path / "s")
+
+    assert updates == {}
+    assert apply_updates(_make_metadata(), updates) == _make_metadata()

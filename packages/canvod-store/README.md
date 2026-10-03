@@ -19,7 +19,7 @@ uv pip install canvod-store
 
 ## Configuration (optional)
 
-`MyIcechunkStore`, `GnssResearchSite`, and `IcechunkDataReader` read
+`MyIcechunkStore` and `GnssResearchSite` read
 compression/chunking/resource settings from `canvod-config`'s
 `load_config()`. In a standalone install outside a canvodpy monorepo
 checkout, point it at a settings file with:

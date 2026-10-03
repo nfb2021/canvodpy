@@ -153,10 +153,10 @@ The `GridData` object returned by all builders provides:
 
     ---
 
-    `add_cell_ids_to_ds_fast` — KDTree-accelerated assignment of each
-    observation to a grid cell. O(n log m) for n observations, m cells.
-
-    `add_cell_ids_to_vod_fast` — Same for VOD datasets.
+    `add_cell_ids_to_ds_fast` — assigns each observation to the cell with
+    the nearest center (KDTree, O(n log m) for n observations, m cells),
+    eagerly or lazily for dask arrays. `canvodpy run` uses the same function
+    when grid assignment is set.
 
 -   :fontawesome-solid-floppy-disk: &nbsp; **Grid Persistence**
 
@@ -191,8 +191,6 @@ The `GridData` object returned by all builders provides:
 | ------ | ------- |
 | `filtering` | Global IQR, Z-score, SID pattern filters |
 | `per_cell_filtering` | Per-cell variants of the above |
-| `hampel_filtering` | Hampel (median-MAD) outlier detection |
-| `sigma_clip_filter` | Numba-accelerated sigma-clipping |
 | `masking` | Spatial and temporal mask construction |
 | `weighting` | Per-cell weight calculators |
 | `solar` | Solar geometry (elevation, azimuth) |
@@ -275,5 +273,5 @@ flowchart TD
 !!! example "Try it"
     [06 — Hemispheric Grids](../../notebooks/_build/06_hemispheric_grids.html){target=_blank}
     ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/06_hemispheric_grids.py))
-    · [18 — Grid Exploration](../../notebooks/_build/18_grid_exploration.html){target=_blank}
-    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/18_grid_exploration.py))
+    · [19 — Grid Exploration](../../notebooks/_build/19_grid_exploration.html){target=_blank}
+    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/19_grid_exploration.py))

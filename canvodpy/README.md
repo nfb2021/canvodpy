@@ -18,7 +18,7 @@ Four API levels are available to match your workflow:
 | **L1** | Convenience | `process_date()`, `Site` | Quick exploration, notebooks |
 | **L2** | Fluent | `FluentWorkflow().read().augment().grid().vod()` | Scripted pipelines |
 | **L3** | Low-level | Direct subpackage access | Full control, custom integrations |
-| **L4** | Functional | `read_rinex()`, `augment_with_ephemeris()`, ... | Airflow / orchestrators |
+| **L4** | Functional (deprecated) | `read_rinex()`, `augment_with_ephemeris()`, ... | No longer maintained; gives different results than `canvodpy run` |
 
 ## Installation
 
@@ -63,15 +63,11 @@ from canvod.vod import TauOmegaZerothOrder
 from canvod.store import GnssResearchSite
 ```
 
-### L4: Functional API (Airflow-compatible)
+### L4: Functional API (deprecated)
 
-```python
-from canvodpy import read_rinex, augment_with_ephemeris, assign_grid_cells
-
-ds = read_rinex("path/to/ROSA01TUW_R_20250010000_01D_01S_AA.rnx")
-ds = augment_with_ephemeris(ds, agency="COD")
-ds = assign_grid_cells(ds, grid_type="equal_area", resolution=2.0)
-```
+The single-step functions of `canvodpy.functional` are left over from
+development and will be removed with the next major version. They are no
+longer maintained and give different results than `canvodpy run`.
 
 ## Included Packages
 
@@ -99,8 +95,8 @@ in [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions).
 | Platform | Status | Notes |
 |---|---|---|
 | Linux | Full support | Recommended for production |
-| macOS | Full support | Fully tested |
-| Windows | WSL only | Native not supported (reserved `aux` name) |
+| macOS (Apple silicon) | Full support | Fully tested; Intel Macs not supported (no Python 3.14 `numba`/`llvmlite` wheels) |
+| Windows | Full support | Fully tested; HEALPix grids unavailable (`healpy` publishes no Windows wheels) |
 
 ## Configuration
 

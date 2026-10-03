@@ -10,10 +10,13 @@ outside of ``canvodpy run`` — see dev/todo_later.md §29.
 from __future__ import annotations
 
 import datetime
+from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.console import Console
+
+from canvodpy.cli.options import CONFIG_DIR_OPTION
 
 console = Console()
 
@@ -50,6 +53,7 @@ def vod(
         str,
         typer.Option("--calculator", help="VOD calculator to use."),
     ] = "tau_omega",
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
 ) -> None:
     """Compute VOD in bulk from an existing RINEX store and write the result."""
     from canvodpy.api import Site
@@ -101,6 +105,7 @@ def vod_reconcile(
             help="Backfill the gaps found. Default is a dry-run report only.",
         ),
     ] = False,
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
 ) -> None:
     """Find (and optionally backfill) RINEX-ingested-but-VOD-missing dates.
 

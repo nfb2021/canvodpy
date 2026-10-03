@@ -262,6 +262,14 @@ class TestCanVODFilenameFromFilename:
         assert f.minute == 30
         assert f.period == "15M"
 
+    def test_ubx_file_type(self):
+        f = CanVODFilename.from_filename("ROSA01TUW_R_20250010000_01D_01S_AA.ubx")
+        assert f.file_type == FileType.UBX
+
+    def test_nmea_file_type(self):
+        f = CanVODFilename.from_filename("ROSA01TUW_R_20250010000_01D_01S_AA.nmea")
+        assert f.file_type == FileType.NMEA
+
     def test_compression_empty_string_normalized(self):
         f = CanVODFilename(
             site="ROS",

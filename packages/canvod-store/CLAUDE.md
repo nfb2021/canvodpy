@@ -8,7 +8,7 @@ Versioned Icechunk/Zarr storage layer for GNSS VOD datasets.
 |---|---|
 | `store.py` | `MyIcechunkStore` — main storage backend (read/write/append/metadata) |
 | `viewer.py` | `IcechunkStoreViewer` — inspection, summary, format detection |
-| `reader.py` | `IcechunkDataReader` — lazy Dask-backed dataset reads |
+| `reader.py` | `IcechunkDataReader` — deprecated leftover ingestion path (RINEX v3 only, no augmentation); use `canvodpy run` / `Site.pipeline()` |
 | `manager.py` | `GnssResearchSite` — high-level site management |
 | `file_registry.py` | `FileRegistryManager` — tracks ingested files |
 | `preprocessing.py` | `IcechunkPreprocessor` — data conditioning before write |

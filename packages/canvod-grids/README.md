@@ -44,6 +44,7 @@ print(grid.ncells)  # number of grid cells
 
 # Assign satellite observations to cells
 from canvod.grids import CellAggregator
+
 agg = CellAggregator(grid)
 per_cell = agg.aggregate(ds, variable="vod", method="median")
 ```

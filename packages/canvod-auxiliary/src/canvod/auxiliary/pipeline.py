@@ -9,10 +9,10 @@ import threading
 from pathlib import Path
 
 import numpy as np
+import structlog
 import xarray as xr
 from canvod.readers.matching import MatchedDirs
 
-from canvod.auxiliary._internal import get_logger
 from canvod.auxiliary.core.base import AuxFile
 from canvod.auxiliary.preprocessing import prep_aux_ds
 
@@ -63,7 +63,7 @@ class AuxDataPipeline:
         self._registry: dict[str, dict] = {}
         self._cache: dict[str, xr.Dataset] = {}
         self._lock = threading.Lock()
-        self._logger = get_logger(__name__).bind(
+        self._logger = structlog.get_logger(__name__).bind(
             date=self.matched_dirs.yyyydoy.to_str(),
             sid_filtering=len(keep_sids) if keep_sids else "all",
         )

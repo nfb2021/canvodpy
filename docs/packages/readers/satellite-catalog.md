@@ -32,7 +32,9 @@ machine-readable file — enabling canvodpy to track these properties automatica
 The `SatelliteCatalog` class parses the IGS `igs_satellite_metadata.snx` SINEX file —
 a single authoritative source of satellite metadata maintained by the [IGS](https://gssc.esa.int/navipedia/index.php/International_GNSS_Service_(IGS)){:target="_blank"} (updated
 every 2-4 weeks by [DLR](https://gssc.esa.int/navipedia/index.php/GNSS_Satellite_Orbit_Determination){:target="_blank"}). It provides time-aware queries for all GNSS constellations:
-GPS, GLONASS, Galileo, BeiDou, QZSS, IRNSS, and SBAS.
+GPS, GLONASS, Galileo, BeiDou, QZSS, and IRNSS. SBAS satellites are not in the
+SINEX file; their SV list (`S01`–`S99`, `nn` = PRN − 100) comes from the RINEX
+specification.
 
 !!! tip "Offline-first design"
 

@@ -6,6 +6,7 @@ This module provides common utilities used across all canVODpy packages:
 - Date/time utilities for GNSS data
 - Validation helpers
 - File hashing
+- Deprecation warnings
 
 Examples
 --------
@@ -24,9 +25,14 @@ Examples
 
 >>> from canvod.utils.tools import sanitize_directory
 >>> sanitize_directory(store_path)  # removes stray .DS_Store files
+
+>>> from canvod.utils.tools import deprecated
+>>> @deprecated("Use new_function instead.")
+... def old_function(): ...
 """
 
 from .date_utils import YYDOY, YYYYDOY, get_gps_week_from_filename
+from .deprecation import deprecated
 from .hashing import file_hash
 from .sanitize import sanitize_directory
 from .validation import isfloat
@@ -41,6 +47,7 @@ __all__ = [
     "YYDOY",
     "YYYYDOY",
     "_worker_init",
+    "deprecated",
     "file_hash",
     "get_gps_week_from_filename",
     "get_version_from_pyproject",

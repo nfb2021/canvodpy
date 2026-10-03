@@ -228,7 +228,7 @@ Zarr attribute (`canvod_metadata`) and managed by the companion package.
 ---
 
 !!! example "Try it"
-    [08 — Icechunk Store](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/08_icechunk_store.py)
-    · [17 — Store Operations](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/17_store_operations.py)
-    (source links only for now — rendered snapshot pending a test-data
-    fixture fix, see `dev/notebook_docs_integration_plan.md`)
+    [08 — Icechunk Store](../../notebooks/_build/08_icechunk_store.html){target=_blank}
+    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/08_icechunk_store.py))
+    · [18 — Store Operations](../../notebooks/_build/18_workflow_store_operations.html){target=_blank}
+    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/18_workflow_store_operations.py))

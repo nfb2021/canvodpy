@@ -58,7 +58,7 @@ own file set.
 ## `run_id`: correlating a single pipeline invocation
 
 ```python
-from canvodpy.logging import get_run_id, set_run_id, reset_run_id
+from canvod.utils.logging import get_run_id, set_run_id, reset_run_id
 ```
 
 A `run_id` identifies one pipeline invocation for one site — format
@@ -132,7 +132,7 @@ no-op. `stage_timer` replaces it, plus the previously ragged mix of field
 names (`duration_seconds`, `processing_time_min`, ...) some call sites used.
 
 ```python
-from canvodpy.logging import stage_timer, timed_stage, emit_run_summary
+from canvod.utils.logging import stage_timer, timed_stage, emit_run_summary
 
 with stage_timer("icechunk.write", group=group_name, size_mb=12.4):
     to_icechunk(dataset, session, group=group_name)

@@ -11,8 +11,6 @@ per_cell_filtering  Per-cell statistical filters.
 masking             Spatial and temporal mask construction.
 solar               Solar geometry computations.
 weighting           Per-cell weight calculators.
-hampel_filtering    Hampel (median-MAD) outlier filtering.
-sigma_clip_filter   Numba-accelerated sigma-clipping / Hampel filtering.
 temporal            Weighted temporal aggregation and diurnal analysis.
 spatial             Per-cell spatial statistics.
 per_cell_analysis   Multi-dataset per-cell VOD analysis.
@@ -29,10 +27,6 @@ from canvod.grids.analysis.filtering import (
     IQRFilter,
     SIDPatternFilter,
     ZScoreFilter,
-)
-from canvod.grids.analysis.hampel_filtering import (
-    aggr_hampel_cell_sid_parallelized,
-    hampel_cell_sid_parallelized,
 )
 from canvod.grids.analysis.masking import (
     SpatialMask,
@@ -52,10 +46,6 @@ from canvod.grids.analysis.per_cell_filtering import (
     PerCellFilterPipeline,
     PerCellIQRFilter,
     PerCellZScoreFilter,
-)
-from canvod.grids.analysis.sigma_clip_filter import (
-    astropy_hampel_ultra_fast,
-    astropy_hampel_vectorized_fast,
 )
 from canvod.grids.analysis.solar import SolarPositionCalculator
 from canvod.grids.analysis.spatial import VODSpatialAnalyzer
@@ -88,16 +78,11 @@ __all__ = [
     # Weighting
     "WeightCalculator",
     "ZScoreFilter",
-    "aggr_hampel_cell_sid_parallelized",
-    "astropy_hampel_ultra_fast",
-    "astropy_hampel_vectorized_fast",
     "create_elevation_mask",
     "create_hemisphere_mask",
     "extract_percell_coverage",
     "extract_percell_stats",
     "extract_percell_temporal_stats",
-    # Hampel / sigma-clip
-    "hampel_cell_sid_parallelized",
     "percell_to_grid_counts",
     "percell_to_grid_data",
     # Storage (lazy – requires canvod-store at runtime)

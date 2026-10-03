@@ -1,9 +1,9 @@
 """Fluent workflow API with deferred execution.
 
 .. deprecated::
-    Use ``Site(site).pipeline()`` for configured pipeline runs, or
-    ``canvodpy.functional`` for component-level scripting/analysis.
-    ``FluentWorkflow`` emits a ``DeprecationWarning`` on instantiation.
+    Use ``Site(site).pipeline()`` to process data and ``Site(site).vod``
+    to compute VOD. Removed with the next major version.
+    ``FluentWorkflow`` emits a ``FutureWarning`` on instantiation.
 
 Provides a chainable, lazy pipeline where steps are recorded and
 executed only when a terminal method is called.
@@ -36,10 +36,11 @@ from __future__ import annotations
 from functools import wraps
 from typing import TYPE_CHECKING, Any
 
-from canvodpy._deprecation import deprecated
+import structlog
+
+from canvod.utils.tools import deprecated
 from canvodpy.api import Site
 from canvodpy.factories import GridFactory, ReaderFactory, VODFactory
-from canvodpy.logging import get_logger
 
 if TYPE_CHECKING:
     import xarray as xr
@@ -131,9 +132,9 @@ def terminal(method):
 
 
 @deprecated(
-    "FluentWorkflow is deprecated. Use Site(site).pipeline() for "
-    "configured pipeline runs, or canvodpy.functional for "
-    "component-level scripting."
+    "FluentWorkflow is left over from development and will be removed with the next major version. "
+    "Use canvodpy.Site(<site>).pipeline() to process data and "
+    "canvodpy.Site(<site>).vod to compute VOD instead."
 )
 class FluentWorkflow:
     """Chainable, deferred-execution workflow for VOD analysis.
@@ -179,7 +180,7 @@ class FluentWorkflow:
             keep_vars = load_config().processing.params.keep_gnss_observables
         self._keep_vars = keep_vars
 
-        self.log = get_logger(__name__).bind(site=self._site.name)
+        self.log = structlog.get_logger(__name__).bind(site=self._site.name)
 
     # ------------------------------------------------------------------
     # Steps (deferred)

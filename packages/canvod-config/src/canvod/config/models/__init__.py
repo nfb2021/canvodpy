@@ -23,21 +23,30 @@ from .compression import (
 from .logging import LoggingConfig
 from .metadata import CredentialsConfig, MetadataConfig
 from .preprocessing import (
+    PREPROCESSING_ATTR,
     GridAssignmentConfig,
     HistogramBinsConfig,
     PreprocessingConfig,
     StatisticsConfig,
     TemporalAggregationConfig,
+    preprocessing_record,
 )
 from .processing import ProcessingConfig
 from .processing_params import ProcessingParams
 from .references import FundingRef, PublicationRef, ReferencesConfig
 from .root import CanvodConfig
 from .sids import SidsConfig
-from .sites import ReceiverConfig, SiteConfig, SitesConfig, VodAnalysisConfig
+from .sites import (
+    ReceiverConfig,
+    SiteConfig,
+    SitesConfig,
+    VodAnalysisConfig,
+    reference_store_group,
+)
 from .storage import MaintenanceConfig, StorageConfig
 
 __all__ = [
+    "PREPROCESSING_ATTR",
     "AuxDataConfig",
     "CanvodConfig",
     "ChunkStrategy",
@@ -65,4 +74,6 @@ __all__ = [
     "TemporalAggregationConfig",
     "VodAnalysisConfig",
     "_StrictModel",
+    "preprocessing_record",
+    "reference_store_group",
 ]

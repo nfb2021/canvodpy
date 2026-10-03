@@ -2,28 +2,60 @@
 
 from __future__ import annotations
 
+import json
+import re
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from .base import _StrictModel
 
+_FREQ_UNIT_SECONDS = {"s": 1, "min": 60, "h": 3600}
+_FREQ = re.compile(r"^([1-9][0-9]*)(s|min|h)$")
+
 
 class TemporalAggregationConfig(_StrictModel):
-    """Temporal aggregation preprocessing settings."""
+    """Temporal aggregation of the observations into time bins."""
 
-    enabled: bool = Field(True, description="Enable temporal aggregation")
-    freq: str = Field("1min", description="Aggregation frequency (pandas offset alias)")
-    method: Literal["mean", "median"] = Field("mean", description="Aggregation method")
+    enabled: bool = Field(True, description="Apply the temporal aggregation")
+    freq: str = Field(
+        ...,
+        description=(
+            "Bin length: a whole number of seconds, minutes or hours "
+            "('30s', '1min', '1h') that divides one day"
+        ),
+    )
+    method: Literal["mean", "median"] = Field(
+        ..., description="Statistic of the observations in each bin"
+    )
+
+    @field_validator("freq")
+    @classmethod
+    def _freq_divides_day(cls, value: str) -> str:
+        match = _FREQ.match(value)
+        if match is None:
+            msg = (
+                f"freq must be a whole number followed by 's', 'min' or 'h' "
+                f"(e.g. '30s', '1min'), not {value!r}"
+            )
+            raise ValueError(msg)
+        seconds = int(match.group(1)) * _FREQ_UNIT_SECONDS[match.group(2)]
+        if 86_400 % seconds:
+            msg = (
+                f"freq {value!r} does not divide one day, so the bins would "
+                "not start at 00:00 of every day"
+            )
+            raise ValueError(msg)
+        return value
 
 
 class GridAssignmentConfig(_StrictModel):
-    """Grid cell assignment preprocessing settings."""
+    """Assignment of each observation to a cell of a hemispherical grid."""
 
-    enabled: bool = Field(True, description="Enable grid cell assignment")
-    grid_type: str = Field("equal_area", description="Grid type for cell assignment")
+    enabled: bool = Field(True, description="Apply the grid cell assignment")
+    grid_type: str = Field(..., description="Grid type, e.g. 'equal_area'")
     angular_resolution: float = Field(
-        2.0, gt=0, le=90, description="Angular resolution in degrees"
+        ..., gt=0, le=90, description="Angular resolution in degrees"
     )
 
 
@@ -36,7 +68,11 @@ class HistogramBinsConfig(_StrictModel):
 
 
 class StatisticsConfig(_StrictModel):
-    """Streaming statistics configuration."""
+    """Streaming statistics configuration.
+
+    Reserved for a future release: no run reads this section yet, so setting
+    it has no effect.
+    """
 
     enabled: bool = Field(False, description="Enable streaming statistics collection")
     variables: list[str] = Field(
@@ -69,14 +105,50 @@ class StatisticsConfig(_StrictModel):
 
 
 class PreprocessingConfig(_StrictModel):
-    """Preprocessing pipeline configuration."""
+    """Operations applied before the data are written to the GNSS store.
 
-    temporal_aggregation: TemporalAggregationConfig = Field(
-        default_factory=TemporalAggregationConfig,
+    Each operation is applied only if its section is set (and ``enabled``).
+    Temporal aggregation runs first, then the grid cell assignment.
+    """
+
+    temporal_aggregation: TemporalAggregationConfig | None = Field(
+        None, description="Temporal aggregation; not applied unless set"
     )
-    grid_assignment: GridAssignmentConfig = Field(
-        default_factory=GridAssignmentConfig,
+    grid_assignment: GridAssignmentConfig | None = Field(
+        None, description="Grid cell assignment; not applied unless set"
     )
     statistics: StatisticsConfig = Field(
         default_factory=StatisticsConfig,
+        description="Streaming statistics; reserved, not read by any run yet",
     )
+
+
+#: Dataset and store-group attribute recording the applied preprocessing.
+PREPROCESSING_ATTR = "Preprocessing"
+
+
+def preprocessing_record(config: PreprocessingConfig | None) -> str:
+    """JSON record of the operations ``config`` applies (``"{}"`` for none).
+
+    Stored in the ``Preprocessing`` attribute of every written dataset, so a
+    store group never mixes data preprocessed in different ways.
+
+    Parameters
+    ----------
+    config : PreprocessingConfig | None
+        The ``processing.preprocessing`` section.
+
+    Returns
+    -------
+    str
+        Sorted-key JSON of the enabled operations and their settings.
+    """
+    record: dict[str, dict] = {}
+    if config is not None:
+        temporal = config.temporal_aggregation
+        if temporal is not None and temporal.enabled:
+            record["temporal_aggregation"] = temporal.model_dump(exclude={"enabled"})
+        grid = config.grid_assignment
+        if grid is not None and grid.enabled:
+            record["grid_assignment"] = grid.model_dump(exclude={"enabled"})
+    return json.dumps(record, sort_keys=True)

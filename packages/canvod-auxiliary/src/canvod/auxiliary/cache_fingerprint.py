@@ -20,6 +20,11 @@ from pathlib import Path
 # silently misreading them against a coarser grid.
 CANONICAL_AUX_GRID_SECONDS = 1.0
 
+# Version of the cached content. Bump it when the computed values change for
+# the same input files, so entries written by older code are not reused.
+# 2: CLK clock bias read in seconds (was divided by 1e6).
+AUX_CACHE_FORMAT_VERSION = 2
+
 
 def compute_aux_cache_fingerprint(
     *,
@@ -42,6 +47,7 @@ def compute_aux_cache_fingerprint(
     reusing a stale cache entry.
     """
     sections = {
+        "format_version": AUX_CACHE_FORMAT_VERSION,
         "agency": agency,
         "product_type": product_type,
         "ephemeris_source": ephemeris_source,

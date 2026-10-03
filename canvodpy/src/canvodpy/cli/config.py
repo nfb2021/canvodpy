@@ -26,7 +26,13 @@ from canvod.config.loader import (
     get_default_config_dir,
     get_template_dir,
 )
-from canvod.config.models import ProcessingConfig, SidsConfig, SitesConfig
+from canvod.config.models import (
+    ProcessingConfig,
+    SidsConfig,
+    SitesConfig,
+    reference_store_group,
+)
+from canvodpy.cli.options import CONFIG_DIR_OPTION
 
 # Config subcommand
 config_app = typer.Typer(
@@ -36,16 +42,6 @@ config_app = typer.Typer(
 )
 
 console = Console()
-
-# Dev-checkout config/ if present, else XDG (~/.config/canvodpy) — see
-# get_default_config_dir()'s docstring for the full precedence rule.
-DEFAULT_CONFIG_DIR = get_default_config_dir()
-
-CONFIG_DIR_OPTION = typer.Option(
-    "--config-dir",
-    "-c",
-    help="Configuration directory",
-)
 
 
 @config_app.callback()
@@ -136,7 +132,7 @@ def _run_interactive_wizard(canvod_dest: Path) -> None:
 
 @config_app.command()
 def init(
-    config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
     force: bool = typer.Option(
         False,
         "--force",
@@ -154,12 +150,14 @@ def init(
 
     Creates:
       - config/canvod-settings.yaml
-      - config/recipes/*.yaml (example naming recipes)
+
+    Naming recipes are created per receiver with ``just naming-init SITE NAME``.
 
     Parameters
     ----------
-    config_dir : Path
-        Directory where configuration files are created.
+    config_dir : Path | None
+        Directory where configuration files are created (see
+        ``--config-dir``).
     force : bool
         Overwrite existing files.
     interactive : bool
@@ -170,6 +168,7 @@ def init(
     -------
     None
     """
+    config_dir = get_default_config_dir()
     console.print("\n[bold]Initializing canvodpy configuration...[/bold]\n")
 
     # Create config directory
@@ -204,20 +203,6 @@ def init(
     else:
         console.print(f"[yellow]⚠️  Template not found: {canvod_example}[/yellow]")
 
-    # Copy example recipe files (bundled as *.yaml.example, same convention
-    # as canvod-settings.yaml.example above — strip the suffix on copy).
-    recipes_src = template_dir / "recipes"
-    recipes_dest = config_dir / "recipes"
-    if recipes_src.exists():
-        recipes_dest.mkdir(parents=True, exist_ok=True)
-        for recipe_file in sorted(recipes_src.glob("*.yaml.example")):
-            dest = recipes_dest / recipe_file.name.removesuffix(".example")
-            if dest.exists() and not force:
-                files_skipped.append(dest)
-            else:
-                shutil.copy(recipe_file, dest)
-                files_created.append(dest)
-
     # Show results
     if files_created:
         console.print("[green]✓ Created:[/green]")
@@ -238,7 +223,8 @@ def init(
             "      export CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com"
         )
         console.print(
-            "  - Edit config/recipes/*.yaml if your receivers use non-canonical filenames\n"
+            "  - If a receiver writes non-canonical file names, create its naming "
+            "recipe with: just naming-init SITE NAME\n"
         )
         return
 
@@ -259,150 +245,107 @@ def init(
     console.print(
         "       export CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL=you@example.com"
     )
-    console.print("  3. Edit config/recipes/*.yaml to match your filename format")
+    console.print(
+        "  3. If a receiver writes non-canonical file names, create its naming "
+        "recipe with: just naming-init SITE NAME"
+    )
     console.print("  4. Run: canvodpy config validate\n")
+
+
+def _print_site_report(report) -> None:
+    """Print a :class:`~canvodpy.orchestrator.data_check.SiteReport`.
+
+    Lines are not wrapped, so the paths in them can be copied.
+    """
+
+    from rich.markup import escape
+
+    from canvodpy.orchestrator.data_check import group_by_file_type
+
+    def say(text: str) -> None:
+        console.print(text, soft_wrap=True, highlight=False)
+
+    for error in report.errors:
+        say(f"  [red]❌ {report.site}: {escape(error)}[/red]")
+    for rx in report.receivers.values():
+        label = f"{report.site}/{rx.name}"
+        if rx.errors:
+            say(f"  [red]❌ {label}[/red]")
+        elif rx.files:
+            recipe = f", recipe '{rx.recipe}'" if rx.recipe else ""
+            say(
+                f"  [green]✓ {label} ({rx.identity}): {rx.files} files on "
+                f"{len(rx.days)} days, {rx.days[0]} to {rx.days[-1]} "
+                f"({rx.reader_format}{recipe})[/green]"
+            )
+            if rx.sampling_checked:
+                intervals = ", ".join(
+                    f"{s:g} s" for s in dict.fromkeys(rx.sampling_checked)
+                )
+                say(
+                    f"      Sampling matches the file names in "
+                    f"{len(rx.sampling_checked)} file(s) checked: {intervals}"
+                )
+        else:
+            say(f"  [yellow]⚠️  {label}[/yellow]")
+        for error in rx.errors:
+            say(f"      [red]{escape(error)}[/red]")
+        for warning in rx.warnings:
+            say(f"      [yellow]{escape(warning)}[/yellow]")
+        if rx.unrecognized:
+            say("      Not processed, by file type:")
+            for kind, count, example in group_by_file_type(rx.unrecognized):
+                say(f"        {escape(kind)}: {count} (e.g. {escape(example.name)})")
 
 
 @config_app.command()
 def validate(
-    config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
+    site: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--site",
+            help="Check the data of this site only. Repeat for several sites. "
+            "Default: all sites.",
+            show_default=False,
+        ),
+    ] = None,
+    check_sampling: Annotated[
+        bool,
+        typer.Option(
+            "--check-sampling/--no-check-sampling",
+            help="Read the first file of the first and the last day of each "
+            "receiver and compare the sampling interval of its data with the "
+            "one in its canonical name.",
+        ),
+    ] = True,
 ) -> None:
-    """Validate configuration files.
+    """Validate the configuration and the receiver data it points to.
+
+    The data are checked with the same file discovery as ``canvodpy run``:
+    every error reported here would stop a run or make its results wrong.
 
     Parameters
     ----------
-    config_dir : Path
-        Directory containing config files.
+    config_dir : Path | None
+        Directory containing config files (see ``--config-dir``).
+    site : list[str] | None
+        Sites whose data to check; ``None`` checks all sites.
+    check_sampling : bool
+        Compare named and actual sampling intervals.
 
     Returns
     -------
     None
     """
     from canvod.config.loader import load_config
-    from canvod.readers.gnss_specs.constants import (
-        FORMAT_GLOB_PATTERNS,
-        RINEX_OBS_GLOB_PATTERNS,
-    )
+    from canvodpy.orchestrator.data_check import check_site_data
 
-    console.print("\n[bold]Validating configuration...[/bold]\n")
+    config_dir = get_default_config_dir()
+    console.print(f"\n[bold]Validating configuration in {config_dir}...[/bold]\n")
 
     try:
         config = load_config(config_dir)
-        console.print("[green]✓ Configuration is valid![/green]\n")
-
-        # Show summary
-        console.print(f"  Sites: {len(config.sites.sites)}")
-        for name in config.sites.sites.keys():
-            console.print(f"    - {name}")
-
-        console.print(f"\n  SID mode: {config.sids.mode}")
-        console.print(f"  Agency: {config.processing.aux_data.agency}")
-
-        # Show site data roots
-        for name, site in config.sites.sites.items():
-            console.print(f"  {name} data root: {site.gnss_site_data_root}")
-
-        # Show credentials from config
-        email = config.processing.credentials.nasa_earthdata_acc_mail
-        if email:
-            console.print(f"  NASA Earthdata email: {email}")
-            console.print("  [green]✓ NASA CDDIS enabled[/green]")
-        else:
-            console.print("  [yellow]⊘ NASA CDDIS disabled (ESA only)[/yellow]")
-
-        console.print()
-
-        # Check receiver directories exist and contain data
-        console.print("[bold]Checking receiver directories...[/bold]")
-        dir_errors: list[str] = []
-        recipe_errors: list[str] = []
-
-        try:
-            import canvod.filemap  # noqa: F401
-
-            filemap_available = True
-        except ImportError:
-            filemap_available = False
-
-        for site_name, site in config.sites.sites.items():
-            base_path = site.get_base_path()
-            for recv_name, recv in site.receivers.items():
-                if recv.recipe and not filemap_available:
-                    recipe_errors.append(
-                        f"{site_name}/{recv_name} (recipe: {recv.recipe})"
-                    )
-                recv_dir = base_path / recv.directory
-                if not recv_dir.exists():
-                    msg = f"  [red]❌ {site_name}/{recv_name}: {recv_dir} (directory not found)[/red]"
-                    console.print(msg)
-                    dir_errors.append(f"{site_name}/{recv_name}")
-                    continue
-
-                # Check for any GNSS data files anywhere in the tree
-                has_data = False
-                if RINEX_OBS_GLOB_PATTERNS:
-                    has_data = any(
-                        f
-                        for pattern in RINEX_OBS_GLOB_PATTERNS
-                        for f in recv_dir.rglob(pattern)
-                        if f.is_file()
-                    )
-                else:
-                    # Fallback: any file anywhere
-                    has_data = any(True for _ in recv_dir.rglob("*") if _.is_file())
-
-                if has_data:
-                    # Detect format from files on disk
-                    detected_fmt = None
-                    if FORMAT_GLOB_PATTERNS:
-                        for fmt, patterns in FORMAT_GLOB_PATTERNS.items():
-                            if any(
-                                f
-                                for pat in patterns
-                                for f in recv_dir.rglob(pat)
-                                if f.is_file()
-                            ):
-                                detected_fmt = fmt
-                                break
-                    configured_fmt = recv.reader_format
-                    if configured_fmt == "auto" and detected_fmt:
-                        fmt_info = f"format: auto → {detected_fmt}"
-                    elif configured_fmt == "auto":
-                        fmt_info = "format: auto"
-                    else:
-                        fmt_info = f"format: {configured_fmt}"
-                    console.print(
-                        f"  [green]✓ {site_name}/{recv_name}: {recv_dir} ({fmt_info})[/green]"
-                    )
-                else:
-                    console.print(
-                        f"  [yellow]⚠️  {site_name}/{recv_name}: {recv_dir} "
-                        f"(directory exists but no GNSS data files found)[/yellow]"
-                    )
-
-        if recipe_errors:
-            console.print(
-                f"\n[red]❌ {len(recipe_errors)} receiver(s) configure a naming "
-                f"recipe but canvod-filemap is not installed:[/red]"
-            )
-            for entry in recipe_errors:
-                console.print(f"  {entry}")
-            console.print("  Install with: uv sync --extra filemap")
-            console.print()
-            raise typer.Exit(1)
-
-        if dir_errors:
-            console.print(
-                f"\n[red]❌ {len(dir_errors)} receiver director(y/ies) not found.[/red]"
-            )
-            console.print(
-                "  Check gnss_site_data_root and receiver directory settings in canvod-settings.yaml"
-            )
-            console.print()
-            raise typer.Exit(1)
-
-        console.print()
-
     except ConfigValidationError as e:
         console.print("[red]❌ Validation failed:[/red]\n")
         console.print(format_validation_error(e))
@@ -414,10 +357,54 @@ def validate(
         console.print()
         raise typer.Exit(1) from e
 
+    console.print("[green]✓ Configuration is valid![/green]\n")
+
+    console.print(f"  Sites: {len(config.sites.sites)}")
+    for name in config.sites.sites.keys():
+        console.print(f"    - {name}")
+
+    console.print(f"\n  SID mode: {config.sids.mode}")
+    console.print(f"  Agency: {config.processing.aux_data.agency}")
+
+    for name, site_cfg in config.sites.sites.items():
+        console.print(f"  {name} data root: {site_cfg.gnss_site_data_root}")
+
+    email = config.processing.credentials.nasa_earthdata_acc_mail
+    if email:
+        console.print(f"  NASA Earthdata email: {email}")
+        console.print("  [green]✓ NASA CDDIS enabled[/green]")
+    else:
+        console.print("  [yellow]⊘ NASA CDDIS disabled (ESA only)[/yellow]")
+
+    unknown = [s for s in site or [] if s not in config.sites.sites]
+    if unknown:
+        console.print(
+            f"\n[red]❌ Unknown site(s): {', '.join(unknown)}. Configured: "
+            f"{', '.join(config.sites.sites) or '(none)'}[/red]\n"
+        )
+        raise typer.Exit(1)
+
+    console.print("\n[bold]Checking receiver data...[/bold]")
+    reports = [
+        check_site_data(name, config, check_sampling)
+        for name in site or list(config.sites.sites)
+    ]
+    for report in reports:
+        _print_site_report(report)
+
+    failed = [r.site for r in reports if not r.ok]
+    if failed:
+        console.print(
+            f"\n[red]❌ Receiver data of {', '.join(failed)} would not be "
+            f"processed correctly. Fix the errors above.[/red]\n"
+        )
+        raise typer.Exit(1)
+    console.print()
+
 
 @config_app.command()
 def show(
-    config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
     section: str = typer.Option(
         None,
         "--section",
@@ -429,8 +416,8 @@ def show(
 
     Parameters
     ----------
-    config_dir : Path
-        Directory containing config files.
+    config_dir : Path | None
+        Directory containing config files (see ``--config-dir``).
     section : str
         Optional section name (processing, sites, sids).
 
@@ -440,6 +427,7 @@ def show(
     """
     from canvod.config.loader import load_config
 
+    config_dir = get_default_config_dir()
     try:
         config = load_config(config_dir)
     except ConfigValidationError as e:
@@ -467,14 +455,14 @@ def show(
 
 @config_app.command()
 def edit(
-    config_dir: Annotated[Path, CONFIG_DIR_OPTION] = DEFAULT_CONFIG_DIR,
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
 ) -> None:
     """Open canvod-settings.yaml in $EDITOR.
 
     Parameters
     ----------
-    config_dir : Path
-        Directory containing config files.
+    config_dir : Path | None
+        Directory containing config files (see ``--config-dir``).
 
     Returns
     -------
@@ -482,6 +470,7 @@ def edit(
     """
     import os
 
+    config_dir = get_default_config_dir()
     file_path = config_dir / "canvod-settings.yaml"
 
     if not file_path.exists():
@@ -653,7 +642,7 @@ def _show_sites(config: SitesConfig) -> None:
             pair_table.add_column("Position From")
 
             for ref_name, canopy_name in pairs:
-                group_name = f"{ref_name}_{canopy_name}"
+                group_name = reference_store_group(ref_name, canopy_name)
                 pair_table.add_row(group_name, ref_name, canopy_name)
 
             console.print(pair_table)

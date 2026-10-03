@@ -132,7 +132,7 @@ def find_vod_backfill_gaps(
             f"VOD analysis '{analysis_name}' not configured. Available: {available}"
         )
     cfg = site.vod_analyses[analysis_name]
-    rinex_group = f"{cfg.reference_receiver}_{cfg.canopy_receiver}"
+    rinex_group = cfg.reference_store_group
     vod_group = f"{calculator_name}/{analysis_name}"
 
     if not site.gnss_store.group_exists(rinex_group):

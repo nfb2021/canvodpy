@@ -755,7 +755,7 @@ just test-coverage
     | `just config-init`                | Scaffold `canvod-settings.yaml` from template           |
     | `just config-validate`            | Validate the current configuration             |
     | `just config-show`                | Show the resolved configuration                |
-    | `canvod-preflight validate <dir>` | Check data files against the naming convention |
+    | `just config-check-data <site>`   | Check a site's data files as a run reads them  |
     | `just docs`                       | Preview documentation locally                  |
     | `just test-coverage`              | Run tests with coverage report                 |
     | `just clean`                      | Remove build artifacts and caches              |

@@ -26,6 +26,75 @@ class InterpolatorConfig:
         return dict(vars(self))
 
 
+def _detect_jumps(data: np.ndarray, window_size: int, threshold: float) -> np.ndarray:
+    """Detect clock-jump discontinuities via a windowed before/after comparison.
+
+    For each candidate boundary, compares the mean of up to ``window_size``
+    samples immediately before it to the mean of up to ``window_size``
+    samples immediately after it. This is more robust to single-sample noise
+    than a raw two-point ``np.diff``: a noisy outlier gets smoothed out by
+    averaging with its neighbors on both sides, whereas a genuine clock reset
+    keeps the two windows separated regardless of window size.
+
+    ``window_size <= 1`` degenerates to the raw two-point diff.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Clock data for one satellite, already restricted to valid (non-NaN)
+        samples.
+    window_size : int
+        Number of samples on each side of a candidate boundary to average.
+    threshold : float
+        Jump threshold for discontinuity detection.
+
+    Returns
+    -------
+    np.ndarray
+        Indices ``i`` such that a jump lies between ``data[i]`` and
+        ``data[i + 1]`` — the same convention as
+        ``np.where(np.abs(np.diff(data)) > threshold)[0]``.
+    """
+    n = len(data)
+    if n < 2:
+        return np.array([], dtype=int)
+    if window_size <= 1:
+        return np.where(np.abs(np.diff(data)) > threshold)[0]
+
+    idx = np.arange(1, n)
+    lo = np.maximum(0, idx - window_size)
+    hi = np.minimum(n, idx + window_size)
+    cumsum = np.concatenate(([0.0], np.cumsum(data)))
+    before_mean = (cumsum[idx] - cumsum[lo]) / (idx - lo)
+    after_mean = (cumsum[hi] - cumsum[idx]) / (hi - idx)
+    score = np.abs(after_mean - before_mean)
+
+    flagged = score > threshold
+    if not np.any(flagged):
+        return np.array([], dtype=int)
+
+    # A genuine step elevates the score for every candidate boundary whose
+    # window still spans it, not just the true edge — collapse each
+    # contiguous flagged run to its single highest-scoring boundary.
+    edges = np.diff(flagged.astype(np.int8))
+    run_starts = np.where(edges == 1)[0] + 1
+    run_ends = np.where(edges == -1)[0] + 1
+    if flagged[0]:
+        run_starts = np.concatenate(([0], run_starts))
+    if flagged[-1]:
+        run_ends = np.concatenate((run_ends, [len(flagged)]))
+
+    # idx[j] is the sample starting the "after" side; the diff convention
+    # callers expect wants the sample ending the "before" side (idx[j] - 1).
+    return np.array(
+        [
+            idx[start + int(np.argmax(score[start:end]))] - 1
+            for start, end in zip(run_starts, run_ends, strict=True)
+        ],
+        dtype=int,
+    )
+
+
 @dataclass
 class Sp3Config(InterpolatorConfig):
     """Configuration for SP3 ephemeris interpolation.
@@ -324,6 +393,7 @@ class ClockInterpolationStrategy(Interpolator):
                             t_source,
                             t_target,
                             self.config.jump_threshold,
+                            self.config.window_size,
                         )
                     )
 
@@ -343,6 +413,7 @@ class ClockInterpolationStrategy(Interpolator):
         t_source: np.ndarray,
         t_target: np.ndarray,
         threshold: float,
+        window_size: int,
     ) -> np.ndarray:
         """Interpolate clock data for a single satellite.
 
@@ -358,6 +429,8 @@ class ClockInterpolationStrategy(Interpolator):
             Target epochs in seconds from start.
         threshold : float
             Jump threshold for discontinuity detection.
+        window_size : int
+            Window size for discontinuity detection — see :func:`_detect_jumps`.
 
         Returns
         -------
@@ -379,7 +452,7 @@ class ClockInterpolationStrategy(Interpolator):
         valid_time = t_source[valid_mask]
 
         # Detect discontinuities (clock jumps)
-        jumps = np.where(np.abs(np.diff(valid_data)) > threshold)[0]
+        jumps = _detect_jumps(valid_data, window_size, threshold)
         segments = np.split(np.arange(len(valid_time)), jumps + 1)
 
         # Interpolate each continuous segment

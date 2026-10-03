@@ -40,7 +40,7 @@ When Claude Code starts, it follows this chain to build understanding:
 ```
 CLAUDE.md (auto-loaded)
 ├── Scientific context (GNSS-T, VOD, key domain concepts)
-├── Architecture (11 packages, CLI + Site.pipeline() + functional API, data contracts)
+├── Architecture (11 packages, CLI + Site.pipeline(), data contracts)
 ├── Conventions (uv, ruff, ty, pytest, commitizen)
 ├── Skills table (15+ domain skills, auto-applied)
 ├── Guardrails (what NOT to change without understanding the underlying science)
@@ -48,7 +48,7 @@ CLAUDE.md (auto-loaded)
     ├── docs/guides/ai-development.md  ← you are here
     ├── docs/architecture.md           ← system design & data flow
     ├── docs/principles.md             ← design philosophy
-    ├── docs/guides/api-levels.md      ← CLI, Site.pipeline(), functional API
+    ├── docs/guides/api-levels.md      ← CLI, Site.pipeline()
     ├── docs/guides/contributor-setup.md ← contributor setup & first run
     ├── docs/findings/                 ← scientific comparison results
     └── docs/packages/*/overview.md    ← per-package deep dives
@@ -189,4 +189,4 @@ Claude will:
 
 - [Architecture](../architecture.md) — system design and data flow
 - [Contributor Setup](contributor-setup.md) — contributor setup and first run
-- [API Levels](api-levels.md) — CLI, `Site.pipeline()`, and the functional API explained
+- [API Levels](api-levels.md) — CLI and `Site.pipeline()` explained

@@ -419,6 +419,11 @@ class TestNmeaObs:
         assert obs is not None
         assert obs.fpath == nmea_file
 
+    def test_epochs_record_utc(self, nmea_file):
+        """NMEA times are UTC."""
+        ds = NmeaObs(fpath=nmea_file).to_ds(keep_data_vars=["SNR"])
+        assert ds["epoch"].attrs["time_system"] == "UTC"
+
     def test_file_hash(self, nmea_file):
         """Test file hash is generated."""
         obs = NmeaObs(fpath=nmea_file)

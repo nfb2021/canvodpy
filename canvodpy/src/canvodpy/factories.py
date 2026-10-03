@@ -37,9 +37,9 @@ from __future__ import annotations
 from abc import ABC
 from typing import Any, ClassVar, TypeVar
 
-from canvodpy.logging import get_logger
+import structlog
 
-log = get_logger(__name__)
+log = structlog.get_logger(__name__)
 
 T = TypeVar("T", bound=ABC)
 
@@ -396,13 +396,9 @@ class AugmentationFactory(ComponentFactory):
 
     Examples
     --------
-    >>> from canvod.auxiliary.augmentation import HampelFilter
-    >>> AugmentationFactory.register("hampel", HampelFilter)
-    >>> step = AugmentationFactory.create(
-    ...     "hampel",
-    ...     window_size=5,
-    ...     n_sigma=3.0,
-    ... )
+    >>> from canvod.auxiliary.augmentation import ClockCorrectionAugmentation
+    >>> AugmentationFactory.register("clock", ClockCorrectionAugmentation)
+    >>> step = AugmentationFactory.create("clock")
     """
 
     _registry: ClassVar[dict[str, type]] = {}

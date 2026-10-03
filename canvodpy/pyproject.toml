@@ -29,6 +29,7 @@ dependencies = [
     "canvod-viz",
     "canvod-vod",
     "canvod-ops",
+    "canvod-preflight",
     "matplotlib>=3.8.0",
     "pint>=0.20",
     "structlog>=23.0",
@@ -52,7 +53,8 @@ dependencies = [
 
 # Optional slot-in extensions (github.com/nfb2021/canvodpy-extensions).
 # canvodpy works without these — file discovery falls back to canonical
-# canVOD-only glob patterns (*.rnx, *.sbf) when absent.
+# canVOD-only glob patterns (*.rnx, *.sbf) when absent; receiver naming
+# recipes require canvod-filemap.
 [project.optional-dependencies]
 filemap = ["canvod-filemap"]
 
@@ -90,6 +92,7 @@ canvod-config = { workspace = true }
 canvod-viz = { workspace = true }
 canvod-vod = { workspace = true }
 canvod-ops = { workspace = true }
+canvod-preflight = { workspace = true }
 
 [tool.ty.src]
 exclude = [

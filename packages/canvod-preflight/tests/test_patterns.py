@@ -10,6 +10,11 @@ from canvod.preflight.patterns import (
     resolve_year_from_yy,
 )
 
+# Tests of the deprecated mapping and validation API, see test_deprecations.py.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:.*left over from development:FutureWarning"
+)
+
 
 class TestHourLetterToInt:
     def test_a_is_zero(self):

@@ -10,11 +10,11 @@ Main application package — orchestrates the full GNSS → VOD pipeline.
 | `orchestrator/pipeline.py` | `PipelineOrchestrator` — coordination |
 | `api.py` | `Site`, `Pipeline` (L3, active); `process_date()`/`calculate_vod()`/`preview_processing()` (L1, **deprecated**) |
 | `fluent.py` | `FluentWorkflow` (L2, **deprecated** — deferred execution chain) |
-| `functional.py` | L4 functional API: `read_rinex()`, `augment_with_ephemeris()`, etc. |
+| `functional.py` | L4 functional API: `read_rinex()`, `augment_with_ephemeris()`, etc. (deprecated) |
 | `workflow.py` | `VODWorkflow` (**deprecated** — `_augment_data` is a no-op stub, never applies ephemeris augmentation) |
 | `vod_computer.py` | `VodComputer` — `compute_day()` (inline) + `compute_bulk()` (from store) |
 | `factories.py` | `ReaderFactory`, `GridFactory`, `VODFactory`, `AugmentationFactory` |
-| `workflows/` | Task definitions, `validate_data_dirs()` pre-flight check |
+| `workflows/` | Airflow task functions; file discovery via `orchestrator/discovery.py`, `validate_data_dirs()` = `config validate` |
 | `orchestrator/resources.py` | `MemoryMonitor`, `DaskClusterManager` |
 
 ## API levels
@@ -26,10 +26,10 @@ deprecated (`DeprecationWarning` on use) — kept working, no longer taught.
 |---|---|---|---|---|
 | CLI | Command-line | `uv run canvodpy run --site ... --start ... --end ...` | Running the pipeline — recommended | Active |
 | L3 | Site pipeline (OOP) | `Site(site).pipeline()` (`api.py`) | Python-native configured pipeline runs — what the CLI wraps; internally builds `PipelineOrchestrator`/`RinexDataProcessor` | Active |
-| L4 | Functional | `read_rinex()`, `augment_with_ephemeris()`, etc. (`functional.py`) | Component-level scripting/analysis; also used by Airflow (stateless) | Active |
 | L1 | Convenience | `process_date()`, `calculate_vod()`, `preview_processing()` (`api.py`) | Superseded by `Site(site).pipeline()` | Deprecated |
-| L2 | Fluent | `FluentWorkflow(...).read().augment().grid().vod()` (`fluent.py`) | Superseded by `Site.pipeline()` / functional | Deprecated |
+| L2 | Fluent | `FluentWorkflow(...).read().augment().grid().vod()` (`fluent.py`) | Superseded by `Site.pipeline()` | Deprecated |
 | — | `VODWorkflow` (`workflow.py`) | `VODWorkflow(site=...)` | Broken augmentation step (`_augment_data` is a no-op) — do not use | Deprecated |
+| L4 | Functional | `read_rinex()`, `augment_with_ephemeris()`, etc. (`functional.py`) | No longer maintained; gives different results than `canvodpy run` | Deprecated |
 
 Note: `Site("rosa").process_date(...)` does **not** exist directly on `Site` —
 use `Site("rosa").pipeline().process_date(...)`.
@@ -50,10 +50,10 @@ Files → DataDirectoryValidator → GNSSDataReader → AuxDataAugmenter → Gri
   utility library — no CLI code, no `typer`/`rich` deps — consistent with what
   its own `CLAUDE.md` always described it as. See `dev/cli_home_and_flags_plan.md`
   for the full rationale.
-- `PipelineOrchestrator`/`RinexDataProcessor` (the CLI/`Site.pipeline()` path) discover
-  files via `canvod-filemap`'s `BUILTIN_PATTERNS` when installed, falling back to
-  canonical canVOD-only globs (`*.rnx`/`*.sbf`) otherwise — see §12 in `dev/todo_later.md`
-- `FluentWorkflow.read()` (**deprecated**) uses `FilenameMapper` when naming config is available
+- `canvodpy run`, `Site.pipeline()` and the Airflow tasks all discover files via
+  `orchestrator/discovery.py`: the receiver's recipe (`canvod-filemap`,
+  `<config dir>/recipes/<site>/<name>.yaml`) or canonical names only, any folder layout
+- `FluentWorkflow.read()` (**deprecated**) still uses the deprecated `naming:` block
 - Receiver position from RINEX header via `ECEFPosition.from_ds_metadata(ds)`
 - Factory API: `fpath=` (not `path=`), `.to_ds()` (not `.read()`)
 - `vod_analyses` returns `dict[str, VodAnalysisConfig]` (Pydantic models, attribute access)

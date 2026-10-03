@@ -14,11 +14,12 @@ from typing import TYPE_CHECKING, Any
 import icechunk
 import numpy as np
 import polars as pl
+import structlog
 import xarray as xr
 import zarr
+from canvod.config.models import PREPROCESSING_ATTR
+from canvod.utils.logging import get_run_id, stage_timer
 from canvod.utils.tools import get_version_from_pyproject, sanitize_directory
-from canvodpy.logging import get_logger, stage_timer
-from canvodpy.logging.run_context import get_run_id
 from icechunk.session import ForkSession
 from icechunk.xarray import to_icechunk
 from zarr.dtype import VariableLengthUTF8
@@ -73,13 +74,85 @@ def _with_run_id(commit_message: str) -> str:
 
     Lets a human or an agent correlate an Icechunk commit with the run
     that produced it, by grepping the same run_id across the commit log
-    and the agent-diagnostic log (see ``canvodpy.logging.run_context``).
+    and the agent-diagnostic log (see ``canvod.utils.logging.run_context``).
     Append-only: does not change caller-provided commit message content.
     """
     run_id = get_run_id()
     if run_id is None:
         return commit_message
     return f"{commit_message} (run={run_id})"
+
+
+def _append_log_rows(zmeta: zarr.Group, df: pl.DataFrame) -> None:
+    """Append rows to a log-book table (``{group}/metadata/table``).
+
+    Assigns continuous ``index`` values and keeps every column at the
+    table's row count: a column new to the table is backfilled for the rows
+    already stored, and a stored column absent from ``df`` is padded (``""``
+    for strings, ``NaT`` for ``start``/``end``). Tables written by different
+    ingest paths, or by older canVODpy versions with fewer columns, therefore
+    stay readable as one DataFrame.
+    """
+    start_index = 0
+    existing_len = 0
+    if "index" in zmeta:
+        existing_len = zmeta["index"].shape[0]
+        start_index = int(zmeta["index"][-1].item()) + 1 if existing_len > 0 else 0
+
+    df_with_index = df.with_columns(
+        (pl.arange(start_index, start_index + df.height)).alias("index")
+    )
+
+    def _column_spec(col_name: str) -> tuple[Any, Any]:
+        """(dtype, fill value) of a log-book column."""
+        if col_name == "index":
+            return "i8", 0
+        if col_name in ("start", "end"):
+            return "M8[ns]", np.datetime64("NaT", "ns")
+        # strings / jsons / ids
+        return VariableLengthUTF8(), ""
+
+    for col_name in df_with_index.columns:
+        col_data = df_with_index[col_name]
+        dtype, fill = _column_spec(col_name)
+
+        if col_name in ("index", "start", "end"):
+            arr = col_data.to_numpy().astype(dtype)
+        else:
+            arr = col_data.to_list()
+
+        if col_name not in zmeta:
+            zmeta.create_array(
+                name=col_name,
+                shape=(existing_len,),
+                dtype=dtype,
+                chunks=(1024,),
+                fill_value=fill,
+                overwrite=True,
+            )
+            if existing_len:
+                zmeta[col_name][:] = (
+                    [fill] * existing_len
+                    if isinstance(fill, str)
+                    else np.full(existing_len, fill, dtype=dtype)
+                )
+
+        # Resize and append
+        old_len = zmeta[col_name].shape[0]
+        new_len = old_len + len(arr)
+        zmeta[col_name].resize(new_len)
+        zmeta[col_name][old_len:new_len] = arr
+
+    for col_name in set(zmeta.array_keys()) - set(df_with_index.columns):
+        dtype, fill = _column_spec(col_name)
+        old_len = zmeta[col_name].shape[0]
+        new_len = old_len + df_with_index.height
+        zmeta[col_name].resize(new_len)
+        zmeta[col_name][old_len:new_len] = (
+            [fill] * df_with_index.height
+            if isinstance(fill, str)
+            else np.full(df_with_index.height, fill, dtype=dtype)
+        )
 
 
 @dataclass
@@ -102,8 +175,34 @@ class VodWritePlan:
     action: str  # "write" | "append"
     start: np.datetime64
     end: np.datetime64
-    commit_message: str
+    commit_message: str  # per-group description, then the batch commit message
     dataset: xr.Dataset
+
+
+def _vod_batch_commit(
+    version: str, action: str, plans: Sequence[VodWritePlan]
+) -> tuple[str, dict[str, str]]:
+    """Commit message and metadata for the VOD groups sharing one commit.
+
+    Sets each plan's ``commit_message`` to the returned message, so the
+    log-book rows written for these groups match the commit exactly.
+    """
+    message = _with_run_id(
+        f"[v{version}] {action} " + "; ".join(p.commit_message for p in plans)
+    )
+    metadata = {
+        "groups": ",".join(p.item.group_name for p in plans),
+        "total_groups": str(len(plans)),
+        "start": str(min(p.start for p in plans)),
+        "end": str(max(p.end for p in plans)),
+        "source_file_hashes": json.dumps(
+            {p.item.group_name: p.item.source_file_hashes for p in plans},
+            sort_keys=True,
+        ),
+    }
+    for plan in plans:
+        plan.commit_message = message
+    return message, metadata
 
 
 @dataclass
@@ -188,7 +287,7 @@ class MyIcechunkStore:
         compression_algorithm : str | None, optional
             Override default compression algorithm.
         """
-        self._logger = get_logger(__name__)
+        self._logger = structlog.get_logger(__name__)
 
         try:
             from canvod.config import load_config
@@ -784,6 +883,47 @@ class MyIcechunkStore:
         )
         return exists
 
+    def check_preprocessing_matches(
+        self, group_name: str, dataset: xr.Dataset, branch: str = "main"
+    ) -> None:
+        """Refuse data preprocessed differently from the data in ``group_name``.
+
+        Compares the ``Preprocessing`` attribute (see
+        ``processing.preprocessing``) of ``dataset`` with the one of the
+        existing group. Data written without it count as not preprocessed.
+
+        Parameters
+        ----------
+        group_name : str
+            Store group about to receive ``dataset``.
+        dataset : xr.Dataset
+            Data to write.
+        branch : str, default "main"
+            Repository branch to examine.
+
+        Raises
+        ------
+        ValueError
+            If the group exists and was preprocessed differently.
+        """
+        try:
+            with self.readonly_session(branch) as session:
+                root = zarr.open_group(session.store, mode="r")
+                if group_name not in root:
+                    return
+                stored = root[group_name].attrs.get(PREPROCESSING_ATTR, "{}")
+        except zarr.errors.GroupNotFoundError:
+            return
+        new = dataset.attrs.get(PREPROCESSING_ATTR, "{}")
+        if json.loads(str(stored)) != json.loads(str(new)):
+            msg = (
+                f"Group '{group_name}' holds data with processing.preprocessing "
+                f"{stored}, but the new data have {new}. One group must not "
+                "mix both: restore the previous processing.preprocessing "
+                "setting, or write to a new store."
+            )
+            raise ValueError(msg)
+
     def read_group(
         self,
         group_name: str,
@@ -1003,7 +1143,7 @@ class MyIcechunkStore:
         num_variables = len(dataset.data_vars)
 
         # Write to Icechunk, timed via the lightweight stage_timer (see
-        # canvodpy/logging/stage_timer.py) -- replaces the removed
+        # canvod.utils.logging.stage_timer) -- replaces the removed
         # OpenTelemetry-based telemetry.py, which required an optional
         # dependency that was never actually installed.
         with stage_timer(
@@ -1203,7 +1343,12 @@ class MyIcechunkStore:
         branch: str = "main",
         commit_message: str | None = None,
     ) -> None:
-        """Overwrite a file's contribution to the group (same hash, new epoch range)."""
+        """Overwrite a file's contribution to the group (same hash, new epoch range).
+
+        The group's epochs outside ``[start, end]`` and ``dataset`` are merged
+        and rewritten in epoch order, so ``epoch`` stays monotonic when the
+        replaced range lies before the latest stored data.
+        """
 
         dataset = self._normalize_encodings(dataset)
 
@@ -1221,33 +1366,23 @@ class MyIcechunkStore:
             mask = (ds_from_store.epoch.values < start) | (
                 ds_from_store.epoch.values > end
             )
-            ds_from_store_cleansed = ds_from_store.isel(epoch=mask)
-            ds_from_store_cleansed = self._normalize_encodings(ds_from_store_cleansed)
-
-            # Check if any epochs remain after cleansing, then write leftovers.
-            if ds_from_store_cleansed.sizes.get("epoch", 0) > 0:
-                self._to_icechunk_throttled(
-                    ds_from_store_cleansed, session, group=group_name, mode="w"
-                )
-            # no epochs left, reset group to empty
-            else:
-                self._to_icechunk_throttled(
-                    dataset.isel(epoch=[]), session, group=group_name, mode="w"
-                )
+            ds_rewrite = xr.concat(
+                [ds_from_store.isel(epoch=mask), dataset],
+                dim="epoch",
+                combine_attrs="override",
+            ).sortby("epoch")
+            ds_rewrite = self._normalize_encodings(ds_rewrite)
+            self._to_icechunk_throttled(ds_rewrite, session, group=group_name, mode="w")
 
             # write back the backed up metadata table
             self.restore_metadata_table(group_name, metadata_backup, session)
-
-            # Append the new dataset
-            self._to_icechunk_throttled(
-                dataset, session, group=group_name, append_dim="epoch"
-            )
 
             if commit_message is None:
                 version = get_version_from_pyproject()
                 commit_message = (
                     f"[v{version}] Overwrote file {rinex_hash} in group '{group_name}'"
                 )
+            commit_message = _with_run_id(commit_message)
 
             zroot = zarr.open_group(session.store, mode="a")
             self._append_metadata_row(
@@ -1261,7 +1396,7 @@ class MyIcechunkStore:
                 commit_msg=commit_message,
                 dataset_attrs=dataset.attrs,
             )
-            session.commit(_with_run_id(commit_message))
+            session.commit(commit_message)
 
     def get_group_info(self, group_name: str, branch: str = "main") -> dict[str, Any]:
         """
@@ -1360,6 +1495,88 @@ class MyIcechunkStore:
                 _with_run_id(f"[v{version}] metadata/{name} for {group_name}")
             )
 
+    def write_metadata_parts(
+        self,
+        parts: list[xr.Dataset],
+        group_name: str,
+        name: str,
+        session: Any,
+        *,
+        replace_overlaps: bool = False,
+    ) -> int:
+        """Add per-file metadata datasets to *{group_name}/metadata/{name}*.
+
+        Writes into *session* without committing, so the caller commits the
+        metadata together with the observations it belongs to. Creates the
+        dataset if it does not exist yet, otherwise appends along ``epoch``.
+
+        Parameters
+        ----------
+        parts : list[xr.Dataset]
+            Per-file metadata datasets with an ``epoch`` dim, one per file
+            whose observations are written in the same session.
+        group_name : str
+            Target group (the observations' store group).
+        name : str
+            Dataset name under ``metadata/`` (e.g. ``"sbf_obs"``).
+        session : Session or ForkSession
+            Open writable session of the observations' write.
+        replace_overlaps : bool, default False
+            Rewrite the dataset from the session's base snapshot without
+            the stored epochs that fall in the epoch range of any part, as
+            the ``overwrite`` store strategy does for the observations.
+            Needed whenever the observation group was rewritten with
+            ``mode="w"`` in *session*, which deletes its ``metadata/``
+            subgroups.
+
+        Returns
+        -------
+        int
+            Number of epochs written.
+        """
+        if not parts:
+            msg = "parts list is empty"
+            raise ValueError(msg)
+
+        path = f"{group_name}/metadata/{name}"
+        clean = [
+            self._cleanse_dataset_attrs(self._normalize_encodings(part))
+            for part in parts
+        ]
+        if replace_overlaps:
+            # Read the stored dataset from the snapshot this session started
+            # from: rewriting the observation group with mode="w" (overwrite
+            # strategy) has already deleted its metadata/ subgroups in the
+            # session itself. Opened lazily, so only the rewrite streams it.
+            base = self.repo.readonly_session(snapshot_id=session.snapshot_id)
+            if zarr.open_group(base.store, mode="r").get(path) is not None:
+                stored = xr.open_zarr(base.store, group=path, consolidated=False)
+                epochs = stored["epoch"].values
+                keep = np.ones(epochs.size, dtype=bool)
+                for part in clean:
+                    start = part["epoch"].values.min()
+                    end = part["epoch"].values.max()
+                    keep &= (epochs < start) | (epochs > end)
+                rewrite = xr.concat(
+                    [stored.isel(epoch=keep), *clean],
+                    dim="epoch",
+                    combine_attrs="override",
+                ).sortby("epoch")
+                self._to_icechunk_throttled(
+                    self._normalize_encodings(rewrite), session, group=path, mode="w"
+                )
+                return sum(part.sizes.get("epoch", 0) for part in clean)
+
+        exists = zarr.open_group(session.store, mode="r").get(path) is not None
+        for i, part in enumerate(clean):
+            if i == 0 and not exists:
+                self._to_icechunk_throttled(part, session, group=path, mode="w")
+            else:
+                self._to_icechunk_throttled(
+                    part, session, group=path, append_dim="epoch"
+                )
+        return sum(part.sizes.get("epoch", 0) for part in clean)
+
     def append_metadata_datasets(
         self,
         parts: list[xr.Dataset],
@@ -1367,11 +1584,12 @@ class MyIcechunkStore:
         name: str,
         branch: str = "main",
     ) -> str:
-        """Write metadata datasets incrementally — no in-memory concat.
+        """Append metadata datasets in their own commit — no in-memory concat.
 
-        The first dataset initialises the group (``mode="w"``), subsequent
-        datasets are appended along ``epoch``.  All writes happen inside a
-        single session/commit so the operation is atomic.
+        Creates *{group_name}/metadata/{name}* if it does not exist yet,
+        otherwise appends along ``epoch``. Prefer
+        :meth:`write_metadata_parts` inside the session that writes the
+        observations, so both land in one commit.
 
         Parameters
         ----------
@@ -1389,26 +1607,9 @@ class MyIcechunkStore:
         str
             Icechunk snapshot ID.
         """
-        if not parts:
-            msg = "parts list is empty"
-            raise ValueError(msg)
-
         version = get_version_from_pyproject()
-        path = f"{group_name}/metadata/{name}"
-        total_epochs = 0
-
         with self.writable_session(branch) as session:
-            for i, part in enumerate(parts):
-                ds = self._normalize_encodings(part)
-                ds = self._cleanse_dataset_attrs(ds)
-                if i == 0:
-                    self._to_icechunk_throttled(ds, session, group=path, mode="w")
-                else:
-                    self._to_icechunk_throttled(
-                        ds, session, group=path, append_dim="epoch"
-                    )
-                total_epochs += ds.sizes.get("epoch", 0)
-
+            total_epochs = self.write_metadata_parts(parts, group_name, name, session)
             return session.commit(
                 _with_run_id(
                     f"[v{version}] metadata/{name} for {group_name} "
@@ -1669,6 +1870,7 @@ class MyIcechunkStore:
         branch: str = "main",
         commit_message: str | None = None,
         dedup: bool = False,
+        metadata_datasets: dict[str, xr.Dataset] | None = None,
     ) -> bool:
         """Write or append a dataset to a group.
 
@@ -1701,6 +1903,10 @@ class MyIcechunkStore:
             writing.  If the dataset would be a duplicate, the write is skipped,
             a warning is logged, and ``False`` is returned.  Set to ``True`` for
             RINEX/SBF ingest; leave ``False`` for VOD and derived-data stores.
+        metadata_datasets : dict[str, xr.Dataset] or None
+            Per-file metadata datasets (e.g. ``{"sbf_obs": meta_ds}``) added
+            to ``{group_name}/metadata/<name>`` in the same commit as
+            *dataset*, see :meth:`write_metadata_parts`.
 
         Returns
         -------
@@ -1728,6 +1934,7 @@ class MyIcechunkStore:
                 )
                 return False
 
+        self.check_preprocessing_matches(group_name, dataset, branch)
         dataset = self._normalize_encodings(dataset)
 
         if self.group_exists(group_name, branch):
@@ -1735,6 +1942,8 @@ class MyIcechunkStore:
                 self._to_icechunk_throttled(
                     dataset, session, group=group_name, append_dim=append_dim
                 )
+                for name, meta_ds in (metadata_datasets or {}).items():
+                    self.write_metadata_parts([meta_ds], group_name, name, session)
                 if commit_message is None:
                     commit_message = f"Appended to group '{group_name}'"
                 session.commit(_with_run_id(commit_message))
@@ -1746,6 +1955,8 @@ class MyIcechunkStore:
                 self._to_icechunk_throttled(
                     dataset, session, group=group_name, mode="w"
                 )
+                for name, meta_ds in (metadata_datasets or {}).items():
+                    self.write_metadata_parts([meta_ds], group_name, name, session)
                 if commit_message is None:
                     commit_message = f"Created group '{group_name}'"
                 session.commit(_with_run_id(commit_message))
@@ -1784,13 +1995,13 @@ class MyIcechunkStore:
                                   is recoverable via repo.ancestry())
             action          str   (UTF-8, e.g. "write"|"append"|"overwrite")
             commit_msg      str   (UTF-8)
-            written_at      str   (UTF-8, ISO8601 with timezone)
+            written_at      str   (UTF-8, ISO8601, UTC)
             write_strategy  str   (UTF-8)
             attrs           str   (UTF-8, JSON dump of dataset attrs)
             canonical_name  str   (UTF-8)
             physical_path   str   (UTF-8)
         """
-        written_at = datetime.now().astimezone().isoformat()
+        written_at = datetime.now(UTC).isoformat()
         row = {
             "rinex_hash": str(rinex_hash),
             "start": np.datetime64(start, "ns"),
@@ -1807,38 +2018,8 @@ class MyIcechunkStore:
             "physical_path": str(physical_path) if physical_path else "",
         }
         df_row = pl.DataFrame([row])
-        meta_group_path = f"{group_name}/metadata/table"
-
-        if (
-            "metadata" not in zroot[group_name]
-            or "table" not in zroot[group_name]["metadata"]
-        ):
-            zmeta = zroot.require_group(meta_group_path)
-            zmeta.create_array(
-                name="index", shape=(0,), dtype="i8", chunks=(1024,), overwrite=True
-            )
-            zmeta["index"].append([0])
-            for col in df_row.columns:
-                if col in ("start", "end"):
-                    dtype = "M8[ns]"
-                    arr = np.array(df_row[col].to_numpy(), dtype=dtype)
-                else:
-                    dtype = VariableLengthUTF8()
-                    arr = df_row[col].to_list()
-                zmeta.create_array(
-                    name=col, shape=(0,), dtype=dtype, chunks=(1024,), overwrite=True
-                )
-                zmeta[col].append(arr)
-        else:
-            zmeta = zroot[meta_group_path]
-            current_len = zmeta["index"].shape[0]
-            zmeta["index"].append([current_len])
-            for col in df_row.columns:
-                if col in ("start", "end"):
-                    arr = np.array(df_row[col].to_numpy(), dtype="M8[ns]")
-                else:
-                    arr = df_row[col].to_list()
-                zmeta[col].append(arr)
+        zmeta = zroot.require_group(f"{group_name}/metadata/table")
+        _append_log_rows(zmeta, df_row)
 
     def append_metadata(
         self,
@@ -1943,51 +2124,10 @@ class MyIcechunkStore:
             meta_group_path = f"{group_name}/metadata/table"
             zmeta = zroot.require_group(meta_group_path)
 
-            start_index = 0
-            if "index" in zmeta:
-                existing_len = zmeta["index"].shape[0]
-                start_index = (
-                    int(zmeta["index"][-1].item()) + 1 if existing_len > 0 else 0
-                )
-
-            # Assign sequential indices
-            df_with_index = df.with_columns(
-                (pl.arange(start_index, start_index + df.height)).alias("index")
-            )
-
-            # Write each column
-            for col_name in df_with_index.columns:
-                col_data = df_with_index[col_name]
-
-                if col_name == "index":
-                    dtype = "i8"
-                    arr = col_data.to_numpy().astype(dtype)
-                elif col_name in ("start", "end"):
-                    dtype = "M8[ns]"
-                    arr = col_data.to_numpy().astype(dtype)
-                else:
-                    # strings / jsons / ids
-                    dtype = VariableLengthUTF8()
-                    arr = col_data.to_list()
-
-                if col_name not in zmeta:
-                    # Create array if it doesn't exist
-                    zmeta.create_array(
-                        name=col_name,
-                        shape=(0,),
-                        dtype=dtype,
-                        chunks=(1024,),
-                        overwrite=True,
-                    )
-
-                # Resize and append
-                old_len = zmeta[col_name].shape[0]
-                new_len = old_len + len(arr)
-                zmeta[col_name].resize(new_len)
-                zmeta[col_name][old_len:new_len] = arr
+            _append_log_rows(zmeta, df)
 
             self._logger.info(
-                f"Appended {df_with_index.height} metadata rows to group '{group_name}'"
+                f"Appended {df.height} metadata rows to group '{group_name}'"
             )
 
         if session is not None:
@@ -2038,13 +2178,15 @@ class MyIcechunkStore:
             end                 datetime64[ns]
             snapshot_id         str (UTF-8)
             action              str (UTF-8, "write"|"append"|"overwrite")
-            commit_msg          str (UTF-8)
-            written_at          str (UTF-8, ISO8601 with timezone)
+            commit_msg          str (UTF-8, the message of the commit that
+                                 holds the row, including its run_id)
+            run_id              str (UTF-8, "" outside a run)
+            written_at          str (UTF-8, ISO8601, UTC)
             write_strategy      str (UTF-8)
             calculator_name     str (UTF-8)
             attrs               str (UTF-8, JSON dump of dataset attrs)
         """
-        written_at = datetime.now().astimezone().isoformat()
+        written_at = datetime.now(UTC).isoformat()
         row = {
             "source_file_hashes": json.dumps(source_file_hashes, sort_keys=True),
             "source_gnss_stores": json.dumps(source_gnss_stores, sort_keys=True),
@@ -2053,44 +2195,15 @@ class MyIcechunkStore:
             "snapshot_id": str(snapshot_id),
             "action": str(action),
             "commit_msg": str(commit_msg),
+            "run_id": get_run_id() or "",
             "written_at": written_at,
             "write_strategy": str(self._vod_store_strategy),
             "calculator_name": str(calculator_name),
             "attrs": json.dumps(dataset_attrs, default=str),
         }
         df_row = pl.DataFrame([row])
-        meta_group_path = f"{group_name}/metadata/table"
-
-        if (
-            "metadata" not in zroot[group_name]
-            or "table" not in zroot[group_name]["metadata"]
-        ):
-            zmeta = zroot.require_group(meta_group_path)
-            zmeta.create_array(
-                name="index", shape=(0,), dtype="i8", chunks=(1024,), overwrite=True
-            )
-            zmeta["index"].append([0])
-            for col in df_row.columns:
-                if col in ("start", "end"):
-                    dtype = "M8[ns]"
-                    arr = np.array(df_row[col].to_numpy(), dtype=dtype)
-                else:
-                    dtype = VariableLengthUTF8()
-                    arr = df_row[col].to_list()
-                zmeta.create_array(
-                    name=col, shape=(0,), dtype=dtype, chunks=(1024,), overwrite=True
-                )
-                zmeta[col].append(arr)
-        else:
-            zmeta = zroot[meta_group_path]
-            current_len = zmeta["index"].shape[0]
-            zmeta["index"].append([current_len])
-            for col in df_row.columns:
-                if col in ("start", "end"):
-                    arr = np.array(df_row[col].to_numpy(), dtype="M8[ns]")
-                else:
-                    arr = df_row[col].to_list()
-                zmeta[col].append(arr)
+        zmeta = zroot.require_group(f"{group_name}/metadata/table")
+        _append_log_rows(zmeta, df_row)
 
     def _vod_metadata_row_exists(
         self,
@@ -2278,9 +2391,11 @@ class MyIcechunkStore:
         if commit_message is None:
             version = get_version_from_pyproject()
             commit_message = (
-                f"[v{version}] {action.capitalize()}d VOD group '{group_name}' "
+                f"[v{version}] {action} VOD group '{group_name}' "
                 f"(calculator={calculator_name})"
             )
+        # The log-book row must carry the message the commit actually gets.
+        commit_message = _with_run_id(commit_message)
 
         with self.writable_session(branch) as session:
             self._logger.info(
@@ -2335,7 +2450,7 @@ class MyIcechunkStore:
                 calculator_name=calculator_name,
                 dataset_attrs=dict(dataset.attrs),
             )
-            session.commit(_with_run_id(commit_message))
+            session.commit(commit_message)
 
         self._logger.info(
             f"{action.capitalize()}d VOD group '{group_name}' "
@@ -2386,13 +2501,11 @@ class MyIcechunkStore:
         start = dataset.epoch.min().values
         end = dataset.epoch.max().values
         action = "append" if self.group_exists(item.group_name, branch) else "write"
-        commit_message = item.commit_message
-        if commit_message is None:
-            version = get_version_from_pyproject()
-            commit_message = (
-                f"[v{version}] {action.capitalize()}d VOD group "
-                f"'{item.group_name}' (calculator={item.calculator_name})"
-            )
+        # A description of this group's write; the batch combines the
+        # descriptions of all groups sharing a commit into its message.
+        commit_message = item.commit_message or (
+            f"VOD {item.group_name} (calculator={item.calculator_name})"
+        )
         return None, VodWritePlan(
             item=item,
             action=action,
@@ -2523,6 +2636,9 @@ class MyIcechunkStore:
         # Pre-pass: brand-new groups, sequential, one clean session, one commit.
         if new_plans:
             summary_parts: list[str] = []
+            prepass_msg, prepass_metadata = _vod_batch_commit(
+                version, "write", new_plans
+            )
             with self.writable_session(branch) as prepass_session:
                 for plan in new_plans:
                     t_start = time.perf_counter()
@@ -2566,18 +2682,19 @@ class MyIcechunkStore:
                     summary_parts.append(group_name)
 
                 if summary_parts:
-                    prepass_msg = (
-                        f"[v{version}] pre-pass create {len(summary_parts)} "
-                        f"VOD groups: {', '.join(summary_parts)}"
-                    )
                     prepass_snapshot_id = prepass_session.commit(
-                        _with_run_id(prepass_msg)
+                        prepass_msg, metadata=prepass_metadata
                     )
                     for name in summary_parts:
                         results[name].snapshot_id = prepass_snapshot_id
 
         # Fork/merge phase: pre-existing groups only.
         if append_plans:
+            # Fail-fast below: either every group lands in this commit or
+            # none does, so the message can name all of them up front.
+            commit_msg, agg_metadata = _vod_batch_commit(
+                version, "append", list(append_plans.values())
+            )
             with self.writable_session(branch) as base_session:
                 forks = {name: base_session.fork() for name in append_plans}
                 with ThreadPoolExecutor(max_workers=len(append_plans)) as tpe:
@@ -2599,14 +2716,8 @@ class MyIcechunkStore:
                         raise
 
                 base_session.merge(*forks.values())
-                summary = ", ".join(completed)
-                commit_msg = f"[v{version}] {len(completed)} VOD groups: {summary}"
-                agg_metadata = {
-                    "groups": ",".join(completed),
-                    "total_groups": str(len(completed)),
-                }
                 batch_snapshot_id = base_session.commit(
-                    _with_run_id(commit_msg), metadata=agg_metadata
+                    commit_msg, metadata=agg_metadata
                 )
                 for name, result in completed.items():
                     result.snapshot_id = batch_snapshot_id
@@ -2869,6 +2980,41 @@ class MyIcechunkStore:
                 return int(zmeta["index"].shape[0])
         except Exception:
             return 0
+
+    def source_file_hashes(
+        self,
+        group_name: str,
+        start: np.datetime64,
+        end: np.datetime64,
+        branch: str = "main",
+    ) -> list[str]:
+        """Hashes of the ingested files whose data overlaps ``[start, end]``.
+
+        Read from ``group_name``'s log book, in ingest order and without
+        duplicates. Rows recording a file that was skipped as already
+        ingested (``exists`` is ``"True"`` and nothing was written) are
+        ignored, so each file counts once however often it was re-run.
+
+        Used as the provenance of a dataset read back from the store for
+        that range, e.g. the daily inputs of a VOD computation.
+        """
+        df = self.load_metadata_for_dedup(group_name, branch=branch)
+        if df is None or df.is_empty():
+            return []
+
+        start_ns = np.datetime64(start, "ns")
+        end_ns = np.datetime64(end, "ns")
+        rows = df.filter((pl.col("start") <= end_ns) & (pl.col("end") >= start_ns))
+        if "action" in rows.columns:
+            skipped = (pl.col("action") == "skipped") | (
+                (pl.col("action") == "") & (pl.col("exists") == "True")
+            )
+        elif "exists" in rows.columns:
+            skipped = pl.col("exists") == "True"
+        else:
+            skipped = pl.lit(False)
+        rows = rows.filter(~skipped).sort("index")
+        return list(dict.fromkeys(str(h) for h in rows["rinex_hash"].to_list()))
 
     def load_metadata_for_dedup(
         self, group_name: str, branch: str = "main"

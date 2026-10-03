@@ -42,10 +42,7 @@ reader = Rnxv3Obs(fpath=filepath)
 dataset = reader.to_ds(keep_rnx_data_vars=["SNR"])
 
 # Filter GPS L1 signals
-gps_l1 = dataset.where(
-    (dataset.system == 'G') & (dataset.band == 'L1'),
-    drop=True
-)
+gps_l1 = dataset.where((dataset.system == "G") & (dataset.band == "L1"), drop=True)
 ```
 
 ## Interactive Examples

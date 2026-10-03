@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
+from canvod.utils.tools import deprecated
+
 from .base import _StrictModel
 
 
@@ -36,7 +38,10 @@ class ReceiverConfig(_StrictModel):
     )
     naming: dict | None = Field(
         None,
-        description="Naming configuration (validated by canvod-filemap package)",
+        description=(
+            "Deprecated, not used for file discovery. Set 'recipe' for "
+            "non-canonical filenames instead."
+        ),
     )
     metadata: dict[str, str | int | float | bool] | None = Field(
         None,
@@ -56,8 +61,9 @@ class ReceiverConfig(_StrictModel):
         None,
         description=(
             "Name of a naming recipe (e.g. 'examplesite_reference'). "
-            "Resolved from config/recipes/{recipe}.yaml. "
-            "When set, replaces the 'naming' block for file discovery."
+            "Read from <config dir>/recipes/<site>/{recipe}.yaml. "
+            "Without a recipe, only files with canonical canVOD names are "
+            "processed."
         ),
     )
 
@@ -68,12 +74,27 @@ class ReceiverConfig(_StrictModel):
             import warnings
 
             warnings.warn(
-                "ReceiverConfig: 'scs_from' is deprecated; use 'paired_canopies' instead",
-                DeprecationWarning,
+                "The receiver setting 'scs_from' is left over from development and will be removed with the next major version. "
+                "Rename it to 'paired_canopies' in your site configuration.",
+                FutureWarning,
                 stacklevel=2,
             )
             data = dict(data)
             data["paired_canopies"] = data.pop("scs_from")
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_naming(cls, data: object) -> object:
+        if isinstance(data, dict) and data.get("naming") is not None:
+            import warnings
+
+            warnings.warn(
+                "The receiver setting 'naming' is left over from development and will be removed with the next major version. "
+                "Use 'recipe' instead (create one with: just naming-init <site> <recipe>).",
+                FutureWarning,
+                stacklevel=2,
+            )
         return data
 
     @model_validator(mode="after")
@@ -87,30 +108,57 @@ class ReceiverConfig(_StrictModel):
             raise ValueError(msg)
         return self
 
-    @model_validator(mode="after")
-    def validate_naming_recipe_exclusive(self) -> ReceiverConfig:
-        """Reject a receiver configuring both recipe and naming.
 
-        recipe's own description says it "replaces the naming block for
-        file discovery" — but nothing enforced that until now, so both
-        could be set with no indication of which one actually takes effect.
-        """
-        if self.recipe is not None and self.naming is not None:
-            msg = (
-                "recipe and naming are mutually exclusive on a receiver — "
-                "recipe replaces the naming block for file discovery, so "
-                "having both set is ambiguous. Remove one."
-            )
-            raise ValueError(msg)
-        return self
+def reference_store_group(reference_receiver: str, canopy_receiver: str) -> str:
+    """Icechunk store group name holding a reference receiver's paired data.
+
+    Reference receiver data is always written to the RINEX store under this
+    paired name (see ``PipelineOrchestrator._group_by_date_and_receiver``),
+    never under the bare receiver name -- one reference can be paired with
+    several canopies, each getting its own group. This is the single place
+    that derives that name; every reader of the store should call this (or
+    ``VodAnalysisConfig.reference_store_group``) instead of formatting the
+    f-string locally.
+
+    Parameters
+    ----------
+    reference_receiver : str
+        Bare reference receiver name (matches a ``receivers`` config key).
+    canopy_receiver : str
+        Bare canopy receiver name it is paired with.
+
+    Returns
+    -------
+    str
+        Store group name, e.g. ``"reference_01_canopy_01"``.
+    """
+    return f"{reference_receiver}_{canopy_receiver}"
 
 
 class VodAnalysisConfig(_StrictModel):
     """VOD analysis pair configuration."""
 
     canopy_receiver: str = Field(..., description="Canopy receiver name")
-    reference_receiver: str = Field(..., description="Reference receiver name")
+    reference_receiver: str = Field(
+        ...,
+        description=(
+            "Bare reference receiver name -- always matches a 'receivers' "
+            "config key, never a store group name. Used for directory "
+            "lookups during RINEX ingest. For the Icechunk store group "
+            "holding this receiver's data (paired with canopy_receiver), "
+            "use the reference_store_group property instead."
+        ),
+    )
     description: str | None = Field(None, description="Analysis description")
+
+    @property
+    def reference_store_group(self) -> str:
+        """Icechunk store group name for this analysis's reference data.
+
+        See :func:`reference_store_group` (module-level) for why this is
+        distinct from ``reference_receiver``.
+        """
+        return reference_store_group(self.reference_receiver, self.canopy_receiver)
 
 
 class SiteConfig(_StrictModel):
@@ -131,8 +179,25 @@ class SiteConfig(_StrictModel):
     )
     naming: dict | None = Field(
         None,
-        description="Naming configuration (validated by canvod-filemap package)",
+        description=(
+            "Deprecated, not used for file discovery. Set 'recipe' on each "
+            "receiver with non-canonical filenames instead."
+        ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_naming(cls, data: object) -> object:
+        if isinstance(data, dict) and data.get("naming") is not None:
+            import warnings
+
+            warnings.warn(
+                "The site setting 'naming' is left over from development and will be removed with the next major version. "
+                "Use 'recipe' on each receiver instead (create one with: just naming-init <site> <recipe>).",
+                FutureWarning,
+                stacklevel=2,
+            )
+        return data
 
     @model_validator(mode="after")
     def validate_paired_canopies_targets(self) -> SiteConfig:
@@ -205,15 +270,12 @@ class SiteConfig(_StrictModel):
             raise ValueError(msg)
         return [cfg.paired_canopies]
 
+    @deprecated(
+        "SiteConfig.resolve_scs_from() is left over from development and will be removed with the next major version. "
+        "Use SiteConfig.resolve_paired_canopies() instead."
+    )
     def resolve_scs_from(self, receiver_name: str) -> list[str]:
         """Deprecated: use resolve_paired_canopies instead."""
-        import warnings
-
-        warnings.warn(
-            "SiteConfig.resolve_scs_from is deprecated; use resolve_paired_canopies instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         return self.resolve_paired_canopies(receiver_name)
 
     @model_validator(mode="after")

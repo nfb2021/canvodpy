@@ -29,6 +29,8 @@ from canvod.config.models import (
     SiteConfig,
     SitesConfig,
     StorageConfig,
+    VodAnalysisConfig,
+    reference_store_group,
 )
 
 # ===================================================================
@@ -298,29 +300,29 @@ class TestReceiverConfig:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             rc = ReceiverConfig(type="reference", directory="ref/raw", scs_from="all")
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert any(issubclass(x.category, FutureWarning) for x in w)
         assert rc.paired_canopies == "all"
-
-    def test_recipe_and_naming_both_set_raises(self):
-        with pytest.raises(ValidationError, match="mutually exclusive"):
-            ReceiverConfig(
-                type="canopy",
-                directory="can/raw",
-                recipe="rosalia_canopy",
-                naming={"source_pattern": "auto"},
-            )
 
     def test_recipe_only_is_valid(self):
         rc = ReceiverConfig(type="canopy", directory="can/raw", recipe="rosalia_canopy")
         assert rc.recipe == "rosalia_canopy"
         assert rc.naming is None
 
-    def test_naming_only_is_valid(self):
-        rc = ReceiverConfig(
-            type="canopy", directory="can/raw", naming={"source_pattern": "auto"}
-        )
+    def test_naming_is_deprecated(self):
+        with pytest.warns(FutureWarning, match="receiver setting 'naming'.*recipe"):
+            rc = ReceiverConfig(
+                type="canopy", directory="can/raw", naming={"source_pattern": "auto"}
+            )
         assert rc.naming == {"source_pattern": "auto"}
         assert rc.recipe is None
+
+    def test_site_naming_is_deprecated(self):
+        with pytest.warns(FutureWarning, match="site setting 'naming'.*recipe"):
+            SiteConfig(
+                gnss_site_data_root="/data",
+                receivers={"canopy_01": {"type": "canopy", "directory": "c"}},
+                naming={"site_id": "ROS", "agency": "TUW"},
+            )
 
 
 # ===================================================================
@@ -380,7 +382,7 @@ class TestSiteConfig:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             result = site.resolve_scs_from("reference_01")
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert any(issubclass(x.category, FutureWarning) for x in w)
         assert result == ["canopy_01"]
 
     def test_paired_canopies_references_nonexistent_canopy_raises(self):
@@ -411,6 +413,54 @@ class TestSiteConfig:
         pairs = site.get_reference_canopy_pairs()
         assert ("r1", "c1") in pairs
         assert ("r1", "c2") in pairs
+
+    def test_auto_derive_vod_analyses_uses_bare_reference_name(self):
+        """See GH #66: reference_receiver must stay the bare receiver name
+        (matches a 'receivers' key, used for directory lookups) -- never
+        the paired store group name.
+        """
+        site = self._make_site()
+        assert site.vod_analyses is not None
+        cfg = site.vod_analyses["canopy_01_vs_reference_01"]
+        assert cfg.reference_receiver == "reference_01"
+        assert cfg.canopy_receiver == "canopy_01"
+
+    def test_explicit_vod_analyses_not_overridden(self):
+        site = self._make_site(
+            vod_analyses={
+                "custom": VodAnalysisConfig(
+                    canopy_receiver="canopy_01", reference_receiver="reference_01"
+                )
+            }
+        )
+        assert list(site.vod_analyses) == ["custom"]
+
+
+# ===================================================================
+# VodAnalysisConfig.reference_store_group
+# ===================================================================
+
+
+class TestReferenceStoreGroup:
+    def test_function_formats_paired_name(self):
+        assert reference_store_group("reference_01", "canopy_01") == (
+            "reference_01_canopy_01"
+        )
+
+    def test_vod_analysis_config_property_matches_function(self):
+        cfg = VodAnalysisConfig(
+            canopy_receiver="canopy_01", reference_receiver="reference_01"
+        )
+        assert cfg.reference_store_group == "reference_01_canopy_01"
+        assert cfg.reference_store_group == reference_store_group(
+            cfg.reference_receiver, cfg.canopy_receiver
+        )
+
+    def test_property_stays_distinct_from_bare_receiver(self):
+        cfg = VodAnalysisConfig(
+            canopy_receiver="canopy_01", reference_receiver="reference_01"
+        )
+        assert cfg.reference_store_group != cfg.reference_receiver
 
 
 # ===================================================================
@@ -466,7 +516,7 @@ class TestStorageConfig:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             result = sc.get_rinex_store_path("rosalia")
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert any(issubclass(x.category, FutureWarning) for x in w)
         assert result == tmp_path / "rosalia" / "rinex"
 
     def test_placeholder_path_not_validated(self):

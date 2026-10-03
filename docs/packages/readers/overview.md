@@ -23,6 +23,17 @@ The `canvod-readers` package provides validated parsers for [GNSS](https://gssc.
 
     [:octicons-arrow-right-24: RINEX format](rinex-format.md)
 
+-   :fontawesome-solid-file-lines: &nbsp; **RINEX v2.11 — `Rnxv2Obs`**
+
+    ---
+
+    Legacy RINEX 2 observation files (`.YYo`, `.rnx`), read into the same RINEX 3
+    based `SV|BAND|CODE` structure. RINEX 2 does not record tracking codes;
+    where the specification leaves a code unresolved, the sid carries a
+    lowercase marker (`p`, `l`, `u`) instead of a guessed RINEX 3 code.
+
+    [:octicons-arrow-right-24: RINEX v2.11 format](rinex-v2-format.md)
+
 -   :fontawesome-solid-satellite-dish: &nbsp; **SBF Binary — `SbfReader`**
 
     ---
@@ -40,24 +51,24 @@ The `canvod-readers` package provides validated parsers for [GNSS](https://gssc.
 
 ## Supported Formats at a Glance
 
-| Feature | `Rnxv3Obs` | `SbfReader` |
-| ------- | ---------- | ----------- |
-| Format | Plain text | Binary |
-| Extension | `.rnx` | `.sbf` |
-| Satellite geometry (θ, φ) | SP3 download | **Embedded** |
-| Extra metadata | Header only | PVT · DOP · quality |
-| `to_ds()` | ✓ | ✓ |
-| `iter_epochs()` | ✓ | ✓ |
-| `to_metadata_ds()` | — | ✓ |
-| `to_ds_and_auxiliary()` | `{}` aux | `{"sbf_obs": meta_ds}` |
+| Feature | `Rnxv3Obs` | `Rnxv2Obs` | `SbfReader` |
+| ------- | ---------- | ---------- | ----------- |
+| Format | Plain text | Plain text | Binary |
+| Extension | `.rnx` | `.YYo`, `.rnx` | `.sbf` |
+| Tracking codes | Exact (RINEX 3 attribute) | Exact where RINEX 2.11 defines them, else lowercase marker | Exact |
+| Satellite geometry (θ, φ) | SP3 download | SP3 download | **Embedded** |
+| Extra metadata | Header only | Header only | PVT · DOP · quality |
+| `to_ds()` | ✓ | ✓ | ✓ |
+| `iter_epochs()` | ✓ | ✓ | ✓ |
+| `to_ds_and_auxiliary()` | `{}` aux | `{}` aux | `{"sbf_obs": meta_ds}` |
 
 !!! note "Consistent output structure"
 
-    Both readers always produce data with the same two dimensions — time (epoch) and signal (SID) — and the same required attributes, so analysis code works with RINEX and SBF data interchangeably.
-    Both readers produce `(epoch × sid)` xarray Datasets that pass
+    All readers always produce data with the same two dimensions — time (epoch) and signal (SID) — and the same required attributes, so analysis code works with RINEX and SBF data interchangeably.
+    All readers produce `(epoch × sid)` xarray Datasets that pass
     `validate_dataset()`. Every row is one timestep (an epoch), every column
     is one signal (a SID), and every cell is one observable — for example,
-    SNR in dB-Hz. The same dimensions, coordinates, and required attributes
+    SNR, with its unit in the `units` attribute. The same dimensions, coordinates, and required attributes
     are guaranteed, so downstream analysis code is reader-agnostic for observables.
     Geometry provisioning differs: RINEX datasets are augmented with satellite
     positions from SP3 files (CLK too, by default — optional, see
@@ -74,7 +85,9 @@ The `canvod-readers` package provides validated parsers for [GNSS](https://gssc.
 graph TD
     A1["RINEX v3 File (.rnx)"] --> B1["Rnxv3Obs (+ SP3/CLK)"]
     A2["SBF File (.sbf)"] --> B2["SbfReader"]
+    A3["RINEX v2 File (.YYo)"] --> B3["Rnxv2Obs (+ SP3/CLK)"]
     B1 --> C["validate_dataset()"]
+    B3 --> C
     B2 --> C
     C --> D["`**xarray.Dataset**
     epoch x sid`"]
@@ -146,6 +159,7 @@ Subclasses only need to inherit from `GNSSDataReader` — no separate `BaseModel
 === "SBF — quick-look (no downloads)"
 
     ```python
+    import numpy as np
     from canvod.readers.sbf import SbfReader
 
     reader = SbfReader(fpath="rref001a00.sbf")
@@ -153,7 +167,7 @@ Subclasses only need to inherit from `GNSSDataReader` — no separate `BaseModel
     meta_ds = aux["sbf_obs"]
 
     # Polar angle filter: elevation ≥ 20°
-    snr_filtered = obs_ds["SNR"].where(meta_ds["theta"] <= 70)
+    snr_filtered = obs_ds["SNR"].where(meta_ds["broadcast_theta"] <= np.deg2rad(70))
     ```
 
 === "Multi-constellation analysis"
@@ -230,7 +244,7 @@ Subclasses only need to inherit from `GNSSDataReader` — no separate `BaseModel
     ```python
     from canvod.readers.builder import DatasetBuilder
 
-    builder = DatasetBuilder(reader)
+    builder = DatasetBuilder(reader, time_system="GPS")
     ei = builder.add_epoch(timestamp)
     sig = builder.add_signal(sv="G01", band="L1", code="C")
     builder.set_value(ei, sig, "SNR", 42.0)
@@ -287,13 +301,28 @@ Subclasses only need to inherit from `GNSSDataReader` — no separate `BaseModel
 
 ## Performance
 
-### Single-Pass Parser
+### RINEX v3 parsers
 
-`Rnxv3Obs` uses a single-pass parser that pre-computes the full Signal ID (SID) space from the RINEX header and fills pre-allocated NumPy arrays in one pass over the file. This avoids the overhead of:
+`Rnxv3Obs` pre-computes the full Signal ID (SID) space from the RINEX header and fills pre-allocated NumPy arrays. A pre-built lookup table maps `(SV, obs_code)` to the array index, and the SIDs are derived once from the header.
 
-- **Per-observation object allocation** — inline string parsing replaces per-observation model instantiation
-- **Repeated signal ID lookups** — a pre-built lookup table maps `(SV, obs_code)` → array index directly
-- **Redundant header re-parsing** — SIDs are derived once from header metadata at parse start
+Two parsers fill these arrays:
+
+- **`validated`** (default): every epoch passes the Pydantic epoch and satellite models (epoch line, satellite IDs, satellite count, observation records). Epochs that fail are dropped, and the reader logs how many and at which lines (`rinex_epochs_rejected`).
+- **`unvalidated_fast`**: slices fixed columns without any check.
+
+Both share the SID space, the array allocation, the epoch-time conversion and the dataset assembly. For a valid file they give the identical dataset (`test_rinex_v3_path_parity.py`).
+
+!!! danger "`unvalidated_fast` is your responsibility"
+
+    The unvalidated parser does not check epochs, satellite IDs, satellite
+    counts or observation fields. A corrupted record can enter the dataset
+    as partial or wrong values, for example the fields of a truncated
+    satellite line, or an epoch whose satellite count does not match its
+    records. canVODpy takes no responsibility for its results; checking the
+    input files is entirely up to you. Every use emits an
+    `UnvalidatedParserWarning`. Select it with
+    `to_ds(parser="unvalidated_fast")` or
+    `processing.params.rinex_v3_parser: unvalidated_fast`.
 
 ### Tips
 

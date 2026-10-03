@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import re
+from unittest import mock
+
 import canvodpy.cli.config as cfg
+import pytest
 import typer
 import yaml
 from typer.testing import CliRunner
@@ -151,9 +155,11 @@ class TestValidateRecipeWithoutFilemap:
         config_dir = tmp_path / "config"
         self._write_config(config_dir, tmp_path, with_recipe=True)
 
-        result = runner.invoke(
-            _app(), ["config", "validate", "--config-dir", str(config_dir)]
-        )
+        # Simulate an install without canvod-filemap, whatever this env has
+        with mock.patch.dict("sys.modules", {"canvod.filemap": None}):
+            result = runner.invoke(
+                _app(), ["config", "validate", "--config-dir", str(config_dir)]
+            )
 
         assert result.exit_code == 1
         assert "canopy_01" in result.output
@@ -168,3 +174,52 @@ class TestValidateRecipeWithoutFilemap:
         )
 
         assert "uv sync --extra filemap" not in result.output
+
+
+class TestConfigDirOption:
+    def test_selects_the_settings_and_the_recipes(self, tmp_path):
+        pytest.importorskip("canvod.filemap.recipe_files")
+        from canvodpy.orchestrator.discovery import recipe_file
+
+        from canvod.config.loader import get_default_config_dir
+
+        config_dir = tmp_path / "my_config"
+        result = runner.invoke(
+            _app(), ["config", "init", "--config-dir", str(config_dir)]
+        )
+        assert result.exit_code == 0, result.output
+        assert (config_dir / "canvod-settings.yaml").exists()
+
+        # Every later lookup in the same process uses that directory
+        assert get_default_config_dir() == config_dir.resolve()
+        (config_dir / "recipes" / "rosalia").mkdir(parents=True)
+        (config_dir / "recipes" / "rosalia" / "rx.yaml").write_text("")
+        assert recipe_file("rosalia", "rx") == (
+            config_dir.resolve() / "recipes" / "rosalia" / "rx.yaml"
+        )
+
+    def test_every_command_offers_it(self):
+        from canvodpy.cli.app import main_app
+
+        for command in (
+            ["run"],
+            ["vod"],
+            ["vod-reconcile"],
+            ["doctor"],
+            ["store", "list"],
+            ["store", "info"],
+            ["store", "log"],
+            ["store", "maintain"],
+            ["store", "maintain-due"],
+            ["config", "init"],
+            ["config", "validate"],
+            ["config", "show"],
+            ["config", "edit"],
+        ):
+            # Wide help text, ANSI codes removed: on GitHub Actions typer
+            # forces a colored terminal, and the codes split option names.
+            result = runner.invoke(
+                main_app, [*command, "--help"], env={"COLUMNS": "200"}
+            )
+            plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+            assert "--config-dir" in plain, command

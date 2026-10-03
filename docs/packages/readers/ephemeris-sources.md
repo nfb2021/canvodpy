@@ -77,16 +77,19 @@ The production path used by the orchestrator (Levels 1 and 3).
 
 ```
 1. AuxDataPipeline: download SP3 (+ CLK, if aux_data.fetch_clock) from FTP (CODE/ESA/IGS)
-2. Hermite interpolation: SP3 positions → target epoch grid
-3. Clock piecewise linear interpolation (skipped if fetch_clock=False)
-4. Write Zarr cache: aux_{date}.zarr
-5. Per file: open Zarr → sel(epoch) → compute_spherical_coordinates()
-6. Output: ds["theta"], ds["phi"], ds["r"]
+2. Epoch grid of the day: 00:00 plus multiples of the sampling interval of the
+   observations (1 s with a shared aux cache)
+3. Hermite interpolation: SP3 positions → epoch grid
+4. Clock piecewise linear interpolation (skipped if fetch_clock=False)
+5. Write Zarr cache: aux_{date}.zarr
+6. Per file: open Zarr → nearest grid epoch per observation epoch
+   → compute_spherical_coordinates()
+7. Output: ds["theta"], ds["phi"], ds["r"]
 ```
 
 CLK is not consumed by the VOD formula (`VOD = -ln(T) · cos(θ)` — only
 transmittance and polar angle). Set `aux_data.fetch_clock: false` to skip
-steps 1's clock download and step 3 entirely.
+step 1's clock download and step 4 entirely.
 
 ### Configuration
 
@@ -108,8 +111,8 @@ processing:
 |-----------|---------|--------|
 | SP3/CLK download | canvod-auxiliary | `pipeline.py` |
 | FTP with fallback | canvod-auxiliary | `core/downloader.py` |
-| Hermite interpolation | canvodpy | `orchestrator/interpolator.py` |
-| Clock interpolation (optional, `aux_data.fetch_clock`) | canvodpy | `orchestrator/interpolator.py` |
+| Hermite interpolation | canvod-auxiliary | `interpolation/interpolator.py` |
+| Clock interpolation (optional, `aux_data.fetch_clock`) | canvod-auxiliary | `interpolation/interpolator.py` |
 | ECEF → theta/phi/r | canvod-auxiliary | `position/spherical_coords.py` |
 
 ---
@@ -118,29 +121,37 @@ processing:
 
 Available when the receiver is a Septentrio unit outputting SBF binary format.
 The receiver firmware computes satellite elevation and azimuth from the
-broadcast navigation message and embeds them in the `SatVisibility` block.
+satellite's almanac or broadcast ephemeris and embeds them in the
+`SatVisibility` block, together with which of the two it used.
 
 ### How it works
 
 ```
 1. SBF reader scans file: extracts SatVisibility blocks
 2. Azimuth and elevation are pre-computed by receiver firmware
-3. Stored in sbf_obs auxiliary dataset as theta/phi
-4. Aligned to observation epochs and SIDs
+3. Stored in the sbf_obs auxiliary dataset as broadcast_theta/broadcast_phi
+   (radians), on the epochs and SIDs of the observations: each value comes
+   from the SatVisibility block with the same time stamp as the observations
+4. Copied to theta/phi of the observations dataset where the receiver
+   computed them from the broadcast ephemeris (broadcast_angle_source = 2);
+   almanac-based angles become NaN, and a file with no ephemeris-based
+   angle raises an error
 5. No download, no Zarr cache, no coordinate transform needed
 ```
 
 !!! info "Theta and phi convention"
 
-    SBF SatVisibility provides polar angle (theta = 90° - elevation)
-    and geographic azimuth (0° = North, clockwise). Same convention
-    used throughout canvodpy — no conversion needed.
+    SBF SatVisibility provides elevation and geographic azimuth
+    (0° = North, clockwise). The reader converts elevation to the polar
+    angle (theta = 90° - elevation) and both angles to radians, the
+    convention used throughout canvodpy.
 
 ### Configuration
 
 ```yaml
 processing:
-  ephemeris_source: "broadcast"
+  params:
+    ephemeris_source: "broadcast"
   # reader_format must be "sbf" for this to work
 ```
 

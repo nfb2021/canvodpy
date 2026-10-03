@@ -1,26 +1,31 @@
-"""VOD computation helper with explicit strategies.
+"""VOD computation and storage for a site: the single VOD implementation.
 
-Provides two strategies for computing Vegetation Optical Depth:
+Every entry point computes and stores VOD through this class: the Python
+``site.vod`` object, ``canvodpy run`` (per day, during processing),
+``canvodpy vod`` and ``canvodpy vod-reconcile`` (from the GNSS store).
 
-- ``compute_day()`` — inline per-day computation from in-memory datasets.
-  Calls ``.load()`` on Dask-backed datasets to materialize into main-process
-  memory, then computes VOD single-threaded.  For daily cron / Airflow.
+- ``compute_day()`` / ``compute_day_all()`` — from the per-day datasets
+  yielded by ``Pipeline.process_range()``. Loads them into memory, then
+  computes.
+- ``compute_bulk()`` — from the site's GNSS Icechunk store. Reads the full
+  (or filtered) time range, drops duplicate epochs, sorts, then computes.
 
-- ``compute_bulk()`` — bulk computation from an Icechunk RINEX store.
-  Opens groups directly, reads the full time range, deduplicates/sorts,
-  then computes.  For backfill or reprocessing.
-
-Both strategies share core logic via ``_compute_and_write()``.
+All three share ``_compute()`` (the calculator, which aligns canopy and
+reference on their shared epochs and signals) and ``_write()`` (one commit
+for all analyses written together, then the VOD store metadata).
+``canvodpy run`` adds only terminal conveniences: it skips a failing
+analysis instead of raising, and retries the store write on transient
+errors.
 
 Examples
 --------
-Per-day (inside a processing loop)::
+Per day (inside a processing loop)::
 
     vod = VodComputer(site)
 
     with site.pipeline() as pipeline:
         for date_key, datasets in pipeline.process_range(...):
-            vod.compute_day(datasets, "canopy_01_vs_reference_01")
+            vod.compute_day_all(datasets)
 
 Bulk reprocessing::
 
@@ -37,7 +42,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from canvodpy.logging import get_logger
+import structlog
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -57,16 +62,22 @@ def ensure_vod_store_metadata(site: Site, calculator_name: str) -> None:
     the config and record drift rather than silently freezing the config
     section at whatever was true on the very first write). Best-effort:
     swallows failures so a metadata problem never blocks the actual VOD
-    write. See dev/todo_later.md §29 item 4.
+    write, but logs them as warnings. Call it after the data write, so the
+    coverage and summaries describe the data just written. See
+    dev/todo_later.md §29 item 4.
     """
-    log = get_logger(__name__).bind(site=site.name, calculator=calculator_name)
+    log = structlog.get_logger(__name__).bind(
+        site=site.name, calculator=calculator_name
+    )
     try:
         from canvod.config import load_config
         from canvod.store_metadata import (
+            apply_updates,
             collect_config_snapshot,
             collect_metadata,
             metadata_exists,
             read_metadata,
+            summarize_store,
             update_metadata,
             write_metadata,
         )
@@ -87,6 +98,7 @@ def ensure_vod_store_metadata(site: Site, calculator_name: str) -> None:
                 source_format=calculator_name,
                 store_path=store_path,
             )
+            meta = apply_updates(meta, summarize_store(store_path))
             write_metadata(store_path, meta)
             log.info("vod_store_metadata_written")
         else:
@@ -114,14 +126,16 @@ def ensure_vod_store_metadata(site: Site, calculator_name: str) -> None:
                 *history_entries,
             ]
 
+            # Coverage and summaries describe the data now stored.
+            updates.update(summarize_store(store_path))
             update_metadata(store_path, updates)
             log.info("vod_store_metadata_updated", config_drift_detected=drifted)
     except Exception:
-        log.debug("vod_store_metadata_write_failed", exc_info=True)
+        log.warning("vod_store_metadata_write_failed", exc_info=True)
 
 
 class VodComputer:
-    """Helper for VOD computation with explicit inline and bulk strategies.
+    """Compute VOD for a site's configured analyses and write it to the VOD store.
 
     Parameters
     ----------
@@ -144,7 +158,14 @@ class VodComputer:
         self._site = site
         self._calculator_name = calculator
         self._rechunk = rechunk or {"epoch": 17280, "sid": -1}
-        self.log = get_logger(__name__).bind(site=site.name, calculator=calculator)
+        self.log = structlog.get_logger(__name__).bind(
+            site=site.name, calculator=calculator
+        )
+
+    @property
+    def calculator_name(self) -> str:
+        """Registered name of the VOD calculator in use."""
+        return self._calculator_name
 
     def compute_day(
         self,
@@ -153,7 +174,7 @@ class VodComputer:
         *,
         write: bool = True,
     ) -> xr.Dataset:
-        """Compute VOD inline from per-day datasets.
+        """Compute VOD for one analysis from per-day datasets.
 
         Materializes Dask-backed datasets into memory via ``.load()``,
         then computes VOD single-threaded.
@@ -161,7 +182,7 @@ class VodComputer:
         Parameters
         ----------
         datasets : dict[str, xr.Dataset]
-            Per-receiver datasets keyed by receiver name (e.g. from
+            Per-receiver datasets keyed by store group name (e.g. from
             ``process_range()``).  May be Dask-backed.
         analysis_name : str
             Configured VOD analysis name (e.g. ``"canopy_01_vs_reference_01"``).
@@ -180,22 +201,73 @@ class VodComputer:
         ValueError
             If ``analysis_name`` is not configured.
         """
-        log = self.log.bind(analysis=analysis_name)
-        log.info("compute_day_started")
+        vod_ds = self._compute_from_datasets(datasets, analysis_name)
+        if write:
+            self.write_day(datasets, {analysis_name: vod_ds})
+        return vod_ds
 
-        canopy_ds, sky_ds = self._extract_pair(datasets, analysis_name)
+    def compute_day_all(
+        self,
+        datasets: dict[str, xr.Dataset],
+        *,
+        write: bool = True,
+    ) -> dict[str, xr.Dataset]:
+        """Compute VOD for every configured analysis from per-day datasets.
 
-        # Materialize into memory (safe for single-day data ~1.5GB)
-        canopy_ds = canopy_ds.load()
-        sky_ds = sky_ds.load()
+        All results are written together, in one commit.
 
-        log.info(
-            "datasets_loaded",
-            canopy_epochs=canopy_ds.sizes.get("epoch", 0),
-            sky_epochs=sky_ds.sizes.get("epoch", 0),
-        )
+        Parameters
+        ----------
+        datasets : dict[str, xr.Dataset]
+            Per-receiver datasets keyed by store group name (e.g. from
+            ``process_range()``).  May be Dask-backed.
+        write : bool
+            If ``True`` (default), write the results to the VOD store.
 
-        return self._compute_and_write(canopy_ds, sky_ds, analysis_name, write=write)
+        Returns
+        -------
+        dict[str, xr.Dataset]
+            VOD dataset per analysis name.
+
+        Raises
+        ------
+        KeyError
+            If a required receiver group is not in ``datasets``.
+        """
+        results = {
+            name: self._compute_from_datasets(datasets, name)
+            for name in self._site.vod_analyses
+        }
+        if write and results:
+            self.write_day(datasets, results)
+        return results
+
+    def write_day(
+        self,
+        datasets: dict[str, xr.Dataset],
+        results: dict[str, xr.Dataset],
+    ) -> dict[str, Any]:
+        """Write VOD results computed from ``datasets`` in one commit.
+
+        Parameters
+        ----------
+        datasets : dict[str, xr.Dataset]
+            The per-day datasets the results were computed from; their
+            epochs select the GNSS files recorded as the VOD's sources.
+        results : dict[str, xr.Dataset]
+            VOD dataset per analysis name, e.g. from
+            ``compute_day(..., write=False)``.
+
+        Returns
+        -------
+        dict[str, VodWriteResult]
+            Store write result per ``{calculator}/{analysis}`` group.
+        """
+        entries = []
+        for name, vod_ds in results.items():
+            canopy_ds, sky_ds = self._aligned_pair(datasets, name)
+            entries.append((name, vod_ds, canopy_ds, sky_ds))
+        return self._write(entries)
 
     def compute_bulk(
         self,
@@ -205,7 +277,7 @@ class VodComputer:
         end: datetime | None = None,
         write: bool = True,
     ) -> xr.Dataset:
-        """Compute VOD from the RINEX Icechunk store.
+        """Compute VOD from the GNSS Icechunk store.
 
         Opens canopy and reference groups directly from the store,
         reads the full (or filtered) time range, then computes VOD.
@@ -226,6 +298,59 @@ class VodComputer:
         xr.Dataset
             Computed VOD dataset.
         """
+        vod_ds, canopy_ds, sky_ds = self._compute_bulk_entry(analysis_name, start, end)
+        if write:
+            self._write([(analysis_name, vod_ds, canopy_ds, sky_ds)])
+        return vod_ds
+
+    def compute_bulk_all(
+        self,
+        *,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        write: bool = True,
+    ) -> dict[str, xr.Dataset]:
+        """Compute VOD for every configured analysis from the GNSS store.
+
+        Same as ``compute_bulk()`` per analysis; all results are written
+        together, in one commit.
+
+        Parameters
+        ----------
+        start : datetime, optional
+            Start of time range filter.
+        end : datetime, optional
+            End of time range filter.
+        write : bool
+            If ``True`` (default), write the results to the VOD store.
+
+        Returns
+        -------
+        dict[str, xr.Dataset]
+            VOD dataset per analysis name.
+        """
+        entries = [
+            (name, *self._compute_bulk_entry(name, start, end))
+            for name in self._site.vod_analyses
+        ]
+        if write and entries:
+            self._write(entries)
+        return {name: vod_ds for name, vod_ds, _, _ in entries}
+
+    # ------------------------------------------------------------------
+    # Shared core
+    # ------------------------------------------------------------------
+
+    def _compute_bulk_entry(
+        self,
+        analysis_name: str,
+        start: datetime | None,
+        end: datetime | None,
+    ) -> tuple[xr.Dataset, xr.Dataset, xr.Dataset]:
+        """Read one analysis pair from the GNSS store and compute VOD.
+
+        Returns the VOD dataset and the aligned canopy and reference inputs.
+        """
         import xarray as xr
 
         log = self.log.bind(analysis=analysis_name)
@@ -233,7 +358,7 @@ class VodComputer:
 
         analysis_cfg = self._get_analysis_config(analysis_name)
         canopy_name = analysis_cfg.canopy_receiver
-        ref_name = analysis_cfg.reference_receiver
+        ref_group = analysis_cfg.reference_store_group
 
         store = self._site.gnss_store
 
@@ -241,17 +366,9 @@ class VodComputer:
             canopy_ds = xr.open_zarr(
                 store=session.store, group=canopy_name, consolidated=False
             )
-            try:
-                sky_ds = xr.open_zarr(
-                    store=session.store, group=ref_name, consolidated=False
-                )
-            except Exception:
-                # Paired naming: reference_01_canopy_01 instead of reference_01
-                paired_name = f"{ref_name}_{canopy_name}"
-                log.info("group_fallback", original=ref_name, paired=paired_name)
-                sky_ds = xr.open_zarr(
-                    store=session.store, group=paired_name, consolidated=False
-                )
+            sky_ds = xr.open_zarr(
+                store=session.store, group=ref_group, consolidated=False
+            )
 
         # Time-range filter
         if start or end:
@@ -262,9 +379,7 @@ class VodComputer:
         canopy_ds = self._dedup_sort(canopy_ds)
         sky_ds = self._dedup_sort(sky_ds)
 
-        # Load into memory for computation
-        canopy_ds = canopy_ds.load()
-        sky_ds = sky_ds.load()
+        canopy_ds, sky_ds = xr.align(canopy_ds.load(), sky_ds.load(), join="inner")
 
         log.info(
             "bulk_data_loaded",
@@ -272,37 +387,39 @@ class VodComputer:
             sky_epochs=sky_ds.sizes.get("epoch", 0),
         )
 
-        return self._compute_and_write(canopy_ds, sky_ds, analysis_name, write=write)
+        vod_ds = self._compute(canopy_ds, sky_ds, analysis_name)
+        return vod_ds, canopy_ds, sky_ds
 
-    # ------------------------------------------------------------------
-    # Shared core
-    # ------------------------------------------------------------------
+    def _compute_from_datasets(
+        self,
+        datasets: dict[str, xr.Dataset],
+        analysis_name: str,
+    ) -> xr.Dataset:
+        """Load one analysis pair from per-day datasets and compute VOD."""
+        log = self.log.bind(analysis=analysis_name)
+        canopy_ds, sky_ds = self._aligned_pair(datasets, analysis_name)
 
-    def _compute_and_write(
+        # Materialize into memory (safe for single-day data ~1.5GB)
+        canopy_ds = canopy_ds.load()
+        sky_ds = sky_ds.load()
+
+        log.info(
+            "datasets_loaded",
+            canopy_epochs=canopy_ds.sizes.get("epoch", 0),
+            sky_epochs=sky_ds.sizes.get("epoch", 0),
+        )
+        return self._compute(canopy_ds, sky_ds, analysis_name)
+
+    def _compute(
         self,
         canopy_ds: xr.Dataset,
         sky_ds: xr.Dataset,
         analysis_name: str,
-        *,
-        write: bool = True,
     ) -> xr.Dataset:
-        """Compute VOD and optionally write to the VOD store.
+        """Compute VOD with the configured calculator.
 
-        Parameters
-        ----------
-        canopy_ds : xr.Dataset
-            In-memory canopy dataset.
-        sky_ds : xr.Dataset
-            In-memory sky/reference dataset.
-        analysis_name : str
-            Analysis name for store write.
-        write : bool
-            Whether to persist the result.
-
-        Returns
-        -------
-        xr.Dataset
-            VOD dataset.
+        The calculator itself aligns both datasets on their shared epochs
+        and signals.
         """
         from canvodpy.factories import VODFactory
 
@@ -313,99 +430,175 @@ class VodComputer:
         )
 
         vod_ds = calculator.calculate_vod()
+        vod_ds = self._apply_output_options(
+            vod_ds, calculator.canopy_ds, calculator.sky_ds
+        )
+
+        analysis_cfg = self._get_analysis_config(analysis_name)
+        vod_ds.attrs["analysis_name"] = analysis_name
+        vod_ds.attrs["canopy_receiver"] = analysis_cfg.canopy_receiver
+        vod_ds.attrs["reference_receiver"] = analysis_cfg.reference_receiver
+        vod_ds.attrs["calculator"] = self._calculator_name
 
         self.log.info(
             "vod_computed",
             analysis=analysis_name,
             variables=list(vod_ds.data_vars),
         )
-
-        if write:
-            self._write_to_store(vod_ds, analysis_name, canopy_ds, sky_ds)
-
         return vod_ds
 
-    def _write_to_store(
+    def _apply_output_options(
         self,
         vod_ds: xr.Dataset,
-        analysis_name: str,
         canopy_ds: xr.Dataset,
         sky_ds: xr.Dataset,
-    ) -> None:
-        """Write VOD dataset to the site's VOD store."""
-        # Clear encodings that may conflict with Zarr write
-        for var in vod_ds.data_vars:
-            vod_ds[var].encoding.clear()
-        for coord in vod_ds.coords:
-            vod_ds[coord].encoding.clear()
+    ) -> xr.Dataset:
+        """Apply the configured optional VOD outputs.
 
-        # numpy 2.x promotes string arrays to StringDType (kind='T') during
-        # alignment/concat; Zarr stores strings as object and rejects the mismatch.
-        for coord in list(vod_ds.coords):
-            if getattr(vod_ds[coord].dtype, "kind", None) == "T":
-                vod_ds = vod_ds.assign_coords({coord: vod_ds[coord].astype(object)})
+        ``store_delta_snr`` keeps ``delta_snr`` (dropped by default);
+        ``store_radial_diff`` adds ``radial_diff`` (canopy minus reference
+        slant range, needs ``r`` from ``store_radial_distance`` at ingest).
+        """
+        from canvod.config import load_config
 
-        # Rechunk for efficient storage
-        vod_ds = vod_ds.chunk(self._rechunk)
+        params = load_config().processing.params
 
-        analysis_cfg = self._get_analysis_config(analysis_name)
-        canopy_name = analysis_cfg.canopy_receiver
-        ref_name = analysis_cfg.reference_receiver
-        gnss_store_path = str(self._site._site.gnss_store.store_path)
+        if not params.store_delta_snr:
+            vod_ds = vod_ds.drop_vars("delta_snr", errors="ignore")
 
+        if params.store_radial_diff:
+            if "r" in canopy_ds and "r" in sky_ds:
+                radial_diff = canopy_ds["r"] - sky_ds["r"]
+                radial_diff.attrs["units"] = "m"
+                radial_diff.attrs["long_name"] = (
+                    "radial distance difference (canopy − reference)"
+                )
+                vod_ds["radial_diff"] = radial_diff
+            else:
+                self.log.warning(
+                    "radial_diff_unavailable",
+                    reason=(
+                        "store_radial_diff=true but 'r' not present in receiver "
+                        "data; set store_radial_distance=true at ingest time"
+                    ),
+                )
+        return vod_ds
+
+    def _write(
+        self,
+        entries: list[tuple[str, xr.Dataset, xr.Dataset, xr.Dataset]],
+    ) -> dict[str, Any]:
+        """Write VOD results in one commit, then update the store metadata.
+
+        Parameters
+        ----------
+        entries : list of tuple
+            ``(analysis_name, vod_ds, canopy_ds, sky_ds)`` per analysis;
+            ``canopy_ds``/``sky_ds`` are the aligned inputs, whose epoch
+            range selects the GNSS files recorded as sources.
+
+        Returns
+        -------
+        dict[str, VodWriteResult]
+            Store write result per ``{calculator}/{analysis}`` group.
+        """
+        research_site = self._site._site
+        gnss_store_path = str(research_site.gnss_store.store_path)
+
+        items = []
+        for analysis_name, vod_ds, canopy_ds, sky_ds in entries:
+            analysis_cfg = self._get_analysis_config(analysis_name)
+            canopy_name = analysis_cfg.canopy_receiver
+            ref_name = analysis_cfg.reference_receiver
+            items.append(
+                {
+                    "vod_dataset": self._prepare_for_store(vod_ds),
+                    "analysis_name": analysis_name,
+                    "calculator_name": self._calculator_name,
+                    "source_file_hashes": {
+                        canopy_name: research_site.source_file_hashes_for(
+                            canopy_name, canopy_ds
+                        ),
+                        ref_name: research_site.source_file_hashes_for(
+                            analysis_cfg.reference_store_group, sky_ds
+                        ),
+                    },
+                    "source_gnss_stores": {
+                        canopy_name: gnss_store_path,
+                        ref_name: gnss_store_path,
+                    },
+                    "commit_message": (
+                        f"VOD {analysis_name} {self._date_label(vod_ds)}"
+                    ),
+                }
+            )
+
+        results = research_site.store_vod_analyses_batch(items=items)
         ensure_vod_store_metadata(self._site, self._calculator_name)
 
-        self._site._site.store_vod_analysis(
-            vod_dataset=vod_ds,
-            analysis_name=analysis_name,
-            calculator_name=self._calculator_name,
-            source_file_hashes={
-                canopy_name: canopy_ds.attrs.get("File Hash", "unknown"),
-                ref_name: sky_ds.attrs.get("File Hash", "unknown"),
-            },
-            source_gnss_stores={
-                canopy_name: gnss_store_path,
-                ref_name: gnss_store_path,
-            },
-        )
+        for analysis_name, *_ in entries:
+            self.log.info(
+                "vod_written_to_store",
+                analysis=analysis_name,
+                model=self._calculator_name,
+            )
+        return results
 
-        self.log.info(
-            "vod_written_to_store", analysis=analysis_name, model=self._calculator_name
-        )
+    def _prepare_for_store(self, vod_ds: xr.Dataset) -> xr.Dataset:
+        """Drop encodings inherited from the inputs and rechunk.
+
+        String coordinates are converted by the store itself
+        (``MyIcechunkStore._normalize_encodings``).
+        """
+        vod_ds = vod_ds.copy(deep=False)
+        for name in vod_ds.variables:
+            vod_ds[name].encoding = {}
+        return vod_ds.chunk(self._rechunk)
+
+    @staticmethod
+    def _date_label(vod_ds: xr.Dataset) -> str:
+        """``YYYYDOY`` of the first epoch, or ``YYYYDOY-YYYYDOY`` for a range."""
+        import pandas as pd
+
+        if not vod_ds.sizes.get("epoch", 0):
+            return "empty"
+        first = pd.Timestamp(vod_ds.epoch.values.min())
+        last = pd.Timestamp(vod_ds.epoch.values.max())
+        start = f"{first.year}{first.dayofyear:03d}"
+        end = f"{last.year}{last.dayofyear:03d}"
+        return start if start == end else f"{start}-{end}"
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
-    def _extract_pair(
+    def _aligned_pair(
         self,
         datasets: dict[str, xr.Dataset],
         analysis_name: str,
     ) -> tuple[xr.Dataset, xr.Dataset]:
-        """Extract canopy and sky datasets from a dict of receiver datasets."""
+        """Canopy and reference datasets of one analysis, aligned."""
+        import xarray as xr
+
         analysis_cfg = self._get_analysis_config(analysis_name)
         canopy_name = analysis_cfg.canopy_receiver
-        ref_name = analysis_cfg.reference_receiver
+        ref_group = analysis_cfg.reference_store_group
 
         if canopy_name not in datasets:
             raise KeyError(
                 f"Canopy receiver '{canopy_name}' not in datasets. "
                 f"Available: {list(datasets.keys())}"
             )
-        if ref_name not in datasets:
-            paired_name = f"{ref_name}_{canopy_name}"
-            if paired_name in datasets:
-                self.log.info(
-                    "extract_pair_fallback", original=ref_name, paired=paired_name
-                )
-                ref_name = paired_name
-            else:
-                raise KeyError(
-                    f"Reference receiver '{ref_name}' (also tried '{paired_name}') "
-                    f"not in datasets. Available: {list(datasets.keys())}"
-                )
+        if ref_group not in datasets:
+            raise KeyError(
+                f"Reference group '{ref_group}' not in datasets. "
+                f"Available: {list(datasets.keys())}"
+            )
 
-        return datasets[canopy_name], datasets[ref_name]
+        canopy_ds, sky_ds = xr.align(
+            datasets[canopy_name], datasets[ref_group], join="inner"
+        )
+        return canopy_ds, sky_ds
 
     def _get_analysis_config(self, analysis_name: str) -> Any:
         """Get the VodAnalysisConfig for the given analysis name."""

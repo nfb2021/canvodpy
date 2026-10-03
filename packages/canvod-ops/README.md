@@ -14,7 +14,9 @@ steps to GNSS datasets. Operations are composable and chainable via `Pipeline`.
 | Component | Purpose |
 |---|---|
 | `Op` | Abstract base class for all operations |
-| `GridAssignment` | Assigns satellite observations to equal-area grid cells |
+| `TemporalAggregate` | Aggregates observations into regular time bins |
+| `GridAssignment` | Assigns satellite observations to hemispherical grid cells |
+| `preprocess_files` | Applies `processing.preprocessing` to one receiver's files of a day |
 | `Pipeline` | Chains operations and returns `PipelineResult` |
 
 ## Installation
@@ -23,12 +25,13 @@ steps to GNSS datasets. Operations are composable and chainable via `Pipeline`.
 uv pip install canvod-ops
 ```
 
-## Configuration (optional)
+## Configuration
 
-`build_default_pipeline()` falls back to `PreprocessingConfig()` defaults when
-no config is found — `canvod-config`'s `load_config()` is only consulted if
-available. In a standalone install outside a canvodpy monorepo checkout,
-point it at a settings file with:
+`canvodpy run`, the Python API and Airflow apply these operations before
+writing to the GNSS store if the `processing.preprocessing` section of
+`canvod-settings.yaml` sets them; nothing is applied unless it is set.
+`build_default_pipeline()` builds that pipeline. In a standalone install
+outside a canvodpy monorepo checkout, point it at a settings file with:
 
 - `CANVOD_CONFIG_DIR` — directory containing `canvod-settings.yaml`
 - `CANVOD_CONFIG_FILE` — an overlay YAML file merged on top
@@ -36,11 +39,15 @@ point it at a settings file with:
 ## Quick Start
 
 ```python
-from canvod.ops import Pipeline, GridAssignment
+from canvod.ops import GridAssignment, Pipeline, TemporalAggregate
 
-grid = create_hemigrid(grid_type="equal_area", resolution=2.0)
-pipeline = Pipeline([GridAssignment(grid)])
-result = pipeline.run(ds)
+pipeline = Pipeline(
+    [
+        TemporalAggregate(freq="1min", method="mean"),
+        GridAssignment(grid_type="equal_area", angular_resolution=2.0),
+    ]
+)
+ds_out, result = pipeline(ds)
 ```
 
 ## Documentation

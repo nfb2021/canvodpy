@@ -140,7 +140,7 @@ The `DatasetBuilder` helper eliminates the ~30 lines of manual numpy/xarray coor
 ```python
 from canvod.readers.builder import DatasetBuilder
 
-builder = DatasetBuilder(reader)
+builder = DatasetBuilder(reader, time_system="GPS")
 for epoch in reader.iter_epochs():
     ei = builder.add_epoch(epoch.timestamp)
     for obs in epoch.observations:
@@ -248,7 +248,7 @@ sequenceDiagram
 
     User->>Reader: to_ds()
     activate Reader
-    Reader->>Builder: DatasetBuilder(reader)
+    Reader->>Builder: DatasetBuilder(reader, time_system)
 
     loop For each epoch
         Reader->>Builder: add_epoch(timestamp)
@@ -379,13 +379,17 @@ Immutability ensures predictable behavior, thread safety, and cacheable results.
 Format-specific code is contained within the reader:
 
 ```python
-# In Rnxv3Obs — format-specific fast parsing
-def _parse_obs_fast(slice_text: str) -> tuple[float | None, int | None, int | None]:
-    """Inline RINEX v3 observation extraction (no Pydantic overhead)."""
+# In Rnxv3Obs — format-specific parsing, two parsers on shared helpers
+def _create_dataset_validated(self, keep_data_vars) -> xr.Dataset:
+    """Default: epochs from iter_epochs() (Pydantic-validated) -> arrays."""
     ...
 
-def _create_dataset_single_pass(self) -> xr.Dataset:
-    """Single-pass: header-derived SIDs → pre-allocated arrays → one file scan."""
+def _create_dataset_unvalidated_fast(self, keep_data_vars) -> xr.Dataset:
+    """Opt-in, DANGEROUS: fixed-column slicing without any validation."""
+    ...
+
+def _assemble_dataset(self, timestamps, arrays, sorted_sids, sid_properties):
+    """Shared: coordinates, attributes and variable order for both parsers."""
     ...
 ```
 

@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
+from canvod.utils.tools import deprecated
+
 from .base import _StrictModel
 
 
@@ -235,15 +237,12 @@ class StorageConfig(_StrictModel):
         """
         return self.stores_root_dir / site_name / self.gnss_store_name
 
+    @deprecated(
+        "StorageConfig.get_rinex_store_path() is left over from development and will be removed with the next major version. "
+        "Use StorageConfig.get_gnss_store_path() instead."
+    )
     def get_rinex_store_path(self, site_name: str) -> Path:
         """Deprecated: use get_gnss_store_path instead."""
-        import warnings
-
-        warnings.warn(
-            "StorageConfig.get_rinex_store_path is deprecated; use get_gnss_store_path",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         return self.get_gnss_store_path(site_name)
 
     def get_vod_store_path(self, site_name: str) -> Path:

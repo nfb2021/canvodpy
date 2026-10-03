@@ -28,7 +28,8 @@ Examples::
 from __future__ import annotations
 
 import re
-from datetime import timedelta
+from collections.abc import Callable, Sequence
+from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Annotated, Self
 
@@ -151,6 +152,18 @@ class CanVODFilename:
         return _duration_to_timedelta(self.period)
 
     @property
+    def start(self) -> datetime:
+        """Start of the time span the file covers, from its name."""
+        return datetime(self.year, 1, 1) + timedelta(
+            days=self.doy - 1, hours=self.hour, minutes=self.minute
+        )
+
+    @property
+    def end(self) -> datetime:
+        """End of the time span the file covers (exclusive), from its name."""
+        return self.start + self.batch_duration
+
+    @property
     def name(self) -> str:
         """Full filename including optional compression extension."""
         stem = (
@@ -214,3 +227,54 @@ class CanVODFilename:
 
     def __str__(self) -> str:
         return self.name
+
+
+# -- Overlaps -----------------------------------------------------------------
+
+
+def find_overlaps[T](
+    items: Sequence[T],
+    key: Callable[[T], CanVODFilename] | None = None,
+) -> list[tuple[T, T]]:
+    """Find pairs of files whose named time spans overlap.
+
+    Each file covers ``[start, start + period)`` according to its canonical
+    name, so a daily file next to sub-daily files of the same day overlaps
+    each of them, and adjacent files (00:00-01:00, 01:00-02:00) do not.
+    Spans are compared as absolute times, so a file running past midnight
+    overlaps files of the next day. Only files of the same receiver identity
+    and file type are compared; an SBF file and the RINEX file converted
+    from it do not overlap.
+
+    Parameters
+    ----------
+    items : Sequence
+        Files to check.
+    key : Callable | None
+        Returns the :class:`CanVODFilename` of an item. ``None``: the items
+        are :class:`CanVODFilename` instances.
+
+    Returns
+    -------
+    list[tuple]
+        Overlapping pairs, earlier-starting file first, sorted by start.
+    """
+    groups: dict[tuple[str, str], list[tuple[CanVODFilename, int, T]]] = {}
+    for i, item in enumerate(items):
+        cn = key(item) if key is not None else item
+        assert isinstance(cn, CanVODFilename)
+        identity = (
+            f"{cn.site}{cn.receiver_type.value}{cn.receiver_number:02d}{cn.agency}"
+        )
+        groups.setdefault((identity, cn.file_type.value), []).append((cn, i, item))
+
+    overlaps: list[tuple[datetime, int, int, T, T]] = []
+    for group in groups.values():
+        group.sort(key=lambda entry: (entry[0].start, entry[0].end, entry[1]))
+        active: list[tuple[CanVODFilename, int, T]] = []
+        for cn, i, item in group:
+            active = [a for a in active if a[0].end > cn.start]
+            overlaps.extend((a[0].start, a[1], i, a[2], item) for a in active)
+            active.append((cn, i, item))
+    overlaps.sort(key=lambda o: o[:3])
+    return [(a, b) for _, _, _, a, b in overlaps]

@@ -100,7 +100,7 @@ Two environment variables control *where* configuration is read from:
 
 | Variable             | Effect                                                           |
 | -------------------- | ---------------------------------------------------------------- |
-| `CANVOD_CONFIG_DIR`  | Use a different config directory (default: `{repo_root}/config`) |
+| `CANVOD_CONFIG_DIR`  | Use a different config directory, for the settings file and the recipes; same as the `--config-dir` option (default: `{repo_root}/config`) |
 | `CANVOD_CONFIG_FILE` | Apply an overlay YAML on top of the main `canvod-settings.yaml`  |
 
 ---
@@ -221,6 +221,7 @@ processing:
 
   params:
     keep_gnss_observables: [SNR]   # observables to keep (SNR, Pseudorange, Phase, Doppler)
+    rinex_v3_parser: validated     # 'unvalidated_fast' is DANGEROUS: no checks, your responsibility
     store_radial_distance: false   # store satellite distance (r)
     receiver_position_mode: shared # or per_receiver
     file_pairing: complete         # or paired
@@ -234,15 +235,14 @@ processing:
     # cpu_affinity: [0, 1, 2, 3]  # pin to CPU cores (Linux)
     # nice_priority: 10            # 0=normal, 19=lowest priority
 
-  preprocessing:
-    temporal_aggregation:
-      enabled: true
-      freq: "1min"                 # target time resolution
-      method: mean                 # mean or median
-    grid_assignment:
-      enabled: true
-      grid_type: equal_area
-      angular_resolution: 2.0     # degrees
+  # Optional; nothing is applied unless set (see canvod-ops: Preprocessing during a run)
+  # preprocessing:
+  #   temporal_aggregation:
+  #     freq: "1min"               # divides one day
+  #     method: median             # mean or median
+  #   grid_assignment:
+  #     grid_type: equal_area
+  #     angular_resolution: 2.0    # degrees
 
   netcdf_compression:              # NetCDF output from RINEX readers
     zlib: true
@@ -271,13 +271,16 @@ processing:
 | Field                           | Values                   | Description                                                                                                                                                                              |
 | ------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `params.keep_gnss_observables`  | list                     | GNSS observables to retain (default `[SNR]`).                                                                                                                                            |
+| `params.rinex_v3_parser`        | `validated`, `unvalidated_fast` | How RINEX v3 files are parsed. `validated` (default) checks every epoch and drops (and logs) epochs that fail. `unvalidated_fast` is **dangerous**: no checks, corrupted records can enter the store, and the results are entirely your responsibility; every use emits an `UnvalidatedParserWarning`. Both give the identical dataset for a valid file. |
 | `params.receiver_position_mode` | `shared`, `per_receiver` | `shared` uses canopy receiver position for all receivers (enables 1:1 SNR comparison). `per_receiver` uses each receiver's own position.                                                 |
 | `params.file_pairing`           | `complete`, `paired`     | `complete` ingests all files per receiver independently. `paired` only processes dates where both receivers have data.                                                                   |
-| `params.ephemeris_source`       | `final`, `broadcast`     | `final` computes satellite positions from agency SP3/CLK products. `broadcast` uses ephemerides from SBF SatVisibility blocks (SBF only, no SP3/CLK download, faster but less accurate). |
+| `params.ephemeris_source`       | `final`, `broadcast`     | `final` computes satellite positions from agency SP3/CLK products. `broadcast` uses the satellite angles the receiver computed from the broadcast ephemeris (SBF SatVisibility blocks; almanac-based angles are not used; SBF only, no SP3/CLK download, faster but less accurate). |
 | `aux_data.fetch_clock`          | `true`, `false`          | Whether to download and interpolate CLK clock-correction files alongside SP3 (only applies to `ephemeris_source: final`). Default `true`. VOD doesn't consume clock data — disable to save downloads/parsing/interpolation time. |
 | `params.days_per_batch`         | 1–30                     | Calendar days pooled per parallel processing wave.                                                                                                                                       |
 | `params.resource_mode`          | `auto`, `manual`         | `auto` detects available CPU cores and leaves two free for the operating system. `manual` enforces explicit limits (`n_max_threads` is then required) — use this on shared servers.      |
 | `params.store_radial_distance`  | `true`, `false`          | Whether to store satellite radial distance in the output.                                                                                                                                |
+| `params.store_sbf_raw_observables` | `true`, `false`       | SBF only: add the pre-correction observables (`SNR_raw`, `Pseudorange_unsmoothed`, `Pseudorange_raw`, `Phase_raw`) to the observations. Default `true`. |
+| `params.store_sbf_metadata`     | `true`, `false`          | SBF only: store the per-file metadata dataset `sbf_obs` (SatVisibility geometry, MeasExtra, PVT, DOP, receiver status) under `{group}/metadata/sbf_obs`, in the same commit as the observations. Default `true`. |
 | `storage.gnss_store_strategy`   | `skip`, `overwrite`, `unsafe_append` | What to do when a file already exists in the store. `skip` (default) is the normal case. See warning below before ever using `unsafe_append`.                              |
 
 For a full explanation of how `resource_mode`, `days_per_batch`, and `n_max_threads` interact
@@ -377,6 +380,9 @@ Three modes are available:
     multi-GNSS list covering MEO satellites only (GPS + Galileo + BeiDou MEO +
     GLONASS). GEO, IGSO, augmentation signals (SBAS/IRNSS/QZSS), and GPS L2W are
     excluded because they are not useful for canopy transmissometry.
+    All are RINEX 3 signals. RINEX 2 band-only SIDs (e.g. `L1|u`) are not
+    included and must be selected explicitly, see
+    [RINEX v2.11 Parsing](../packages/readers/rinex-v2-format.md#default-sid-preset).
 
     ```yaml
     sids:
@@ -422,15 +428,13 @@ receiver directory exists and contains data files:
 just config-validate
 ```
 
-**Data directory validation** checks the file names inside a receiver directory against
-the canVOD naming convention before any data is read:
+**Data check** finds each receiver's files exactly as `canvodpy run` does, in any folder
+layout, and reports the days and files a run would process, files it would pass over,
+and problems that would stop it (for example two files covering the same time):
 
 ```bash
-canvod-preflight validate /data/examplesite/02_canopy \
-    --site ROS --agency TUW --receiver 1 --role canopy
+just config-check-data <site>
 ```
-
-For a site already defined in `canvod-settings.yaml`: `just config-check-data <site>`.
 
 ---
 
@@ -439,7 +443,7 @@ For a site already defined in `canvod-settings.yaml`: `just config-check-data <s
 !!! warning "This deviates from the community-agreed GNSS-T file naming convention"
     The standard pipeline expects every GNSS data file to follow the
     [community-agreed  filename convention](../packages/naming/overview.md),
-    which is enforced by `canvod-preflight` before any data is read.
+    and processes only files that follow it.
 
     If your receiver outputs files in a proprietary or legacy format —
     Septentrio SBF with firmware-generated names, RINEX v2 short names,
@@ -466,11 +470,14 @@ sites:
   my_site:
     receivers:
       reference_01:
-        recipe: my_site_reference   # → config/recipes/my_site_reference.yaml
+        recipe: my_site_reference   # → <config dir>/recipes/my_site/my_site_reference.yaml
 ```
 
-`just config-init` copies recipe templates into `config/recipes/` alongside
-`canvod-settings.yaml`. The full recipe format and API are documented in the
+Recipe files are kept per site, in `<config dir>/recipes/<site>/<recipe>.yaml`.
+`just naming-init my_site my_site_reference` creates one from the template that
+ships with canvod-filemap. A recipe saved directly in `<config dir>/recipes/` is
+not used; the error message says where to move it. Recipes are user data and are
+not part of the canvodpy repository. The full recipe format and API are documented in the
 [canvod-filemap repository](https://github.com/nfb2021/canvodpy-extensions).
 
 ---

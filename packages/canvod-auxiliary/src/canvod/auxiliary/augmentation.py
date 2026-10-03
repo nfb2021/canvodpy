@@ -17,9 +17,9 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import structlog
 import xarray as xr
 
-from canvod.auxiliary._internal import get_logger
 from canvod.auxiliary.matching import DatasetMatcher
 from canvod.auxiliary.position import (
     ECEFPosition,
@@ -62,7 +62,7 @@ class AugmentationContext:
         self.receiver_type = receiver_type
         self.matched_datasets = matched_datasets or {}
         self.metadata = metadata or {}
-        self._logger = get_logger()
+        self._logger = structlog.get_logger(__name__)
 
     def get_matched_dataset(self, name: str) -> xr.Dataset:
         """Get a matched auxiliary dataset by name.
@@ -129,7 +129,7 @@ class AugmentationStep(ABC):
     def __init__(self, name: str):
         """Initialize augmentation step."""
         self.name = name
-        self._logger = get_logger()
+        self._logger = structlog.get_logger(__name__)
 
     @abstractmethod
     def augment(
@@ -331,7 +331,7 @@ class AuxDataAugmenter:
     ) -> None:
         self.aux_pipeline = aux_pipeline
         self.steps = steps or self._get_default_steps()
-        self._logger = get_logger()
+        self._logger = structlog.get_logger(__name__)
         self._receiver_position_cache: ECEFPosition | None = None
 
         self._logger.info(

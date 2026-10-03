@@ -12,6 +12,7 @@ Configurable preprocessing pipeline for GNSS observation datasets.
         - Pipeline
         - PipelineResult
         - build_default_pipeline
+        - preprocess_files
 
 ## Temporal
 

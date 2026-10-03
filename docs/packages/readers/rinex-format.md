@@ -25,6 +25,8 @@ A RINEX v3 observation file has two sections separated by `END OF HEADER`:
 +──────────────────────────────────────────────────+
 ```
 
+For RINEX 2.11 files see [RINEX v2.11 Parsing](rinex-v2-format.md).
+
 Supported systems: [GPS](https://gssc.esa.int/navipedia/index.php/GPS){:target="_blank"} (G), [GLONASS](https://gssc.esa.int/navipedia/index.php/GLONASS){:target="_blank"} (R), [Galileo](https://gssc.esa.int/navipedia/index.php/Galileo){:target="_blank"} (E), [BeiDou](https://gssc.esa.int/navipedia/index.php/BeiDou){:target="_blank"} (C), [QZSS](https://gssc.esa.int/navipedia/index.php/QZSS){:target="_blank"} (J), [IRNSS](https://gssc.esa.int/navipedia/index.php/IRNSS){:target="_blank"} (I), [SBAS](https://gssc.esa.int/navipedia/index.php/SBAS){:target="_blank"} (S).
 
 ---
@@ -115,16 +117,20 @@ The full pipeline:
 === "Allocate + Fill"
 
     ```python
-    # Pre-allocate — avoids repeated memory reallocation
-    snr_data = np.full((n_epochs, len(sorted_sids)), np.nan, dtype=np.float32)
+    # Pre-allocate the kept variables, fill value NaN (LLI/SSI: -1)
+    arrays = _allocate_obs_arrays(n_epochs, len(sorted_sids), kept_vars)
     sid_to_idx = {sid: i for i, sid in enumerate(sorted_sids)}
 
-    # Single pass over file lines (no Pydantic objects)
-    for t_idx, (start, end) in enumerate(epoch_batches):
-        for line in lines[start+1:end]:
-            sv = line[:3].strip()
-            # ... inline parsing ...
+    # Default parser: only epochs that pass the Pydantic models
+    for t_idx, record in enumerate(self._iter_validated_epochs(rejected)):
+        for sat in record.data:
+            for (obs_type, sid_suffix), obs in zip(lut[sat.sv[0]], sat.observations):
+                _store_observation(arrays, t_idx, sid_to_idx[sat.sv + sid_suffix],
+                                   obs_type, obs.value, obs.lli, obs.ssi)
     ```
+
+    The opt-in `parser="unvalidated_fast"` fills the same arrays by slicing
+    fixed columns, without any validation (see the warning below).
 
 === "Build Coordinates"
 
@@ -199,8 +205,8 @@ class Rnxv3ObsEpochRecord(BaseModel):
 ```python
 class Observation(BaseModel):
     value: float
-    lli:   int | None = None   # Loss of Lock Indicator (0–9)
-    ssi:   int | None = None   # Signal Strength Indicator (0–9)
+    lli:   int | None = None   # Loss of Lock Indicator (bits 0–2)
+    ssi:   int | None = None   # Signal Strength Indicator (1–9, 0 = unknown)
 
 class Satellite(BaseModel):
     sv:           str                      # e.g. "G01"
@@ -230,6 +236,33 @@ SYSTEM_BANDS = {
 }
 ```
 
+### Satellites
+
+Satellite numbers follow RINEX 3.04 section 8.4. SBAS satellites are `Snn` with `nn` = PRN − 100 (PRN 120 → `S20`, EGNOS PRN 148 → `S48`); the reader recognises `S01`–`S99`. The satellite lists of the other systems come from the [constellation models](satellite-catalog.md#integration-with-constellations).
+
+---
+
+## Loss of Lock and Signal Strength Indicators
+
+Pseudorange, phase, Doppler, and SNR of one signal share one sid (`S1C`, `L1C`, `C1C`, `D1C` → `G01|L1|C`), but each observation field carries its own LLI and SSI digit. The reader stores one LLI and one SSI per sid, following RINEX 3.04 Table A3 notes 1–3:
+
+- **LLI** is taken from the **phase** observation only ("should only be associated with the phase observation"). Flags on the other observables are ignored.
+- **SSI** is taken from the **phase**; if the signal has no phase (e.g. `C1W`/`S1W`), from the **pseudorange**. SSI on Doppler or SNR fields is ignored.
+
+The result does not depend on the order of observables in the header.
+
+| LLI bit | Meaning (Table A3) |
+|---|---|
+| 0 | Lost lock between previous and current observation: cycle slip possible |
+| 1 | Half-cycle ambiguity/slip possible |
+| 2 | Galileo BOC tracking of an MBOC-modulated signal |
+
+`-1` marks "no indicator written". Table A3 defines no further bits, so the `valid_range` of `LLI` is `[-1, 7]`. The RINEX 3 meaning of `LLI` and `SSI` is shared by all readers; the [RINEX 2 reader](rinex-v2-format.md#loss-of-lock-and-signal-strength-indicators) translates its bits.
+
+## Signal strength unit
+
+The unit of the `S` observations is declared by the optional `SIGNAL STRENGTH UNIT` header record (RINEX 3.04 sect. 5.7), which defines only `DBHZ`. With `DBHZ`, `SNR` is labelled as C/N0 in dB-Hz. Without it, the unit is not declared and `SNR` is labelled dB.
+
 ---
 
 ## Performance Notes
@@ -248,29 +281,57 @@ SYSTEM_BANDS = {
 
 ---
 
+## Choosing the parser
+
+`to_ds()` validates every epoch by default. The unvalidated fast parser
+exists for users who have checked their files otherwise:
+
+```python
+ds = reader.to_ds()                              # validated (default)
+ds = reader.to_ds(parser="unvalidated_fast")     # DANGEROUS, see below
+```
+
+The default comes from the configuration (`processing.params.rinex_v3_parser`,
+`validated` unless changed). The stripped v3.05 reader uses the same parsers.
+
+!!! danger "`unvalidated_fast` is your responsibility"
+
+    The unvalidated parser does not check epochs, satellite IDs, satellite
+    counts or observation fields. A corrupted record can enter the dataset
+    as partial or wrong values. canVODpy takes no responsibility for its
+    results; checking the input files is entirely up to you. Every use emits
+    an `UnvalidatedParserWarning`. For a valid file both parsers give the
+    identical dataset.
+
+## Epoch time
+
+Epochs are stored as written in the file, in the time system of its
+`TIME OF FIRST OBS` header record (RINEX 3.04 Table A2: `GPS`, `GLO`, `GAL`,
+`QZS`, `BDT`, `IRN`; a single-system file defaults to its own system). No
+conversion to another time scale is made. The epoch coordinate records the
+time scale in its `time_system` attribute; RINEX `GLO` is defined as UTC and
+is recorded as `UTC`. Seconds keep the 100 ns resolution of the epoch
+record's `F11.7` field.
+
 ## Error Handling
 
 ```python
 from pydantic import ValidationError
-from canvod.readers.gnss_specs.exceptions import (
-    CorruptedFileError,
-    MissingEpochError,
-    IncompleteEpochError,
-)
 
-# Construction errors — header is invalid
+# Construction errors: the header is invalid, or a mandatory record such as
+# TIME OF FIRST OBS is missing or malformed
 try:
     reader = Rnxv3Obs(fpath=path)
-except ValidationError as e:
+except (ValidationError, ValueError) as e:
     print(f"Invalid RINEX header: {e}")
 
-# Runtime errors — data section is malformed
+# Data section: the validated parser drops epochs that fail validation and
+# logs them ("rinex_epochs_rejected", with their line numbers). An epoch with
+# an impossible date or time (e.g. month 13) rejects the whole file.
 try:
     ds = reader.to_ds()
-except CorruptedFileError:
-    print("File is corrupted or truncated")
-except IncompleteEpochError:
-    print("An epoch has fewer satellites than declared")
+except ValueError as e:
+    print(f"Invalid epoch date or time: {e}")
 ```
 
 !!! info "Exception hierarchy"
