@@ -19,7 +19,7 @@ jobs:
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - name: Install uv and set the python version
-              uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+              uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
               with:
                   python-version: '3.14'
                   enable-cache: true
@@ -46,7 +46,7 @@ jobs:
 
             - name: Coverage comment
               id: coverage_comment
-              uses: py-cov-action/python-coverage-comment-action@e65989054858e156fff6ecb17b55e6ec2a824949 # v3
+              uses: py-cov-action/python-coverage-comment-action@95185d1d5acb8a0a87f47b6fb493ad1a76ec0f2a # v3
               with:
                   GITHUB_TOKEN: ${{ github.token }}
                   VERBOSE: false
