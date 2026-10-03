@@ -1880,7 +1880,7 @@ class Rnxv3Obs(GNSSDataReader):
                                 doppler[t_idx, s_idx] = value
                     if lli is not None and obs_lli is not None and obs_type == "L":
                         lli[t_idx, s_idx] = obs_lli
-                    if ssi is not None and obs_ssi is not None:
+                    if ssi is not None and ssi_rank is not None and obs_ssi is not None:
                         rank = _SSI_SOURCE_RANK.get(obs_type, 0)
                         if rank > ssi_rank[t_idx, s_idx]:
                             ssi[t_idx, s_idx] = obs_ssi
