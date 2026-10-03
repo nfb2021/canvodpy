@@ -164,14 +164,11 @@ def collect_environment(
 
 
 def collect_config_snapshot(config: Any) -> ConfigSnapshot:
-    """Serialize config sections + compute SHA256 hash.
-
-    The deprecated ``processing.preprocessing`` section is not recorded: no
-    run applies it, so it does not describe the stored data.
-    """
+    """Serialize config sections + compute SHA256 hash."""
     sections: dict[str, Any] = {}
     keys = (
         "processing",
+        "preprocessing",
         "aux_data",
         "netcdf_compression",
         "icechunk",
@@ -199,6 +196,7 @@ def collect_config_snapshot(config: Any) -> ConfigSnapshot:
 
     return ConfigSnapshot(
         processing=sections.get("processing"),
+        preprocessing=sections.get("preprocessing"),
         aux_data=sections.get("aux_data"),
         compression=sections.get("netcdf_compression"),
         icechunk=sections.get("icechunk"),

@@ -136,6 +136,17 @@ class TestTauOmegaZerothOrder:
         assert "VOD" in vod_ds.data_vars
         assert vod_ds["VOD"].shape == (20, 8)
 
+    def test_calculate_vod_keeps_cell_ids(self):
+        """Grid cells assigned before the store write reach the VOD."""
+        canopy_ds, sky_ds = self.create_test_datasets(n_epoch=20, n_sid=8)
+        cells = np.arange(160.0).reshape(20, 8)
+        canopy_ds["cell_id_equal_area_2.0deg"] = (("epoch", "sid"), cells)
+        calculator = TauOmegaZerothOrder(canopy_ds=canopy_ds, sky_ds=sky_ds)
+
+        vod_ds = calculator.calculate_vod()
+
+        np.testing.assert_array_equal(vod_ds["cell_id_equal_area_2.0deg"].values, cells)
+
     def test_calculate_vod_coords(self):
         """Test that VOD output preserves coordinates."""
         canopy_ds, sky_ds = self.create_test_datasets()

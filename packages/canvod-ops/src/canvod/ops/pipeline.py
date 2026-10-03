@@ -33,6 +33,10 @@ class Pipeline:
     def __init__(self, ops: list[Op] | None = None) -> None:
         self._ops: list[Op] = list(ops) if ops else []
 
+    def __len__(self) -> int:
+        """Number of operations."""
+        return len(self._ops)
+
     def add(self, op: Op) -> Pipeline:
         """Append an operation and return self for chaining."""
         self._ops.append(op)

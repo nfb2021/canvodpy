@@ -51,6 +51,7 @@ from canvod.auxiliary.position import (
 )
 from canvod.config import load_config
 from canvod.config.models import reference_store_group
+from canvod.ops import preprocess_files
 from canvod.readers import DataDirMatcher, MatchedDirs
 from canvod.store import GnssResearchSite, scoped_zarr_concurrency
 from canvod.store.store import _with_run_id
@@ -2262,6 +2263,8 @@ class RinexDataProcessor:
         `batch_check_existing`, `check_temporal_overlaps` all key off
         `receiver_name`), zero cross-group reads, no store write.
         """
+        for _fname, ds in augmented_datasets:
+            self.site.gnss_store.check_preprocessing_matches(receiver_name, ds)
         file_hash_map = {
             fname: ds.attrs.get("File Hash") for fname, ds in augmented_datasets
         }
@@ -2990,6 +2993,9 @@ class RinexDataProcessor:
             receiver=receiver_name,
             files=len(augmented_datasets),
         )
+
+        for _fname, ds in augmented_datasets:
+            self.site.gnss_store.check_preprocessing_matches(receiver_name, ds)
 
         file_hash_map = {
             fname: ds.attrs.get("File Hash") for fname, ds in augmented_datasets
@@ -4347,6 +4353,16 @@ class RinexDataProcessor:
                                 error=str(e),
                             )
                             skipped.add(name)
+
+        # processing.preprocessing (if set) on each receiver-day, after the
+        # SCS recompute above (which needs the unprocessed observations)
+        preprocessing = self._config.processing.preprocessing
+        for name, (aug, aux_ds, sid_iss) in per_receiver_results.items():
+            per_receiver_results[name] = (
+                preprocess_files(aug, preprocessing),
+                aux_ds,
+                sid_iss,
+            )
 
         # ====================================================================
         # PHASE 3 — writes + yields

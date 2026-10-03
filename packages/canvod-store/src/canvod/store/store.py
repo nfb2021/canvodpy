@@ -16,6 +16,7 @@ import numpy as np
 import polars as pl
 import xarray as xr
 import zarr
+from canvod.config.models import PREPROCESSING_ATTR
 from canvod.utils.tools import get_version_from_pyproject, sanitize_directory
 from canvodpy.logging import get_logger, stage_timer
 from canvodpy.logging.run_context import get_run_id
@@ -881,6 +882,47 @@ class MyIcechunkStore:
             f"Group '{group_name}' exists on branch '{branch}': {exists}"
         )
         return exists
+
+    def check_preprocessing_matches(
+        self, group_name: str, dataset: xr.Dataset, branch: str = "main"
+    ) -> None:
+        """Refuse data preprocessed differently from the data in ``group_name``.
+
+        Compares the ``Preprocessing`` attribute (see
+        ``processing.preprocessing``) of ``dataset`` with the one of the
+        existing group. Data written without it count as not preprocessed.
+
+        Parameters
+        ----------
+        group_name : str
+            Store group about to receive ``dataset``.
+        dataset : xr.Dataset
+            Data to write.
+        branch : str, default "main"
+            Repository branch to examine.
+
+        Raises
+        ------
+        ValueError
+            If the group exists and was preprocessed differently.
+        """
+        try:
+            with self.readonly_session(branch) as session:
+                root = zarr.open_group(session.store, mode="r")
+                if group_name not in root:
+                    return
+                stored = root[group_name].attrs.get(PREPROCESSING_ATTR, "{}")
+        except zarr.errors.GroupNotFoundError:
+            return
+        new = dataset.attrs.get(PREPROCESSING_ATTR, "{}")
+        if json.loads(str(stored)) != json.loads(str(new)):
+            msg = (
+                f"Group '{group_name}' holds data with processing.preprocessing "
+                f"{stored}, but the new data have {new}. One group must not "
+                "mix both: restore the previous processing.preprocessing "
+                "setting, or write to a new store."
+            )
+            raise ValueError(msg)
 
     def read_group(
         self,
@@ -1892,6 +1934,7 @@ class MyIcechunkStore:
                 )
                 return False
 
+        self.check_preprocessing_matches(group_name, dataset, branch)
         dataset = self._normalize_encodings(dataset)
 
         if self.group_exists(group_name, branch):

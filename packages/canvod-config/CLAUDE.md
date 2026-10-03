@@ -16,7 +16,7 @@ installed on its own.
 | `models/processing.py` | `ProcessingConfig` — composes metadata/credentials/aux_data/params/compression/icechunk/storage/logging/preprocessing/references |
 | `models/sites.py` | `SiteConfig`, `SitesConfig`, `ReceiverConfig`, `VodAnalysisConfig` |
 | `models/sids.py` | `SidsConfig` — note: `_get_preset_sids()` resolves `presets/` via `Path(__file__).parent.parent`, one level up from this subpackage |
-| `models/metadata.py`, `processing_params.py`, `compression.py`, `storage.py`, `logging.py`, `preprocessing.py` (deprecated section, never applied by a run), `references.py`, `aux_data.py`, `base.py` | One config section each |
+| `models/metadata.py`, `processing_params.py`, `compression.py`, `storage.py`, `logging.py`, `preprocessing.py` (optional; applied by every run only if set, never by default), `references.py`, `aux_data.py`, `base.py` | One config section each |
 | `loader.py` | `ConfigLoader` — YAML config loading with overlay support, `find_monorepo_root()` |
 
 ## Config hierarchy

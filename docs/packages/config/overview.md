@@ -85,6 +85,15 @@ processing:
     # cpu_affinity: [0, 1, 2, 3]
     # nice_priority: 10
 
+  # Optional; nothing is applied unless set (see canvod-ops: Preprocessing during a run)
+  # preprocessing:
+  #   temporal_aggregation:
+  #     freq: "1min"               # divides one day
+  #     method: median             # mean or median
+  #   grid_assignment:
+  #     grid_type: equal_area
+  #     angular_resolution: 2.0    # degrees
+
   compression:
     zlib: true
     complevel: 5

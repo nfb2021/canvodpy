@@ -26,6 +26,7 @@ import xarray as xr
 
 from canvod.config import load_config
 from canvod.config.models import reference_store_group
+from canvod.ops import preprocess_files
 from canvod.readers import MatchedDirs
 from canvod.readers.gnss_specs.constants import UREG
 from canvod.store import GnssResearchSite
@@ -1099,8 +1100,13 @@ class PipelineOrchestrator:
                             )
                             continue
 
-                        augmented = sorted(group_results, key=lambda x: x[0].name)
                         processor = doy_contexts[date_key][0]
+                        # processing.preprocessing (if set) on the whole
+                        # receiver-day, so time bins can span two files
+                        augmented = preprocess_files(
+                            sorted(group_results, key=lambda x: x[0].name),
+                            processor._config.processing.preprocessing,
+                        )
                         rinex_files = receiver_files_lookup[group_key]
                         group_aux = pending_aux.pop(group_key, None)
                         group_fmt = reader_format_lookup.get(group_key)

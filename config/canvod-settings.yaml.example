@@ -123,6 +123,23 @@ processing:
     # nice_priority: 10          # OS priority (0 = normal, 19 = lowest)
 
   # ---------------------------------------------------------------------------
+  # Preprocessing (optional; nothing is applied unless set)
+  # ---------------------------------------------------------------------------
+  # `canvodpy run`, the Python API and Airflow apply these operations to each
+  # receiver's files of a day before writing them to the GNSS store: first the
+  # temporal aggregation, then the grid cell assignment. Time bins start at
+  # 00:00 and are labeled with their start; a bin spanning two files is
+  # aggregated from both. Keep the setting for the life of a store: writing
+  # differently preprocessed data into an existing store stops with an error.
+  # preprocessing:
+  #   temporal_aggregation:
+  #     freq: "1min"             # whole number + "s", "min" or "h"; divides one day
+  #     method: "median"         # "mean" or "median"
+  #   grid_assignment:
+  #     grid_type: "equal_area"
+  #     angular_resolution: 2.0  # degrees (0 < value <= 90)
+
+  # ---------------------------------------------------------------------------
   # NetCDF Compression (used when writing intermediate .nc files)
   # ---------------------------------------------------------------------------
   netcdf_compression:

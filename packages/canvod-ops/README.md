@@ -14,7 +14,9 @@ steps to GNSS datasets. Operations are composable and chainable via `Pipeline`.
 | Component | Purpose |
 |---|---|
 | `Op` | Abstract base class for all operations |
-| `GridAssignment` | Assigns satellite observations to equal-area grid cells |
+| `TemporalAggregate` | Aggregates observations into regular time bins |
+| `GridAssignment` | Assigns satellite observations to hemispherical grid cells |
+| `preprocess_files` | Applies `processing.preprocessing` to one receiver's files of a day |
 | `Pipeline` | Chains operations and returns `PipelineResult` |
 
 ## Installation
@@ -23,15 +25,16 @@ steps to GNSS datasets. Operations are composable and chainable via `Pipeline`.
 uv pip install canvod-ops
 ```
 
-`canvodpy run`, the Python API and Airflow do not apply these operations;
-apply them yourself to datasets read from a store.
+## Configuration
 
-## Configuration (deprecated)
+`canvodpy run`, the Python API and Airflow apply these operations before
+writing to the GNSS store if the `processing.preprocessing` section of
+`canvod-settings.yaml` sets them; nothing is applied unless it is set.
+`build_default_pipeline()` builds that pipeline. In a standalone install
+outside a canvodpy monorepo checkout, point it at a settings file with:
 
-The `processing.preprocessing` settings section, which
-`build_default_pipeline()` reads when called without a config, is left over
-from development and will be removed with the next major version. Build the
-pipeline explicitly instead (see Quick Start).
+- `CANVOD_CONFIG_DIR` — directory containing `canvod-settings.yaml`
+- `CANVOD_CONFIG_FILE` — an overlay YAML file merged on top
 
 ## Quick Start
 

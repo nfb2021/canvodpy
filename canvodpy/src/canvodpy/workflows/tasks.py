@@ -22,12 +22,14 @@ from typing import Any
 
 import numpy as np
 import structlog
+import xarray as xr
 
 from canvod.auxiliary.interpolation import aux_epoch_grid, interpolate_aux_day
 from canvod.auxiliary.pipeline import AuxDataPipeline
 from canvod.auxiliary.position import ECEFPosition
 from canvod.config import load_config
 from canvod.config.models import reference_store_group
+from canvod.ops import preprocess_files
 from canvod.readers import MatchedDirs
 from canvod.utils.tools import YYYYDOY
 from canvodpy.orchestrator.discovery import (
@@ -599,6 +601,7 @@ def process_rinex(
             continue
 
         # Process each file sequentially (Airflow handles parallelism across sites)
+        processed: list[tuple[Path, xr.Dataset]] = []
         for rnx_file in rnx_files:
             try:
                 _path, augmented_ds, _aux_ds, _sid_issues = preprocess_with_hermite_aux(
@@ -612,7 +615,13 @@ def process_rinex(
             except Exception:
                 logger.exception("Failed to process %s", rnx_file.name)
                 continue
+            processed.append((rnx_file, augmented_ds))
 
+        # processing.preprocessing (if set) on the whole day, so time bins
+        # can span two files; then write each file as before
+        for rnx_file, augmented_ds in preprocess_files(
+            processed, config.processing.preprocessing
+        ):
             file_hash = augmented_ds.attrs.get("File Hash")
             time_start = augmented_ds.epoch.min().values
             time_end = augmented_ds.epoch.max().values
@@ -774,6 +783,8 @@ def process_sbf(
             continue
 
         # Process each SBF file
+        processed: list[tuple[Path, xr.Dataset]] = []
+        aux_by_file: dict[Path, dict[str, xr.Dataset]] = {}
         for sbf_file in sbf_files:
             try:
                 _path, augmented_ds, aux_datasets, _sid_issues = (
@@ -791,7 +802,15 @@ def process_sbf(
             except Exception:
                 logger.exception("Failed to process SBF %s", sbf_file.name)
                 continue
+            processed.append((sbf_file, augmented_ds))
+            aux_by_file[sbf_file] = aux_datasets
 
+        # processing.preprocessing (if set) on the whole day, so time bins
+        # can span two files; then write each file as before
+        for sbf_file, augmented_ds in preprocess_files(
+            processed, config.processing.preprocessing
+        ):
+            aux_datasets = aux_by_file[sbf_file]
             # sbf_obs goes into the same commit as the file's observations
             metadata_datasets = (
                 {"sbf_obs": aux_datasets["sbf_obs"]}

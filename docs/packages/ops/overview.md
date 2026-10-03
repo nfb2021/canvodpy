@@ -2,12 +2,14 @@
 
 ## Purpose
 
-The `canvod-ops` package provides a preprocessing pipeline that you apply to
-observation datasets yourself, for example after reading them from a store.
-`canvodpy run`, the Python API and Airflow do not apply it: the stores hold the
-observations at their full time resolution. Operations are applied as a chain:
-each operation receives a dataset, transforms it, and passes the result to the
-next.
+The `canvod-ops` package provides a preprocessing pipeline for observation
+datasets. `canvodpy run`, the Python API and Airflow apply it before writing to
+the GNSS store if the `processing.preprocessing` setting is set (see
+[Preprocessing during a run](#preprocessing-during-a-run)); without that setting
+the store holds the observations at the receiver's sampling interval. You can
+also apply the operations yourself, e.g. to datasets read from a store.
+Operations are applied as a chain: each operation receives a dataset,
+transforms it, and passes the result to the next.
 
 ---
 
@@ -48,7 +50,10 @@ flowchart TD
 ### TemporalAggregate
 
 Aggregates observations into regular time bins. Reduces the number of epochs by
-grouping into frequency buckets and computing the mean or median.
+grouping into frequency buckets and computing the mean or median. Bins start at
+multiples of `freq` counted from 00:00 and are labeled with their start.
+Missing values (NaN) are ignored; a bin without any value stays NaN. Variables
+keep their data type and attributes.
 
 ```python
 from canvod.ops import TemporalAggregate
@@ -62,8 +67,9 @@ ds_out, result = op(ds_in)
 | `freq` | `"1min"` | Target frequency (pandas offset alias) |
 | `method` | `"mean"` | Aggregation: `"mean"` or `"median"` |
 
-If the dataset is already at or coarser than the target frequency, the operation
-is a no-op and returns the dataset unchanged.
+If every epoch already is the start of its own bin, the operation is a no-op and
+returns the dataset unchanged. Data at the target interval but off the bin
+starts (e.g. epochs at `:02`) are relabeled to the bin starts.
 
 #### Per-SID independence
 
@@ -73,17 +79,19 @@ from a different sky position (θ, φ). Mixing VOD or SNR values across satellit
 within a time bin conflates spatial variability (different view angles) with
 temporal variability — producing a physically meaningless average.
 
-Geometry coordinates (θ, φ) are averaged per-SID to produce the **centroid** of
-all contributing sky positions. Using `.first()` instead would assign an arbitrary
-single observation's geometry to the averaged value — misleading because it does
-not represent where the average came from.
+Geometry (θ, φ) is aggregated per SID with the same method, so it describes
+where the aggregated value came from; `.first()` would instead assign a single
+observation's geometry to it. The azimuth φ is aggregated as an angle: each
+value is taken relative to the first value of its bin, so a satellite crossing
+north (φ = 0) yields north, not south.
 
 Coordinate handling:
 
 | Coordinate type | Example | Aggregation |
 |----------------|---------|-------------|
 | Data variables | `VOD`, `SNR` | Mean or median per `(time_bin, sid)` |
-| Epoch×SID coords | `phi`, `theta` | Mean per `(time_bin, sid)` (centroid) |
+| Geometry | `theta` | Mean or median per `(time_bin, sid)` |
+| Azimuth | `phi` | Mean or median as an angle per `(time_bin, sid)` |
 | SID-only coords | `sv`, `band`, `code` | Preserved unchanged |
 
 !!! warning "Anti-pattern: naive xarray resampling"
@@ -111,7 +119,8 @@ ds_out, result = op(ds_in)
 | `grid_type` | `"equal_area"` | Grid builder name |
 | `angular_resolution` | `2.0` | Resolution in degrees |
 
-If the dataset is missing `phi` or `theta` coordinates, the operation is skipped.
+`phi` and `theta` may be data variables (as the runs write them) or
+coordinates. If the dataset has neither, the operation is skipped.
 
 ---
 
@@ -150,12 +159,35 @@ to dataset attributes via `to_metadata_dict()`.
 
 ---
 
-## Config-Driven Pipeline (deprecated)
+## Preprocessing during a run
 
-The `processing.preprocessing:` section of `canvod-settings.yaml` is left over
-from development and will be removed with the next major version; no run
-applies it. Setting it in a settings file raises a `FutureWarning`. Build the
-pipeline explicitly instead, as shown under [Pipeline](#pipeline).
+`canvodpy run`, the Python API and Airflow apply the operations set in the
+`processing.preprocessing` section of `canvod-settings.yaml`. Nothing is
+applied unless the section is set, and each operation runs only if its own
+subsection is set:
 
-`build_default_pipeline(config)` still builds a pipeline from a
-`PreprocessingConfig`; called without one, it reads the deprecated section.
+```yaml
+processing:
+  preprocessing:
+    temporal_aggregation:
+      freq: "1min"      # whole number + "s", "min" or "h"; must divide one day
+      method: "median"  # "mean" or "median"
+    grid_assignment:
+      grid_type: "equal_area"
+      angular_resolution: 2.0
+```
+
+The temporal aggregation runs first, then the grid cell assignment. Both run on
+all files of one receiver and day together (`preprocess_files`), after azimuth
+and elevation are computed and before the data are written to the GNSS store.
+A time bin that spans two files is therefore aggregated from the observations of
+both; it is stored with the file that holds its first observation. VOD is then
+computed from the aggregated data and carries the `cell_id_*` variables along.
+
+Every written dataset records the applied operations in its `Preprocessing`
+attribute. A store group never mixes data preprocessed in different ways: if
+the setting changes, writing into an existing group stops with an error, so
+keep the setting for the life of a store or start a new store.
+
+`build_default_pipeline(config)` builds the same pipeline from a
+`PreprocessingConfig`; called without one, it reads the setting.

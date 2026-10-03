@@ -263,12 +263,19 @@ class TauOmegaZerothOrder(VODCalculator):
         theta = self.canopy_ds["theta"]
         vod = -np.log(canopy_transmissivity) * np.cos(theta)
 
+        # Grid cells assigned before the store write (processing.preprocessing)
+        cell_ids = {
+            name: self.canopy_ds[name]
+            for name in self.canopy_ds.data_vars
+            if str(name).startswith("cell_id_")
+        }
         vod_ds = xr.Dataset(
             {
                 "VOD": vod,
                 "delta_snr": delta_snr,
                 "phi": self.canopy_ds["phi"],
                 "theta": self.canopy_ds["theta"],
+                **cell_ids,
             },
             coords=self.canopy_ds.coords,
         )

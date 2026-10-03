@@ -409,3 +409,95 @@ class TestValidateDataDirs:
                 return_value=_site_config(tmp_path),
             ):
                 validate_data_dirs("Elsewhere")
+
+
+# ---------------------------------------------------------------------------
+# processing.preprocessing in process_rinex
+# ---------------------------------------------------------------------------
+
+
+class TestProcessRinexPreprocessing:
+    """Airflow aggregates the whole day before writing, like ``canvodpy run``."""
+
+    @staticmethod
+    def _file(start: str, file_hash: str) -> xr.Dataset:
+        epochs = np.datetime64(start, "ns") + np.arange(18) * np.timedelta64(5, "s")
+        return xr.Dataset(
+            {
+                "SNR": (("epoch", "sid"), np.arange(18.0).reshape(18, 1)),
+                "phi": (("epoch", "sid"), np.ones((18, 1))),
+                "theta": (("epoch", "sid"), np.ones((18, 1))),
+            },
+            coords={"epoch": epochs, "sid": ["G01|L1|C"]},
+            attrs={"File Hash": file_hash},
+        )
+
+    def _run(self, tmp_path, preprocessing):
+        from canvodpy.workflows import tasks
+
+        from canvod.config.models import PreprocessingConfig
+
+        config = _site_config(tmp_path)
+        config.processing.processing.threads_per_worker = 1
+        config.processing.preprocessing = (
+            None
+            if preprocessing is None
+            else PreprocessingConfig.model_validate(preprocessing)
+        )
+        # 00:00:00-00:01:25 and 00:01:30-00:02:55: the 00:01 bin spans both.
+        files = {
+            "a.rnx": self._file("2025-01-01T00:00:00", "A"),
+            "b.rnx": self._file("2025-01-01T00:01:30", "B"),
+        }
+
+        def fake_worker(rnx_file, **_kwargs):
+            return rnx_file, files[rnx_file.name], {}, {}
+
+        site = MagicMock()
+        site.gnss_store.should_skip_file.return_value = (False, None)
+        header = MagicMock()
+        header.approx_position = [MagicMock(magnitude=v) for v in (4e6, 1e6, 4.8e6)]
+        with (
+            patch.object(tasks, "load_config", return_value=config),
+            patch("canvod.store.GnssResearchSite", return_value=site),
+            patch(
+                "canvodpy.orchestrator.processor.preprocess_with_hermite_aux",
+                side_effect=fake_worker,
+            ),
+            patch(
+                "canvod.readers.rinex.v3_04.Rnxv3Header.from_file",
+                return_value=header,
+            ),
+        ):
+            tasks.process_rinex(
+                "TestSite",
+                "2025001",
+                str(tmp_path / "aux.zarr"),
+                receiver_files={
+                    "canopy_01": {"files": ["a.rnx", "b.rnx"], "count": 2},
+                    "reference_01": {"files": [], "count": 0},
+                },
+            )
+        return [
+            c.kwargs["dataset"]
+            for c in site.gnss_store.write_or_append_group.call_args_list
+        ]
+
+    def test_not_set_writes_files_unchanged(self, tmp_path):
+        written = self._run(tmp_path, None)
+        assert [ds.sizes["epoch"] for ds in written] == [18, 18]
+        assert all(ds.attrs["Preprocessing"] == "{}" for ds in written)
+
+    def test_aggregates_the_day_before_writing(self, tmp_path):
+        written = self._run(
+            tmp_path, {"temporal_aggregation": {"freq": "1min", "method": "mean"}}
+        )
+        assert [ds.attrs["File Hash"] for ds in written] == ["A", "B"]
+        a, b = written
+        np.testing.assert_array_equal(
+            a["epoch"].values,
+            np.array(["2025-01-01T00:00", "2025-01-01T00:01"], dtype="datetime64[ns]"),
+        )
+        # 00:01 bin: last 6 epochs of a (SNR 12..17) and first 6 of b (0..5).
+        assert a["SNR"].values[1, 0] == np.mean([*range(12, 18), *range(6)])
+        assert b["SNR"].values[0, 0] == np.mean(range(6, 18))
