@@ -185,9 +185,7 @@ uv add canvodpy
 uv add canvod-readers canvod-grids
 ```
 
-canVODpy requires Python 3.14. On macOS, it runs on Apple silicon only: its
-`numba` and `llvmlite` dependencies publish no Python 3.14 wheels for Intel
-Macs.
+canVODpy requires Python 3.14. On macOS, the tests run on Apple silicon.
 
 ## Quick Start
 
