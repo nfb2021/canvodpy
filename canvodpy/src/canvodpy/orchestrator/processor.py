@@ -211,7 +211,9 @@ def preprocess_with_hermite_aux(
         List of specific SIDs to keep. If None, keeps all possible SIDs.
     use_sbf_geometry : bool, default False
         If True and reader_name is "sbf", skip external orbit/clock downloads
-        and transfer theta/phi directly from SBF SatVisibility blocks.
+        and transfer theta/phi directly from SBF SatVisibility blocks via
+        ``SbfBroadcastProvider`` (ephemeris-based angles only; raises if the
+        file has none).
     store_radial_distance : bool, default False
         If True, keep the radial distance variable ``r`` in the output.
     broadcast_canopy_file : Path | None, default None
@@ -270,58 +272,18 @@ def preprocess_with_hermite_aux(
 
             # SBF-geometry fast path: use receiver-reported theta/phi, skip ephemeris
             if reader_name == "sbf" and use_sbf_geometry:
-                # Use canopy file's sbf_obs when provided (reference receiver
-                # in shared position mode), else this file's own sbf_obs
-                if broadcast_canopy_file is not None:
-                    from canvodpy.factories import ReaderFactory
+                from canvod.auxiliary.ephemeris.provider import SbfBroadcastProvider
 
-                    canopy_rnx = ReaderFactory.create(
-                        broadcast_canopy_fmt or "sbf", fpath=broadcast_canopy_file
-                    )
-                    _, canopy_aux = canopy_rnx.to_ds_and_auxiliary(
-                        keep_data_vars=None,
-                        write_global_attrs=False,
-                        keep_sids=keep_sids,
-                    )
-                    meta_ds = canopy_aux.get("sbf_obs")
-                else:
-                    meta_ds = aux_datasets.get("sbf_obs")
-                if (
-                    meta_ds is not None
-                    and "broadcast_theta" in meta_ds
-                    and "broadcast_phi" in meta_ds
-                ):
-                    # Extract broadcast geometry (already in radians from reader)
-                    bt = meta_ds["broadcast_theta"]
-                    bp = meta_ds["broadcast_phi"]
-
-                    # Align to obs epoch space
-                    if "epoch" in bt.dims:
-                        common_epochs = np.intersect1d(ds.epoch.values, bt.epoch.values)
-                        bt = bt.sel(epoch=common_epochs).reindex(
-                            epoch=ds.epoch.values, fill_value=np.nan
-                        )
-                        bp = bp.sel(epoch=common_epochs).reindex(
-                            epoch=ds.epoch.values, fill_value=np.nan
-                        )
-
-                    # Align to obs SID space
-                    common_sids = sorted(set(ds.sid.values) & set(bt.sid.values))
-                    bt = bt.sel(sid=common_sids).reindex(
-                        sid=ds.sid.values, fill_value=np.nan
-                    )
-                    bp = bp.sel(sid=common_sids).reindex(
-                        sid=ds.sid.values, fill_value=np.nan
-                    )
-
-                    from canvod.auxiliary.position.spherical_coords import (
-                        add_broadcast_spherical_coords_to_dataset,
-                    )
-
-                    # .values prevents epoch-level coord leakage (pdop, hdop, …)
-                    ds = add_broadcast_spherical_coords_to_dataset(
-                        ds, bt.values, bp.values
-                    )
+                # Reference receiver in shared position mode: the canopy
+                # file's geometry, else this file's own sbf_obs.
+                provider = SbfBroadcastProvider(
+                    canopy_file=broadcast_canopy_file,
+                    canopy_reader_format=broadcast_canopy_fmt or "sbf",
+                    keep_sids=keep_sids,
+                )
+                ds = provider.augment_dataset(
+                    ds, receiver_position, aux_datasets=aux_datasets
+                )
                 from canvod.readers.preprocessing import flush_sid_accumulators
 
                 sid_issues = flush_sid_accumulators()

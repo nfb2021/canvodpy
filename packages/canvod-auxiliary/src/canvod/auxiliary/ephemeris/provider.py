@@ -308,6 +308,11 @@ class SbfBroadcastProvider(EphemerisProvider):
     skipping external orbit/clock downloads entirely.  Only works
     when the source format is SBF.
 
+    Only angles the receiver computed from the broadcast ephemeris are used
+    (``broadcast_angle_source == 2``). Almanac-based angles become NaN: on
+    the canVODpy test data (2025-001) they differ from the ephemeris-based
+    angles by up to 0.26 deg for GLONASS and up to 104 deg for BeiDou.
+
     Parameters
     ----------
     canopy_file : Path, optional
@@ -315,16 +320,27 @@ class SbfBroadcastProvider(EphemerisProvider):
         mode.  When provided, the canopy file's geometry overrides the
         reference file's own geometry.
     canopy_reader_format : str
-        Reader format for the canopy file.
+        Reader format for the canopy file. Only ``"sbf"`` carries
+        SatVisibility geometry.
+    keep_sids : list of str, optional
+        SIDs to keep when reading ``canopy_file``. Only saves work: the
+        geometry is aligned to the observation SIDs either way.
     """
 
     def __init__(
         self,
         canopy_file: Path | None = None,
         canopy_reader_format: str = "sbf",
+        keep_sids: list[str] | None = None,
     ) -> None:
+        if canopy_reader_format != "sbf":
+            raise ValueError(
+                f"canopy_reader_format={canopy_reader_format!r}: only SBF files "
+                "carry SatVisibility geometry, use 'sbf'."
+            )
         self.canopy_file = canopy_file
         self.canopy_reader_format = canopy_reader_format
+        self.keep_sids = keep_sids
 
     def preprocess_day(
         self,
@@ -356,21 +372,25 @@ class SbfBroadcastProvider(EphemerisProvider):
         Returns
         -------
         xr.Dataset
-            Dataset with theta/phi added from SBF broadcast.
+            Dataset with theta/phi added from SBF broadcast. Cells without
+            an ephemeris-based angle are NaN.
+
+        Raises
+        ------
+        ValueError
+            If no ``sbf_obs`` is available, it lacks the SatVisibility
+            variables, or it holds no ephemeris-based angle for any
+            observation.
         """
         import numpy as np
 
         # Determine source of sbf_obs metadata
         if self.canopy_file is not None:
-            from canvodpy.factories import ReaderFactory
+            from canvod.readers.sbf.reader import SbfReader
 
-            canopy_rnx = ReaderFactory.create(
-                self.canopy_reader_format,
-                fpath=self.canopy_file,
-            )
-            _, canopy_aux = canopy_rnx.to_ds_and_auxiliary(
+            _, canopy_aux = SbfReader(fpath=self.canopy_file).to_ds_and_auxiliary(
                 keep_data_vars=None,
-                write_global_attrs=False,
+                keep_sids=self.keep_sids,
             )
             meta_ds = canopy_aux.get("sbf_obs")
         elif aux_datasets is not None:
@@ -381,13 +401,11 @@ class SbfBroadcastProvider(EphemerisProvider):
                 "aux_datasets with 'sbf_obs' key."
             )
 
-        if (
-            meta_ds is None
-            or "broadcast_theta" not in meta_ds
-            or "broadcast_phi" not in meta_ds
-        ):
+        required = ("broadcast_theta", "broadcast_phi", "broadcast_angle_source")
+        if meta_ds is None or any(name not in meta_ds for name in required):
             raise ValueError(
-                "sbf_obs metadata does not contain broadcast_theta/broadcast_phi. "
+                "sbf_obs metadata does not contain broadcast_theta, "
+                "broadcast_phi and broadcast_angle_source. "
                 "Cannot use broadcast ephemeris."
             )
 
@@ -395,9 +413,12 @@ class SbfBroadcastProvider(EphemerisProvider):
             add_broadcast_spherical_coords_to_dataset,
         )
 
-        # Extract broadcast geometry (already in radians from reader)
-        bt = meta_ds["broadcast_theta"]
-        bp = meta_ds["broadcast_phi"]
+        # Extract broadcast geometry (already in radians from reader); keep
+        # only angles computed from the broadcast ephemeris (2), not the
+        # almanac (1) or an unknown source (-1).
+        from_ephemeris = meta_ds["broadcast_angle_source"] == 2
+        bt = meta_ds["broadcast_theta"].where(from_ephemeris)
+        bp = meta_ds["broadcast_phi"].where(from_ephemeris)
 
         # Align to observation epoch space
         if "epoch" in bt.dims:
@@ -413,6 +434,12 @@ class SbfBroadcastProvider(EphemerisProvider):
         common_sids = sorted(set(ds.sid.values) & set(bt.sid.values))
         bt = bt.sel(sid=common_sids).reindex(sid=ds.sid.values, fill_value=np.nan)
         bp = bp.sel(sid=common_sids).reindex(sid=ds.sid.values, fill_value=np.nan)
+
+        if np.isnan(bt.values).all():
+            raise ValueError(
+                "sbf_obs holds no ephemeris-based SatVisibility angle for any "
+                "observation. Cannot use broadcast ephemeris."
+            )
 
         # Use .values to prevent coord leakage from meta_ds (pdop, hdop, …)
         return add_broadcast_spherical_coords_to_dataset(ds, bt.values, bp.values)
