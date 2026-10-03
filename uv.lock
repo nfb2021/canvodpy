@@ -27,22 +27,22 @@ members = [
 [manifest.dependency-groups]
 dev = [
     { name = "anywidget", specifier = ">=0.11.0" },
-    { name = "commitizen", specifier = ">=4.18.1" },
-    { name = "hypothesis", specifier = ">=6.168.0" },
+    { name = "commitizen", specifier = ">=4.19.0" },
+    { name = "hypothesis", specifier = ">=6.168.1" },
     { name = "ipykernel", specifier = ">=7.3.0" },
     { name = "loky", specifier = ">=3.6.0" },
-    { name = "marimo", specifier = ">=0.24.2" },
-    { name = "mkdocstrings-python", specifier = ">=2.0.8" },
-    { name = "mystmd", specifier = ">=1.10.1" },
+    { name = "marimo", specifier = ">=0.25.0" },
+    { name = "mkdocstrings-python", specifier = ">=2.0.9" },
+    { name = "mystmd", specifier = ">=1.11.0" },
     { name = "pre-commit", specifier = ">=4.6.2" },
     { name = "psutil", specifier = ">=7.2.2" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "pytest-mock", specifier = ">=3.15.1" },
-    { name = "ruff", specifier = ">=0.16.8" },
+    { name = "ruff", specifier = ">=0.16.9" },
     { name = "traitlets", specifier = ">=5.16.1" },
-    { name = "ty", specifier = ">=0.0.82" },
-    { name = "zensical", specifier = ">=0.0.62" },
+    { name = "ty", specifier = ">=0.0.84" },
+    { name = "zensical", specifier = ">=0.0.65" },
 ]
 
 [[package]]
@@ -1908,16 +1908,16 @@ wheels = [
 
 [[package]]
 name = "mkdocstrings-python"
-version = "2.0.8"
+version = "2.0.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "griffelib" },
     { name = "mkdocs-autorefs" },
     { name = "mkdocstrings" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c5/65/0db919b7c91bf033b42d04f15ff16a56f4edd6afb26e84d448359660ece3/mkdocstrings_python-2.0.8.tar.gz", hash = "sha256:34545b54681cf0b212aab95394d37b0f5326a93b102f6ad1df3d965c79384c9d", size = 201771, upload-time = "2026-08-31T20:16:06.698Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/96/11/640067d1ad713ea99c233e53e57a4c300d9885f904a61371d7ef90dea549/mkdocstrings_python-2.0.9.tar.gz", hash = "sha256:ae945637dc0618c6beedbee169f10c0234b77f322c53db3fc9fb4c29b3013038", size = 203006, upload-time = "2026-09-22T13:43:27.712Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0b/b7/a5a854d4e44853f26decc0c5e0d68df052399f3da344a313da4178f00816/mkdocstrings_python-2.0.8-py3-none-any.whl", hash = "sha256:e555d9ef53b0febdeae4dd603144d4f86ec90fef672276645ea3bb61232c3d24", size = 105443, upload-time = "2026-08-31T20:16:05.25Z" },
+    { url = "https://files.pythonhosted.org/packages/62/0f/f7f926cfa06317bbdbd3cf0ff82f9e3a91767352eb01519c81499fddf575/mkdocstrings_python-2.0.9-py3-none-any.whl", hash = "sha256:c0233eff3f84d78110df50541918e7ec2bcff8e1614faddea34290a90321a416", size = 105698, upload-time = "2026-09-22T13:43:26.345Z" },
 ]
 
 [[package]]
@@ -1946,15 +1946,15 @@ wheels = [
 
 [[package]]
 name = "mystmd"
-version = "1.10.1"
+version = "1.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "nodeenv" },
     { name = "platformdirs" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/18/6e/117ae46e81709d74f8ca8fc444511d6f11cad5a01555618dad0beb905d81/mystmd-1.10.1.tar.gz", hash = "sha256:40b24f20f3c6b77b5292aac4a1b2f89c1915848dd796bb9f2c1d2af71622fc99", size = 2981748, upload-time = "2026-06-05T17:07:02.098Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/00/e0/05c4acc244e317a83cf8da27c2f29b62f86c8ee00d42c3668bf316461b1d/mystmd-1.11.0.tar.gz", hash = "sha256:afc8ca35bcf34cd694b2d5f275dba5baa2e78cf72b4a770369f9a2b6183d7d59", size = 2750170, upload-time = "2026-09-21T16:32:28.084Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7a/16/b71308f641c431936964459df6cdd4b941f8f4a42e9b53f1c8b249cd27e9/mystmd-1.10.1-py3-none-any.whl", hash = "sha256:353bac72edea3dd9335efcf5ec72f95f40509a46026e248b75a96cd373398054", size = 3013401, upload-time = "2026-06-05T17:06:59.902Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/5e/4566006965545a6461d4b250faafd57a3ff04a193ed664790fbbfe7ba91d/mystmd-1.11.0-py3-none-any.whl", hash = "sha256:52ece5bff807e24e979ca86a806153a3c00247df32321547adc533b8720edab6", size = 2780949, upload-time = "2026-09-21T16:32:26.306Z" },
 ]
 
 [[package]]
