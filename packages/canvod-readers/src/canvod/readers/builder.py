@@ -5,7 +5,7 @@ and contract validation automatically.
 
 Examples
 --------
->>> builder = DatasetBuilder(reader)
+>>> builder = DatasetBuilder(reader, time_system="GPS")
 >>> for epoch in reader.iter_epochs():
 ...     ei = builder.add_epoch(epoch.timestamp)
 ...     for obs in epoch.observations:
@@ -29,6 +29,7 @@ from canvod.readers.gnss_specs.metadata import (
     DTYPES,
     OBSERVABLES_METADATA,
     SNR_METADATA,
+    epoch_coord_attrs,
 )
 from canvod.readers.gnss_specs.signals import SignalIDMapper
 
@@ -57,12 +58,18 @@ class DatasetBuilder:
     ----------
     reader : GNSSDataReader
         The reader instance (used for ``_build_attrs()`` and file hash).
+    time_system : str
+        Time scale of the epoch timestamps as given to :meth:`add_epoch`,
+        recorded in the epoch coordinate's ``time_system`` attribute: one of
+        ``"GPS"``, ``"GAL"``, ``"QZS"``, ``"BDT"``, ``"IRN"``, ``"UTC"`` (RINEX
+        ``"GLO"`` is recorded as UTC). Required, since the builder cannot
+        infer it from the timestamps.
     aggregate_glonass_fdma : bool, optional
         Whether to aggregate GLONASS FDMA channels (default True).
 
     Examples
     --------
-    >>> builder = DatasetBuilder(reader)
+    >>> builder = DatasetBuilder(reader, time_system="GPS")
     >>> for epoch in reader.iter_epochs():
     ...     ei = builder.add_epoch(epoch.timestamp)
     ...     for obs in epoch.observations:
@@ -75,9 +82,12 @@ class DatasetBuilder:
         self,
         reader: GNSSDataReader,
         *,
+        time_system: str,
         aggregate_glonass_fdma: bool = True,
     ) -> None:
         self._reader = reader
+        # Validate now, not at build() after all epochs were added.
+        self._epoch_attrs = epoch_coord_attrs(time_system)
         self._mapper = SignalIDMapper(aggregate_glonass_fdma=aggregate_glonass_fdma)
         self._signals: dict[str, SignalID] = {}
         self._epochs: list[datetime] = []
@@ -203,7 +213,7 @@ class DatasetBuilder:
 
         # --- Coordinates ---
         coords = {
-            "epoch": ("epoch", epoch_arr, COORDS_METADATA["epoch"]),
+            "epoch": ("epoch", epoch_arr, self._epoch_attrs),
             "sid": xr.DataArray(
                 np.array(sorted_sids, dtype=object),
                 dims=["sid"],

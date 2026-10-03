@@ -244,7 +244,7 @@ Subclasses only need to inherit from `GNSSDataReader` — no separate `BaseModel
     ```python
     from canvod.readers.builder import DatasetBuilder
 
-    builder = DatasetBuilder(reader)
+    builder = DatasetBuilder(reader, time_system="GPS")
     ei = builder.add_epoch(timestamp)
     sig = builder.add_signal(sv="G01", band="L1", code="C")
     builder.set_value(ei, sig, "SNR", 42.0)
@@ -301,13 +301,28 @@ Subclasses only need to inherit from `GNSSDataReader` — no separate `BaseModel
 
 ## Performance
 
-### Single-Pass Parser
+### RINEX v3 parsers
 
-`Rnxv3Obs` uses a single-pass parser that pre-computes the full Signal ID (SID) space from the RINEX header and fills pre-allocated NumPy arrays in one pass over the file. This avoids the overhead of:
+`Rnxv3Obs` pre-computes the full Signal ID (SID) space from the RINEX header and fills pre-allocated NumPy arrays. A pre-built lookup table maps `(SV, obs_code)` to the array index, and the SIDs are derived once from the header.
 
-- **Per-observation object allocation** — inline string parsing replaces per-observation model instantiation
-- **Repeated signal ID lookups** — a pre-built lookup table maps `(SV, obs_code)` → array index directly
-- **Redundant header re-parsing** — SIDs are derived once from header metadata at parse start
+Two parsers fill these arrays:
+
+- **`validated`** (default): every epoch passes the Pydantic epoch and satellite models (epoch line, satellite IDs, satellite count, observation records). Epochs that fail are dropped, and the reader logs how many and at which lines (`rinex_epochs_rejected`).
+- **`unvalidated_fast`**: slices fixed columns without any check.
+
+Both share the SID space, the array allocation, the epoch-time conversion and the dataset assembly. For a valid file they give the identical dataset (`test_rinex_v3_path_parity.py`).
+
+!!! danger "`unvalidated_fast` is your responsibility"
+
+    The unvalidated parser does not check epochs, satellite IDs, satellite
+    counts or observation fields. A corrupted record can enter the dataset
+    as partial or wrong values, for example the fields of a truncated
+    satellite line, or an epoch whose satellite count does not match its
+    records. canVODpy takes no responsibility for its results; checking the
+    input files is entirely up to you. Every use emits an
+    `UnvalidatedParserWarning`. Select it with
+    `to_ds(parser="unvalidated_fast")` or
+    `processing.params.rinex_v3_parser: unvalidated_fast`.
 
 ### Tips
 

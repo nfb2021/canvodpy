@@ -19,6 +19,7 @@ aux_data:
 params:
   keep_gnss_observables:
     - SNR
+  rinex_v3_parser: validated  # 'unvalidated_fast' is DANGEROUS: no checks, results are the user's responsibility
   aggregate_glonass_fdma: true
   store_radial_distance: false
   store_delta_snr: false

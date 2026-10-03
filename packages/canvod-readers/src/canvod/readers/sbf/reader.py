@@ -51,6 +51,7 @@ from canvod.readers.gnss_specs.metadata import (
     COORDS_METADATA,
     DTYPES,
     OBSERVABLES_METADATA,
+    epoch_coord_attrs,
 )
 from canvod.readers.sbf._registry import FDMA_SIGNAL_NUMS, SIGNAL_TABLE, decode_svid
 from canvod.readers.sbf._scaling import (
@@ -1777,7 +1778,7 @@ class SbfReader(GNSSDataReader):
         ssi_arr = _snr_dbhz_to_ssi(snr_arr).astype(DTYPES["SSI"])
 
         coords_obs: dict[str, Any] = {
-            "epoch": ("epoch", timestamps, COORDS_METADATA["epoch"]),
+            "epoch": ("epoch", timestamps, epoch_coord_attrs("UTC")),
             "sid": xr.DataArray(
                 np.array(sorted_sids, dtype=object),
                 dims=["sid"],
@@ -2043,7 +2044,7 @@ class SbfReader(GNSSDataReader):
                         pvt_status_arr[t, cols] = pvt_raw
 
         coords_meta: dict[str, Any] = {
-            "epoch": ("epoch", timestamps, COORDS_METADATA["epoch"]),
+            "epoch": ("epoch", timestamps, epoch_coord_attrs("UTC")),
             "sid": xr.DataArray(
                 sorted_sids, dims=["sid"], attrs=COORDS_METADATA["sid"]
             ),

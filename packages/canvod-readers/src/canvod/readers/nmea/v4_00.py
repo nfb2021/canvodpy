@@ -33,6 +33,7 @@ from canvod.readers.gnss_specs.metadata import (
     COORDS_METADATA,
     DTYPES,
     SNR_METADATA,
+    epoch_coord_attrs,
 )
 from canvod.readers.gnss_specs.signals import SignalIDMapper
 from canvod.readers.nmea.exceptions import (
@@ -532,7 +533,7 @@ class NmeaObs(GNSSDataReader, BaseModel):
         )
 
         coords = {
-            "epoch": ("epoch", timestamps, COORDS_METADATA["epoch"]),
+            "epoch": ("epoch", timestamps, epoch_coord_attrs("UTC")),
             "sid": signal_id_coord,
             "sv": ("sid", sv_list, COORDS_METADATA["sv"]),
             "system": ("sid", system_list, COORDS_METADATA["system"]),

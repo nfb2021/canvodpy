@@ -473,6 +473,10 @@ class TestSbfObsDataset:
         for coord in ("pdop", "hdop", "n_sv"):
             assert coord in meta_ds.coords, f"Missing epoch coord: {coord}"
 
+    def test_epochs_record_utc(self, meta_ds: xr.Dataset, obs_ds: xr.Dataset) -> None:
+        for ds in (obs_ds, meta_ds):
+            assert ds["epoch"].attrs["time_system"] == "UTC"
+
     def test_sbf_obs_pdop_plausible(self, meta_ds: xr.Dataset) -> None:
         pdop = meta_ds["pdop"].values
         valid = pdop[~np.isnan(pdop)]

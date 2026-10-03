@@ -401,7 +401,7 @@ class MyFormatReader(GNSSDataReader):
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `DatasetBuilder(reader)` | builder | Create a new builder |
+| `DatasetBuilder(reader, time_system=...)` | builder | Create a new builder; `time_system` is the time scale of the epochs you add (`"GPS"`, `"GAL"`, `"QZS"`, `"BDT"`, `"IRN"`, `"UTC"`), recorded in the epoch coordinate |
 | `add_epoch(timestamp)` | `int` | Register an epoch, returns its index |
 | `add_signal(sv, band, code)` | `SignalID` | Register a signal (idempotent — same args = same ID) |
 | `set_value(ei, sig, var, value)` | `None` | Set a value for epoch index + signal + variable |
@@ -580,7 +580,7 @@ Every reader must produce a Dataset that passes `validate_dataset()`. Here is th
 
 | Coordinate | Dtype | Indexed by | Description |
 |------------|-------|------------|-------------|
-| `epoch` | `datetime64[ns]` | `epoch` | Observation timestamps |
+| `epoch` | `datetime64[ns]` | `epoch` | Observation timestamps; attribute `time_system` gives their time scale |
 | `sid` | `object` (string) | `sid` | Signal ID strings (`"G01\|L1\|C"`) |
 | `sv` | `object` (string) | `sid` | Satellite vehicle (`"G01"`) |
 | `system` | `object` (string) | `sid` | System letter (`"G"`) |

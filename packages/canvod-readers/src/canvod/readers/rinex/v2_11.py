@@ -61,6 +61,7 @@ from canvod.readers.gnss_specs.metadata import (
     DTYPES,
     OBSERVABLES_METADATA,
     SNR_METADATA,
+    epoch_coord_attrs,
     get_global_attrs,
 )
 from canvod.readers.gnss_specs.models import (
@@ -149,6 +150,10 @@ def _parse_wavelength_fact_line(line: str) -> tuple[int, int, list[str]]:
                 sat_id = sat_id[0] + sat_id[1:].strip().zfill(2)
                 sats.append(sat_id)
     return wl1, wl2, sats
+
+
+# RINEX 2.11 Table A1, TIME OF FIRST OBS: default time system of a pure file.
+_DEFAULT_TIME_SYSTEM_V2 = {"G": "GPS", "R": "GLO", "E": "GAL"}
 
 
 class _WavelengthFactors:
@@ -468,8 +473,19 @@ class Rnxv2Header(BaseModel):
                     int((sec % 1) * 1e6),
                     tzinfo=UTC,
                 )
-                data["time_system"] = time_sys if time_sys else "GPS"
-                data["t0"] = {"GPS": dt, "UTC": dt}
+                # RINEX 2.11 Table A1: compulsory in mixed GPS/GLONASS
+                # files; pure files default to their own system.
+                if not time_sys:
+                    time_sys = _DEFAULT_TIME_SYSTEM_V2.get(data.get("systems", "G"))
+                if time_sys not in ("GPS", "GLO", "GAL"):
+                    msg = (
+                        f"TIME OF FIRST OBS has no valid time system ({time_sys!r}); "
+                        "it is compulsory in mixed files"
+                    )
+                    raise ValueError(msg)
+                data["time_system"] = time_sys
+                # As written, in that time system; no conversion.
+                data["t0"] = {time_sys: dt}
 
             elif label == "TIME OF LAST OBS":
                 pass  # Not needed for parsing
@@ -505,8 +521,9 @@ class Rnxv2Header(BaseModel):
         data.setdefault("pgm", "")
         data.setdefault("run_by", "")
         data.setdefault("date", datetime.now(UTC))
-        data.setdefault("time_system", "GPS")
-        data.setdefault("t0", {"GPS": datetime.now(UTC)})
+        if "t0" not in data:
+            msg = "mandatory header record TIME OF FIRST OBS is missing"
+            raise ValueError(msg)
 
         data["obs_types"] = obs_types
         data["wavelength_fact_l1"] = wl_l1_default
@@ -1416,7 +1433,7 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
         ]
 
         coords = {
-            "epoch": ("epoch", timestamps, COORDS_METADATA["epoch"]),
+            "epoch": ("epoch", timestamps, epoch_coord_attrs(self.header.time_system)),
             "sid": signal_id_coord,
             "sv": ("sid", sv_list, COORDS_METADATA["sv"]),
             "system": ("sid", constellation_list, COORDS_METADATA["system"]),

@@ -46,6 +46,20 @@ class ProcessingParams(_StrictModel):
         default_factory=lambda: ["SNR"],
         description="GNSS observables to keep (SNR, Pseudorange, Phase, Doppler)",
     )
+    rinex_v3_parser: Literal["validated", "unvalidated_fast"] = Field(
+        "validated",
+        description=(
+            "How RINEX v3 observation files are parsed. 'validated': every "
+            "epoch is checked (epoch line, satellite IDs, satellite count, "
+            "observation fields); epochs that fail are dropped and logged. "
+            "'unvalidated_fast': DANGEROUS. Parses by fixed columns without "
+            "any check, so corrupted records can enter the store as partial "
+            "or wrong values. On valid files both give the same dataset. "
+            "canVODpy takes no responsibility for results of the unvalidated "
+            "parser; checking the input files is entirely the user's "
+            "responsibility. Every use emits an UnvalidatedParserWarning."
+        ),
+    )
     aggregate_glonass_fdma: bool = Field(
         True,
         description=(
