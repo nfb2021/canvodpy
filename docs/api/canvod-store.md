@@ -21,7 +21,11 @@ Versioned data storage using Icechunk.
 
 ::: canvod.store.store
 
-## Data Reader
+## Data Reader (deprecated)
+
+`IcechunkDataReader` is left over from development and will be removed with
+the next major version. Use `canvodpy run` or
+`canvodpy.Site(<site>).pipeline().process_date(<date>)` instead.
 
 ::: canvod.store.reader
 

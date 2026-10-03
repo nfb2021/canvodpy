@@ -13,12 +13,17 @@ import xarray as xr
 from canvod.auxiliary.preprocessing import prep_aux_ds
 from canvod.config import load_config
 from canvod.readers import MatchedDirs, Rnxv3Obs
-from canvod.utils.tools import _worker_init, get_version_from_pyproject
+from canvod.utils.tools import _worker_init, deprecated, get_version_from_pyproject
 from canvodpy.logging import get_logger
 from natsort import natsorted
 from tqdm import tqdm
 
 from canvod.store.manager import GnssResearchSite
+
+_REPLACEMENT = (
+    "Use `canvodpy run` or `canvodpy.Site(<site>).pipeline().process_date(<date>)` "
+    "instead."
+)
 
 
 # Module-level function for ProcessPoolExecutor (must be pickleable).
@@ -114,12 +119,19 @@ def preprocess_rnx(
         raise
 
 
+@deprecated(
+    "`IcechunkDataReader` is left over from development and will be removed "
+    f"with the next major version. {_REPLACEMENT}"
+)
 class IcechunkDataReader:
     """
-    Replacement for RinexFilesParser that reads from Icechunk stores.
+    Read RINEX v3 files of one day and append them to the site's GNSS store.
 
-    This class provides a similar interface to the old parser but reads
-    pre-processed data from Icechunk stores instead of processing RINEX files.
+    .. deprecated::
+        Left over from development, removed with the next major version.
+        Use ``canvodpy run`` or
+        ``canvodpy.Site(<site>).pipeline().process_date(<date>)``, which
+        read all supported formats and add the satellite geometry.
 
     Parameters
     ----------
@@ -254,6 +266,11 @@ class IcechunkDataReader:
             if self.gc_delay > 0:
                 time.sleep(self.gc_delay)
 
+    @deprecated(
+        "`IcechunkDataReader.parsed_rinex_data_gen_v2()` is left over from "
+        "development, does not run with the current `RinexDataProcessor` and "
+        f"will be removed with the next major version. {_REPLACEMENT}"
+    )
     def parsed_rinex_data_gen_v2(
         self,
         keep_vars: list[str] | None = None,
@@ -457,6 +474,11 @@ class IcechunkDataReader:
 
         self._logger.info("RINEX processing and ingestion completed")
 
+    @deprecated(
+        "`IcechunkDataReader.parsed_rinex_data_gen()` is left over from "
+        "development and will be removed with the next major version. "
+        f"{_REPLACEMENT}"
+    )
     def parsed_rinex_data_gen(
         self,
         keep_vars: list[str] | None = None,
