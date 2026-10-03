@@ -3,9 +3,10 @@
 Used by ``canvodpy config validate``. It applies the same file discovery as
 ``canvodpy run`` (:mod:`canvodpy.orchestrator.discovery`), so a site that
 passes the check is processed with exactly the files reported here, and
-every error reported here would also stop a run. In addition it reports
-what a run passes over without a message: files that are not recognized,
-and files whose named sampling interval differs from that of their data.
+every error reported here would also stop a run. In addition it lists the
+files a run does not process (a run only warns with their number per file
+type), and it checks whether the named sampling interval of a file matches
+that of its data.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from canvodpy.orchestrator.discovery import (
     receiver_days,
     recipe_file,
     scan_directory,
+    unprocessed_files,
 )
 
 
@@ -222,11 +224,7 @@ def check_receiver_data(
     files_of_day = {day.yyyydoy: discover_files(day, reader_format) for day in days}
     report.days = sorted(files_of_day)
     report.files = sum(len(files) for files in files_of_day.values())
-    read = {f.path for files in files_of_day.values() for f in files}
-    other_format = sorted(
-        f.path for files in scan.days.values() for f in files if f.path not in read
-    )
-    report.unrecognized = list(scan.unrecognized) + other_format
+    report.unrecognized = unprocessed_files(directory, reader_format, recipe_path)
 
     if configured_format == "auto" and files_of_day:
         report.reader_format = detect_reader_format(

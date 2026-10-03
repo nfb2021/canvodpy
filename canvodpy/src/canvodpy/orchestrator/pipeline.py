@@ -51,6 +51,7 @@ from canvodpy.orchestrator.discovery import (
     discover_files,
     receiver_days,
     recipe_file,
+    unprocessed_files,
 )
 from canvodpy.orchestrator.processor import (
     RinexDataProcessor,
@@ -296,16 +297,35 @@ class PipelineOrchestrator:
 
         Uses the run's file discovery (recipe, otherwise canonical names), so
         a day is scheduled only if files would actually be read for it.
+        Files the run never reads are reported in one warning per receiver,
+        and the run continues with the others.
         """
         site_config = self.site._site_config
         cfg = site_config.receivers[receiver_name]
         reader_format = None if cfg.reader_format == "auto" else cfg.reader_format
-        days = receiver_days(
-            receiver_name,
-            site_config.get_base_path() / cfg.directory,
-            reader_format,
-            recipe_file(self.site.site_name, cfg.recipe),
-        )
+        directory = site_config.get_base_path() / cfg.directory
+        recipe = recipe_file(self.site.site_name, cfg.recipe)
+        days = receiver_days(receiver_name, directory, reader_format, recipe)
+        skipped = unprocessed_files(directory, reader_format, recipe)
+        if skipped:
+            from canvodpy.orchestrator.data_check import group_by_file_type
+
+            self._logger.warning(
+                "files_not_processed",
+                receiver=receiver_name,
+                directory=str(directory),
+                n_files=len(skipped),
+                by_file_type={
+                    kind: f"{count} (e.g. {example.name})"
+                    for kind, count, example in group_by_file_type(skipped)
+                },
+                hint=(
+                    "Neither the naming recipe nor the canVOD naming convention "
+                    "recognizes these files, or the receiver's reader_format "
+                    "does not read them. Run 'canvodpy config validate' for "
+                    "details."
+                ),
+            )
         return {day.yyyydoy: day for day in days}
 
     @staticmethod

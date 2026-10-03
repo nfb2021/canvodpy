@@ -76,6 +76,11 @@ the convention are processed. A run stops before reading any data if
 3. two files cover the same time, for example a daily file next to the 15-minute files
    of the same day.
 
+Files a run does not process (names that neither the recipe nor the convention
+recognizes, or a file type the receiver's `reader_format` does not read) do not stop it.
+The run processes the other files and logs one warning per receiver,
+`files_not_processed`, with the number of such files per file type and an example.
+
 Check a site before processing it; the check finds the files exactly as a run does and
 also lists the files a run would pass over:
 

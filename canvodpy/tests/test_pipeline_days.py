@@ -65,3 +65,34 @@ def test_days_where_both_receivers_have_files(tmp_path: Path) -> None:
     assert ref_type == "reference"
     assert ref_pos == canopy_day  # the canopy's same day gives the position
     assert ref_fmt == "sbf"  # detected, the receiver is configured as auto
+
+
+def test_unprocessed_files_are_warned_about_not_fatal(tmp_path: Path) -> None:
+    """Files the run never reads are reported in one warning per receiver
+    (counted per file type), and the readable files are still scheduled."""
+    clear_discovery_cache()
+    _touch(
+        tmp_path / "canopy",
+        "ROSA01TUW_R_20250020000_15M_05S_AA.rnx",
+        "ROSA01TUW_R_20250020015_15M_05S_AA.sbf",  # canopy reads rinex3 only
+        "rosa0020.25o",  # not a canonical name, no recipe
+        "rosa0030.25o",
+    )
+    _touch(tmp_path / "ref", "ROSR01TUW_R_20250020000_15M_05S_AA.sbf")
+    orch = _orchestrator(tmp_path)
+
+    grouped = orch._group_by_date_and_receiver()
+
+    assert list(grouped) == ["2025002"]
+    orch._logger.warning.assert_called_once()
+    event, fields = (
+        orch._logger.warning.call_args.args[0],
+        orch._logger.warning.call_args.kwargs,
+    )
+    assert event == "files_not_processed"
+    assert fields["receiver"] == "canopy_01"
+    assert fields["n_files"] == 3
+    assert fields["by_file_type"] == {
+        ".##o": "2 (e.g. rosa0020.25o)",
+        ".sbf": "1 (e.g. ROSA01TUW_R_20250020015_15M_05S_AA.sbf)",
+    }

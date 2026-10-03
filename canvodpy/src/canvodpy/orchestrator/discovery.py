@@ -467,6 +467,43 @@ def discover_files(
     return _of_format(index.get(day.yyyydoy, ()), reader_format, day.recipe)
 
 
+def unprocessed_files(
+    directory: Path,
+    reader_format: str | None = None,
+    recipe: Path | None = None,
+) -> list[Path]:
+    """Files in ``directory`` that a run never processes.
+
+    These are the files neither the recipe nor the naming convention
+    recognizes, followed by the recognized files of another file type than
+    ``reader_format`` reads.
+
+    Parameters
+    ----------
+    directory : Path
+        The receiver's data directory.
+    reader_format : str | None
+        As for :func:`discover_files`.
+    recipe : Path | None
+        The receiver's naming recipe file, if it has one.
+
+    Returns
+    -------
+    list[Path]
+        Unrecognized files, then the files of another type, each sorted.
+    """
+    scan = _scan_directory(Path(directory), recipe)
+    read = {
+        f.path
+        for files in scan.days.values()
+        for f in _of_format(files, reader_format, recipe)
+    }
+    other_type = sorted(
+        f.path for files in scan.days.values() for f in files if f.path not in read
+    )
+    return [*scan.unrecognized, *other_type]
+
+
 def detect_reader_format(files: list[DiscoveredFile]) -> str:
     """Reader format for a receiver whose config says ``reader_format: auto``.
 
