@@ -430,6 +430,21 @@ def preprocess_with_hermite_aux(
     return rnx_file, ds_augmented, aux_datasets, sid_issues
 
 
+def _task_args(func: Any, is_reference_fanout: bool, **kwargs: Any) -> tuple:
+    """Build a positional task tuple for *func* from keyword arguments.
+
+    ``pipeline.py`` splats the tuple (minus the trailing fan-out marker)
+    positionally into *func*. Binding by name against *func*'s signature
+    puts every value in its own parameter slot, so adding or reordering a
+    parameter cannot silently shift the others.
+    """
+    import inspect
+
+    bound = inspect.signature(func).bind(**kwargs)
+    bound.apply_defaults()
+    return (*bound.arguments.values(), is_reference_fanout)
+
+
 def preprocess_reference_with_hermite_aux_fanout(
     rnx_file: Path,
     keep_vars: list[str] | None,
@@ -3939,6 +3954,10 @@ class RinexDataProcessor:
 
         task_descriptors: list[tuple] = []
         receiver_file_map: list[tuple[str, list[Path]]] = []
+        store_radial_distance = self._config.processing.params.store_radial_distance
+        store_sbf_raw_observables = (
+            self._config.processing.params.store_sbf_raw_observables
+        )
 
         # In broadcast + shared position mode, build a mapping from
         # timestamp suffix → canopy file path so reference tasks can
@@ -4060,35 +4079,22 @@ class RinexDataProcessor:
                         broadcast_canopy_file = canopy_file_by_timestamp.get(m.group(1))
 
                 task_descriptors.append(
-                    (
-                        rnx_file,
-                        keep_vars,
-                        aux_zarr_path,
-                        receiver_position,
-                        receiver_name,
-                        self.keep_sids,
-                        effective_reader,
-                        self.use_sbf_geometry,
-                        False,  # store_radial_distance
-                        broadcast_canopy_file,
-                        canopy_reader_fmt,
-                        # NOTE: broadcast_canopy_file/canopy_reader_fmt above
-                        # are already positionally misaligned against
-                        # preprocess_with_hermite_aux's store_sbf_raw_
-                        # observables/broadcast_canopy_file params (a
-                        # pre-existing, dormant bug outside use_sbf_geometry=
-                        # True + shared-position-mode -- confirmed, not
-                        # fixed here). The two explicit values below exist
-                        # only to preserve that exact pre-existing (buggy)
-                        # positional mapping unchanged while correctly
-                        # placing aux_group in ITS real parameter slot --
-                        # without them aux_group silently lands on
-                        # broadcast_canopy_fmt's slot instead and never
-                        # reaches the function at all.
-                        None,  # broadcast_canopy_fmt (preserves prior default)
-                        True,  # pad_global_sid (preserves prior default)
-                        aux_group,
-                        False,  # is_reference_fanout
+                    _task_args(
+                        preprocess_with_hermite_aux,
+                        is_reference_fanout=False,
+                        rnx_file=rnx_file,
+                        keep_vars=keep_vars,
+                        aux_zarr_path=aux_zarr_path,
+                        receiver_position=receiver_position,
+                        receiver_type=receiver_name,
+                        keep_sids=self.keep_sids,
+                        reader_name=effective_reader,
+                        use_sbf_geometry=self.use_sbf_geometry,
+                        store_radial_distance=store_radial_distance,
+                        store_sbf_raw_observables=store_sbf_raw_observables,
+                        broadcast_canopy_file=broadcast_canopy_file,
+                        broadcast_canopy_fmt=canopy_reader_fmt,
+                        aux_group=aux_group,
                     )
                 )
 
@@ -4143,19 +4149,19 @@ class RinexDataProcessor:
             reference_lane_key = f"reference:{data_dir.yyyydoy}"
             for rnx_file in rinex_files:
                 task_descriptors.append(
-                    (
-                        rnx_file,
-                        keep_vars,
-                        aux_zarr_path,
-                        canopy_positions,
-                        reference_lane_key,
-                        self.keep_sids,
-                        effective_reader,
-                        False,  # store_radial_distance (matches non-fanout path)
-                        True,  # store_sbf_raw_observables
-                        True,  # pad_global_sid
-                        aux_group,
-                        True,  # is_reference_fanout
+                    _task_args(
+                        preprocess_reference_with_hermite_aux_fanout,
+                        is_reference_fanout=True,
+                        rnx_file=rnx_file,
+                        keep_vars=keep_vars,
+                        aux_zarr_path=aux_zarr_path,
+                        canopy_positions=canopy_positions,
+                        receiver_type=reference_lane_key,
+                        keep_sids=self.keep_sids,
+                        reader_name=effective_reader,
+                        store_radial_distance=store_radial_distance,
+                        store_sbf_raw_observables=store_sbf_raw_observables,
+                        aux_group=aux_group,
                     )
                 )
 
