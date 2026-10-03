@@ -44,6 +44,13 @@ V304_FILE = (
     V304_DIR / "02_canopy/01_GNSS/01_raw/25001/ROSA01TUW_R_20250011945_15M_05S_AA.rnx"
 )
 
+needs_v304 = pytest.mark.skipif(
+    not V304_FILE.exists(), reason="RINEX v3.04 test data not available"
+)
+needs_invalid = pytest.mark.skipif(
+    not INVALID_DIR.is_dir(), reason="invalid RINEX test data not available"
+)
+
 
 def _rinex_files(root: Path) -> list[Path]:
     return sorted(
@@ -116,6 +123,7 @@ def test_validated_keeps_only_valid_epochs(fpath):
     np.testing.assert_array_equal(validated["epoch"].values, expected)
 
 
+@needs_invalid
 @pytest.mark.parametrize(
     ("name", "n_epochs"),
     [
@@ -133,6 +141,7 @@ def test_validated_drops_corrupted_epochs(name, n_epochs):
     assert fast.sizes["epoch"] > n_epochs
 
 
+@needs_invalid
 def test_rejected_epochs_are_reported():
     obs = Rnxv3Obs(
         fpath=INVALID_DIR / "satellite_count_mismatch.25o", completeness_mode="off"
@@ -142,6 +151,7 @@ def test_rejected_epochs_are_reported():
     assert len(rejected) == 1
 
 
+@needs_v304
 def test_fast_parser_warns_on_every_use():
     obs = Rnxv3Obs(fpath=V304_FILE, completeness_mode="off")
     for _ in range(2):
@@ -149,6 +159,7 @@ def test_fast_parser_warns_on_every_use():
             obs.to_ds(keep_data_vars=["SNR"], parser="unvalidated_fast")
 
 
+@needs_v304
 def test_validated_parser_does_not_warn():
     obs = Rnxv3Obs(fpath=V304_FILE, completeness_mode="off")
     with warnings.catch_warnings():
@@ -156,6 +167,7 @@ def test_validated_parser_does_not_warn():
         obs.to_ds(keep_data_vars=["SNR"], parser="validated")
 
 
+@needs_v304
 def test_unknown_parser_is_rejected():
     obs = Rnxv3Obs(fpath=V304_FILE, completeness_mode="off")
     with pytest.raises(ValueError, match="parser must be"):
