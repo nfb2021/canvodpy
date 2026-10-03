@@ -96,7 +96,7 @@ in [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions).
 |---|---|---|
 | Linux | Full support | Recommended for production |
 | macOS (Apple silicon) | Full support | Fully tested; Intel Macs not supported (no Python 3.14 `numba`/`llvmlite` wheels) |
-| Windows | WSL only | Native not supported (reserved `aux` name) |
+| Windows | Full support | Fully tested; HEALPix grids unavailable (`healpy` publishes no Windows wheels) |
 
 ## Configuration
 
