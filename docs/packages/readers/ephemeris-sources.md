@@ -118,7 +118,8 @@ processing:
 
 Available when the receiver is a Septentrio unit outputting SBF binary format.
 The receiver firmware computes satellite elevation and azimuth from the
-broadcast navigation message and embeds them in the `SatVisibility` block.
+satellite's almanac or broadcast ephemeris and embeds them in the
+`SatVisibility` block, together with which of the two it used.
 
 ### How it works
 
@@ -128,7 +129,10 @@ broadcast navigation message and embeds them in the `SatVisibility` block.
 3. Stored in the sbf_obs auxiliary dataset as broadcast_theta/broadcast_phi
    (radians), on the epochs and SIDs of the observations: each value comes
    from the SatVisibility block with the same time stamp as the observations
-4. Copied to theta/phi of the observations dataset
+4. Copied to theta/phi of the observations dataset where the receiver
+   computed them from the broadcast ephemeris (broadcast_angle_source = 2);
+   almanac-based angles become NaN, and a file with no ephemeris-based
+   angle raises an error
 5. No download, no Zarr cache, no coordinate transform needed
 ```
 

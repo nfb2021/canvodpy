@@ -107,8 +107,8 @@ signal-to-noise ratio observations.
 
     Binary format from [Septentrio](https://www.septentrio.com){:target="_blank"} receivers. Includes satellite azimuth and elevation that the receiver computes from
     [broadcast ephemerides](https://gssc.esa.int/navipedia/index.php/Broadcast_Orbits){:target="_blank"}
-    (SatVisibility block) for standalone satellite geometry — no SP3/CLK
-    download required.
+    (SatVisibility block; almanac-based angles are not used) for standalone
+    satellite geometry — no SP3/CLK download required.
 
     **Reader:** `SbfReader` — all GNSS constellations, PVT + DOP metadata
 

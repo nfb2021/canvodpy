@@ -247,6 +247,12 @@ SatVisibility block with the same time stamp as the observations, and are
 copied to every signal of the satellite. SVID 62 (GLONASS slot unknown) is
 skipped.
 
+**Orbit source:** `SatVisibility.SatInfo.SatelliteInfo` (u1) states whether
+the angles were computed from the almanac (1) or the broadcast ephemeris (2);
+255 (unknown) is stored as −1. It is stored as `broadcast_angle_source`.
+Broadcast-mode geometry (`SbfBroadcastProvider`) uses only the
+ephemeris-based angles.
+
 ---
 
 ## MeasExtra Signal-Quality Fields

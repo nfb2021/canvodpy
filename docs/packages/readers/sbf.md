@@ -18,8 +18,8 @@ the observations of that same epoch. One decoder serves `iter_epochs()`,
     The SBF reader differs from `Rnxv3Obs` (RINEX) in one fundamental respect:
     **satellite geometry is embedded in the binary stream**.
     No SP3 ephemeris download is required for quick-look analysis —
-    the receiver's own navigation solution provides azimuth and polar angle
-    for every tracked signal.
+    the receiver firmware reports azimuth and elevation for every satellite
+    it has an almanac or broadcast ephemeris for.
 
 ---
 
@@ -78,8 +78,9 @@ the observations of that same epoch. One decoder serves `iter_epochs()`,
 
     ---
 
-    Per-satellite azimuth and elevation for each tracked SV.
-    Converted to geographic azimuth φ and polar angle θ.
+    Per-satellite azimuth and elevation for each satellite above the
+    horizon with an almanac or broadcast ephemeris, and which of the two
+    the receiver used. Converted to geographic azimuth φ and polar angle θ.
 
 -   :fontawesome-solid-wave-square: &nbsp; **MeasExtra**
 
@@ -497,12 +498,15 @@ detect whether `sbf_obs` metadata is available.
 ## Broadcast Ephemeris: SBF as Geometry Source
 
 The SBF `SatVisibility` block provides satellite azimuth and elevation computed
-by the receiver firmware from broadcast navigation messages. This makes SBF files
-a **self-contained ephemeris source** — no SP3/CLK download needed.
+by the receiver firmware, per satellite either from its almanac or from its
+broadcast ephemeris (`broadcast_angle_source`). This makes SBF files a
+**self-contained ephemeris source** — no SP3/CLK download needed.
 
 The `SbfBroadcastProvider` (an `EphemerisProvider` implementation) extracts
 theta/phi from the `sbf_obs` auxiliary dataset and aligns them to observation
-epochs and SIDs:
+epochs and SIDs. It uses only angles computed from the broadcast ephemeris;
+almanac-based angles become NaN, and a file without any ephemeris-based angle
+raises an error:
 
 ```python
 # Automatic in the orchestrator when ephemeris_source = "broadcast"
@@ -512,15 +516,19 @@ epochs and SIDs:
 obs_ds, aux = reader.to_ds_and_auxiliary(keep_data_vars=["SNR"])
 sbf_obs = aux["sbf_obs"]
 
-# theta/phi are already in sbf_obs — no coordinate transform needed
-theta = sbf_obs["broadcast_theta"]  # polar angle (rad)
-phi = sbf_obs["broadcast_phi"]      # geographic azimuth (rad)
+# theta/phi are already in sbf_obs — no coordinate transform needed;
+# keep the ephemeris-based angles only, as SbfBroadcastProvider does
+from_ephemeris = sbf_obs["broadcast_angle_source"] == 2
+theta = sbf_obs["broadcast_theta"].where(from_ephemeris)  # polar angle (rad)
+phi = sbf_obs["broadcast_phi"].where(from_ephemeris)      # geographic azimuth (rad)
 ```
 
 !!! tip "When to use broadcast vs agency final"
 
-    For VOD applications, broadcast ephemeris accuracy (~1-2 m orbit) produces
-    angular errors six orders of magnitude below measurement noise. Use
+    The receiver reports the angles in steps of 0.01°. Almanac-based angles
+    are not used: on the 2025-001 test data they differed from the
+    ephemeris-based angles by at most 0.03° for GPS and Galileo, but by up to
+    0.26° for GLONASS and up to 104° for BeiDou. Use
     `ephemeris_source: "broadcast"` for immediate processing without internet.
     See [:octicons-arrow-right-24: Ephemeris Sources](ephemeris-sources.md) for details.
 
