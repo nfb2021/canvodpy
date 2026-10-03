@@ -138,7 +138,7 @@ class ClkFile(AuxFile):
         """Read and parse CLK file into xarray Dataset.
 
         Uses modular parser for data extraction and validator for quality checks.
-        Applies unit conversion from microseconds to seconds.
+        The clock bias is in seconds (RINEX clock 3.04, Table A16).
 
         Returns
         -------
@@ -150,8 +150,7 @@ class ClkFile(AuxFile):
         assert self.fpath is not None, "fpath must be set before calling read_file"
         epochs, satellites, clock_offsets = parse_clk_file(self.fpath)
 
-        # Convert units (microseconds → seconds)
-        clock_offsets = (UREG.microsecond * clock_offsets).to("s")
+        clock_offsets = UREG.second * clock_offsets
 
         if self.dimensionless:
             clock_offsets = clock_offsets.magnitude

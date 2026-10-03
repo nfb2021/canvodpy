@@ -76,7 +76,7 @@ def parse_clk_data(
         (epochs, satellites, clock_offsets) where:
         - epochs: list of datetime objects
         - satellites: sorted list of satellite codes
-        - clock_offsets: 2D array (epochs × satellites) in microseconds
+        - clock_offsets: 2D array (epochs × satellites) in seconds
     """
     # First pass: collect all epochs and satellites
     epochs = []
@@ -107,7 +107,7 @@ def parse_clk_data(
             satellites.add(sv_code)
 
             # Store complete record
-            clock_offset = float(parts[9])  # microseconds
+            clock_offset = float(parts[9])  # seconds (RINEX clock 3.04, Table A16)
             clock_records.append((epoch, sv_code, clock_offset))
 
     # Create lookup dictionaries for efficient indexing
