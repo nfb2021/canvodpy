@@ -187,6 +187,7 @@ def _preprocess_file(
     store_sbf_raw_observables: bool,
     pad_global_sid: bool,
     aux_group: str | None,
+    rinex_v3_parser: str,
     use_sbf_geometry: bool = False,
     broadcast_canopy_file: Path | None = None,
     broadcast_canopy_fmt: str | None = None,
@@ -256,6 +257,7 @@ def _preprocess_file(
                 keep_sids=keep_sids,
                 store_raw_observables=store_sbf_raw_observables,
                 pad_global_sid=pad_global_sid,
+                parser=rinex_v3_parser,
             )
             ds.attrs["File Hash"] = rnx.file_hash
             t_rinex = time.perf_counter()
@@ -437,6 +439,7 @@ def preprocess_with_hermite_aux(
     broadcast_canopy_fmt: str | None = None,
     pad_global_sid: bool = True,
     aux_group: str | None = None,
+    rinex_v3_parser: str = "validated",
 ) -> tuple[Path, xr.Dataset, dict[str, xr.Dataset], dict[str, list[str]]]:
     """Read RINEX and compute coordinates using Hermite-interpolated aux data from Zarr.
 
@@ -474,6 +477,9 @@ def preprocess_with_hermite_aux(
         Zarr group within ``aux_zarr_path`` to read this day's aux data
         from (§44 shared-cache mode). ``None`` reads the store root,
         matching legacy per-site aux Zarr layout.
+    rinex_v3_parser : {"validated", "unvalidated_fast"}, default "validated"
+        Parser of RINEX v3 files (``processing.params.rinex_v3_parser``);
+        ignored by the other readers.
 
     Returns
     -------
@@ -495,6 +501,7 @@ def preprocess_with_hermite_aux(
         store_sbf_raw_observables,
         pad_global_sid,
         aux_group,
+        rinex_v3_parser,
         use_sbf_geometry=use_sbf_geometry,
         broadcast_canopy_file=broadcast_canopy_file,
         broadcast_canopy_fmt=broadcast_canopy_fmt,
@@ -529,6 +536,7 @@ def preprocess_reference_with_hermite_aux_fanout(
     store_sbf_raw_observables: bool = True,
     pad_global_sid: bool = True,
     aux_group: str | None = None,
+    rinex_v3_parser: str = "validated",
 ) -> tuple[Path, dict[str, xr.Dataset], dict[str, xr.Dataset], dict[str, list[str]]]:
     """Read a shared reference file once, then compute geometry per canopy pairing.
 
@@ -575,6 +583,7 @@ def preprocess_reference_with_hermite_aux_fanout(
         store_sbf_raw_observables,
         pad_global_sid,
         aux_group,
+        rinex_v3_parser,
     )
 
 
@@ -1790,6 +1799,7 @@ class RinexDataProcessor:
                     store_radial_distance,
                     store_sbf_raw_observables,
                     aux_group=aux_group,
+                    rinex_v3_parser=self._config.processing.params.rinex_v3_parser,
                 ): rinex_file
                 for rinex_file in rinex_files
             }
@@ -3787,6 +3797,7 @@ class RinexDataProcessor:
         store_sbf_raw_observables = (
             self._config.processing.params.store_sbf_raw_observables
         )
+        rinex_v3_parser = self._config.processing.params.rinex_v3_parser
 
         # In broadcast + shared position mode, build a mapping from
         # timestamp suffix → canopy file path so reference tasks can
@@ -3924,6 +3935,7 @@ class RinexDataProcessor:
                         broadcast_canopy_file=broadcast_canopy_file,
                         broadcast_canopy_fmt=canopy_reader_fmt,
                         aux_group=aux_group,
+                        rinex_v3_parser=rinex_v3_parser,
                     )
                 )
 
@@ -3991,6 +4003,7 @@ class RinexDataProcessor:
                         store_radial_distance=store_radial_distance,
                         store_sbf_raw_observables=store_sbf_raw_observables,
                         aux_group=aux_group,
+                        rinex_v3_parser=rinex_v3_parser,
                     )
                 )
 

@@ -1506,7 +1506,8 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
         Parameters
         ----------
         keep_data_vars : list of str, optional
-            Data variables to include. Defaults to config value.
+            Data variables to include. ``None`` includes all available. A
+            run passes the ``processing.params.keep_gnss_observables`` setting.
         **kwargs
             Additional keyword arguments:
             outname : Path or str, optional
@@ -1536,17 +1537,10 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
         add_future_datavars = bool(kwargs.pop("add_future_datavars", True))
         keep_sids = cast(list[str] | None, kwargs.pop("keep_sids", None))
 
-        if keep_data_vars is None:
-            from canvod.config import load_config
-
-            keep_data_vars = load_config().processing.params.keep_gnss_observables
-
         ds = self.create_rinex_netcdf_with_signal_id()
 
-        # Drop unwanted vars
-        for var in list(ds.data_vars):
-            if var not in keep_data_vars:
-                ds = ds.drop_vars([var])
+        if keep_data_vars is not None:
+            ds = ds.drop_vars([v for v in ds.data_vars if v not in keep_data_vars])
 
         if pad_global_sid:
             from canvod.readers.preprocessing import pad_to_global_sid

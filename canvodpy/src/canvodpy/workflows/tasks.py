@@ -611,6 +611,7 @@ def process_rinex(
                     receiver_position=position,
                     receiver_type=recv_name,
                     keep_sids=keep_sids,
+                    rinex_v3_parser=config.processing.params.rinex_v3_parser,
                 )
             except Exception:
                 logger.exception("Failed to process %s", rnx_file.name)

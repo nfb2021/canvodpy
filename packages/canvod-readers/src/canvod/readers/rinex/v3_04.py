@@ -1972,18 +1972,13 @@ class Rnxv3Obs(GNSSDataReader):
     def _create_dataset(
         self,
         keep_data_vars: frozenset[str] | None,
-        parser: RinexV3Parser | None,
+        parser: RinexV3Parser,
     ) -> xr.Dataset:
         """Build the dataset with the chosen parser.
 
-        ``parser=None`` takes ``processing.params.rinex_v3_parser`` from the
-        configuration. ``"unvalidated_fast"`` emits an
-        :class:`UnvalidatedParserWarning` and a log warning on every use.
+        ``"unvalidated_fast"`` emits an :class:`UnvalidatedParserWarning` and a
+        log warning on every use.
         """
-        if parser is None:
-            from canvod.config import load_config
-
-            parser = load_config().processing.params.rinex_v3_parser
         if parser == "validated":
             return self._create_dataset_validated(keep_data_vars)
         if parser == "unvalidated_fast":
@@ -2003,7 +1998,7 @@ class Rnxv3Obs(GNSSDataReader):
         self,
         start: datetime | None = None,
         end: datetime | None = None,
-        parser: RinexV3Parser | None = None,
+        parser: RinexV3Parser = "validated",
     ) -> xr.Dataset:
         """Create a NetCDF dataset with signal IDs.
 
@@ -2016,7 +2011,7 @@ class Rnxv3Obs(GNSSDataReader):
             Start of time range (inclusive).
         end : datetime, optional
             End of time range (inclusive).
-        parser : {"validated", "unvalidated_fast"} or None, optional
+        parser : {"validated", "unvalidated_fast"}, default "validated"
             As for :meth:`to_ds`.
 
         Returns
@@ -2044,7 +2039,9 @@ class Rnxv3Obs(GNSSDataReader):
         outname : Path or str, optional
             If provided, saves dataset to this file path
         keep_data_vars : list of str or None, optional
-            Data variables to include in dataset. Defaults to config value.
+            Data variables to include in dataset. ``None`` includes all
+            available. A run passes the
+            ``processing.params.keep_gnss_observables`` setting.
         write_global_attrs : bool, default False
             If True, adds comprehensive global attributes
         pad_global_sid : bool, default True
@@ -2056,16 +2053,15 @@ class Rnxv3Obs(GNSSDataReader):
         keep_sids : list of str or None, default None
             If provided, filters/pads dataset to these specific SIDs.
             If None and pad_global_sid=True, pads to all possible SIDs.
-        parser : {"validated", "unvalidated_fast"} or None, default None
+        parser : {"validated", "unvalidated_fast"}, default "validated"
             ``"validated"`` checks every epoch through the pydantic epoch and
             satellite models and drops (and logs) epochs that fail.
             ``"unvalidated_fast"`` is DANGEROUS: it slices fixed columns
             without any check, so corrupted records can enter the dataset as
             partial or wrong values; canVODpy takes no responsibility for its
             results, and every use emits an :class:`UnvalidatedParserWarning`.
-            Both give the same dataset for a valid file. None takes
-            ``processing.params.rinex_v3_parser`` from the configuration
-            (default ``"validated"``).
+            Both give the same dataset for a valid file. A run passes the
+            ``processing.params.rinex_v3_parser`` setting.
 
         Returns
         -------
@@ -2079,14 +2075,10 @@ class Rnxv3Obs(GNSSDataReader):
         strip_fillval = bool(kwargs.pop("strip_fillval", True))
         add_future_datavars = bool(kwargs.pop("add_future_datavars", True))
         keep_sids = cast(list[str] | None, kwargs.pop("keep_sids", None))
-        parser = cast(RinexV3Parser | None, kwargs.pop("parser", None))
+        parser = cast(RinexV3Parser, kwargs.pop("parser", "validated"))
 
-        if keep_data_vars is None:
-            from canvod.config import load_config
-
-            keep_data_vars = load_config().processing.params.keep_gnss_observables
-
-        ds = self._create_dataset(frozenset(keep_data_vars), parser)
+        kept = None if keep_data_vars is None else frozenset(keep_data_vars)
+        ds = self._create_dataset(kept, parser)
 
         if pad_global_sid:
             from canvod.readers.preprocessing import pad_to_global_sid
