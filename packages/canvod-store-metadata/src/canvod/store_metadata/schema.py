@@ -152,7 +152,13 @@ class Environment(BaseModel):
 # §9 — Config Snapshot
 class ConfigSnapshot(BaseModel):
     processing: dict[str, Any] | None = Field(None)
-    preprocessing: dict[str, Any] | None = Field(None)
+    preprocessing: dict[str, Any] | None = Field(
+        None,
+        description=(
+            "Deprecated processing.preprocessing section; only in stores "
+            "written before it was deprecated (never applied to the data)"
+        ),
+    )
     aux_data: dict[str, Any] | None = Field(None)
     compression: dict[str, Any] | None = Field(None)
     icechunk: dict[str, Any] | None = Field(None)

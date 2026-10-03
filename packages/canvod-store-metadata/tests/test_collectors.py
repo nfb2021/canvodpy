@@ -89,6 +89,8 @@ class TestCollectors:
         assert snap.config_hash is not None
         assert len(snap.config_hash) == 64
         assert snap.processing == {"batch_hours": 24}
+        # Deprecated and never applied, so not recorded.
+        assert snap.preprocessing is None
 
     def test_collect_references_none_config(self):
         config = MagicMock(spec=["processing"])

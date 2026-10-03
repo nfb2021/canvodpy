@@ -2,10 +2,12 @@
 
 ## Purpose
 
-The `canvod-ops` package provides a configurable preprocessing pipeline that
-transforms raw GNSS observation datasets during ingestion. Operations are applied
-as a chain: each operation receives a dataset, transforms it, and passes the
-result to the next.
+The `canvod-ops` package provides a preprocessing pipeline that you apply to
+observation datasets yourself, for example after reading them from a store.
+`canvodpy run`, the Python API and Airflow do not apply it: the stores hold the
+observations at their full time resolution. Operations are applied as a chain:
+each operation receives a dataset, transforms it, and passes the result to the
+next.
 
 ---
 
@@ -148,28 +150,12 @@ to dataset attributes via `to_metadata_dict()`.
 
 ---
 
-## Config-Driven Pipeline
+## Config-Driven Pipeline (deprecated)
 
-The default pipeline is built from `canvod-settings.yaml` configuration (`processing.preprocessing:`):
+The `processing.preprocessing:` section of `canvod-settings.yaml` is left over
+from development and will be removed with the next major version; no run
+applies it. Setting it in a settings file raises a `FutureWarning`. Build the
+pipeline explicitly instead, as shown under [Pipeline](#pipeline).
 
-```yaml
-preprocessing:
-  temporal_aggregation:
-    enabled: true
-    freq: "1min"
-    method: mean
-  grid_assignment:
-    enabled: true
-    grid_type: equal_area
-    angular_resolution: 2.0
-```
-
-```python
-from canvod.ops import build_default_pipeline
-
-pipeline = build_default_pipeline()  # reads from config
-ds_out, result = pipeline(ds_in)
-```
-
-Set `enabled: false` to skip an operation. The pipeline is empty if all
-operations are disabled.
+`build_default_pipeline(config)` still builds a pipeline from a
+`PreprocessingConfig`; called without one, it reads the deprecated section.

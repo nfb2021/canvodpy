@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from canvod.utils.tools import deprecated
 
@@ -36,11 +36,29 @@ class ProcessingConfig(_StrictModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     preprocessing: PreprocessingConfig = Field(
         default_factory=PreprocessingConfig,
+        description=(
+            "Deprecated: never applied by `canvodpy run`, the Python API or "
+            "Airflow. Removed with the next major version."
+        ),
     )
     references: ReferencesConfig = Field(
         default_factory=ReferencesConfig,
         description="Publication and funding references",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_preprocessing(cls, data: object) -> object:
+        if isinstance(data, dict) and data.get("preprocessing") is not None:
+            import warnings
+
+            warnings.warn(
+                "The setting 'processing.preprocessing' is left over from development and will be removed with the next major version. "
+                "No run applies it; remove it from your settings file and pass the operations to canvod.ops.Pipeline explicitly instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        return data
 
     @property
     @deprecated(

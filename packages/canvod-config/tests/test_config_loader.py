@@ -1,5 +1,6 @@
 """Tests for ConfigLoader round-trip and merge logic."""
 
+import warnings
 from pathlib import Path
 
 import pytest
@@ -171,6 +172,42 @@ class TestConfigLoaderDefaults:
         assert config.sids.mode == "preset"
         assert config.sids.preset == "default"
         assert len(config.sids.get_sids()) == 277
+
+
+class TestDeprecatedPreprocessing:
+    """``processing.preprocessing`` is deprecated: no run applies it."""
+
+    def _write_settings(self, tmp_path: Path, extra: dict) -> None:
+        processing = {
+            "metadata": {
+                "author": "Test Author",
+                "email": "test@example.com",
+                "institution": "Test University",
+            },
+            "storage": {"stores_root_dir": str(tmp_path / "stores")},
+            **extra,
+        }
+        with open(tmp_path / "canvod-settings.yaml", "w") as f:
+            yaml.dump({"processing": processing}, f)
+
+    def test_package_defaults_do_not_warn(self, tmp_path):
+        self._write_settings(tmp_path, {})
+        with warnings.catch_warnings(record=True) as record:
+            warnings.simplefilter("always")
+            ConfigLoader(config_dir=tmp_path).load()
+        assert not [w for w in record if "processing.preprocessing" in str(w.message)]
+
+    def test_setting_it_warns(self, tmp_path):
+        self._write_settings(
+            tmp_path,
+            {"preprocessing": {"temporal_aggregation": {"freq": "5min"}}},
+        )
+        with pytest.warns(
+            FutureWarning,
+            match=r"'processing\.preprocessing' is left over from development",
+        ):
+            config = ConfigLoader(config_dir=tmp_path).load()
+        assert config.processing.preprocessing.temporal_aggregation.freq == "5min"
 
 
 class TestConfigLoaderValidationError:

@@ -235,16 +235,6 @@ processing:
     # cpu_affinity: [0, 1, 2, 3]  # pin to CPU cores (Linux)
     # nice_priority: 10            # 0=normal, 19=lowest priority
 
-  preprocessing:
-    temporal_aggregation:
-      enabled: true
-      freq: "1min"                 # target time resolution
-      method: mean                 # mean or median
-    grid_assignment:
-      enabled: true
-      grid_type: equal_area
-      angular_resolution: 2.0     # degrees
-
   netcdf_compression:              # NetCDF output from RINEX readers
     zlib: true
     complevel: 5

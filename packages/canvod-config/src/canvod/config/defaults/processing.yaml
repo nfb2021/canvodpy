@@ -66,13 +66,3 @@ logging:
   log_dir: null  # Defaults to .logs/ in monorepo root
   log_file_name: canvodpy.log
   log_path_depth: 6
-
-preprocessing:
-  temporal_aggregation:
-    enabled: true
-    freq: "1min"
-    method: "mean"
-  grid_assignment:
-    enabled: true
-    grid_type: "equal_area"
-    angular_resolution: 2.0

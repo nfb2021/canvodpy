@@ -16,9 +16,11 @@ def build_default_pipeline(
     Parameters
     ----------
     config : PreprocessingConfig | None
-        Explicit config. If ``None``, attempts to load from the user's
-        config files via ``load_config()``. Falls back to
-        ``PreprocessingConfig()`` defaults if no config is available.
+        Explicit config. If ``None``, reads the deprecated
+        ``processing.preprocessing`` section via ``load_config()`` (its
+        defaults unless a settings file still sets it; then the config
+        warns). Falls back to ``PreprocessingConfig()`` if no config is
+        available.
 
     Returns
     -------

@@ -119,30 +119,6 @@ processing:
     #                            # negative needs root/CAP_SYS_NICE on Linux, else no-op)
 
   # ---------------------------------------------------------------------------
-  # Preprocessing Pipeline
-  # ---------------------------------------------------------------------------
-  # NOTE (2026-07-10): temporal_aggregation and grid_assignment below only feed
-  # canvod-ops's build_default_pipeline()/Pipeline (TemporalAggregate,
-  # GridAssignment ops) — nothing in the live orchestrator (processor.py,
-  # workflows/tasks.py) or the CLI calls that pipeline yet. Grid-cell
-  # assignment for real ingested data currently happens ad hoc downstream
-  # instead (in whatever consumer reads the store), not from this
-  # angular_resolution value. Intent: once wired in, these become the
-  # community-agreed standard grid resolution + temporal aggregation applied
-  # uniformly across all sites, enforced (not just default) in a future
-  # version.
-  preprocessing:
-    temporal_aggregation:
-      enabled: true
-      freq: "1min"           # pandas offset alias: "1min", "30s", "5min", etc.
-      method: "mean"         # "mean" or "median"
-
-    grid_assignment:
-      enabled: true
-      grid_type: "equal_area"
-      angular_resolution: 2.0  # degrees (0 < value ≤ 90)
-
-  # ---------------------------------------------------------------------------
   # NetCDF Compression (used when writing intermediate .nc files)
   # ---------------------------------------------------------------------------
   netcdf_compression:

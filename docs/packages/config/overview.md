@@ -85,16 +85,6 @@ processing:
     # cpu_affinity: [0, 1, 2, 3]
     # nice_priority: 10
 
-  preprocessing:
-    temporal_aggregation:
-      enabled: true
-      freq: "1min"
-      method: mean
-    grid_assignment:
-      enabled: true
-      grid_type: equal_area
-      angular_resolution: 2.0
-
   compression:
     zlib: true
     complevel: 5

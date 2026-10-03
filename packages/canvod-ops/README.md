@@ -23,24 +23,28 @@ steps to GNSS datasets. Operations are composable and chainable via `Pipeline`.
 uv pip install canvod-ops
 ```
 
-## Configuration (optional)
+`canvodpy run`, the Python API and Airflow do not apply these operations;
+apply them yourself to datasets read from a store.
 
-`build_default_pipeline()` falls back to `PreprocessingConfig()` defaults when
-no config is found — `canvod-config`'s `load_config()` is only consulted if
-available. In a standalone install outside a canvodpy monorepo checkout,
-point it at a settings file with:
+## Configuration (deprecated)
 
-- `CANVOD_CONFIG_DIR` — directory containing `canvod-settings.yaml`
-- `CANVOD_CONFIG_FILE` — an overlay YAML file merged on top
+The `processing.preprocessing` settings section, which
+`build_default_pipeline()` reads when called without a config, is left over
+from development and will be removed with the next major version. Build the
+pipeline explicitly instead (see Quick Start).
 
 ## Quick Start
 
 ```python
-from canvod.ops import Pipeline, GridAssignment
+from canvod.ops import GridAssignment, Pipeline, TemporalAggregate
 
-grid = create_hemigrid(grid_type="equal_area", resolution=2.0)
-pipeline = Pipeline([GridAssignment(grid)])
-result = pipeline.run(ds)
+pipeline = Pipeline(
+    [
+        TemporalAggregate(freq="1min", method="mean"),
+        GridAssignment(grid_type="equal_area", angular_resolution=2.0),
+    ]
+)
+ds_out, result = pipeline(ds)
 ```
 
 ## Documentation
