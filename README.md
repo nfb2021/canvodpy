@@ -6,7 +6,7 @@
 <!-- Python, Platforms & Package Manager -->
 [![PyPI](https://img.shields.io/pypi/v/canvodpy.svg)](https://pypi.org/project/canvodpy/)
 [![Python](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/)
-[![Platforms](https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20Windows-lightgrey)](https://github.com/nfb2021/canvodpy/actions/workflows/test_platforms.yml)
+[![Platforms](https://img.shields.io/badge/platform-Linux%20|%20macOS%20(Apple%20silicon)%20|%20Windows-lightgrey)](https://github.com/nfb2021/canvodpy/actions/workflows/test_platforms.yml)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 
 <!-- Identity -->
@@ -184,6 +184,10 @@ uv add canvodpy
 # Or install specific components
 uv add canvod-readers canvod-grids
 ```
+
+canVODpy requires Python 3.14. On macOS, it runs on Apple silicon only: its
+`numba` and `llvmlite` dependencies publish no Python 3.14 wheels for Intel
+Macs.
 
 ## Quick Start
 

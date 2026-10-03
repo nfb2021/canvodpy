@@ -788,6 +788,9 @@ just test-coverage
     **`uv sync` fails with a Python version error**
     :   canVODpy requires Python 3.14. Install a supported version with `uv python install 3.14` and try again.
 
+    **`uv sync` tries to build `llvmlite` on a Mac**
+    :   On macOS, canVODpy runs on Apple silicon only. Its `numba` and `llvmlite` dependencies publish no Python 3.14 wheels for Intel Macs.
+
     **Pre-commit hook fails on commit**
     :   Run `just check` — it will auto-fix most linting and formatting issues. Stage the fixed files and commit again.
 

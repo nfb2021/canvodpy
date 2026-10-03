@@ -95,7 +95,7 @@ in [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions).
 | Platform | Status | Notes |
 |---|---|---|
 | Linux | Full support | Recommended for production |
-| macOS | Full support | Fully tested |
+| macOS (Apple silicon) | Full support | Fully tested; Intel Macs not supported (no Python 3.14 `numba`/`llvmlite` wheels) |
 | Windows | WSL only | Native not supported (reserved `aux` name) |
 
 ## Configuration

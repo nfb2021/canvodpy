@@ -330,7 +330,7 @@ All quality checks run automatically:
 
 | Workflow | Runs On | Purpose |
 |----------|---------|---------|
-| `test_platforms.yml` | Push, PR | Multi-platform tests (Linux/macOS/Windows) |
+| `test_platforms.yml` | Push, PR | Multi-platform tests (Linux/macOS on Apple silicon/Windows) |
 | `test_coverage.yml` | Push, PR | Coverage tracking → Coveralls |
 | `code_quality.yml` | Push | Linting, formatting, type checking |
 | `codeql.yml` | Push, PR, Weekly | CodeQL security analysis |
