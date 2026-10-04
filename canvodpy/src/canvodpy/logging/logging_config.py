@@ -509,9 +509,9 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
         cache_logger_on_first_use=True,
     )
 
-    logger = structlog.get_logger("gnssvodpy")
+    logger = structlog.get_logger("canvodpy")
     # Ensure the underlying stdlib logger accepts all levels
-    logging.getLogger("gnssvodpy").setLevel(logging.DEBUG)
+    logging.getLogger("canvodpy").setLevel(logging.DEBUG)
 
     _install_excepthook(logger)
 

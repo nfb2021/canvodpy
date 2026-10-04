@@ -12,7 +12,6 @@ Versioned Icechunk/Zarr storage layer for GNSS VOD datasets.
 | `manager.py` | `GnssResearchSite` — high-level site management |
 | `file_registry.py` | `FileRegistryManager` — tracks ingested files |
 | `preprocessing.py` | `IcechunkPreprocessor` — data conditioning before write |
-| `grid_adapters/` | `HemiGridStorageAdapter` — grid ↔ store integration |
 
 ## Store layout
 

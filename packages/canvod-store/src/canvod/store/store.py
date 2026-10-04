@@ -3695,10 +3695,8 @@ class MyIcechunkStore:
         table``, ``metadata/sbf_obs``) — so this method copies that
         subtree back afterward via a raw recursive Zarr copy (see
         ``_copy_zarr_subtree``), all on a temporary branch, before ``main``
-        is ever touched. This mirrors a fix already applied once before in
-        gnssvodpy (``rechunk_group_verbose``), generalized here to handle
-        canvod-store's two-level-deep ``metadata/{table,sbf_obs}`` nesting
-        rather than gnssvodpy's one-level copy.
+        is ever touched. The copy handles canvod-store's two-level-deep
+        ``metadata/{table,sbf_obs}`` nesting.
 
         Both the data read and the subtree copy are pinned to the exact
         snapshot captured at the start of this call (not just "whatever

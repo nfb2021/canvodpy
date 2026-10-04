@@ -12,8 +12,6 @@ not on anything ephemeris- or interpolation-specific -- keeping them here
 made ``canvod-readers`` (which calls them from every reader's ``to_ds()``)
 depend on ``canvod-auxiliary``, which already depends on ``canvod-readers``,
 a genuine import cycle that broke standalone ``canvod-readers`` installs.
-
-Matches gnssvodpy.icechunk_manager.preprocessing.IcechunkPreprocessor exactly.
 """
 
 import numpy as np
@@ -39,9 +37,6 @@ def prep_aux_ds(
     2. Pad to global sid list (all constellations) or filter to keep_sids
     3. Normalize sid dtype to object
     4. Strip _FillValue attributes
-
-    This matches
-    gnssvodpy.icechunk_manager.preprocessing.IcechunkPreprocessor.prep_aux_ds().
 
     Parameters
     ----------

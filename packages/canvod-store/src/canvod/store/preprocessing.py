@@ -3,8 +3,7 @@ Preprocessing wrapper for Icechunk storage.
 
 This module provides the IcechunkPreprocessor class which wraps
 preprocessing functions from canvod.readers.preprocessing and
-canvod.auxiliary.preprocessing. It maintains backward compatibility with
-gnssvodpy code while delegating to the new modular implementation.
+canvod.auxiliary.preprocessing.
 """
 
 from typing import Any
@@ -25,8 +24,7 @@ class IcechunkPreprocessor:
     Handles preprocessing of RINEX-converted datasets before writing to Icechunk.
 
     This class wraps functions from canvod.readers.preprocessing and
-    canvod.auxiliary.preprocessing to provide backward compatibility with
-    existing gnssvodpy code.
+    canvod.auxiliary.preprocessing.
 
     Note:
         All methods now delegate to canvod.readers.preprocessing /

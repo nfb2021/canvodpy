@@ -32,7 +32,3 @@ the next major version. Use `canvodpy run` or
 ## Preprocessing
 
 ::: canvod.store.preprocessing
-
-## Grid Adapters
-
-::: canvod.store.grid_adapters

@@ -3,8 +3,6 @@ Research site manager that coordinates RINEX and VOD Icechunk stores.
 
 This module provides the GnssResearchSite class that manages both stores
 for a research site and provides high-level operations across them.
-
-Module: src/gnssvodpy/icechunk_manager/manager.py
 """
 
 from __future__ import annotations
@@ -818,7 +816,7 @@ class GnssResearchSite:
                 to_icechunk(vod_ds, session, group=analysis_name, append_dim="epoch")
                 action = "append"
 
-            version = importlib.metadata.version("canvodpy")
+            version = importlib.metadata.version("canvod-store")
             commit_msg = f"[v{version}] VOD for {analysis_name}"
             snapshot_id = session.commit(commit_msg)
 

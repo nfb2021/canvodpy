@@ -408,17 +408,8 @@ def grid_to_dataset(grid: GridData) -> xr.Dataset:
         ``cell_phi``, ``cell_theta``, ``vertices_phi``, ``vertices_theta``,
         ``n_vertices``, ``solid_angle``.
 
-    Notes
-    -----
-    This function is distinct from
-    :meth:`HemiGridStorageAdapter._prepare_vertices_dataframe` in
-    ``canvod-store``. That method produces a long-form DataFrame for zarr
-    ragged-array storage; this one produces a rectangular xarray Dataset
-    suitable for analysis and visualisation.
-
     """
-    # Reuse the commented-out logic pattern from gnssvodpy vertices.py:
-    # extract per-cell vertices into (n_cells, max_vertices) arrays.
+    # Extract per-cell vertices into (n_cells, max_vertices) arrays.
     n_cells = grid.ncells
     grid_type = grid.grid_type
 

@@ -1,6 +1,6 @@
 """High-level public API for canvodpy.
 
-This module provides the user-friendly API that wraps proven gnssvodpy logic.
+This module provides the user-friendly API.
 
 Recommended surfaces:
 - Run the pipeline via the ``canvodpy`` CLI (production runs, resumable).

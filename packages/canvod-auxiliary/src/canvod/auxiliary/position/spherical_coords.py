@@ -5,8 +5,6 @@ local ENU (East-North-Up) topocentric frame.
 
 The azimuthal angle φ follows geographic/navigation standards with North=0°
 and clockwise rotation (0°=North, 90°=East, 180°=South, 270°=West).
-
-Migrated from gnssvodpy.position.spherical_coords
 """
 
 import numpy as np

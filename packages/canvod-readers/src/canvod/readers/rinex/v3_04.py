@@ -1,13 +1,5 @@
 """RINEX v3.04 observation file reader.
 
-Migrated from: gnssvodpy/rinexreader/rinex_reader.py
-
-Changes from original:
-- Updated imports to use canvod.readers.gnss_specs
-- Added structured logging for LLM-friendly diagnostics
-- Removed IcechunkPreprocessor calls (TODO: move to canvod-store)
-- Preserved all other functionality
-
 Classes:
 - Rnxv3Header: Parse RINEX v3 headers
 - Rnxv3Obs: Main reader class, converts RINEX to xarray Dataset

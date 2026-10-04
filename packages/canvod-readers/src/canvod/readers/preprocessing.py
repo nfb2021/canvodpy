@@ -5,8 +5,6 @@ Handles conversion of raw per-satellite (sv) data to per-signal (sid)
 dimension, global SID padding, and related dataset normalization steps
 needed before matching auxiliary data (SP3, CLK) with reader output or
 writing to Icechunk.
-
-Matches gnssvodpy.icechunk_manager.preprocessing.IcechunkPreprocessor exactly.
 """
 
 from typing import Any, overload

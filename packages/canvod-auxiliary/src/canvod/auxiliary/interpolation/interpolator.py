@@ -3,8 +3,6 @@
 Provides specialized interpolation for:
 - SP3 ephemeris: Hermite cubic splines using satellite velocities
 - CLK clock: Piecewise linear with discontinuity detection
-
-Migrated from gnssvodpy.processor.interpolator
 """
 
 from abc import ABC, abstractmethod
