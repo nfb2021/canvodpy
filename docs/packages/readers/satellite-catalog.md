@@ -12,7 +12,7 @@ satellite signals passing through a canopy. Several satellite-level properties
 directly affect signal interpretation:
 
 - **Transmit power (TX)** — different satellite generations broadcast at different
-  power levels (e.g. GPS-IIF: 240 W, GPS-III: 370 W). When computing transmittance
+  power levels (in the IGS file e.g. GPS-IIF: 240 W, GPS-IIIA: 300 W). When computing transmittance
   as the ratio of canopy-to-reference SNR, the absolute power cancels — but mixed
   constellations and satellite replacements can introduce systematic biases if not
   accounted for.
@@ -46,16 +46,16 @@ specification.
 
 ## What's in the SINEX file?
 
-The file contains seven data blocks covering ~290 satellite vehicles:
+The file has eight `SATELLITE/` blocks; the catalog reads the six below (not `COM` and `ECCENTRICITY`):
 
 | SINEX Block | Data | Example |
 |-------------|------|---------|
-| `SATELLITE/IDENTIFIER` | SVN, COSPAR ID, NORAD catalog number, block type, launch date | `G063`, `2014-068A`, `GPS-IIF` |
-| `SATELLITE/PRN` | PRN ↔ SVN assignments with validity periods | G01 → G063 from 2014-250 to open |
+| `SATELLITE/IDENTIFIER` | SVN, COSPAR ID, NORAD catalog number, block type, launch date | `G063`, `2011-036A`, `GPS-IIF` |
+| `SATELLITE/PRN` | PRN ↔ SVN assignments with validity periods | G01 → G080 from 2024-12-17 to open |
 | `SATELLITE/TX_POWER` | Transmit power (Watts) per SVN | G063: 240 W |
 | `SATELLITE/MASS` | Satellite mass (kg) per SVN | G063: 1633.0 kg |
 | `SATELLITE/FREQUENCY_CHANNEL` | GLONASS FDMA channel numbers per SVN | R730: channel 1 |
-| `SATELLITE/PLANE` | Orbital plane and slot assignments | G063: plane B, slot 2 |
+| `SATELLITE/PLANE` | Orbital plane and slot assignments | G063: plane 4, slot D2A |
 
 ---
 
@@ -122,11 +122,11 @@ from datetime import date
 
 catalog = SatelliteCatalog.load()
 
-# What satellite vehicle is behind G01 today?
-svn = catalog.prn_to_svn("G01", date(2025, 6, 17))  # → "G063"
+# What satellite vehicle was behind G01 on 2024-01-01?
+svn = catalog.prn_to_svn("G01", date(2024, 1, 1))  # → "G063"
 
 # Reverse lookup
-prn = catalog.svn_to_prn("G063", date(2025, 6, 17))  # → "G01"
+prn = catalog.svn_to_prn("G063", date(2024, 1, 1))  # → "G01" (None from 2024-04-12 on)
 
 # Full assignment history for a PRN
 history = catalog.prn_history("G01")
@@ -175,20 +175,20 @@ mass = catalog.mass("G063", date(2025, 1, 1))  # → 1633.0 (kg)
 channel = catalog.glonass_channel("R730", date(2025, 1, 1))  # → 1
 
 # Orbital plane and slot
-plane, slot = catalog.plane_and_slot("G063", date(2025, 1, 1))  # → ("B", "2")
+plane, slot = catalog.plane_and_slot("G063", date(2025, 1, 1))  # → ("4", "D2A")
 ```
 
 ### Combined metadata lookup
 
 ```python
 # Get everything for a PRN on a date
-meta = catalog.get_prn_metadata("G01", date(2025, 1, 1))
+meta = catalog.get_prn_metadata("G01", date(2024, 1, 1))
 # → {
 #     "prn": "G01", "svn": "G063", "block": "GPS-IIF",
-#     "cospar_id": "2014-068A", "satcat": 40294,
+#     "cospar_id": "2011-036A", "satcat": 37753,
+#     "comment": "Launched 2011-07-16; NAVSTAR 66",
 #     "tx_power_watts": 240, "mass_kg": 1633.0,
-#     "plane": "B", "slot": "2", "glonass_channel": None,
-#     "comment": "Launched 2014-10-29"
+#     "plane": "4", "slot": "D2A", "glonass_channel": None,
 # }
 ```
 
@@ -252,8 +252,8 @@ enriched.coords["svn"]             # "G063", "E210", ...
 enriched.coords["block"]           # "GPS-IIF", "GAL-FOC", ...
 enriched.coords["tx_power_watts"]  # 240.0, 265.0, ...
 enriched.coords["mass_kg"]         # 1633.0, 733.0, ...
-enriched.coords["plane"]           # "B", "A", ...
-enriched.coords["slot"]            # "2", "5", ...
+enriched.coords["plane"]           # "4", ... (as written in the SINEX file)
+enriched.coords["slot"]            # "D2A", ...
 ```
 
 !!! info "Date inference"
@@ -283,7 +283,7 @@ gps = GPS()
 print(len(gps.svs))  # 32 (static default)
 
 gps.update_svs_from_catalog(on_date=date(2025, 1, 1))
-print(len(gps.svs))  # actual active PRNs on that date
+print(len(gps.svs))  # the PRNs active on that date (32 on 2025-01-01)
 ```
 
 ---
@@ -293,14 +293,16 @@ print(len(gps.svs))  # actual active PRNs on that date
 ```python
 catalog = SatelliteCatalog.load()
 print(catalog.summary())
+# counts change with every IGS update; e.g.
 # {
-#     "total_svns": 291,
-#     "constellations": {"GPS": 78, "GLONASS": 67, "Galileo": 36, ...},
-#     "prn_assignments": 487,
-#     "tx_power_records": 312,
-#     "mass_records": 285,
-#     "frequency_channels": 67,
-#     "plane_slots": 410,
+#     "total_svns": 294,
+#     "constellations": {"GPS": 80, "GLONASS": 101, "Galileo": 36, "BeiDou": 60,
+#                        "QZSS": 7, "IRNSS": 10},
+#     "prn_assignments": 399,
+#     "tx_power_records": 229,
+#     "mass_records": 505,
+#     "frequency_channels": 149,
+#     "plane_slots": 259,
 # }
 ```
 
@@ -323,7 +325,7 @@ print(catalog.summary())
 ## References
 
 - [IGS Satellite Metadata SINEX](https://files.igs.org/pub/station/general/igs_satellite_metadata.snx)
-- Steigenberger, P., et al. (2023). "GNSS satellite transmit power and its impact on orbit determination." *Journal of Geodesy*, 97(4).
+- Steigenberger, P., Thoelert, S., Montenbruck, O. (2018). "GNSS satellite transmit power and its impact on orbit determination." *Journal of Geodesy*, 92(6), 609–624. doi:10.1007/s00190-017-1082-2
 - IGS SINEX format specification v2.02
 
 ---

@@ -32,7 +32,8 @@ Each of these names the formats it knows; keep them in step:
 | `canvodpy/src/canvodpy/__init__.py` | register in `_register_builtin_components` |
 | `canvodpy/src/canvodpy/orchestrator/discovery.py` | `_READER_FILE_TYPES`, `_ALL_FILE_TYPES` |
 | `packages/canvod-preflight/src/canvod/preflight/convention.py` | `FileType`, if the file type is new |
-| `packages/canvod-config/src/canvod/config/models/sites.py` | the `reader_format` description |
+| `canvodpy/src/canvodpy/factories.py` | `ReaderFactory._detect_format`, if `reader_format: auto` should find it |
+| `packages/canvod-config/src/canvod/config/models/sites.py` | the `reader_format` values and description |
 | `packages/canvod-store/src/canvod/store/viewer.py` | `_FORMAT_LABELS` |
 
 ## 3. Tests and docs

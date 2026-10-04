@@ -79,15 +79,21 @@ reader = Rnxv3Obs(fpath=Path("station.24o"))
 
 What happens on construction:
 
-1. Pydantic validates that `fpath` exists and is readable.
-2. The header section is parsed into `Rnxv3Header`.
-3. RINEX version (3.x) and file type (`O`) are validated.
-4. Observation type table (`SYS / # / OBS TYPES`) is extracted.
+1. Pydantic validates that `fpath` exists.
+2. The header section is parsed into `Rnxv3Header`; RINEX version (3.x),
+   file type (`O`) and the observation type table
+   (`SYS / # / OBS TYPES`) are validated.
+3. The epoch completeness check runs (`completeness_mode`, default
+   `"strict"`; `"warn"` or `"off"` to relax it, see below).
+4. The whole file is read into memory and hashed (`file_hash`).
 
-!!! tip "Lazy data section"
-    The data section is **not** read at construction time.
-    Only the header (~50 lines) is loaded — making instantiation fast
-    even for multi-GB files.
+!!! warning "Sampling intervals the reader accepts"
+    The completeness check infers the sampling interval from the epochs
+    and accepts only 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30 or 60 s, or 2, 5,
+    10, 15, 30 or 60 min. A file sampled at any other interval (e.g. 3 s
+    or 20 s) raises a `ValidationError` on construction, also in a run.
+    `Rnxv3Obs(fpath=..., completeness_mode="off")` reads such a file in
+    your own scripts; `canvodpy run` has no setting for it yet.
 
 ### Step 2 — Epoch Iteration
 
@@ -96,7 +102,7 @@ for epoch in reader.iter_epochs():
     print(epoch.timestamp, epoch.num_satellites)
 ```
 
-The generator scans forward from `END OF HEADER`, yielding one `Rnxv3ObsEpochRecord` per `>` epoch marker. Memory usage is bounded to one epoch at a time.
+The generator scans the file's lines (already in memory) from `END OF HEADER`, yielding one validated `Rnxv3ObsEpochRecord` per `>` epoch marker; epochs that fail validation are skipped.
 
 ### Step 3 — Dataset Construction
 
@@ -135,29 +141,21 @@ The full pipeline:
 === "Build Coordinates"
 
     ```python
-    sv_arr     = np.array([sid.split('|')[0] for sid in all_sids])
-    system_arr = np.array([sid[0]            for sid in all_sids])
-    band_arr   = np.array([sid.split('|')[1] for sid in all_sids])
-    code_arr   = np.array([sid.split('|')[2] for sid in all_sids])
-
-    freq_center = np.array([mapper.get_band_frequency(sid.split('|')[1])
-                            for sid in all_sids], dtype=np.float64)
-    bandwidth   = np.array([mapper.get_band_bandwidth(sid.split('|')[1])
-                            for sid in all_sids], dtype=np.float64)
+    # _assemble_dataset(): one coordinate per signal property,
+    # precomputed from the header for every sid
+    coords["sv"]   = ("sid", np.array(sid_prop("sv"), dtype=object), ...)
+    coords["band"] = ("sid", np.array(sid_prop("band"), dtype=object), ...)
+    for key in ("freq_center", "freq_min", "freq_max"):
+        coords[key] = ("sid", np.asarray(sid_prop(key), dtype=np.float32), ...)
     ```
 
 === "Validate + Return"
 
     ```python
     ds = xr.Dataset(
-        data_vars={"SNR": (("epoch", "sid"), snr_data, SNR_METADATA), ...},
-        coords={"epoch": ..., "sid": ..., "sv": ..., ...},
-        attrs={
-            "Created":         datetime.now().isoformat(),
-            "Software":        f"canvod-readers {__version__}",
-            "Institution":     "...",
-            "File Hash": self.file_hash,
-        },
+        data_vars={"SNR": (("epoch", "sid"), snr_data, snr_meta), ...},
+        coords=coords,
+        attrs={**self._build_attrs()},   # Created, Software, Institution, File Hash
     )
 
     validate_dataset(ds, required_vars=keep_data_vars)
@@ -171,46 +169,49 @@ The full pipeline:
 ### Header Model
 
 ```python
-from pydantic import BaseModel, field_validator
-
-class Rnxv3Header(BaseModel):
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+class Rnxv3Header(BaseModel):   # rinex/v3_04.py
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True, ...)
 
     version: float
     rinextype: str
+    systems: str
+    receiver_type: str
+    approx_position: list[pint.Quantity]
+    t0: dict[str, datetime]                      # TIME OF FIRST OBS
     obs_codes_per_system: dict[str, list[str]]   # system → observation codes
-    t0: dict[str, datetime]                      # system → first obs time
-    interval: float | None = None
-    # ... many more fields (see source for full list)
+    signal_strength_unit: pint.Unit | str
+    # ... more fields (see source for the full list)
 ```
 
 ### Epoch Record
 
-```python
-class Rnxv3ObsEpochRecord(BaseModel):
-    epoch_flag:     int       # 0 = OK, 2 = power failure, …
-    timestamp:      datetime
-    num_satellites: int
-    satellites:     list[Satellite] = []
+Pydantic dataclasses in `gnss_specs/models.py`:
 
-    @field_validator("epoch_flag")
-    def check_flag(cls, v):
-        if not (0 <= v <= 6):
-            raise ValueError(f"Invalid epoch flag: {v}")
-        return v
+```python
+class Rnxv3ObsEpochRecordLineModel:   # the "> ..." line
+    year: int; month: int; day: int; hour: int; minute: int
+    seconds: float
+    epoch_flag: int
+    num_satellites: int
+    receiver_clock_offset: float | None = None
+
+class Rnxv3ObsEpochRecord:
+    info: Rnxv3ObsEpochRecordLineModel
+    data: list[Satellite]   # must hold num_satellites satellites
 ```
 
 ### Observation and Satellite
 
 ```python
-class Observation(BaseModel):
-    value: float
-    lli:   int | None = None   # Loss of Lock Indicator (bits 0–2)
-    ssi:   int | None = None   # Signal Strength Indicator (1–9, 0 = unknown)
+class Observation:
+    obs_type: str | None
+    value: float | None
+    lli: int | None   # Loss of Lock Indicator
+    ssi: int | None   # Signal Strength Indicator (1–9, 0 = unknown)
 
-class Satellite(BaseModel):
-    sv:           str                      # e.g. "G01"
-    observations: dict[str, Observation]   # obs_code → Observation
+class Satellite:
+    sv: str                          # e.g. "G01"
+    observations: list[Observation]
 ```
 
 ---
@@ -228,11 +229,14 @@ RINEX observation codes (`S1C`, `L2W`, `C5Q`, …) are mapped to the canonical S
 ### Constellation Band Mapping
 
 ```python
-SYSTEM_BANDS = {
+SignalIDMapper().SYSTEM_BANDS == {
     "G": {"1": "L1", "2": "L2", "5": "L5"},
-    "R": {"1": "G1", "2": "G2", "3": "G3"},
-    "E": {"1": "E1", "5": "E5a", "7": "E5b", "6": "E6"},
-    "C": {"2": "B1I", "1": "B1C", "5": "B2a", "7": "B2b", "6": "B3I"},
+    "R": {"1": "G1", "2": "G2", "3": "G3", "4": "G1a", "6": "G2a"},
+    "E": {"1": "E1", "5": "E5a", "7": "E5b", "8": "E5", "6": "E6"},
+    "C": {"2": "B1I", "1": "B1C", "5": "B2a", "7": "B2b", "8": "B2", "6": "B3I"},
+    "J": {"1": "L1", "2": "L2", "5": "L5", "6": "L6"},
+    "I": {"5": "L5", "9": "S"},
+    "S": {"1": "L1", "5": "L5"},
 }
 ```
 
@@ -269,9 +273,9 @@ The unit of the `S` observations is declared by the optional `SIGNAL STRENGTH UN
 
 <div class="grid" markdown>
 
-!!! tip "Lazy iteration"
-    `iter_epochs()` is a generator — the file is never loaded entirely into
-    memory. One epoch is held at a time.
+!!! tip "One read"
+    The file is read once, on construction, and kept in memory as lines;
+    `iter_epochs()` and `to_ds()` parse from there.
 
 !!! tip "Pre-allocated arrays"
     `to_ds()` pre-allocates NumPy arrays with `np.full(..., np.nan)` before
@@ -291,8 +295,9 @@ ds = reader.to_ds()                              # validated (default)
 ds = reader.to_ds(parser="unvalidated_fast")     # DANGEROUS, see below
 ```
 
-The default comes from the configuration (`processing.params.rinex_v3_parser`,
-`validated` unless changed). The stripped v3.05 reader uses the same parsers.
+`to_ds()` itself always defaults to `validated`; a run passes the
+`processing.params.rinex_v3_parser` setting (default `validated`). The
+stripped v3.05 reader uses the same parsers.
 
 !!! danger "`unvalidated_fast` is your responsibility"
 

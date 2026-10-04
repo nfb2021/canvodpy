@@ -124,9 +124,11 @@ Identical structure to `Rnxv3Obs.to_ds()` — a drop-in replacement:
 MeasExtra is logged (0.03125 dB-Hz resolution instead of 0.25 dB-Hz).
 `SSI` is derived from `SNR` (RINEX 3.04 banding); SBF has no native SSI.
 
-`to_ds_and_auxiliary(store_raw_observables=True)` adds the observables before
-the receiver's corrections: `SNR_raw`, `Pseudorange_unsmoothed`,
-`Pseudorange_raw`, `Phase_raw` (NaN where MeasExtra is not logged).
+`to_ds_and_auxiliary()` also returns the observables before the receiver's
+corrections: `SNR_raw`, `Pseudorange_unsmoothed`, `Pseudorange_raw`,
+`Phase_raw` (NaN where MeasExtra is not logged). `store_raw_observables=False`
+leaves them out, and `to_ds()` never includes them. A run passes
+`processing.params.store_sbf_raw_observables` (default `true`).
 
 !!! note "Observations that are dropped"
 
@@ -147,7 +149,7 @@ either, so `sbf_obs` covers exactly the stored observation files. Set
 `processing.params.store_sbf_metadata: false` to not store it; broadcast
 geometry still works, since it uses `sbf_obs` in memory.
 
-**Epoch-level scalar variables** (dimension: `epoch`):
+**Epoch-level values** (coordinates on `epoch`):
 
 | Variable | SBF Source | CF `units` | Description |
 | -------- | ---------- | ---------- | ----------- |
@@ -282,6 +284,9 @@ Source: RefGuide-4.14.0, ReceiverStatus, field RxError, p.398.
 
 $$\theta = 90° - \text{elevation}$$
 
+`broadcast_theta` and `broadcast_phi` are stored in radians; the tables
+below give degrees for readability.
+
 <div class="grid" markdown>
 
 | θ | Meaning |
@@ -301,7 +306,7 @@ $$\theta = 90° - \text{elevation}$$
 The stored value is the **geographic (compass) azimuth**:
 
 - 0° = North · 90° = East · 180° = South · 270° = West *(clockwise)*
-- This is the raw SBF `Azimuth` field scaled by 0.01°
+- The SBF `Azimuth` field (steps of 0.01°), converted to radians
 
 !!! note "Mathematical convention"
 
@@ -390,7 +395,7 @@ interoperability and scientific reproducibility.
     reader = SbfReader(fpath=Path("rref001a00.25_"))
 
     # Inspect header
-    print(reader.header.rx_name)       # e.g. "AsteRx SB3"
+    print(reader.header.rx_name)       # receiver name from ReceiverSetup
     print(reader.header.rx_version)    # e.g. "4.14.4"
     print(reader.num_epochs)           # number of MeasEpoch blocks
     print(reader.systems)              # ["E", "G", "R", ...]
@@ -438,8 +443,9 @@ interoperability and scientific reproducibility.
     # All GPS signals
     gps = daily_obs.sel(sid=[s for s in daily_obs.sid.values if s.startswith("G")])
 
-    # L1C band only
-    l1c = daily_obs.sel(sid=[s for s in daily_obs.sid.values if "|L1C|" in s])
+    # GPS L1 C/A only
+    l1c = daily_obs.sel(sid=(daily_obs.system == "G") & (daily_obs.band == "L1")
+                            & (daily_obs.code == "C"))
 
     # Polar angle filter: elevation ≥ 20° → theta ≤ 70°
     theta_mask = daily_meta["broadcast_theta"] <= np.deg2rad(70)
@@ -595,7 +601,7 @@ See [:octicons-arrow-right-24: Satellite Catalog](satellite-catalog.md) for the 
 | `to_ds()` | ✓ | ✓ |
 | `iter_epochs()` | ✓ | ✓ |
 | `to_ds_and_auxiliary()` | Returns `{}` aux | Returns `{"sbf_obs": meta_ds}` |
-| Broadcast ephemeris | Requires `.YYp` NAV file (planned) | Built-in via SatVisibility |
+| Broadcast ephemeris | Not supported (needs a navigation file) | Built-in via SatVisibility |
 | SID discovery | Header-based (all declared SVs) | Observation-based (tracked SVs only) |
 | SNR quantization | ~0.001 dB | 0.25 dB-Hz; 0.03125 dB-Hz with MeasExtra |
 
