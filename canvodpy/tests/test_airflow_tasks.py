@@ -15,7 +15,7 @@ import xarray as xr
 from canvodpy.orchestrator.discovery import DiscoveryError
 from canvodpy.workflows.tasks import (
     _resolve_date,
-    check_rinex,
+    check_day,
     check_sbf,
     cleanup,
     parse_sampling_interval_from_filename,
@@ -107,12 +107,12 @@ class TestParseSamplingInterval:
 
 
 # ---------------------------------------------------------------------------
-# check_rinex / check_sbf tests
+# check_day / check_sbf tests
 # ---------------------------------------------------------------------------
 
 
-class TestCheckRinex:
-    """Test check_rinex with mock config and filesystem."""
+class TestCheckDay:
+    """Test check_day with mock config and filesystem."""
 
     @pytest.fixture()
     def mock_site(self, tmp_path):
@@ -125,7 +125,7 @@ class TestCheckRinex:
 
     def test_all_files_present(self, mock_site):
         with patch("canvodpy.workflows.tasks.load_config", return_value=mock_site):
-            result = check_rinex("TestSite", "2025001")
+            result = check_day("TestSite", "2025001")
         assert result["ready"] is True
         assert result["receivers"]["canopy_01"]["has_files"] is True
         assert result["receivers"]["reference_01"]["has_files"] is True
@@ -138,7 +138,7 @@ class TestCheckRinex:
 
         with patch("canvodpy.workflows.tasks.load_config", return_value=mock_site):
             with pytest.raises(RuntimeError, match="missing receivers"):
-                check_rinex("TestSite", "2025001")
+                check_day("TestSite", "2025001")
 
     def test_any_folder_layout(self, tmp_path):
         """Files are found by the date in their names, not by their folder."""
@@ -147,7 +147,7 @@ class TestCheckRinex:
             (tmp_path / directory / "2025" / "jan" / name).touch()
         config = _site_config(tmp_path)
         with patch("canvodpy.workflows.tasks.load_config", return_value=config):
-            result = check_rinex("TestSite", "2025-01-01")
+            result = check_day("TestSite", "2025-01-01")
         assert result["receivers"]["canopy_01"]["files"] == [
             str(tmp_path / "canopy" / "2025" / "jan" / CANOPY_RNX)
         ]
@@ -159,7 +159,7 @@ class TestCheckRinex:
         (base / "canopy" / "25001" / daily).touch()
         with patch("canvodpy.workflows.tasks.load_config", return_value=mock_site):
             with pytest.raises(DiscoveryError, match="cover the same time"):
-                check_rinex("TestSite", "2025001")
+                check_day("TestSite", "2025001")
 
     def test_receiver_role_mismatch_is_an_error(self, mock_site):
         """Canopy files in the reference directory are not processed."""
@@ -168,11 +168,21 @@ class TestCheckRinex:
         ref.rename(ref.with_name(CANOPY_RNX.replace("ROSA01", "ROSA02")))
         with patch("canvodpy.workflows.tasks.load_config", return_value=mock_site):
             with pytest.raises(DiscoveryError, match="configured as 'reference'"):
-                check_rinex("TestSite", "2025001")
+                check_day("TestSite", "2025001")
+
+    def test_uses_the_configured_reader_format(self, mock_site):
+        """A receiver configured for SBF does not count its RINEX files."""
+        mock_site.sites.sites["TestSite"].receivers["canopy_01"].reader_format = "sbf"
+        with patch("canvodpy.workflows.tasks.load_config", return_value=mock_site):
+            with pytest.raises(
+                RuntimeError, match=r"missing receivers \['canopy_01'\]"
+            ):
+                check_day("TestSite", "2025001")
 
 
+@pytest.mark.filterwarnings("ignore:`check_sbf` is left over:FutureWarning")
 class TestCheckSbf:
-    """Test check_sbf with mock config and filesystem."""
+    """Test check_sbf (deprecated) with mock config and filesystem."""
 
     @pytest.fixture()
     def mock_site_sbf(self, tmp_path):
@@ -412,7 +422,38 @@ class TestValidateDataDirs:
 
 
 # ---------------------------------------------------------------------------
-# processing.preprocessing in process_rinex
+# process_day: the code of ``canvodpy run``
+# ---------------------------------------------------------------------------
+
+
+class TestProcessDay:
+    """``process_day`` runs the day through ``Site.pipeline().process_date``."""
+
+    def test_runs_the_day_through_the_pipeline(self):
+        from canvodpy.workflows import tasks
+
+        pipeline = MagicMock()
+        pipeline.__enter__.return_value = pipeline
+        pipeline.process_date.return_value = {
+            "canopy_01": xr.Dataset(coords={"epoch": np.arange(3)}),
+            "reference_01_canopy_01": xr.Dataset(coords={"epoch": np.arange(2)}),
+        }
+        site = MagicMock()
+        site.pipeline.return_value = pipeline
+        with patch("canvodpy.api.Site", return_value=site) as site_cls:
+            result = tasks.process_day("TestSite", "2025-01-01")
+
+        site_cls.assert_called_once_with("TestSite")
+        pipeline.process_date.assert_called_once_with("2025001")
+        assert result == {
+            "site": "TestSite",
+            "yyyydoy": "2025001",
+            "groups": {"canopy_01": 3, "reference_01_canopy_01": 2},
+        }
+
+
+# ---------------------------------------------------------------------------
+# processing.preprocessing in process_rinex (deprecated)
 # ---------------------------------------------------------------------------
 
 
@@ -468,6 +509,7 @@ class TestProcessRinexPreprocessing:
                 "canvod.readers.rinex.v3_04.Rnxv3Header.from_file",
                 return_value=header,
             ),
+            pytest.warns(FutureWarning, match="Use `process_day` instead"),
         ):
             tasks.process_rinex(
                 "TestSite",

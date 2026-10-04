@@ -4,13 +4,12 @@ Each function accepts only primitives (str, dict, list, None) and returns
 JSON-serializable dicts suitable for XCom.  They delegate to existing
 canvodpy machinery — no pipeline rewrite.
 
-Two DAG topologies (SBF and RINEX)::
+DAG topology::
 
-    SBF:   validate_dirs → check_sbf → process_sbf
-             → validate_ingest → calculate_vod → cleanup
+    validate_dirs → check_sbf / check_rinex (→ wait_for_sp3)
+      → process_day → validate_ingest → calculate_vod → cleanup
 
-    RINEX: validate_dirs → wait_for_rinex → wait_for_sp3 → fetch_aux_data
-             → process_rinex → validate_ingest → calculate_vod → cleanup
+``process_day`` and ``calculate_vod`` run the same code as ``canvodpy run``.
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ from canvod.config import load_config
 from canvod.config.models import reference_store_group
 from canvod.ops import preprocess_files
 from canvod.readers import MatchedDirs
-from canvod.utils.tools import YYYYDOY
+from canvod.utils.tools import YYYYDOY, deprecated
 from canvodpy.orchestrator.discovery import (
     DiscoveredFile,
     parse_sampling_interval_from_filename,
@@ -90,7 +89,9 @@ def _day_files(
     date_obj : YYYYDOY
         The day.
     reader_format : str | None
-        ``"rinex3"`` or ``"sbf"`` to select one file type, ``None`` for all.
+        ``"rinex3"`` or ``"sbf"`` to select one file type for all receivers,
+        ``None`` for the ``reader_format`` configured for each receiver (as
+        ``canvodpy run`` reads them; ``"auto"`` selects all types).
 
     Returns
     -------
@@ -126,19 +127,53 @@ def _day_files(
                 date_obj.to_str(),
                 recipe_file(site, rcfg.recipe),
             ),
-            reader_format,
+            reader_format if reader_format is not None else rcfg.reader_format,
         )
         for name, rcfg in site_cfg.receivers.items()
     }
 
 
 # ---------------------------------------------------------------------------
-# Task 1 — check_rinex / check_sbf
+# Task 1 — check_day
 # ---------------------------------------------------------------------------
 
 
-def _check_files(site: str, yyyydoy: str, reader_format: str, kind: str) -> dict:
-    """Shared body of :func:`check_rinex` and :func:`check_sbf`."""
+def check_day(site: str, yyyydoy: str) -> dict:
+    """Check whether every receiver has files for the given date.
+
+    The files are those ``canvodpy run`` processes for the day (see
+    :mod:`canvodpy.orchestrator.discovery`), in the ``reader_format``
+    configured for each receiver: selected by the receiver's naming recipe
+    or by canonical canVOD names, anywhere below the receiver's directory.
+
+    Parameters
+    ----------
+    site : str
+        Research site name (must exist in config).
+    yyyydoy : str
+        Date in ``YYYYDDD`` format **or** Airflow ``ds`` (``YYYY-MM-DD``).
+
+    Returns
+    -------
+    dict
+        ``{"site", "yyyydoy", "ready": True, "receivers": {name:
+        {"directory", "has_files", "files", "count"}}}``
+
+    Raises
+    ------
+    RuntimeError
+        If files are missing for any receiver (stops the DAG run so Airflow
+        can retry later).
+    DiscoveryError
+        If the receivers' files cannot be assigned unambiguously, e.g. two
+        files cover the same time. Retrying does not help; the data
+        directory has to be fixed.
+    """
+    return _check_files(site, yyyydoy, None, "GNSS")
+
+
+def _check_files(site: str, yyyydoy: str, reader_format: str | None, kind: str) -> dict:
+    """Shared body of :func:`check_day`, :func:`check_rinex` and :func:`check_sbf`."""
     config = load_config()
     site_cfg = config.sites.sites[site]
     date_obj = _resolve_date(yyyydoy)
@@ -177,6 +212,10 @@ def _check_files(site: str, yyyydoy: str, reader_format: str, kind: str) -> dict
     }
 
 
+@deprecated(
+    "`check_rinex` is left over from development and will be removed with the next "
+    "major version. Use `check_day` instead."
+)
 def check_rinex(site: str, yyyydoy: str) -> dict:
     """Check whether RINEX files exist for all receivers on the given date.
 
@@ -211,6 +250,10 @@ def check_rinex(site: str, yyyydoy: str) -> dict:
     return _check_files(site, yyyydoy, "rinex3", "RINEX")
 
 
+@deprecated(
+    "`check_sbf` is left over from development and will be removed with the next "
+    "major version. Use `check_day` instead."
+)
 def check_sbf(site: str, yyyydoy: str) -> dict:
     """Check whether SBF files exist for all receivers on the given date.
 
@@ -383,6 +426,10 @@ def check_sp3_availability(ds: str) -> object:
 # ---------------------------------------------------------------------------
 
 
+@deprecated(
+    "`fetch_aux_data` is left over from development and will be removed with the next "
+    "major version. Use `process_day` instead."
+)
 def fetch_aux_data(
     site: str,
     yyyydoy: str,
@@ -512,6 +559,10 @@ def fetch_aux_data(
 # ---------------------------------------------------------------------------
 
 
+@deprecated(
+    "`process_rinex` is left over from development and will be removed with the next "
+    "major version. Use `process_day` instead."
+)
 def process_rinex(
     site: str,
     yyyydoy: str,
@@ -678,6 +729,10 @@ def process_rinex(
 # ---------------------------------------------------------------------------
 
 
+@deprecated(
+    "`process_sbf` is left over from development and will be removed with the next "
+    "major version. Use `process_day` instead."
+)
 def process_sbf(
     site: str,
     yyyydoy: str,
@@ -873,6 +928,48 @@ def process_sbf(
         "ephemeris_source": "broadcast" if use_broadcast else "agency",
         "store_radial_distance": config.processing.processing.store_radial_distance,
         "store_sbf_raw_observables": config.processing.processing.store_sbf_raw_observables,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Task 3 — process_day (the code of ``canvodpy run``)
+# ---------------------------------------------------------------------------
+
+
+def process_day(site: str, yyyydoy: str) -> dict:
+    """Process one day of all receivers of a site and write the GNSS store.
+
+    Runs ``Site(site).pipeline().process_date()``, the same code as
+    ``canvodpy run``: file discovery, auxiliary data, reader, receiver
+    position, satellite geometry, ``processing.preprocessing`` and the
+    store write with its log book. Each receiver is read with the
+    ``reader_format`` of its site configuration.
+
+    Parameters
+    ----------
+    site : str
+        Research site name.
+    yyyydoy : str
+        Date in ``YYYYDDD`` format **or** Airflow ``ds`` (``YYYY-MM-DD``).
+
+    Returns
+    -------
+    dict
+        ``{"site", "yyyydoy", "groups": {group: n_epochs}}``. ``groups`` is
+        empty if there was nothing to process for the day.
+    """
+    from canvodpy.api import Site
+
+    date_obj = _resolve_date(yyyydoy)
+    with Site(site).pipeline() as pipeline:
+        datasets = pipeline.process_date(date_obj.to_str())
+
+    return {
+        "site": site,
+        "yyyydoy": date_obj.to_str(),
+        "groups": {
+            name: int(ds.sizes.get("epoch", 0)) for name, ds in datasets.items()
+        },
     }
 
 
