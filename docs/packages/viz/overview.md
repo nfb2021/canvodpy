@@ -104,6 +104,13 @@ The `canvod-viz` package provides 2D and 3D hemispheric visualization for GNSS-T
     (fig_2d, ax_2d), fig_3d = viz.create_comparison_plot(data=vod_data)
     ```
 
+!!! note "Cells without data"
+    Cells without data (NaN) are not part of the color scale: 2D plots
+    leave them white, the 3D views draw them in `nan_color` (default
+    `"lightgray"`), so they never look like the minimum value.
+    `plot_3d_mesh` renders HTM grids only; other grids raise
+    `NotImplementedError`.
+
 ---
 
 ## Styling
@@ -152,7 +159,7 @@ Arial/Helvetica fonts, 300 DPI, inward ticks, colorblind-friendly palette (Wong,
 
 ### Colorscale
 
-Cross-framework colormap conversion between matplotlib, Plotly, and palettable:
+Colormaps converted between matplotlib and Plotly:
 
 ```python
 from canvod.viz import Colorscale

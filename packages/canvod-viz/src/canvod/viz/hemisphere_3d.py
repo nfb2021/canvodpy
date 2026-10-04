@@ -17,6 +17,71 @@ if TYPE_CHECKING:
     from canvod.grids import HemiGrid
 
 
+#: Color of cells without data (NaN), like matplotlib's ``set_bad``.
+DEFAULT_NAN_COLOR = "lightgray"
+
+
+def _split_missing(trace: go.Mesh3d | go.Scatter3d, nan_color: str) -> list:
+    """Draw the cells without data (NaN) of ``trace`` in ``nan_color``.
+
+    Plotly has no color for NaN: a NaN intensity is drawn in the lowest
+    color of the scale, so a cell without data looks like the minimum.
+    The cells with data stay in ``trace``; the others move to a second
+    trace of one fixed color, which the color scale does not include.
+    """
+    if isinstance(trace, go.Mesh3d):
+        intensity = np.asarray(trace.intensity, dtype=float)
+        tri = np.column_stack([trace.i, trace.j, trace.k])
+        missing = np.isnan(intensity[tri]).any(axis=1)
+        if not missing.any():
+            return [trace]
+        kept = go.Mesh3d(trace)
+        kept.update(
+            i=tri[~missing, 0],
+            j=tri[~missing, 1],
+            k=tri[~missing, 2],
+            cmin=np.nanmin(intensity) if (~missing).any() else None,
+            cmax=np.nanmax(intensity) if (~missing).any() else None,
+        )
+        empty = go.Mesh3d(
+            x=trace.x,
+            y=trace.y,
+            z=trace.z,
+            i=tri[missing, 0],
+            j=tri[missing, 1],
+            k=tri[missing, 2],
+            color=nan_color,
+            opacity=trace.opacity,
+            flatshading=True,
+            name="No data",
+            hoverinfo="name",
+        )
+        return [kept, empty] if (~missing).any() else [empty]
+    values = np.asarray(trace.marker.color, dtype=float)
+    missing = np.isnan(values)
+    if not missing.any():
+        return [trace]
+    xyz = [np.asarray(trace[c]) for c in ("x", "y", "z")]
+    kept = go.Scatter3d(trace)
+    kept.update(
+        x=xyz[0][~missing],
+        y=xyz[1][~missing],
+        z=xyz[2][~missing],
+        marker_color=values[~missing],
+        text=np.asarray(trace.text)[~missing] if trace.text is not None else None,
+    )
+    empty = go.Scatter3d(
+        x=xyz[0][missing],
+        y=xyz[1][missing],
+        z=xyz[2][missing],
+        mode="markers",
+        marker=dict(size=trace.marker.size, color=nan_color),
+        name="No data",
+        hoverinfo="name",
+    )
+    return [kept, empty]
+
+
 class HemisphereVisualizer3D:
     """3D hemisphere visualization using plotly.
 
@@ -62,6 +127,7 @@ class HemisphereVisualizer3D:
         show_colorbar: bool = True,
         width: int = 800,
         height: int = 600,
+        nan_color: str = DEFAULT_NAN_COLOR,
         **kwargs: Any,
     ) -> go.Figure:
         """Create 3D surface plot on hemisphere with actual cell patches.
@@ -88,6 +154,8 @@ class HemisphereVisualizer3D:
             Figure width in pixels
         height : int, default 600
             Figure height in pixels
+        nan_color : str, default 'lightgray'
+            Color of cells without data (NaN); not part of the color scale.
         **kwargs
             Additional plotly trace parameters
 
@@ -144,7 +212,7 @@ class HemisphereVisualizer3D:
                 show_colorbar,
             )
 
-        fig_data = [trace]
+        fig_data = _split_missing(trace, nan_color) if data is not None else [trace]
         if show_wireframe:
             fig_data.append(self._extract_wireframe_lines())
         fig = go.Figure(data=fig_data)
@@ -758,6 +826,7 @@ class HemisphereVisualizer3D:
         show_edges: bool = True,
         width: int = 800,
         height: int = 600,
+        nan_color: str = DEFAULT_NAN_COLOR,
     ) -> go.Figure:
         """Create 3D mesh plot showing cell boundaries.
 
@@ -777,16 +846,18 @@ class HemisphereVisualizer3D:
             Figure width
         height : int, default 600
             Figure height
+        nan_color : str, default 'lightgray'
+            Color of cells without data (NaN); not part of the color scale.
 
         Returns
         -------
         plotly.graph_objects.Figure
             Interactive mesh plot
 
-        Notes
-        -----
-        This method requires grid cells with vertex information.
-        Currently supports HTM and geodesic grids.
+        Raises
+        ------
+        NotImplementedError
+            For any grid type other than HTM.
 
         """
         traces = []
@@ -816,16 +887,21 @@ class HemisphereVisualizer3D:
                     if np.all(z_coords < 0):
                         continue
 
-                    # Normalize color value
-                    color_val = (values[idx] - np.nanmin(values)) / (
-                        np.nanmax(values) - np.nanmin(values)
-                    )
-                    color_rgb = sample_colorscale(colorscale, [color_val])[0]
+                    # Normalize color value; no data gets nan_color
+                    if np.isnan(values[idx]):
+                        color_rgb = nan_color
+                    else:
+                        span = np.nanmax(values) - np.nanmin(values)
+                        color_val = (
+                            (values[idx] - np.nanmin(values)) / span if span else 0.5
+                        )
+                        color_rgb = sample_colorscale(colorscale, [color_val])[0]
 
-                    # Create triangle mesh
+                    # Create triangle mesh; vertices are (north, east, up),
+                    # the plot's x axis is east (as in the other 3D views)
                     trace = go.Mesh3d(
-                        x=vertices[:, 0],
-                        y=vertices[:, 1],
+                        x=vertices[:, 1],
+                        y=vertices[:, 0],
                         z=vertices[:, 2],
                         i=[0],
                         j=[1],
