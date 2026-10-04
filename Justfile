@@ -28,6 +28,34 @@ alias q := check
 alias t := test
 
 # ============================================================================
+# Code graph (graphify): free and local, no LLM, no API key
+# ============================================================================
+
+# graphify builds a graph of the code from its syntax tree. Only commands that
+# never call an LLM are used here (`extract --code-only`, `affected`, `path`,
+# `explain`); LLM API keys are removed from their environment as well.
+# Never run `graphify label`, a full `graphify extract`, or its assistant skill:
+# those call paid language-model APIs.
+graphify := "env -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL -u OPENAI_API_KEY -u OPENAI_BASE_URL -u GEMINI_API_KEY -u GOOGLE_API_KEY -u MOONSHOT_API_KEY -u DEEPSEEK_API_KEY -u AZURE_OPENAI_API_KEY -u OLLAMA_API_KEY GRAPHIFY_NO_TIPS=1 uvx -q --from graphifyy==0.9.75 graphify"
+graph_file := ".graphify/graphify-out/graph.json"
+
+# rebuild the code graph (.graphify/, git-ignored; git hooks run this after commits, merges and checkouts)
+graph:
+    @{{ graphify }} extract . --code-only --force --out .graphify
+
+# everything that calls, imports or subclasses NAME (impact of a change)
+graph-affected NAME:
+    @{{ graphify }} affected {{ quote(NAME) }} --graph {{ graph_file }}
+
+# how NAME_A reaches NAME_B (caller first), e.g. just graph-path VodComputer TauOmegaZerothOrder
+graph-path NAME_A NAME_B:
+    @{{ graphify }} path {{ quote(NAME_A) }} {{ quote(NAME_B) }} --graph {{ graph_file }}
+
+# a node and its neighbours in plain words
+graph-explain NAME:
+    @{{ graphify }} explain {{ quote(NAME) }} --graph {{ graph_file }}
+
+# ============================================================================
 # Code Quality (All Packages)
 # ============================================================================
 
@@ -70,8 +98,12 @@ check-format-only:
 check-types:
     uv run ty check
 
-# lint, format and type-check (all packages)
-check: check-lint check-format check-types
+# check that AGENTS.md files and skills name only existing paths and recipes
+check-agent-docs:
+    uv run --no-sync python scripts/check_agent_docs.py
+
+# lint, format and type-check (all packages), check the agent docs
+check: check-lint check-format check-types check-agent-docs
 
 # ============================================================================
 # Testing (All Packages)
@@ -262,14 +294,7 @@ check-dev-tools:
 
 # setup the pre-commit hooks
 hooks:
-    uvx pre-commit install
-    uvx pre-commit install --hook-type commit-msg
-
-# install bundled Claude Code skills to ~/.claude/skills/
-install-skills:
-    @mkdir -p ~/.claude/skills/icechunk
-    @cp .claude/skills/icechunk/SKILL.md ~/.claude/skills/icechunk/SKILL.md
-    @echo "Installed: icechunk"
+    uv run pre-commit install --hook-type pre-commit --hook-type commit-msg --hook-type pre-push --hook-type post-merge --hook-type post-commit --hook-type post-checkout
 
 # ============================================================================
 # uv venv and Dependency Management
@@ -405,7 +430,7 @@ clean-test:
 # install all packages in workspace and ensure all git hooks are active
 sync:
     uv sync
-    uv run pre-commit install --hook-type pre-commit --hook-type commit-msg --hook-type pre-push --hook-type post-merge
+    uv run pre-commit install --hook-type pre-commit --hook-type commit-msg --hook-type pre-push --hook-type post-merge --hook-type post-commit --hook-type post-checkout
 
 # update all git submodules (demo + test_data) to their latest remote commits and record the new pointers
 update-submodules:
@@ -451,17 +476,17 @@ dist:
 # Per-Package Commands
 # ============================================================================
 
-# run check for a specific package
+# run check for a specific package (canvodpy or canvod-*)
 check-package PACKAGE:
-    cd packages/{{PACKAGE}} && uv run ruff check . --fix && uv run ruff format . && uv run ty check
+    cd {{ if PACKAGE == "canvodpy" { "canvodpy" } else { "packages/" + PACKAGE } }} && uv run ruff check . --fix && uv run ruff format . && uv run ty check
 
-# run tests for a specific package
+# run tests for a specific package, e.g. canvod-readers (canvodpy: the umbrella package)
 test-package PACKAGE:
-    cd packages/{{PACKAGE}} && uv run pytest
+    cd {{ if PACKAGE == "canvodpy" { "canvodpy" } else { "packages/" + PACKAGE } }} && uv run pytest
 
 # build a specific package
 build-package PACKAGE:
-    cd packages/{{PACKAGE}} && uv build
+    cd {{ if PACKAGE == "canvodpy" { "canvodpy" } else { "packages/" + PACKAGE } }} && uv build
 
 # ============================================================================
 # Notebooks (marimo)

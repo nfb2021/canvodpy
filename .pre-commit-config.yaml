@@ -53,6 +53,24 @@ repos:
 
   - repo: local
     hooks:
+      # Paths and just recipes named in AGENTS.md files and skills must exist;
+      # runs on every commit, since renaming code can break them too
+      - id: check-agent-docs
+        name: agent docs
+        entry: uv run --no-sync python scripts/check_agent_docs.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+      # Keep the code graph (`just graph`, free, no LLM) in step with the code;
+      # runs in the background, output in .graphify/build.log
+      - id: code-graph
+        name: code graph
+        entry: bash -c 'mkdir -p .graphify && (just graph > .graphify/build.log 2>&1 &)'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [post-commit, post-merge, post-checkout]
       - id: ty-check
         name: ty type check
         entry: uv run ty check

@@ -63,3 +63,24 @@ jobs:
                   tool: just
             - name: Type check with ty
               run: just check-types
+
+    agent_docs:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            - uses: ./.github/actions/setup
+            - name: Install just
+              uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+              with:
+                  tool: just
+            - name: Check out canvodpy-extensions, to check the extensions paths too
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  repository: nfb2021/canvodpy-extensions
+                  path: canvodpy-extensions-checkout
+                  fetch-depth: 0 # the locked commit may be on any branch
+                  persist-credentials: false
+            - name: Check paths and recipes named in AGENTS.md and skills
+              env:
+                  CANVODPY_EXTENSIONS_REPO: canvodpy-extensions-checkout
+              run: just check-agent-docs

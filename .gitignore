@@ -1,10 +1,9 @@
 # ============================================================================
 # Claude Code — track project setup, ignore private state
 # ============================================================================
-# CLAUDE.md files are tracked (project + package instructions)
-# .claude/commands/ is tracked (slash commands ship with the repo)
+# AGENTS.md and CLAUDE.md files are tracked (agent instructions)
+# .claude/skills/ is tracked (task guides ship with the repo)
 .claude/*
-!.claude/commands/
 !.claude/skills/
 
 # ============================================================================
@@ -368,3 +367,6 @@ packages/*/config/
 .processing/
 .vscode/
 .icechunk_gridding_claude/
+
+# Code graph (just graph): built locally, never committed
+.graphify/
