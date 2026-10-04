@@ -53,7 +53,17 @@ Aggregates observations into regular time bins. Reduces the number of epochs by
 grouping into frequency buckets and computing the mean or median. Bins start at
 multiples of `freq` counted from 00:00 and are labeled with their start.
 Missing values (NaN) are ignored; a bin without any value stays NaN. Variables
-keep their data type and attributes.
+keep their attributes. Floating-point variables keep their data type; integer
+variables (e.g. `LLI`, `SSI`) come out as `float64` and are averaged as
+numbers, including their fill value -1, so a bit flag or an indicator loses its
+meaning in a bin. A bin keeps no count of the epochs behind it.
+
+`SNR` is averaged as stored, in dB-Hz, not as linear power. Because VOD is
+linear in the SNR difference in dB, the mean of the dB values gives the mean of
+the per-epoch VOD, provided the canopy and reference bins average the same
+epochs and θ changes little within a bin
+([issue #192](https://github.com/nfb2021/canvodpy/issues/192)). The median is
+the same in dB and in linear power.
 
 ```python
 from canvod.ops import TemporalAggregate
@@ -103,8 +113,11 @@ Coordinate handling:
 
 ### GridAssignment
 
-Assigns each observation to a spatial grid cell based on its spherical coordinates
-(`phi`, `theta`). Adds a `cell_id_*` variable to the dataset.
+Assigns each observation to the grid cell that contains its direction
+(`phi`, `theta`); an observation outside every cell gets NaN. The grid is built
+with `create_hemigrid` and its defaults (see
+[canvod-grids](../grids/overview.md)). Adds a `cell_id_*` variable to the
+dataset.
 
 ```python
 from canvod.ops import GridAssignment
@@ -120,7 +133,8 @@ ds_out, result = op(ds_in)
 | `angular_resolution` | `2.0` | Resolution in degrees |
 
 `phi` and `theta` may be data variables (as the runs write them) or
-coordinates. If the dataset has neither, the operation is skipped.
+coordinates, on `(epoch, sid)`. If either is missing, the operation is skipped
+with a warning.
 
 ---
 
@@ -164,7 +178,7 @@ to dataset attributes via `to_metadata_dict()`.
 `canvodpy run`, the Python API and Airflow apply the operations set in the
 `processing.preprocessing` section of `canvod-settings.yaml`. Nothing is
 applied unless the section is set, and each operation runs only if its own
-subsection is set:
+subsection is set (and not `enabled: false`):
 
 ```yaml
 processing:

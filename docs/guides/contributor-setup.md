@@ -732,8 +732,9 @@ Every push to a branch and every pull request triggers automated checks on GitHu
 | **Platform Tests**     | Every push and PR, weekly  | Runs the test suite on Linux, macOS and Windows with Python 3.14                                                                       |
 | **Deploy Docs**        | A published release, or started by hand | Builds and deploys the documentation site                                                                                |
 
-The test runs in CI do not check out the test-data submodule for now, so
-tests that need it are skipped there; run them locally.
+The test runs in CI check out the test-data submodule
+(`packages/canvod-readers/tests/test_data`), so tests that need it run
+there too.
 
 ### Test coverage with Coveralls
 

@@ -236,7 +236,7 @@ graph TB
 
 **Builder Layer** -- `DatasetBuilder` handles coordinate assembly, frequency resolution, dtype enforcement, and validation for new readers. The built-in readers assemble their datasets themselves.
 
-**Implementation Layer (Concrete Readers)** -- Parses specific formats, implements abstract methods, and handles format-specific details. `Rnxv3Obs` reads RINEX 3 observation files, `Rnxv3StrippedObs` RINEX 3 files with a stripped header, `Rnxv2Obs` RINEX 2.11, `SbfReader` Septentrio Binary Format (with the receiver's own satellite geometry), `NmeaObs` NMEA 0183 v4.00.
+**Implementation Layer (Concrete Readers)** -- Parses specific formats, implements abstract methods, and handles format-specific details. `Rnxv3Obs` reads RINEX 3 observation files, `Rnxv3StrippedObs` RINEX 3 files that contain signal strengths only, `Rnxv2Obs` RINEX 2.11, `SbfReader` Septentrio Binary Format (with the receiver's own satellite geometry), `NmeaObs` NMEA 0183 v4.00.
 
 **Support Layer** -- Provides constellation specifications (GPS, Galileo, etc.), Signal ID mapping, and metadata templates.
 
@@ -510,7 +510,8 @@ reader = ReaderFactory.create("my_format", fpath="data.myf")
     RINEX 3 file is detected as `rinex3`, so name `rinex3_stripped`
     yourself. SBF and other binary formats use the name-based API:
     `ReaderFactory.create("sbf", fpath=path)`. Runs with
-    `reader_format: auto` use the same detection.
+    `reader_format: auto` tell SBF and NMEA files by their file type and
+    RINEX 2 from RINEX 3 with `detect_reader()`.
 
 ## Summary
 
@@ -522,4 +523,4 @@ The canvod-readers architecture is characterized by:
 4. **Contract enforcement** through the ABC, ensuring consistent behavior across all readers.
 5. **Type safety** via Pydantic, catching errors during parsing.
 6. **Structural validation** through `validate_dataset()`, ensuring downstream compatibility.
-7. **Extensibility** — new formats can be added in ~30 lines without modifying existing code. See [:octicons-arrow-right-24: Building a Reader](building-a-reader.md) for a step-by-step guide.
+7. **Extensibility** — new formats can be added without modifying existing code. See [:octicons-arrow-right-24: Building a Reader](building-a-reader.md) for a step-by-step guide.

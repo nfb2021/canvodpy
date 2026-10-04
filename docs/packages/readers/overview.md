@@ -60,16 +60,19 @@ The `canvod-readers` package provides validated parsers for [GNSS](https://gssc.
 
 ## Supported Formats at a Glance
 
-| Feature | `Rnxv3Obs` | `Rnxv2Obs` | `SbfReader` |
-| ------- | ---------- | ---------- | ----------- |
-| Format | Plain text | Plain text | Binary |
-| Extension | `.rnx` | `.YYo`, `.rnx` | `.sbf` |
-| Tracking codes | Exact (RINEX 3 attribute) | Exact where RINEX 2.11 defines them, else lowercase marker | Exact |
-| Satellite geometry (θ, φ) | SP3 download | SP3 download | **Embedded** |
-| Extra metadata | Header only | Header only | PVT · DOP · quality |
-| `to_ds()` | ✓ | ✓ | ✓ |
-| `iter_epochs()` | ✓ | ✓ | ✓ |
-| `to_ds_and_auxiliary()` | `{}` aux | `{}` aux | `{"sbf_obs": meta_ds}` |
+| Feature | `Rnxv3Obs` | `Rnxv2Obs` | `SbfReader` | `NmeaObs` |
+| ------- | ---------- | ---------- | ----------- | --------- |
+| Format | Plain text | Plain text | Binary | Plain text |
+| Extension | `.rnx` | `.YYo`, `.rnx` | `.sbf` | `.nmea` |
+| Tracking codes | Exact (RINEX 3 attribute) | Exact where RINEX 2.11 defines them, else lowercase marker | Exact | From the GSV signal ID, else `X` |
+| Observables | SNR, pseudorange, phase, Doppler, LLI, SSI | as RINEX 3 | SNR, pseudorange, phase, Doppler, SSI, flags | SNR only |
+| Epoch time scale | From the header (normally GPS time) | From the header (normally GPS time) | GPS time | UTC |
+| Satellite geometry (θ, φ) | SP3 download | SP3 download | SP3 download, or **embedded** (SatVisibility) | SP3 download |
+| Extra metadata | Header only | Header only | PVT · DOP · quality | None |
+| `to_ds_and_auxiliary()` | `{}` aux | `{}` aux | `{"sbf_obs": meta_ds}` | `{}` aux |
+
+Every reader has `to_ds()` and `iter_epochs()`. The `epoch` coordinate
+records its time scale in the `time_system` attribute.
 
 !!! note "Consistent output structure"
 
@@ -95,9 +98,11 @@ graph TD
     A1["RINEX v3 File (.rnx)"] --> B1["Rnxv3Obs (+ SP3/CLK)"]
     A2["SBF File (.sbf)"] --> B2["SbfReader"]
     A3["RINEX v2 File (.YYo)"] --> B3["Rnxv2Obs (+ SP3/CLK)"]
+    A4["NMEA File (.nmea)"] --> B4["NmeaObs (+ SP3/CLK)"]
     B1 --> C["validate_dataset()"]
     B3 --> C
     B2 --> C
+    B4 --> C
     C --> D["`**xarray.Dataset**
     epoch x sid`"]
     B2 --> E["`**Metadata Dataset**
@@ -108,42 +113,22 @@ graph TD
 
 ### Contract-Based Design
 
-All readers implement the `GNSSDataReader` base class — a Pydantic `BaseModel` + ABC that provides file path validation, model configuration, and a consistent interface:
+All readers implement the `GNSSDataReader` base class, a Pydantic `BaseModel`
+and ABC. It holds the validated file path `fpath` and declares what every
+reader must provide:
 
-```python
-from pydantic import BaseModel, ConfigDict, field_validator
-from abc import ABC, abstractmethod
-import xarray as xr
+| Abstract member | What it returns |
+|---|---|
+| `to_ds(**kwargs)` | The `(epoch × sid)` dataset |
+| `iter_epochs()` | The file's epochs one by one |
+| `file_hash` | First 16 hex digits of the file's SHA-256 (deduplication) |
+| `start_time`, `end_time` | First and last epoch |
+| `systems`, `num_satellites` | Systems and number of satellites in the file |
 
-class GNSSDataReader(BaseModel, ABC):
-    """Base class for all GNSS data format readers."""
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    fpath: Path  # Validated at construction time
-
-    @abstractmethod
-    def to_ds(self, **kwargs) -> xr.Dataset:
-        """Convert to xarray.Dataset (epoch × sid)."""
-
-    @abstractmethod
-    def iter_epochs(self):
-        """Iterate through epochs."""
-
-    @property
-    @abstractmethod
-    def file_hash(self) -> str:
-        """SHA-256 hash for deduplication."""
-
-    def to_ds_and_auxiliary(
-        self, **kwargs
-    ) -> tuple[xr.Dataset, dict[str, xr.Dataset]]:
-        """Single-pass scan: obs dataset + any auxiliary datasets.
-
-        Default returns empty aux dict.
-        SbfReader overrides for one-pass binary decode.
-        """
-        return self.to_ds(**kwargs), {}
-```
+`to_ds_and_auxiliary(**kwargs)` returns the dataset and a dict of auxiliary
+datasets; by default the dict is empty, and `SbfReader` fills it from the
+same pass over the file. A missing member fails as soon as the class is
+instantiated.
 
 Subclasses only need to inherit from `GNSSDataReader` — no separate `BaseModel` import, no `fpath` field, no file validation boilerplate.
 
@@ -294,8 +279,8 @@ Subclasses only need to inherit from `GNSSDataReader` — no separate `BaseModel
 
     Every dataset produced by any reader must pass structural validation
     before it is returned. Checks dimensions, coordinate dtypes, required
-    variables, and global attributes — including `"File Hash"`, a SHA-256
-    of the source file contents that `canvod-store` uses as its first
+    variables, and global attributes — including `"File Hash"`, the first
+    16 hex digits of the SHA-256 of the source file contents that `canvod-store` uses as its first
     deduplication layer, ensuring the same physical file is never ingested
     twice regardless of when it is processed.
 
@@ -337,8 +322,8 @@ Both share the SID space, the array allocation, the epoch-time conversion and th
 
 !!! tip "Memory"
 
-    Use `keep_data_vars=["SNR"]` to load only what you need.
-    Full RINEX with phase + Doppler uses ~4× more memory.
+    Use `keep_data_vars=["SNR"]` to load only what you need;
+    pseudorange, phase and Doppler add one array each.
 
 !!! tip "Batch processing"
 
@@ -350,4 +335,4 @@ Both share the SID space, the array allocation, the epoch-time conversion and th
 !!! tip "Storage"
 
     After processing, write to Icechunk via `canvod-store` for
-    compressed, versioned storage with O(1) epoch lookups.
+    compressed, versioned storage.

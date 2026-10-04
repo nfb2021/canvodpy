@@ -18,7 +18,7 @@ Examples
 >>> print(date.to_datetime())
 
 >>> from canvod.utils.tools import gpsweekday
->>> week, day = gpsweekday("2025-01-15")
+>>> week, day = gpsweekday("15-01-2025")  # dd-mm-yyyy
 
 >>> from canvod.utils.tools import isfloat
 >>> isfloat("3.14")  # True

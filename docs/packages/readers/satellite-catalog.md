@@ -19,19 +19,20 @@ directly affect signal interpretation:
 - **PRN reassignments** — a PRN code (e.g. `G01`) is not permanently bound to one
   satellite vehicle. When a satellite is decommissioned and its PRN reassigned to a
   new vehicle, the TX power, antenna pattern, and orbital characteristics change.
-  Long time series that span a reassignment must be flagged to avoid false trends.
+  A long time series that spans a reassignment can show a step that is not in the
+  vegetation; `reassignments_in_range` finds them.
 - **Orbital plane and slot** — the satellite's position in the constellation
   determines its sky track over the receiver site, which affects the polar angle
   distribution and therefore the VOD sampling geometry.
 
 The IGS SINEX catalog provides all of this information in a single, authoritative,
-machine-readable file — enabling canvodpy to track these properties automatically.
+machine-readable file. `canvodpy run` does not use it: the catalog is a tool for
+your own analysis (e.g. `enrich_dataset` on data read from a store).
 
 ## Overview
 
 The `SatelliteCatalog` class parses the IGS `igs_satellite_metadata.snx` SINEX file —
-a single authoritative source of satellite metadata maintained by the [IGS](https://gssc.esa.int/navipedia/index.php/International_GNSS_Service_(IGS)){:target="_blank"} (updated
-every 2-4 weeks by [DLR](https://gssc.esa.int/navipedia/index.php/GNSS_Satellite_Orbit_Determination){:target="_blank"}). It provides time-aware queries for all GNSS constellations:
+a single authoritative source of satellite metadata maintained by the [IGS](https://gssc.esa.int/navipedia/index.php/International_GNSS_Service_(IGS)){:target="_blank"}. It provides time-aware queries for all GNSS constellations:
 GPS, GLONASS, Galileo, BeiDou, QZSS, and IRNSS. SBAS satellites are not in the
 SINEX file; their SV list (`S01`–`S99`, `nn` = PRN − 100) comes from the RINEX
 specification.
@@ -68,7 +69,8 @@ The file has eight `SATELLITE/` blocks; the catalog reads the six below (not `CO
 ```
 1. Explicit search_dirs (e.g. config aux_data_dir)
 2. ~/.cache/canvod/
-3. Download from IGS (if online and cache is stale)
+3. Download from IGS (if online and the cached copy is older than
+   `max_age_days`, default 7)
 4. Bundled fallback (always works, ships with package)
 ```
 
@@ -103,8 +105,8 @@ The file has eight `SATELLITE/` blocks; the catalog reads the six below (not `CO
 
 !!! info "Placing the file manually"
 
-    Drop a fresh copy of `igs_satellite_metadata.snx` into `~/.cache/canvod/`
-    or your project's `aux_data_dir`. The catalog will find it automatically.
+    Drop a fresh copy of `igs_satellite_metadata.snx` into `~/.cache/canvod/`,
+    or into a directory you pass as `search_dirs`.
 
 ---
 

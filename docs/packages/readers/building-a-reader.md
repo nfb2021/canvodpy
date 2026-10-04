@@ -874,7 +874,7 @@ packages/canvod-readers/
 | `canvodpy/src/canvodpy/factories.py` | `ReaderFactory._detect_format`, if `reader_format: auto` should find it |
 | `canvodpy/src/canvodpy/orchestrator/discovery.py` | `_READER_FILE_TYPES`, `_ALL_FILE_TYPES` |
 | `packages/canvod-preflight/src/canvod/preflight/convention.py` | `FileType`, if the file type is new |
-| `packages/canvod-config/src/canvod/config/models/sites.py` | the `reader_format` values and description |
+| `packages/canvod-config/src/canvod/config/models/sites.py` | the `reader_format` values and description; `_FILE_FORMAT` if the reader reads the files of another format (as `rinex3_stripped` reads RINEX 3), so a canopy and its reference count as the same format |
 | `packages/canvod-store/src/canvod/store/viewer.py` | `_FORMAT_LABELS` |
 
 Update `__init__.py` to export your reader:
@@ -940,6 +940,10 @@ class GnsdReader(GNSSDataReader):
     model_config = ConfigDict(frozen=True)
 
     @property
+    def source_format(self) -> str:
+        return "gnsd"  # the default would say "rinex3"
+
+    @property
     def file_hash(self) -> str:
         return compute_hash(self.fpath)
 
@@ -983,7 +987,8 @@ class GnsdReader(GNSSDataReader):
         keep_data_vars: list[str] | None = None,
         **kwargs,
     ) -> xr.Dataset:
-        builder = DatasetBuilder(self, time_system="GPS")
+        # The file writes its epochs with "Z": UTC
+        builder = DatasetBuilder(self, time_system="UTC")
 
         for epoch in self.iter_epochs():
             ei = builder.add_epoch(epoch.timestamp)

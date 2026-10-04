@@ -44,17 +44,16 @@ Seven implementations are available, all inheriting from `BaseGridBuilder`:
 
     ---
 
-    Fibonacci-sphere sampling. Aesthetically uniform point
-    distribution; ideal for scatter-plot analyses.
-    Requires `scipy`.
+    Fibonacci-sphere sampling: nearly uniform points, each the center
+    of its Voronoi cell.
 
 -   :fontawesome-solid-globe: &nbsp; **HEALPixBuilder**
 
     ---
 
-    Hierarchical Equal Area isoLatitude Pixelization. Strictly
-    equal-area pixels, the gold standard for unbiased solid-angle
-    weighting.
+    Hierarchical Equal Area isoLatitude Pixelization. All pixels of the
+    full sphere have the same area; the hemisphere keeps the pixels
+    whose center lies at or above the outer edge.
     Requires the optional `healpy` dependency — not installed by
     default (see [Optional dependencies](#optional-dependencies)
     below).
@@ -89,8 +88,8 @@ somewhat more (geodesic 1.01 to 1.05 × 2π, HEALPix 1.01 to 1.08 × 2π at
 
 !!! bug "`EqualAreaBuilder` with `cutoff_theta > 0`"
     `EqualAreaBuilder` currently applies `cutoff_theta` at the zenith as
-    well: with `cutoff_theta=10` it also leaves out the cells within
-    about 10° of the zenith. Use `cutoff_theta=0` with this grid type
+    well: with `cutoff_theta=10` it also leaves out the cells near the
+    zenith (θ < 7.5° at 5° resolution). Use `cutoff_theta=0` with this grid type
     until this is fixed.
 
 ### Optional dependencies
@@ -128,8 +127,8 @@ somewhat more (geodesic 1.01 to 1.05 × 2π, HEALPix 1.01 to 1.08 × 2π at
     from canvod.grids import create_hemigrid
 
     grid = create_hemigrid("equal_area", angular_resolution=5.0)
-    print(grid.ncells)           # 1005
-    print(len(grid.theta_lims))  # 18 θ bands
+    print(grid.ncells)           # 1051
+    print(len(grid.theta_lims))  # 19 θ bands
     ```
 
 === "Builder pattern"
@@ -205,13 +204,16 @@ bounding boxes, not the true (curved or triangular) cell boundaries.
 
     ---
 
-    `aggregate_data_to_grid` — Assign and aggregate per cell.
+    In `canvod.grids.aggregation` (also importable from `canvod.grids`):
 
-    `compute_hemisphere_percell` — Per-cell statistics.
+    `aggregate_data_to_grid` — One statistic per cell.
 
-    `compute_zenith_percell` — Zenith-weighted statistics.
+    `compute_percell_timeseries` — Per-cell time series (cell × time).
 
-    `compute_percell_timeseries` — Per-cell time series.
+    `compute_hemisphere_percell` — Daily per-cell time series, full
+    hemisphere.
+
+    `compute_zenith_percell` — Daily per-cell time series, θ ≤ 30°.
 
 </div>
 

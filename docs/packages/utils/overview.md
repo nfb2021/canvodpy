@@ -3,10 +3,9 @@
 ## Purpose
 
 The `canvod-utils` package provides date/time utilities and processing
-diagnostics shared across the canVODpy ecosystem. Configuration management
-moved to a dedicated package — see
-[canvod-config](../config/overview.md) — so `canvod-utils` has no
-YAML dependency and no CLI code of its own (it depends on `pydantic` and
+diagnostics shared across the canVODpy ecosystem. The settings live in
+[canvod-config](../config/overview.md), so `canvod-utils` has no YAML
+dependency and no CLI code of its own (it depends on `pydantic` and
 `structlog` only).
 
 ---
@@ -17,15 +16,15 @@ YAML dependency and no CLI code of its own (it depends on `pydantic` and
 from canvod.utils.tools import YYYYDOY, file_hash
 
 YYYYDOY.from_str("2025032").date   # datetime.date(2025, 2, 1)
-file_hash(path)                    # SHA-256 of a file, used by store dedup guardrails
+file_hash(path)                    # first 16 hex digits of the file's SHA-256
 ```
 
 | Function | Purpose |
 |---|---|
 | `YYYYDOY` / `YYDOY` | Year + Day-of-Year date parsing/formatting (the GNSS-standard date convention) |
 | `get_gps_week_from_filename` | Extract GPS week from a standard product filename |
-| `gpsweekday` | GPS week/day-of-week conversion |
-| `file_hash` | SHA-256 hashing used by the store's dedup guardrails |
+| `gpsweekday` | GPS week and day of week of a date (a string must be `dd-mm-yyyy`) |
+| `file_hash` | First 16 hex digits of a file's SHA-256, used by the store's dedup guardrails |
 | `isfloat` | Safe float-parsing check |
 | `get_version_from_pyproject` | Read a package version directly from `pyproject.toml` |
 | `deprecated` | Decorator that marks code left over from development: warns on use and names the replacement |
