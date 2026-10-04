@@ -1,33 +1,31 @@
-# Default SID preset — curated multi-GNSS list (277 RINEX 3 SIDs; RINEX 2 SIDs opt-in, see end of file)
+# Default SID preset — curated multi-GNSS list (271 RINEX 3 SIDs; RINEX 2 SIDs opt-in, see end of file)
 # GPS (G) + Galileo (E) + BeiDou MEO (C) + GLONASS (R)
 #
 # Exclusion rules (hard):
 #   no GEO          — BeiDou C01–C05, C15 (stationary, no hemisphere sampling)
-#   no IGSO         — BeiDou C06–C10, C38–C40 (narrow sky track, poor VOD geometry)
+#   no IGSO         — BeiDou C06–C10, C38–C40 (narrow sky track, poor VOD geometry),
+#                     and C13, C16 (IGSO satellites C017, C019 until 2026-04-18 per the
+#                     IGS satellite metadata; C13 is the MEO satellite C235 from
+#                     2026-04-19 on, which this list therefore leaves out too)
 #   no augmentation — SBAS, IRNSS, QZSS (regional/non-science signals)
 #   no GPS L2W      — semi-codeless tracking: lower SNR precision, elevated and
 #                     more variable VOD (Bader et al. 2026, RSE 345, 115580)
 #
-# See config/sids.yaml for full per-SV rationale.
+# PRNs are reassigned over time (SatelliteCatalog.prn_history): check the
+# list against the IGS satellite metadata for the dates you process.
 
 sids:
 
-  # BeiDou MEO (C) — 32 SVs × up to 3 bands
+  # BeiDou MEO (C) — 30 SVs × up to 3 bands
   - 'C11|B1I|I'
   - 'C11|B2b|I'
   - 'C11|B3I|I'
   - 'C12|B1I|I'
   - 'C12|B2b|I'
   - 'C12|B3I|I'
-  - 'C13|B1I|I'
-  - 'C13|B2b|I'
-  - 'C13|B3I|I'
   - 'C14|B1I|I'
   - 'C14|B2b|I'
   - 'C14|B3I|I'
-  - 'C16|B1I|I'
-  - 'C16|B2b|I'
-  - 'C16|B3I|I'
   - 'C19|B1I|I'
   - 'C19|B3I|I'
   - 'C20|B1I|I'

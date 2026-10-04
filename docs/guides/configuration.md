@@ -376,10 +376,17 @@ Three modes are available:
 
 === "Default preset"
 
-    The package ships one built-in preset: `default` — a curated 277-SID
+    The package ships one built-in preset: `default` — a curated 271-SID
     multi-GNSS list covering MEO satellites only (GPS + Galileo + BeiDou MEO +
     GLONASS). GEO, IGSO, augmentation signals (SBAS/IRNSS/QZSS), and GPS L2W are
     excluded because they are not useful for canopy transmissometry.
+
+    The list names PRNs, and PRNs are reassigned to other satellites over
+    time. BeiDou C13 and C16 are left out: both were IGSO satellites until
+    2026-04-18 (IGS satellite metadata), and C13 is a MEO satellite from
+    2026-04-19 on. For data from 2026-04-19 on, add the C13 SIDs with
+    `mode: custom` if you want them. `SatelliteCatalog` shows which satellite
+    held a PRN on a given day ([Satellite Catalog](../packages/readers/satellite-catalog.md)).
     All are RINEX 3 signals. RINEX 2 band-only SIDs (e.g. `L1|u`) are not
     included and must be selected explicitly, see
     [RINEX v2.11 Parsing](../packages/readers/rinex-v2-format.md#default-sid-preset).
