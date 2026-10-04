@@ -89,7 +89,7 @@ class MyFormatReader(GNSSDataReader):
 ### Step 2 — File Hash
 
 ```python
-from canvod.readers.gnss_specs.utils import file_hash
+from canvod.utils.tools import file_hash
 
 class MyFormatReader(GNSSDataReader):
     ...

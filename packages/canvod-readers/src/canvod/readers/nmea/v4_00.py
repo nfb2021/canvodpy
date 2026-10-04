@@ -16,7 +16,6 @@ Classes:
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import re
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -41,6 +40,7 @@ from canvod.readers.nmea.exceptions import (
     NmeaInvalidSentenceError,
     NmeaMissingSentenceError,
 )
+from canvod.utils.tools import hashing
 
 # ---------------------------------------------------------------------------
 # NMEA checksum helpers
@@ -399,10 +399,7 @@ class NmeaObs(GNSSDataReader, BaseModel):
 
     @cached_property
     def _file_hash_value(self) -> str:
-        h = hashlib.sha256()
-        with self.fpath.open("rb") as f:
-            h.update(f.read())
-        return h.hexdigest()[:16]
+        return hashing.file_hash(self.fpath)
 
     # ---- ABC implementations ---- #
 

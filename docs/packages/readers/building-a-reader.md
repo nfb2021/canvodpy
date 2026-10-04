@@ -73,7 +73,7 @@ from pydantic import ConfigDict
 
 from canvod.readers.base import GNSSDataReader
 from canvod.readers.builder import DatasetBuilder
-from canvod.readers.gnss_specs.utils import file_hash
+from canvod.utils.tools import file_hash
 
 
 class MyFormatReader(GNSSDataReader):
@@ -167,7 +167,7 @@ The `file_hash` property is used by `canvod-store` (MyIcechunkStore) to prevent 
 The simplest approach uses the provided `file_hash()` utility:
 
 ```python
-from canvod.readers.gnss_specs.utils import file_hash as compute_hash
+from canvod.utils.tools import file_hash as compute_hash
 
 class MyFormatReader(GNSSDataReader):
     ...
@@ -178,7 +178,7 @@ class MyFormatReader(GNSSDataReader):
         return compute_hash(self.fpath)
 ```
 
-The utility reads the file in 8 KB chunks and returns the first 16 characters of the SHA-256 hex digest. This is sufficient for deduplication in practice.
+The utility reads the file in 8 KB chunks and returns the first 16 characters of the SHA-256 hex digest. All built-in readers use it, so the same file gives the same hash whichever reader stores it. If your reader reads the whole file into memory anyway, `canvod.utils.tools.bytes_hash(data)` gives the same value without reading the file a second time.
 
 !!! note "Custom hashing"
 
@@ -907,7 +907,7 @@ from pydantic import ConfigDict
 
 from canvod.readers.base import GNSSDataReader
 from canvod.readers.builder import DatasetBuilder
-from canvod.readers.gnss_specs.utils import file_hash as compute_hash
+from canvod.utils.tools import file_hash as compute_hash
 
 
 class GnsdObservation(NamedTuple):
@@ -1178,7 +1178,7 @@ from canvodpy import ReaderFactory
 from canvod.readers.gnss_specs.signals import SignalIDMapper
 
 # File hashing
-from canvod.readers.gnss_specs.utils import file_hash
+from canvod.utils.tools import file_hash
 
 # Metadata templates
 from canvod.readers.gnss_specs.metadata import (

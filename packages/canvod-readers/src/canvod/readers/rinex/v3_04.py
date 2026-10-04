@@ -6,7 +6,6 @@ Classes:
 """
 
 import functools
-import hashlib
 import json
 import re
 import warnings
@@ -70,6 +69,7 @@ from canvod.readers.gnss_specs.models import (
     Satellite,
 )
 from canvod.readers.gnss_specs.signals import SignalIDMapper
+from canvod.utils.tools import bytes_hash
 
 log = structlog.get_logger(__name__)
 
@@ -980,12 +980,9 @@ class Rnxv3Obs(GNSSDataReader):
 
         """
         if not hasattr(self, "_lines"):
-            h = hashlib.sha256()
-            with self.fpath.open("rb") as f:  # binary mode for consistent hash
-                data = f.read()
-                h.update(data)
-                self._lines = data.decode("utf-8", errors="replace").splitlines()
-            self._file_hash = h.hexdigest()[:16]  # short hash for storage
+            data = self.fpath.read_bytes()  # binary mode for consistent hash
+            self._lines = data.decode("utf-8", errors="replace").splitlines()
+            self._file_hash = bytes_hash(data)
         return self._lines
 
     @property

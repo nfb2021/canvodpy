@@ -20,7 +20,6 @@ Classes:
 - Rnxv2Obs: Main reader class, converts RINEX v2.11 to xarray Dataset
 """
 
-import hashlib
 import json
 from collections import Counter
 from datetime import UTC, datetime
@@ -69,7 +68,7 @@ from canvod.readers.gnss_specs.obs_codes import (
 )
 from canvod.readers.gnss_specs.signals import SignalIDMapper
 from canvod.readers.gnss_specs.utils import get_version_from_pyproject
-from canvod.utils.tools import deprecated
+from canvod.utils.tools import bytes_hash, deprecated
 
 # --------------------------------------------------------------------------- #
 # Constants
@@ -710,12 +709,9 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
 
     def _load_file(self) -> list[str]:
         """Read file, cache lines, compute hash, find header end."""
-        h = hashlib.sha256()
-        with self.fpath.open("rb") as f:
-            data = f.read()
-            h.update(data)
-            lines = data.decode("utf-8", errors="replace").splitlines()
-        self._file_hash = h.hexdigest()[:16]
+        data = self.fpath.read_bytes()
+        lines = data.decode("utf-8", errors="replace").splitlines()
+        self._file_hash = bytes_hash(data)
 
         # Find line after END OF HEADER (PrivateAttr, mutable despite
         # frozen=True -- see _post_init's comment above)

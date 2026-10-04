@@ -20,7 +20,6 @@ following the AsteRx SB3 ProBase Firmware v4.14.0 Reference Guide
 
 from __future__ import annotations
 
-import hashlib
 import math
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -67,6 +66,7 @@ from canvod.readers.sbf._scaling import (
     pseudorange_m,
 )
 from canvod.readers.sbf.models import SbfEpoch, SbfHeader, SbfSignalObs
+from canvod.utils.tools import hashing
 
 try:
     import sbf_parser
@@ -1394,8 +1394,7 @@ class SbfReader(GNSSDataReader):
         str
             16-character hexadecimal prefix of the SHA-256 hash.
         """
-        h = hashlib.sha256(self.fpath.read_bytes())
-        return h.hexdigest()[:16]
+        return hashing.file_hash(self.fpath)
 
     @cached_property
     def start_time(self) -> datetime:
