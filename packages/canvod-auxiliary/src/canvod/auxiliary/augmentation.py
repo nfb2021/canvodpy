@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import structlog
 import xarray as xr
+from canvod.utils.tools import deprecated
 
 from canvod.auxiliary.matching import DatasetMatcher
 from canvod.auxiliary.position import (
@@ -27,8 +28,6 @@ from canvod.auxiliary.position import (
     compute_spherical_coordinates,
 )
 
-# Lazy import to avoid gnssvodpy dependency at module load
-# AuxDataPipeline requires gnssvodpy - only imported for type hints
 if TYPE_CHECKING:
     from canvod.auxiliary.pipeline import AuxDataPipeline
 
@@ -486,11 +485,13 @@ Demonstrates:
 3. Using default and custom augmentation steps
 4. Caching receiver position across multiple files
 
-NOTE: These examples require gnssvodpy to be installed.
-Run with: python -m canvod.auxiliary.augmentation
 """
 
 
+@deprecated(
+    "`example_basic_augmentation` is left over from development and will be "
+    "removed with the next major version. Use `AuxDataAugmenter` instead."
+)
 def example_basic_augmentation():
     """Basic example: Augment a single RINEX dataset."""
     print("=" * 60)
@@ -531,6 +532,10 @@ def example_basic_augmentation():
     # print(f"  r (distance): {augmented_ds.r.attrs}")
 
 
+@deprecated(
+    "`example_custom_augmentation_step` is left over from development and will be "
+    "removed with the next major version. Use `AuxDataAugmenter` instead."
+)
 def example_custom_augmentation_step():
     """Example: Create a custom augmentation step."""
     print("\n" + "=" * 60)
@@ -588,6 +593,10 @@ def example_custom_augmentation_step():
     print("  - Adds: elevation (in degrees)")
 
 
+@deprecated(
+    "`example_augmentation_pipeline` is left over from development and will be "
+    "removed with the next major version. Use `AuxDataAugmenter` instead."
+)
 def example_augmentation_pipeline():
     """Example: Complete augmentation pipeline for multiple files."""
     print("\n" + "=" * 60)
@@ -644,6 +653,10 @@ def example_augmentation_pipeline():
         # augmented_ds.to_netcdf(rinex_file.replace('.nc', '_augmented.nc'))
 
 
+@deprecated(
+    "`example_integration_with_icechunk` is left over from development and will be "
+    "removed with the next major version. Use `AuxDataAugmenter` instead."
+)
 def example_integration_with_icechunk():
     """Example: Integration with parallel RINEX processing."""
     print("\n" + "=" * 60)
@@ -703,6 +716,10 @@ In your parallel RINEX processing workflow:
     """)
 
 
+@deprecated(
+    "`example_adding_custom_steps` is left over from development and will be "
+    "removed with the next major version. Use `AuxDataAugmenter` instead."
+)
 def example_adding_custom_steps():
     """Example: Adding custom augmentation steps dynamically."""
     print("\n" + "=" * 60)
@@ -754,7 +771,6 @@ def example_adding_custom_steps():
 
 
 if __name__ == "__main__":
-    # Conditional imports for examples - requires gnssvodpy
     from pathlib import Path
 
     import xarray as xr

@@ -39,8 +39,8 @@ class TestPrepAuxDs:
             assert "_FillValue" not in result[var].attrs
             assert "_FillValue" not in result[var].encoding
 
-    def test_matches_gnssvodpy_structure(self, sample_sp3_data):
-        """Test output matches gnssvodpy preprocessing structure."""
+    def test_output_structure(self, sample_sp3_data):
+        """Test the output keeps the epochs and has an object sid coordinate."""
         result = prep_aux_ds(sample_sp3_data)
 
         # Should have these characteristics

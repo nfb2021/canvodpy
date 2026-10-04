@@ -15,6 +15,13 @@ from canvod.readers.preprocessing import (
     strip_fillvalue,
 )
 
+from canvod.auxiliary.augmentation import (
+    AugmentationContext,
+    AugmentationStep,
+    AuxDataAugmenter,
+    ClockCorrectionAugmentation,
+    SphericalCoordinateAugmentation,
+)
 from canvod.auxiliary.cache_fingerprint import (
     CANONICAL_AUX_GRID_SECONDS,
     compute_aux_cache_fingerprint,
@@ -45,6 +52,9 @@ from canvod.auxiliary.interpolation import (
 # Dataset matching
 from canvod.auxiliary.matching import DatasetMatcher
 
+# Pipeline
+from canvod.auxiliary.pipeline import AuxDataPipeline
+
 # Position and coordinates
 from canvod.auxiliary.position import (
     ECEFPosition,
@@ -74,10 +84,15 @@ from canvod.auxiliary.products import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "AugmentationContext",
+    "AugmentationStep",
+    "AuxDataAugmenter",
+    "AuxDataPipeline",
     "AuxFile",
     "CANONICAL_AUX_GRID_SECONDS",
     "ClkFile",
     "ClockConfig",
+    "ClockCorrectionAugmentation",
     "ClockInterpolationStrategy",
     # Dataset matching
     "DatasetMatcher",
@@ -95,6 +110,7 @@ __all__ = [
     "InterpolatorConfig",
     "ProductRegistry",
     "ProductSpec",
+    "SphericalCoordinateAugmentation",
     "Sp3Config",
     # File handlers
     "Sp3File",
@@ -118,35 +134,3 @@ __all__ = [
     "preprocess_aux_for_interpolation",
     "strip_fillvalue",
 ]
-
-# Try to import pipeline (requires gnssvodpy)
-try:
-    from canvod.auxiliary.pipeline import AuxDataPipeline as _AuxDataPipeline
-
-    __all__.append(_AuxDataPipeline.__name__)
-    globals()[_AuxDataPipeline.__name__] = _AuxDataPipeline
-except ImportError:
-    pass
-
-# Try to import augmentation (requires gnssvodpy)
-try:
-    from canvod.auxiliary.augmentation import (
-        AugmentationContext,
-        AugmentationStep,
-        AuxDataAugmenter,
-        ClockCorrectionAugmentation,
-        SphericalCoordinateAugmentation,
-    )
-
-    _AUGMENTATION_EXPORTS = (
-        AuxDataAugmenter,
-        AugmentationStep,
-        AugmentationContext,
-        SphericalCoordinateAugmentation,
-        ClockCorrectionAugmentation,
-    )
-    __all__.extend([obj.__name__ for obj in _AUGMENTATION_EXPORTS])
-    for obj in _AUGMENTATION_EXPORTS:
-        globals()[obj.__name__] = obj
-except ImportError:
-    pass
