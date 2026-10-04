@@ -187,8 +187,8 @@ answers structural questions faster and more completely than grep.
 - **Free tools only.** Nothing in this project may need a paid service or
   API key: not for building, testing, docs or agent tooling. graphify can
   call paid language models; use it only through the `just graph*`
-  recipes, never `graphify label`, a full `graphify extract`, or its
-  assistant skill.
+  recipes, never `graphify label`, `graphify cluster-only` (its output
+  suggests it), a full `graphify extract`, or its assistant skill.
 
 - **Explicit over implicit.** Fail loudly with a message that says what to
   do. No silent fallback, no hidden default: a default in a signature or a

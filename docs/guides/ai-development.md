@@ -66,8 +66,9 @@ Connections marked `INFERRED` are guesses; check them in the code.
 
 graphify can also call paid language-model services. The `just` recipes
 use only its free, local commands and remove API keys from its
-environment. Don't run other graphify commands or install its assistant
-skill.
+environment. Don't run other graphify commands (its output suggests
+`graphify cluster-only`, which can call a paid service) or install its
+assistant skill.
 
 ---
 

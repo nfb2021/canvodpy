@@ -34,7 +34,8 @@ alias t := test
 # graphify builds a graph of the code from its syntax tree. Only commands that
 # never call an LLM are used here (`extract --code-only`, `affected`, `path`,
 # `explain`); LLM API keys are removed from their environment as well.
-# Never run `graphify label`, a full `graphify extract`, or its assistant skill:
+# Never run `graphify label`, `graphify cluster-only` (its output suggests it),
+# a full `graphify extract`, or its assistant skill:
 # those call paid language-model APIs.
 graphify := "env -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL -u OPENAI_API_KEY -u OPENAI_BASE_URL -u GEMINI_API_KEY -u GOOGLE_API_KEY -u MOONSHOT_API_KEY -u DEEPSEEK_API_KEY -u AZURE_OPENAI_API_KEY -u OLLAMA_API_KEY GRAPHIFY_NO_TIPS=1 uvx -q --from graphifyy==0.9.75 graphify"
 graph_file := ".graphify/graphify-out/graph.json"
