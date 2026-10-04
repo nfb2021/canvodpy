@@ -24,15 +24,15 @@ Every canVOD-compatible GNSS file follows this naming format:
 | `T` | 1 | Receiver type: **R** = reference, **A** = active (below-canopy) | `R`, `A` |
 | `NN` | 2 | Receiver number, zero-padded | `01`, `35` |
 | `AGC` | 3 | Data provider / agency ID | `TUW`, `GFZ` |
-| `_R` | 2 | Literal separator | `_R` |
+| `_R` | 2 | RINEX data-source field, always `R` (receiver-generated) | `_R` |
 | `YYYY` | 4 | Year | `2025` |
 | `DOY` | 3 | Day of year (001--366) | `001` |
 | `HHMM` | 4 | Start time (hours + minutes) | `0000` |
 | `PERIOD` | 3 | Batch duration: value + unit | `01D`, `15M` |
 | `SAMPLING` | 3 | Data frequency: value + unit | `05S`, `01S` |
 | `CONTENT` | 2 | User-defined content code | `AA` |
-| `TYPE` | 2--4 | File format, lowercase | `rnx`, `sbf` |
-| `COMPRESSION` | -- | Optional compression extension | `zip`, `gz` |
+| `TYPE` | 3--4 | File format, lowercase; runs read `rnx`, `sbf` and `nmea` | `rnx`, `sbf`, `nmea`, `ubx` |
+| `COMPRESSION` | -- | Optional compression extension; runs do not read compressed files, decompress them first | `zip`, `gz` |
 
 ### Duration codes
 
@@ -76,6 +76,10 @@ the convention are processed. A run stops before reading any data if
 3. two files cover the same time, for example a daily file next to the 15-minute files
    of the same day.
 
+With `reader_format: auto`, the reader is detected per day: SBF and NMEA by file type,
+RINEX 2 or 3 from the file header. A day whose files need different readers stops the
+run; set `reader_format`, or keep each format in its own directory.
+
 Files a run does not process (names that neither the recipe nor the convention
 recognizes, or a file type the receiver's `reader_format` does not read) do not stop it.
 The run processes the other files and logs one warning per receiver,
@@ -104,12 +108,8 @@ short names, Septentrio binary, etc.), the optional
 a **recipe-based mapping layer** that virtualises physical filenames to canonical names
 without renaming anything on disk.
 
-Install it separately from the [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions)
-repo (see [Optional Extensions](../../guides/extensions.md) for details and alternatives):
-
-```bash
-uv add "canvod-filemap @ git+https://github.com/nfb2021/canvodpy-extensions.git@v0.1.0#subdirectory=packages/canvod-filemap"
-```
+In a canvodpy checkout, install it with `uv sync --group filemap`; elsewhere from
+GitHub (see [Optional Extensions](../../guides/extensions.md)).
 
 Then reference a recipe from `canvod-settings.yaml`:
 
@@ -134,6 +134,7 @@ receiver_number: 1
 receiver_type: reference
 sampling: "05S"
 period: "15M"
+content: "AA"
 file_type: rnx
 glob: "*.??o"
 fields:
@@ -153,7 +154,7 @@ fields:
 | `doy` | Day of year |
 | `month` / `day` | Month + day of month (converted to DOY) |
 | `hour` | Hour (0--23) |
-| `hour_letter` | RINEX v2 hour letter (a--x = 0--23) |
+| `hour_letter` | RINEX v2 session letter (a--x = hours 0--23; `0` = daily file, its period becomes `01D`) |
 | `minute` | Minute (0--59) |
 | `skip` | Ignore N characters |
 

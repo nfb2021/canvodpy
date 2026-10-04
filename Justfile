@@ -121,7 +121,7 @@ test-fast:
 
 # run tests for all supported Python versions
 testall:
-    uv run --python=3.13 pytest
+    uv run --python=3.14 pytest
 
 # run tests per package to avoid namespace collisions (for CI)
 test-all-packages:
@@ -143,7 +143,7 @@ test-coverage:
     uv run pytest
 
 # run all formatting, linting, and testing commands
-ci PYTHON="3.13":
+ci PYTHON="3.14":
     uv run --python={{ PYTHON }} ruff format .
     uv run --python={{ PYTHON }} ruff check . --fix
     uv run --python={{ PYTHON }} ty check .

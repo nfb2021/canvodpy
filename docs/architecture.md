@@ -7,7 +7,7 @@ description: Architecture of the canVODpy monorepo — package organization and 
 
 ## Overview
 
-canVODpy is organized as a monorepo containing twelve Python packages plus one umbrella package (`canvodpy`) for GNSS vegetation optical depth analysis. All packages reside in a single repository while maintaining technical independence: each can be developed, tested, and published separately.
+canVODpy is organized as a monorepo of eleven Python packages plus the umbrella package `canvodpy`, for GNSS vegetation optical depth analysis. All packages reside in a single repository while maintaining technical independence: each can be developed, tested, and published separately.
 
 !!! info "Core technologies, in plain language"
 
@@ -70,37 +70,35 @@ graph TD
     CANVODPY --> READERS & AUX
     CANVODPY --> STORE & STOREMETA
     CANVODPY --> VOD & GRIDS & OPS & VIZ
-    CANVODPY --> CONFIG
+    CANVODPY --> CONFIG & PREFLIGHT & UTILS
 
-    READERS -.-> UTILS
-    AUX -.-> READERS
-    AUX -.-> UTILS
-    STORE -.-> READERS
-    STORE -.-> AUX
-    STORE -.-> GRIDS
-    STORE -.-> VOD
-    STORE -.-> UTILS
-    OPS -.-> GRIDS
-    OPS -.-> UTILS
+    READERS -.-> CONFIG & UTILS
+    AUX -.-> CONFIG & READERS & UTILS
+    STORE -.-> AUX & CONFIG & GRIDS & READERS & UTILS & VOD
+    GRIDS -.-> STORE & UTILS
+    OPS -.-> CONFIG & GRIDS
     VIZ -.-> GRIDS
-    STOREMETA -.-> UTILS
+    STOREMETA -.-> CONFIG
+    VOD -.-> UTILS
+    PREFLIGHT -.-> UTILS
+    CONFIG -.-> UTILS
 ```
 
 | Layer | Packages | Role |
 |-------|----------|------|
-| **Orchestration** | canvodpy | Pipeline orchestrator, Wave A/B parallel processing, 4-level public API |
-| **Computation** | canvod-vod, canvod-grids, canvod-ops | VOD retrieval (Tau-Omega model), hemispheric grids, preprocessing pipeline |
+| **Orchestration** | canvodpy | CLI (`canvodpy run`), `Site`/`Pipeline`, the orchestrator, Airflow tasks, VOD computation (`VodComputer`) |
+| **Computation** | canvod-vod, canvod-grids, canvod-ops | VOD retrieval (tau-omega model), hemispheric grids, optional preprocessing |
 | **Persistence** | canvod-store, canvod-store-metadata | Icechunk versioned storage, three-layer deduplication, provenance metadata (DataCite/ACDD/STAC) |
-| **Data I/O** | canvod-readers, canvod-auxiliary | RINEX/SBF parsing, SP3/CLK retrieval |
+| **Data I/O** | canvod-readers, canvod-auxiliary | RINEX 2/3, SBF and NMEA readers and the dataset contracts; orbits and clocks (SP3/CLK or broadcast), θ/φ |
 | **Presentation** | canvod-viz | 2D polar projections, 3D interactive surfaces, store viewer |
-| **Quality Assurance** | canvod-preflight | Naming convention parsing and overlap detection |
-| **Foundation** | canvod-config, canvod-utils | Configuration loading/validation; date utilities and diagnostics |
+| **Quality Assurance** | canvod-preflight | The canonical file name convention: parsing, building, overlap detection |
+| **Foundation** | canvod-config, canvod-utils | Settings models and loading; dates, file hashes, the deprecation decorator, logging context |
 
-Two more packages — `canvod-filemap` (non-canonical filename mapping) and
-`canvod-airflow` (Airflow DAG definitions) — are optional and published
-separately in
-[canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions), not
-part of this eleven-package core.
+Three more packages are optional and live in
+[canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions), installed
+from GitHub: `canvod-filemap` (naming recipes for other file names),
+`canvod-airflow` (Airflow DAGs) and `canvod-adapters` (data exchange with other
+GNSS-T programs). See [Extensions](guides/extensions.md).
 
 ---
 
@@ -149,10 +147,10 @@ part of this eleven-package core.
 
     ---
 
-    Four packages have zero inter-package dependencies
-    (`canvod-utils`, `canvod-vod`, `canvod-config`,
-    `canvod-preflight`). The remaining packages build on them in
-    shallow layers; only the umbrella package depends on everything.
+    `canvod-utils` has no inter-package dependency; `canvod-config`,
+    `canvod-vod` and `canvod-preflight` depend on it only. The remaining
+    packages build on them in shallow layers; only the umbrella package
+    depends on everything. No package imports the umbrella package.
 
 </div>
 
@@ -204,7 +202,8 @@ canvod-preflight        ──── depends on canvod-utils
 canvod-vod              ──── depends on canvod-utils
 canvod-readers          ──── depends on canvod-config, canvod-utils
 canvod-auxiliary        ──── depends on canvod-config, canvod-readers, canvod-utils
-canvod-grids            ──── depends on canvod-store, canvod-utils
+canvod-grids            ──── depends on canvod-store, canvod-utils (and canvod-store on
+                              canvod-grids: a cycle, to be removed)
 canvod-store            ──── depends on canvod-auxiliary, canvod-config, canvod-grids,
                               canvod-readers, canvod-utils, canvod-vod
 canvod-store-metadata   ──── depends on canvod-config
@@ -254,9 +253,9 @@ flowchart TD
         AUX_ZARR["Auxiliary Zarr Cache"]
     end
 
-    subgraph PARALLEL["Parallel Processing (Wave A/B)"]
+    subgraph PARALLEL["Parallel Processing"]
         READ_R["`**Read GNSS files**
-        per-file ProcessPoolExecutor`"]
+        one task per file, process pool`"]
         SPHERICAL["`**Spherical Coords**
         ECEF to r, theta, phi
         or SBF embedded geometry`"]
@@ -266,17 +265,17 @@ flowchart TD
         DEDUP["`**Three-Layer Dedup**
         hash / temporal / intra-batch`"]
         APPEND["`**Append + Commit**
-        one commit per receiver-day`"]
+        one writer, commits per day`"]
     end
 
-    subgraph GRID["Grid Assignment"]
-        BUILD_GRID["`**Build Grid**
-        equal-area / geodesic / ...`"]
-        KDTREE["`**KDTree Assign**
-        O(n log m)`"]
+    subgraph PREP["Optional preprocessing (only if set)"]
+        AGG["`**Temporal aggregation**
+        time bins from 00:00`"]
+        KDTREE["`**Grid assignment**
+        nearest cell center`"]
     end
 
-    subgraph VOD["VOD Retrieval"]
+    subgraph VOD["VOD Retrieval (VodComputer)"]
         DELTA["delta SNR canopy - ref"]
         TAU["VOD = -ln(T) cos(theta)"]
     end
@@ -291,9 +290,10 @@ flowchart TD
     SCHEDULE --> READ_R --> SPHERICAL
     AUX_ZARR --> SPHERICAL
 
+    SPHERICAL -.-> AGG -.-> KDTREE -.-> DEDUP
     SPHERICAL --> DEDUP --> APPEND --> RINEX_STORE
 
-    RINEX_STORE --> BUILD_GRID --> KDTREE --> DELTA --> TAU
+    RINEX_STORE --> DELTA --> TAU
     TAU --> VOD_STORE
 ```
 
@@ -301,31 +301,28 @@ flowchart TD
 
 | Stage | What it does | Why it matters scientifically |
 |-------|--------------|-------------------------------|
-| **Configuration** | A single `canvod-settings.yaml` is validated by `CanvodConfig`, a Pydantic `BaseSettings` model; any field can be overridden via `CANVOD__`-prefixed environment variables | Every run is fully described by one validated document — a prerequisite for reproducible processing |
-| **Data discovery** | Each receiver directory is scanned in any folder layout; files are selected by their canonical names or mapped to them by a naming recipe; runs with duplicate or temporally overlapping files, or with files of two receivers in one directory, are stopped | Overlapping input files would double-count observations and bias SNR statistics; the gate makes this impossible |
-| **Auxiliary pipeline** | Downloads agency orbit (SP3) and, by default, clock (CLK) products from public data centers (ESA primary, NASA CDDIS fallback), then interpolates: Hermite splines for orbits, piecewise linear for clocks | Satellite positions are needed to compute where each signal pierced the canopy (θ, φ); receivers only record *what* they saw, not *where from*. Alternatively, SBF files carry broadcast ephemeris, avoiding the download. Clock is orbit-independent and unused by the VOD formula — disable with `aux_data.fetch_clock: false` to skip its download/interpolation entirely |
-| **Reading & transform** | RINEX v2/v3 or SBF files are parsed into `xarray.Dataset(epoch, sid)`; satellite ECEF positions become receiver-relative spherical coordinates (r, θ, φ) | The polar angle θ enters the VOD formula directly; azimuth φ locates the observation on the hemisphere for gridding |
-| **Storage** | Datasets are appended to an Icechunk store; three deduplication layers (file-hash match, temporal overlap vs. store metadata, intra-batch overlap) guard every write; one commit per receiver-day | Duplicate epochs would corrupt the canopy/reference alignment. Each commit is an immutable, citable snapshot of the archive |
-| **Grid assignment** | A hemispheric grid is built and each observation is assigned to a cell via KDTree nearest-neighbor lookup | Canopy structure varies with direction; gridding lets VOD be resolved per sky sector rather than smeared over the hemisphere |
-| **VOD retrieval** | Canopy and reference SNR are aligned by (epoch, sid); transmittance T follows from their difference, and VOD = −ln(T)·cos(θ) (Tau-Omega zeroth-order model) | This is the core measurement: canopy attenuation of L-band signals, a proxy for biomass and vegetation water content |
+| **Configuration** | A single `canvod-settings.yaml` is validated by `CanvodConfig`, a Pydantic `BaseSettings` model; unknown keys are errors; any field can be overridden via `CANVOD__`-prefixed environment variables | Every run is fully described by one validated document — a prerequisite for reproducible processing |
+| **Data discovery** | Each receiver directory is scanned in any folder layout; files are selected by their canonical names or mapped to them by a naming recipe; the reader comes from `reader_format` or is detected per day; runs with duplicate or temporally overlapping files, or with files of two receivers in one directory, are stopped; files a run does not process are reported | Overlapping input files would double-count observations and bias SNR statistics; the gate makes this impossible |
+| **Auxiliary pipeline** | Downloads agency orbit (SP3) and, by default, clock (CLK) products from public data centers (ESA; NASA CDDIS as fallback once a free NASA Earthdata account is configured), then interpolates them once per day onto the epoch grid (00:00 plus multiples of the sampling interval): Hermite splines for orbits, piecewise linear for clocks | Satellite positions are needed to compute where each signal pierced the canopy (θ, φ); receivers only record *what* they saw, not *where from*. Alternatively, SBF files carry broadcast ephemeris, avoiding the download. Clock is orbit-independent and unused by the VOD formula — disable with `aux_data.fetch_clock: false` to skip its download/interpolation entirely |
+| **Reading & transform** | RINEX 2/3, SBF or NMEA files are parsed into `xarray.Dataset(epoch, sid)`; satellite ECEF positions become receiver-relative spherical coordinates (r, θ, φ), relative to the receiver position read from the data | The polar angle θ enters the VOD formula directly; azimuth φ locates the observation on the hemisphere for gridding |
+| **Optional preprocessing** | Only if `processing.preprocessing` is set: temporal aggregation and grid assignment before the store write, in every run | Off by default; a store group never mixes preprocessed and raw data |
+| **Storage** | Datasets are appended to an Icechunk store; three deduplication layers (file-hash match, temporal overlap vs. store metadata, intra-batch overlap) guard every write; with the default write strategy one commit holds all receivers of a day | Duplicate epochs would corrupt the canopy/reference alignment. Each commit is an immutable, citable snapshot of the archive |
+| **Grid assignment** | For analysis (or as optional preprocessing), a hemispheric grid is built and each observation is assigned to the nearest cell center (KD-tree lookup, `canvod.grids.add_cell_ids_to_ds_fast`) | Canopy structure varies with direction; gridding lets VOD be resolved per sky sector rather than smeared over the hemisphere |
+| **VOD retrieval** | `VodComputer` reads canopy and reference from the observation store and aligns them by (epoch, sid); transmittance T follows from their SNR difference, and VOD = −ln(T)·cos(θ) (zeroth-order tau-omega model); results go to the VOD store, which checks the VOD dataset contract | This is the core measurement: canopy attenuation of L-band signals, a proxy for biomass and vegetation water content |
 
 ### Parallelism model
 
-Processing is parallelized at two levels, using only the Python standard
-library — there is no distributed cluster to configure:
-
-- **Outer level (threads):** receivers are grouped into **Wave A** (parse — one
-  job per unique data directory) and **Wave B** (recompute of spherical
-  coordinates from Wave A's cached results). Wave A jobs run concurrently in a
-  `ThreadPoolExecutor`, one worker per receiver.
-- **Inner level (processes):** within each receiver job, individual files are
-  parsed in a `ProcessPoolExecutor`, giving true multi-core parallelism for the
-  CPU-bound parsing work. Core budget is split between levels
-  (`inner_workers = total_cores // outer_workers`).
-- **Writes are sequential by design:** Icechunk on a local filesystem admits
-  one writer at a time, so all receiver results are committed one after
-  another — one commit per receiver-day. This serialization point is what
-  guarantees the deduplication guardrails see a consistent store state.
+- **Reading is parallel.** The files of a batch of days (`days_per_batch`) are
+  read in a pool of worker processes ([loky](https://github.com/joblib/loky),
+  reused across batches), one task per file, so parsing uses all cores.
+  `--workers` or the settings set the pool size.
+- **Writing is serial.** Results are written as soon as all files of a
+  receiver-day are read, by one process. On a local or network file system
+  Icechunk cannot detect two commits at once, so there is exactly one writer:
+  with the default write strategy (`skip`) the receivers of a day are written
+  into forks of one session, merged and committed once; with `overwrite`,
+  one commit per receiver. The deduplication checks therefore always see a
+  consistent store.
 
 ### Hemispheric grids
 
@@ -333,8 +330,9 @@ library — there is no distributed cluster to configure:
 analysis. **Equal-area** (ring-based, equal solid angle; the default) and
 **equal-angle** (regular θ/φ spacing) are verified correct and safe to use
 for analysis. The remaining tessellations (geodesic, HTM, Fibonacci,
-equirectangular) are implemented but not yet verified against a reference
-and should be treated as experimental pending that check. Equal-area cells
+equirectangular, HEALPix) are implemented but not yet verified against a
+reference and should be treated as experimental pending that check.
+HEALPix needs the optional `healpy` package. Equal-area cells
 matter because a fixed solid angle per cell means each cell receives a
 comparable observation density, avoiding polar oversampling artifacts in
 VOD maps.
@@ -347,6 +345,7 @@ One supported surface, plus the CLI on top of it:
 |-------|-------------|----------|
 | CLI | `canvodpy run --site ...` | Running the pipeline — recommended |
 | `Site.pipeline()` (L3) | `Site(name).pipeline()` | Python-native configured pipeline runs — what the CLI wraps |
+| Airflow tasks | `canvodpy.workflows.tasks.check_day`, `process_day` | Scheduled daily runs (canvod-airflow); the same code as the CLI |
 
 `FluentWorkflow` (L2), the flat `process_date()`/`calculate_vod()`/`preview_processing()`
 functions (L1), `VODWorkflow`, and the single-step functions of `canvodpy.functional` (L4)
@@ -372,4 +371,4 @@ for details and migration notes.
 
 ---
 
-**Next in the trail:** [Design Principles](principles.md) · [API Levels](guides/api-levels.md) · [Contributor Setup](guides/contributor-setup.md) · [AI Development](guides/ai-development.md)
+**Next in the trail:** [Design Principles](principles.md) · [API Levels](guides/api-levels.md) · [Contributor Setup](guides/contributor-setup.md) · [Developing with coding agents](guides/ai-development.md)

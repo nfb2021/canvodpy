@@ -100,7 +100,7 @@ Two environment variables control *where* configuration is read from:
 
 | Variable             | Effect                                                           |
 | -------------------- | ---------------------------------------------------------------- |
-| `CANVOD_CONFIG_DIR`  | Use a different config directory, for the settings file and the recipes; same as the `--config-dir` option (default: `{repo_root}/config`) |
+| `CANVOD_CONFIG_DIR`  | Use a different config directory, for the settings file and the recipes; same as the `--config-dir` option (default: `config/` of a canvodpy checkout, else `~/.config/canvodpy`) |
 | `CANVOD_CONFIG_FILE` | Apply an overlay YAML on top of the main `canvod-settings.yaml`  |
 
 ---
@@ -253,7 +253,7 @@ processing:
     compression_algorithm: zstd
     inline_chunk_threshold_bytes: 512
     chunk_strategies:
-      rinex_store:
+      gnss_store:
         epoch: 17280  # 24h at 5s sampling; override to match your site's rate
         sid: -1
       vod_store:
@@ -313,10 +313,10 @@ with the parallel processing architecture, see
 
 ### Ephemeris data sources
 
-Agency SP3/CLK products are downloaded from **ESA GSSC** by default — no account or
-credentials are required. Setting `credentials.nasa_earthdata_acc_mail` to a registered
-NASA Earthdata email address enables **NASA CDDIS** as a primary source, with ESA GSSC
-as fallback.
+Agency SP3/CLK products are downloaded from **ESA GSSC** — no account or credentials
+are required. Setting `credentials.nasa_earthdata_acc_mail` to the email address of a
+(free) NASA Earthdata account adds **NASA CDDIS** as a fallback, used when ESA GSSC
+fails.
 
 ---
 
@@ -456,12 +456,9 @@ just config-check-data <site>
     Where possible, rename files to the canonical convention using `gfzrnx` as a
     one-time per-site step.
 
-Install separately from the [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions)
-repository (see [Optional Extensions](extensions.md) for details and alternatives):
-
-```bash
-uv add "canvod-filemap @ git+https://github.com/nfb2021/canvodpy-extensions.git@v0.1.0#subdirectory=packages/canvod-filemap"
-```
+In a canvodpy checkout, install it with `uv sync --group filemap`. Elsewhere,
+install it from the [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions)
+repository on GitHub; see [Optional Extensions](extensions.md).
 
 Reference a recipe from `canvod-settings.yaml` on the receiver whose files use non-canonical names:
 

@@ -7,22 +7,29 @@ stays small and dependency-free by default:
 
 **[github.com/nfb2021/canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions)**
 
-canvodpy works fully without any of these. Each one is a drop-in: install
-it, and canvodpy detects and uses it automatically — no code changes,
-no config beyond what the package itself asks for.
+canvodpy works fully without any of these. `canvod-filemap` is used only
+for receivers whose settings name a naming recipe (`recipe:`);
+`canvod-airflow` and `canvod-adapters` call canvodpy, not the other way
+around.
 
 ## Available extensions
 
 | Package | Purpose | Status |
 |---|---|---|
 | `canvod-filemap` | Recipe-based filename mapping for non-canonical GNSS filenames (proprietary receiver output, legacy RINEX v2 short names, custom layouts) | Available |
-| `canvod-airflow` | Airflow DAG definitions (daily SBF/RINEX/SBF-agency + backfill) for canvodpy pipelines | Available |
-| `canvod-adapters` | Bidirectional data adapters between canvodpy and third-party GNSS-VOD tools (gnssvod) | Available |
+| `canvod-airflow` | Airflow DAGs: one daily DAG per configured site, plus backfill; the tasks run the code of `canvodpy run` (`canvodpy.workflows.tasks.check_day`, `process_day`) | Available |
+| `canvod-adapters` | Data exchange between canvodpy and other GNSS-T programs (gnssvod): observations and VOD, checked against canvodpy's dataset contracts | Available |
 
 ## Installing an extension
 
 Extensions are released on GitHub only, each package under its own tag
 `<package>-v<version>` (e.g. `canvod-filemap-v1.0.0`), never on PyPI.
+
+!!! note "Before the 1.0.0 releases"
+    The commands below use the 1.0.0 tags. Until those releases exist, this
+    repository pins canvod-filemap to a commit of the extensions' `main`
+    (`rev = ...` in `[tool.uv.sources]`) and `uv sync --group filemap`
+    installs that commit.
 
 In a clone of this repository, `canvod-filemap` is the dependency group
 `filemap`. The root `pyproject.toml` points it at a release tag of the
@@ -97,12 +104,10 @@ for the gnssvod conversion, including how merged VOD bands are imported.
 
 ## What happens if an extension isn't installed
 
-canvodpy checks for each extension lazily, only where it's needed, and
-falls back to sensible defaults:
-
-- Without `canvod-filemap`: file discovery falls back to canonical
-  canVOD-only glob patterns (`*.rnx`, `*.sbf`). Non-canonical filenames
-  require the extension — see [Configuration → Optional: non-canonical
-  filenames](configuration.md#optional-non-canonical-filenames).
-
-You will never see an import error from a regular canvodpy install.
+canvodpy imports `canvod-filemap` only for a receiver whose settings set
+`recipe:`. Without a recipe, discovery takes files with canonical canVOD
+names only, whether or not the package is installed. A receiver with a
+recipe but without `canvod-filemap` installed stops the run with an error
+that says how to install it — it never falls back to guessing file names.
+See [Configuration → Optional: non-canonical
+filenames](configuration.md#optional-non-canonical-filenames).
