@@ -86,6 +86,19 @@ class TestHasRinexFiles:
         _create_rinex_file(tmp_path, suffix=".O")
         assert _has_rinex_files(tmp_path) is True
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "ROSA00TUW_R_20250010000_15M_05S_AA.sbf",
+            "ROSA00TUW_R_20250010000_01D_30S_MO.rnx.gz",
+            "rosa0010.25o.gz",
+            "rosa001a00.25_.gz",
+        ],
+    )
+    def test_dir_with_canonical_or_compressed_files(self, tmp_path, name):
+        (tmp_path / name).write_text("")
+        assert _has_rinex_files(tmp_path) is True
+
     def test_dir_with_unrelated_files(self, tmp_path):
         """Non-RINEX files should not trigger detection."""
         (tmp_path / "readme.txt").write_text("not RINEX")

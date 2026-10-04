@@ -34,7 +34,9 @@ Guide adding a new GNSS data format reader to canvod-readers. Follow this templa
    ReaderFactory.register("my_format", MyFormatReader)
    ```
 
-5. **Add glob patterns** to `BUILTIN_PATTERNS` in `canvod.filemap.patterns`
+5. **Add its file type** to `_READER_FILE_TYPES` and `_ALL_FILE_TYPES` in
+   `canvodpy/src/canvodpy/orchestrator/discovery.py` (files are found by
+   their canonical names; other names need a naming recipe, canvod-filemap)
 
 6. **Add format label** to `_FORMAT_LABELS` in `canvod-store/viewer.py`
 

@@ -17,12 +17,23 @@ from .models import MatchedDirs, PairMatchedDirs
 
 DATE_DIR_LEN = 5
 
+#: Files that make a directory count as holding GNSS data: RINEX and
+#: Septentrio short names, canonical canVOD names, and their compressed forms.
+_GNSS_FILE_GLOBS: tuple[str, ...] = (
+    *RINEX_OBS_GLOB_PATTERNS,
+    "*_R_*_*_*_*.rnx*",
+    "*_R_*_*_*_*.crx*",
+    "*_R_*_*_*_*.sbf*",
+    "*_R_*_*_*_*.ubx*",
+    "*_R_*_*_*_*.nmea*",
+    "*.[0-9][0-9][oOdD]",
+    "*.[0-9][0-9][oOdD].*",
+    "*.[0-9][0-9]_.*",
+)
+
 
 def _has_rinex_files(directory: Path) -> bool:
     """Check if directory exists and contains GNSS observation files.
-
-    Checks for RINEX and SBF files using all builtin patterns from
-    ``canvod.filemap.patterns``.
 
     Parameters
     ----------
@@ -32,28 +43,13 @@ def _has_rinex_files(directory: Path) -> bool:
     Returns
     -------
     bool
-        True if directory exists and contains GNSS data files.
+        True if directory exists and contains GNSS data files
+        (see ``_GNSS_FILE_GLOBS``).
 
     """
     if not directory.exists():
         return False
-
-    # Check RINEX patterns first (fast path)
-    if any(f for pattern in RINEX_OBS_GLOB_PATTERNS for f in directory.glob(pattern)):
-        return True
-
-    # Also check SBF and other formats via BUILTIN_PATTERNS (optional package)
-    try:
-        from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
-
-        for name in auto_match_order():
-            for glob_pat in BUILTIN_PATTERNS[name].file_globs:
-                if any(directory.glob(glob_pat)):
-                    return True
-    except ImportError:
-        pass
-
-    return False
+    return any(any(directory.glob(pattern)) for pattern in _GNSS_FILE_GLOBS)
 
 
 @deprecated(
