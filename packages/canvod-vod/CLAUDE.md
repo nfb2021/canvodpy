@@ -28,5 +28,3 @@ and `theta`/`phi` from ephemeris augmentation.
 ```bash
 uv run pytest packages/canvod-vod/tests/
 ```
-
-VOD is bit-identical between canvodpy and gnssvodpy (verified via a private regression suite).
