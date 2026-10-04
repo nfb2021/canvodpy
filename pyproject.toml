@@ -148,7 +148,7 @@ unresolved-import = "ignore"
 [tool.ty.src]
 # Tests use assert, magic numbers and intentional patterns — skip entirely.
 # Demo notebooks are not production code.
-# The store file below have deep icechunk/xarray generics that need
+# The store file below has deep icechunk/xarray generics that need
 # dedicated refactoring before ty can analyse them cleanly.
 exclude = [
     "**/tests/**",
