@@ -37,6 +37,7 @@ RINEX observation file parsing with validation and GNSS signal specifications.
     options:
       members:
         - signals
+        - obs_codes
         - bands
         - constellations
         - metadata

@@ -43,14 +43,9 @@ from pydantic import (
 from canvod.readers.base import GNSSDataReader, validate_dataset
 from canvod.readers.gnss_specs.constants import UREG
 from canvod.readers.gnss_specs.constellations import (
-    GALILEO,
-    GLONASS,
-    GPS,
-    SBAS,
     V2_CODE_L2C_FAMILY,
     V2_CODE_P_FAMILY,
     V2_CODE_UNRESOLVED,
-    V2_UNRESOLVED_CODES,
 )
 from canvod.readers.gnss_specs.exceptions import (
     IncompleteEpochError,
@@ -67,6 +62,10 @@ from canvod.readers.gnss_specs.metadata import (
 from canvod.readers.gnss_specs.models import (
     Observation,
     Satellite,
+)
+from canvod.readers.gnss_specs.obs_codes import (
+    _parse_v2_obs_code,
+    _v2_tracking_code,
 )
 from canvod.readers.gnss_specs.signals import SignalIDMapper
 from canvod.readers.gnss_specs.utils import get_version_from_pyproject
@@ -111,20 +110,6 @@ V2_EPOCH_FLAG_HEADER_INFO = 4
 V2_EPOCH_FLAG_EXTERNAL_EVENT = 5
 V2_EPOCH_FLAG_CYCLE_SLIP = 6
 V2_YEAR_PIVOT = 80  # Two-digit year pivot: >= 80 → 19xx, < 80 → 20xx
-
-# RINEX v2 -> RINEX 3 tracking-code resolution (see _v2_tracking_code()).
-# Per-system RINEX 3 code lists, keyed by the band names SignalIDMapper
-# produces for v2 frequency numbers. GLONASS FDMA bands carry the same codes
-# as the aggregated G1/G2 bands.
-_V2_SYSTEM_BAND_CODES: dict[str, dict[str, list[str]]] = {
-    "G": GPS.BAND_CODES,
-    "R": {**GLONASS.AGGR_BAND_CODES, **GLONASS.FDMA_BAND_CODES},
-    "E": GALILEO.BAND_CODES,
-    "S": SBAS.BAND_CODES,
-}
-
-# v2 pseudorange codes P1/P2 map to obs-type "C" (pseudorange) in v3.
-_V2_OBS_TYPE_REMAP: dict[str, str] = {"P": "C"}
 
 # System identifiers recognized in RINEX v2.11
 V2_SYSTEM_CODES = {"G", "R", "S", "E", " "}
@@ -215,68 +200,6 @@ def _expand_v2_year(yy: int) -> int:
     if yy >= V2_YEAR_PIVOT:
         return 1900 + yy
     return 2000 + yy
-
-
-def _parse_v2_obs_code(obs_code_v2: str) -> tuple[str, str]:
-    """Parse a RINEX v2 2-char obs code into (obs_type, freq_num).
-
-    Parameters
-    ----------
-    obs_code_v2 : str
-        Two-character RINEX v2 observation code (e.g. "L1", "P2", "C5").
-
-    Returns
-    -------
-    tuple[str, str]
-        (obs_type, freq_num) where obs_type is the v3 observation type
-        character ("C", "L", "D", "S"; v2 "P" pseudoranges become "C") and
-        freq_num the frequency number as string ("1", "2", "5", "6", "7", "8").
-    """
-    raw_type = obs_code_v2[0]  # C, P, L, D, S
-    freq_num = obs_code_v2[1]  # 1, 2, 5, 6, 7, 8
-    return _V2_OBS_TYPE_REMAP.get(raw_type, raw_type), freq_num
-
-
-def _v2_tracking_code(system: str, obs_code_v2: str, band: str | None) -> str:
-    """Resolve the sid tracking code of a RINEX v2 observable.
-
-    Assigns a RINEX 3 attribute only where RINEX 2.11 itself defines the
-    ranging code (``rinex211.txt`` Table A1: "C: Pseudorange GPS: C/A, L2C;
-    Glonass: C/A; Galileo: All" and "P: Pseudorange GPS and Glonass: P
-    code"), and otherwise returns one of the lowercase
-    ``V2_CODE_*`` markers -- RINEX 2 cannot express the underlying code or
-    channel (spec section 10.1), so any RINEX 3 attribute beyond that would
-    be a guess.
-
-    Rules, in order:
-
-    1. A band carrying exactly one RINEX 3 signal (SBAS L1: C/A only)
-       resolves every observable to that signal's code.
-    2. GPS: C1 -> ``C`` (C/A); C2 -> ``l`` (C/A or L2C on L2; C/S/L/X unknown);
-       P1/P2 -> ``p`` (P code; under antispoofing P/W/Y, and D on L2,
-       unknown; RINEX 3.04 Table 4).
-    3. GLONASS: C -> ``C`` (C/A), P -> ``P`` (RINEX 3.04 Table 5 defines a
-       single P-code attribute for GLONASS, so no ambiguity).
-    4. Everything else -> ``u``: phase, Doppler and signal strength (the spec
-       ties signal strength to "the respective phase observations", so it
-       shares their sid), Galileo pseudoranges ("All" codes), and L5.
-    """
-    band_codes = _V2_SYSTEM_BAND_CODES.get(system, {}).get(band or "", [])
-    signal_codes = [code for code in band_codes if code not in V2_UNRESOLVED_CODES]
-    if len(signal_codes) == 1:
-        return signal_codes[0]
-
-    raw_type = obs_code_v2[0]
-    if system == "G":
-        if obs_code_v2 == "C1":
-            return "C"
-        if obs_code_v2 == "C2":
-            return V2_CODE_L2C_FAMILY
-        if raw_type == "P":
-            return V2_CODE_P_FAMILY
-    elif system == "R" and raw_type in ("C", "P"):
-        return raw_type
-    return V2_CODE_UNRESOLVED
 
 
 # --------------------------------------------------------------------------- #
