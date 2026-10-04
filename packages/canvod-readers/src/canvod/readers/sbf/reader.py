@@ -792,6 +792,7 @@ _SMOOTHING_FLAG_ATTRS: dict[str, object] = {
         "Septentrio AsteRx SB3 ProBase Firmware v4.14.0 Reference Guide, "
         "MeasEpoch block (Block 4027), field ObsInfo bit 0, pp. 260-263."
     ),
+    "_FillValue": -1,
 }
 _HALF_CYCLE_ATTRS: dict[str, object] = {
     "long_name": "Carrier-phase half-cycle ambiguity flag",
@@ -808,6 +809,7 @@ _HALF_CYCLE_ATTRS: dict[str, object] = {
         "Septentrio AsteRx SB3 ProBase Firmware v4.14.0 Reference Guide, "
         "MeasEpoch block (Block 4027), field ObsInfo bit 2, pp. 260-263."
     ),
+    "_FillValue": -1,
 }
 
 # ---------------------------------------------------------------------------

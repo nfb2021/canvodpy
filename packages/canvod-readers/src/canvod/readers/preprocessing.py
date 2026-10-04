@@ -7,6 +7,7 @@ needed before matching auxiliary data (SP3, CLK) with reader output or
 writing to Icechunk.
 """
 
+from collections.abc import Hashable
 from typing import Any, overload
 
 import numpy as np
@@ -209,7 +210,14 @@ def pad_to_global_sid(
     Returns
     -------
     xr.Dataset
-        Dataset padded with NaN for missing SIDs.
+        Dataset padded for missing SIDs: floating-point variables with NaN,
+        integer variables with their ``_FillValue`` attribute, so they keep
+        their dtype.
+
+    Raises
+    ------
+    ValueError
+        If an integer data variable has no ``_FillValue`` attribute.
     """
     mapper = SignalIDMapper(aggregate_glonass_fdma=aggregate_glonass_fdma)
     systems = {
@@ -255,8 +263,31 @@ def pad_to_global_sid(
             if dropped_by_filter:
                 _accumulated_dropped_by_filter.update(dropped_by_filter)
 
-    ds_padded = ds.reindex({"sid": np.array(sids, dtype=object)}, fill_value=np.nan)
+    ds_padded = ds.reindex(
+        {"sid": np.array(sids, dtype=object)}, fill_value=_pad_fill_values(ds)
+    )
     return _fill_sid_coords_from_sid_strings(ds_padded, mapper)
+
+
+def _pad_fill_values(ds: xr.Dataset) -> dict[Hashable, Any]:
+    """Return the fill value of each data variable for ``reindex``.
+
+    A NaN fill would turn integer variables into float64, so they are
+    padded with their ``_FillValue`` attribute instead.
+    """
+    fills: dict[Hashable, Any] = {}
+    for name, var in ds.data_vars.items():
+        if np.issubdtype(var.dtype, np.integer):
+            if "_FillValue" not in var.attrs:
+                msg = (
+                    f"Integer variable {name!r} has no _FillValue attribute, "
+                    "so it cannot be padded without changing its dtype."
+                )
+                raise ValueError(msg)
+            fills[name] = var.attrs["_FillValue"]
+        else:
+            fills[name] = np.nan
+    return fills
 
 
 def _fill_sid_coords_from_sid_strings(

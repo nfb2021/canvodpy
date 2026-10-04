@@ -1,6 +1,7 @@
 """Tests for SID-space preprocessing utilities (sv -> sid conversion, global padding)."""
 
 import numpy as np
+import pytest
 import xarray as xr
 
 from canvod.readers.preprocessing import (
@@ -177,6 +178,31 @@ class TestPadToGlobalSid:
             new_sid = next(iter(new_sids))
             first_epoch = result["X"].sel(sid=new_sid).epoch.values[0]
             assert np.isnan(result["X"].sel(sid=new_sid, epoch=first_epoch).values)
+
+    def test_integer_variables_keep_dtype(self):
+        """Integer variables are padded with their _FillValue, not NaN."""
+        ds = xr.Dataset(
+            {
+                "SNR": (("sid",), np.array([40.0], dtype=np.float32)),
+                "SSI": (("sid",), np.array([7], dtype=np.int8), {"_FillValue": -1}),
+            },
+            coords={"sid": np.array(["G01|L1|C"], dtype=object)},
+        )
+        result = pad_to_global_sid(ds, keep_sids=["G01|L1|C", "G02|L1|C"])
+
+        assert result["SSI"].dtype == np.int8
+        assert result["SSI"].sel(sid="G02|L1|C").item() == -1
+        assert result["SSI"].sel(sid="G01|L1|C").item() == 7
+        assert np.isnan(result["SNR"].sel(sid="G02|L1|C").item())
+
+    def test_integer_variable_without_fillvalue_raises(self):
+        """An integer variable without _FillValue cannot be padded."""
+        ds = xr.Dataset(
+            {"SSI": (("sid",), np.array([7], dtype=np.int8))},
+            coords={"sid": np.array(["G01|L1|C"], dtype=object)},
+        )
+        with pytest.raises(ValueError, match="SSI"):
+            pad_to_global_sid(ds, keep_sids=["G01|L1|C", "G02|L1|C"])
 
     def test_keep_sids_filtering(self, sample_preprocessed_sp3):
         """Test keep_sids parameter filters correctly."""
