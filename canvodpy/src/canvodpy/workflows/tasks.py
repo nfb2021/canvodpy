@@ -6,8 +6,8 @@ canvodpy machinery — no pipeline rewrite.
 
 DAG topology::
 
-    validate_dirs → check_sbf / check_rinex (→ wait_for_sp3)
-      → process_day → validate_ingest → calculate_vod → cleanup
+    validate_dirs → check_day (→ wait_for_sp3 with agency ephemeris)
+      → process_day → validate_ingest → calculate_vod
 
 ``process_day`` and ``calculate_vod`` run the same code as ``canvodpy run``.
 """
@@ -955,14 +955,23 @@ def process_day(site: str, yyyydoy: str) -> dict:
     Returns
     -------
     dict
-        ``{"site", "yyyydoy", "groups": {group: n_epochs}}``. ``groups`` is
-        empty if there was nothing to process for the day.
+        ``{"site", "yyyydoy", "groups": {group: n_epochs}}``.
+
+    Raises
+    ------
+    RuntimeError
+        If nothing was processed for the day (e.g. no files, or the
+        auxiliary data could not be downloaded), so Airflow retries the
+        task; the log of the run gives the reason.
     """
     from canvodpy.api import Site
 
     date_obj = _resolve_date(yyyydoy)
     with Site(site).pipeline() as pipeline:
         datasets = pipeline.process_date(date_obj.to_str())
+    if not datasets:
+        msg = f"Nothing processed for {site} {date_obj.to_str()}; see the log"
+        raise RuntimeError(msg)
 
     return {
         "site": site,
@@ -1170,6 +1179,11 @@ def calculate_vod(site: str, yyyydoy: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+@deprecated(
+    "`cleanup` is left over from development and will be removed with the "
+    "next major version. Use `process_day` instead; it keeps its auxiliary "
+    "data where `canvodpy run` keeps it."
+)
 def cleanup(site: str, yyyydoy: str) -> dict:
     """Remove temporary files created during pipeline execution.
 

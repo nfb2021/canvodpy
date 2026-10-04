@@ -340,6 +340,7 @@ class TestValidateIngest:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.filterwarnings("ignore:`cleanup` is left over:FutureWarning")
 class TestCleanup:
     """Test cleanup task."""
 
@@ -450,6 +451,18 @@ class TestProcessDay:
             "yyyydoy": "2025001",
             "groups": {"canopy_01": 3, "reference_01_canopy_01": 2},
         }
+
+    def test_nothing_processed_raises(self):
+        from canvodpy.workflows import tasks
+
+        pipeline = MagicMock()
+        pipeline.__enter__.return_value = pipeline
+        pipeline.process_date.return_value = {}
+        site = MagicMock()
+        site.pipeline.return_value = pipeline
+        with patch("canvodpy.api.Site", return_value=site):
+            with pytest.raises(RuntimeError, match="Nothing processed"):
+                tasks.process_day("TestSite", "2025001")
 
 
 # ---------------------------------------------------------------------------
