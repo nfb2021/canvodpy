@@ -20,6 +20,8 @@ before publishing to PyPI.
   a branch (root `pyproject.toml`, see the `extensions-dependency` guide).
 - Deprecated code stays in every 1.x release; v2.0.0 removes it.
 - `just check` and `just test` pass on the release branch.
+- The working tree is clean (`git status`): `just release` commits with
+  `git add .`, so stray changes would land in the release commit.
 
 ## Steps
 
