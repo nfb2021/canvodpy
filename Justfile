@@ -140,11 +140,12 @@ naming-init SITE NAME:
 
     os.environ["CANVOD_CONFIG_DIR"] = {{ quote(config_dir) }}
     from canvod.config.loader import get_default_config_dir
+    from canvodpy.orchestrator.discovery import FILEMAP_INSTALL_HINT
 
     try:
         from canvod.filemap import create_recipe
     except ImportError:
-        sys.exit("Naming recipes need canvod-filemap. Install it with: uv sync --extra filemap")
+        sys.exit(f"Naming recipes need canvod-filemap. {FILEMAP_INSTALL_HINT}")
     try:
         path = create_recipe(get_default_config_dir(), {{ quote(SITE) }}, {{ quote(NAME) }})
     except FileExistsError as exc:

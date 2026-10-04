@@ -163,7 +163,7 @@ class TestValidateRecipeWithoutFilemap:
 
         assert result.exit_code == 1
         assert "canopy_01" in result.output
-        assert "uv sync --extra filemap" in result.output
+        assert "uv sync --group filemap" in result.output
 
     def test_no_recipe_does_not_trip_the_filemap_check(self, tmp_path):
         config_dir = tmp_path / "config"
@@ -173,7 +173,7 @@ class TestValidateRecipeWithoutFilemap:
             _app(), ["config", "validate", "--config-dir", str(config_dir)]
         )
 
-        assert "uv sync --extra filemap" not in result.output
+        assert "uv sync --group filemap" not in result.output
 
 
 class TestConfigDirOption:

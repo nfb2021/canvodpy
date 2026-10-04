@@ -86,9 +86,10 @@ Installing `canvodpy` provides access to all 10 sub-packages:
 | `canvod-utils` | `canvod.utils` | Date/time utilities, processing diagnostics |
 | `canvod-ops` | `canvod.ops` | Composable preprocessing operations pipeline |
 
-`canvod-filemap` (virtual renaming for non-canonical receiver filenames) is
-an optional extra (`pip install "canvodpy[filemap]"`), published separately
-in [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions).
+`canvod-filemap` (naming recipes for non-canonical receiver filenames) is
+optional and released on GitHub only, in
+[canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions); see
+its documentation for the install command.
 
 ## Platform Support
 

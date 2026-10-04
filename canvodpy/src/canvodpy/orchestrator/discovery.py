@@ -114,6 +114,13 @@ class DiscoveryError(ValueError):
     """A receiver directory's files cannot be assigned unambiguously."""
 
 
+FILEMAP_INSTALL_HINT = (
+    "Install it in the canvodpy repository with: uv sync --group filemap; "
+    "elsewhere from GitHub, see "
+    "https://nfb2021.github.io/canvodpy-extensions/packages/filemap/overview/"
+)
+
+
 def canonical_name_for(path: Path | str) -> str:
     """Return the canonical canVOD filename for ``path``, or ``""``.
 
@@ -162,7 +169,7 @@ def recipe_file(site: str, recipe: str | None) -> Path | None:
     except ImportError as exc:
         msg = (
             f"Recipe '{recipe}' requires canvod-filemap, but it is not "
-            f"installed. Install it with: uv sync --extra filemap"
+            f"installed. {FILEMAP_INSTALL_HINT}"
         )
         raise DiscoveryError(msg) from exc
     try:
@@ -242,7 +249,7 @@ def check_receivers(
             msg = (
                 f"Receiver(s) {', '.join(recipe_receivers)} use a naming recipe, "
                 f"which requires canvod-filemap, but it is not installed. "
-                f"Install it with: uv sync --extra filemap"
+                f"{FILEMAP_INSTALL_HINT}"
             )
             raise DiscoveryError(msg) from exc
 

@@ -291,7 +291,7 @@ def test_recipe_without_filemap_is_an_error(tmp_path: Path) -> None:
     }
     with (
         mock.patch.dict("sys.modules", {"canvod.filemap": None}),
-        pytest.raises(DiscoveryError, match="uv sync --extra filemap") as exc_info,
+        pytest.raises(DiscoveryError, match="uv sync --group filemap") as exc_info,
     ):
         check_receivers(receivers, tmp_path, "rosalia")
     assert "canopy_01" in str(exc_info.value)

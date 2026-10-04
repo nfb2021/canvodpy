@@ -321,12 +321,13 @@ canvodpy/                       # Monorepo root
 └── LICENSE                     # Apache License 2.0
 ```
 
-Two optional packages — `canvod-filemap` (non-canonical filename mapping)
-and `canvod-airflow` (Airflow DAG definitions) — are developed separately in
+Optional packages — `canvod-filemap` (naming recipes for non-canonical
+filenames), `canvod-airflow` (Airflow DAGs) and `canvod-adapters` (data
+exchange with gnssvod) — are developed in
 [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions), not
-in this repo's `packages/`. `canvod-filemap` installs as an extra
-(`uv sync --extra filemap`); `canvod-airflow` is GitHub-only today (not yet
-published to PyPI).
+in this repo's `packages/`, and are released on GitHub only. In this
+repository, `canvod-filemap` installs as a dependency group
+(`uv sync --group filemap`), pinned to a release tag.
 
 </details>
 

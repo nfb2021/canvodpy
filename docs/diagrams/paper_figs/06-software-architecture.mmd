@@ -52,7 +52,7 @@ graph TD
     READERS -.-> UTILS & CONFIG
     GRIDS -.-> UTILS
 
-    FILEMAP -.->|optional extra: uv sync --extra filemap| CANVODPY
+    FILEMAP -.->|dependency group: uv sync --group filemap| CANVODPY
     ADAPTERS -.->|bidirectional convert| STORE
     AIRFLOW -.->|wraps canvodpy.workflows.tasks| CANVODPY
 

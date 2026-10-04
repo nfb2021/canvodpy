@@ -21,14 +21,36 @@ no config beyond what the package itself asks for.
 
 ## Installing an extension
 
-Extensions are not published to PyPI. The monorepo's root `pyproject.toml`
-already points `canvod-filemap` at the public repo over git, so a plain
+Extensions are released on GitHub only, each package under its own tag
+`<package>-v<version>` (e.g. `canvod-filemap-v1.0.0`), never on PyPI.
+
+In a clone of this repository, `canvod-filemap` is the dependency group
+`filemap`. The root `pyproject.toml` points it at a release tag of the
+public repo, so
 
 ```bash
-uv sync --extra filemap
+uv sync --group filemap
 ```
 
-resolves and installs it on any machine — no sibling checkout required.
+installs that release on any machine, no sibling checkout required. The
+group exists only in this repository: it is not part of the `canvodpy`
+package on PyPI, so `pip install "canvodpy[filemap]"` does not exist.
+Elsewhere, install the package from its tag:
+
+```bash
+uv add "canvod-filemap @ git+https://github.com/nfb2021/canvodpy-extensions.git@canvod-filemap-v1.0.0#subdirectory=packages/canvod-filemap"
+```
+
+The group is pinned in the root `pyproject.toml`: the version range in
+`[dependency-groups]`, the tag in `[tool.uv.sources]`:
+
+```toml
+[dependency-groups]
+filemap = ["canvod-filemap>=1.0.0"]
+
+[tool.uv.sources]
+canvod-filemap = { git = "https://github.com/nfb2021/canvodpy-extensions.git", subdirectory = "packages/canvod-filemap", tag = "canvod-filemap-v1.0.0" }
+```
 
 If you have both repositories cloned as sibling directories locally (common
 for contributors iterating on `canvod-filemap` itself), you can override the
@@ -45,33 +67,33 @@ canvod-filemap = { path = "../canvodpy-extensions/packages/canvod-filemap" }
 
     A path-based source only works on machines that happen to have
     `canvodpy-extensions` cloned as a sibling directory. `uv` resolves
-    optional-dependency-group sources even when the extra isn't requested,
-    so committing a local path breaks `uv run`/`uv sync` for everyone else.
+    every dependency group's sources when it locks, even groups that are
+    not installed, so committing a local path breaks `uv sync` for
+    everyone else.
     Keep the git source in version control; only override it locally.
 
 See [canvod-filemap's overview](https://nfb2021.github.io/canvodpy-extensions/packages/filemap/overview/)
 for the recipe format and mapping API.
 
-`canvod-airflow` is installed directly rather than via a canvodpy extra
-(it depends on `canvodpy`, not the other way around — wiring it as a
-`canvodpy` extra would create a circular reference):
+`canvod-airflow` is installed directly (it depends on `canvodpy`, not the
+other way around):
 
 ```bash
-uv add "canvod-airflow[airflow] @ git+https://github.com/nfb2021/canvodpy-extensions.git@v0.1.0#subdirectory=packages/canvod-airflow"
+uv add "canvod-airflow[airflow] @ git+https://github.com/nfb2021/canvodpy-extensions.git@canvod-airflow-v1.0.0#subdirectory=packages/canvod-airflow"
 ```
 
 See [canvod-airflow's overview](https://nfb2021.github.io/canvodpy-extensions/packages/airflow/overview/)
 for DAG structure, deployment, and configuration.
 
-`canvod-adapters` is used directly wherever you're converting data (not
-gated by a canvodpy config flag or extra on the `canvodpy` package itself):
+`canvod-adapters` is installed directly wherever you exchange data with
+another program:
 
 ```bash
-uv add "canvod-adapters[store] @ git+https://github.com/nfb2021/canvodpy-extensions.git@v0.1.0#subdirectory=packages/canvod-adapters"
+uv add "canvod-adapters[store] @ git+https://github.com/nfb2021/canvodpy-extensions.git@canvod-adapters-v1.0.0#subdirectory=packages/canvod-adapters"
 ```
 
 See [canvod-adapters's overview](https://nfb2021.github.io/canvodpy-extensions/packages/adapters/overview/)
-for the gnssvod conversion API and its known lossy-reconstruction caveat.
+for the gnssvod conversion, including how merged VOD bands are imported.
 
 ## What happens if an extension isn't installed
 

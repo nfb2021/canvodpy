@@ -51,13 +51,6 @@ dependencies = [
     "marimo>=0.23.13",
 ]
 
-# Optional slot-in extensions (github.com/nfb2021/canvodpy-extensions).
-# canvodpy works without these — file discovery falls back to canonical
-# canVOD-only glob patterns (*.rnx, *.sbf) when absent; receiver naming
-# recipes require canvod-filemap.
-[project.optional-dependencies]
-filemap = ["canvod-filemap"]
-
 [dependency-groups]
 dev = [
     "pytest>=8.0",
