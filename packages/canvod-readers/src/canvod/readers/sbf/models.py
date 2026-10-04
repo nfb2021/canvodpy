@@ -153,7 +153,7 @@ class SbfEpoch(BaseModel):
     wn : int
         GPS Week Number (continuous, no rollover).
     timestamp : datetime
-        UTC timestamp derived from TOW + WN + leap seconds.
+        GPS time derived from TOW + WN (no leap seconds).
     common_flags : int
         Raw CommonFlags byte. Bit 0: multipath mitigation enabled;
         bit 1: at least one code measurement smoothed; bit 3: clock

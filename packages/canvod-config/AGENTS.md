@@ -25,6 +25,9 @@ Background: `docs/guides/configuration.md`, `docs/packages/config/overview.md`.
 - **Only entry points load settings.** Library code takes values as
   arguments; a library function calling `load_config()` is a hidden
   default (some remain, being removed step by step; don't add new ones).
+- A canopy and its reference record the same file format
+  (`mixed_format_error` in `models/sites.py`, the one check used by the
+  settings, `config validate` and `run`). Mixed setups are not supported.
 - Every new setting has a description on the model, a visible default or
   none, and an entry in the template.
 

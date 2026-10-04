@@ -38,8 +38,8 @@ the observations of that same epoch. One decoder serves `iter_epochs()`,
 
     ---
 
-    GPS↔UTC leap-second offset ΔLS.
-    Used to convert GPS Time (WN + TOW) to UTC.
+    Receiver time and its synchronization with GNSS time.
+    Grouped with the epoch; epochs need only the WNc and TOW of MeasEpoch.
 
 -   :fontawesome-solid-satellite: &nbsp; **ChannelStatus**
 
@@ -115,7 +115,7 @@ Identical structure to `Rnxv3Obs.to_ds()` — a drop-in replacement:
 | Property | Value |
 | -------- | ----- |
 | Dimensions | `(epoch, sid)` |
-| `epoch` coordinate | `datetime64[ns]`, UTC (attribute `time_system: UTC`) |
+| `epoch` coordinate | `datetime64[ns]`, GPS time (attribute `time_system: GPS`) |
 | `sid` coordinate | `"SV\|Band\|Code"` string (e.g. `G07\|L1\|C`) |
 | Data variables | `SNR`, `Pseudorange`, `Phase`, `Doppler`, `SSI`, `Smoothing`, `HalfCycle` (select with `keep_data_vars`) |
 | Validation | Passes `validate_dataset()` |
@@ -609,15 +609,16 @@ See [:octicons-arrow-right-24: Satellite Catalog](satellite-catalog.md) for the 
 
 ## Time Conversion
 
-SBF timestamps use GPS Time (GPS Week + Time of Week in milliseconds).
-`SbfReader` converts GPS Time to UTC using the leap-second offset ΔLS from
-the `ReceiverTime` block.
+SBF time stamps are GPS time: GPS week (`WNc`) and time of week (`TOW`,
+milliseconds), with no leap seconds (RefGuide-4.14.0, Section 2.3, p.53).
+`SbfReader` keeps them in GPS time, like RINEX files and the orbit and
+clock products:
 
-$$\text{UTC} = \text{GPS\_epoch} + \frac{\text{WN} \times 604800 \times 10^3 + \text{TOW}}{10^3} - \Delta_\text{LS}$$
+$$\text{GPS time} = \text{GPS\_epoch} + \frac{\text{WN} \times 604800 \times 10^3 + \text{TOW}}{10^3}$$
 
-Where GPS epoch = 1980-01-06 00:00:00 UTC and ΔLS = 18 s (current, valid
-from 2017-01-01). The ΔLS value is updated dynamically if a `ReceiverTime`
-block is present.
+where GPS epoch = 1980-01-06 00:00:00. A file named for a GPS day starts at
+00:00:00 of that day. Stores written by earlier versions hold UTC epochs,
+18 s earlier (23:59:42 of the previous day for the first file of a day).
 
 ---
 
@@ -641,7 +642,6 @@ file on. Type2 sub-blocks take it from their Type1 sub-block.
 
 - Septentrio AsteRx SB3 ProBase Firmware v4.14.0 Reference Guide
 - Septentrio AsteRx SB3 ProBase Firmware v4.15.1 Reference Guide
-- IS-GPS-200 Rev. N, §20.3.3.5.2.4 (GPS time conversion)
 - CF Conventions v1.11 — `flag_masks`, `flag_meanings`, `flag_values`
 - RINEX 3.04 signal nomenclature (used verbatim for SID strings)
 - [:octicons-arrow-right-24: SBF Field Decoding Reference](sbf-decoding.md) — all formulas with firmware page citations

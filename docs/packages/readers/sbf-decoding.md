@@ -14,21 +14,26 @@ All page references are to the
 ## Epoch Timestamps
 
 **Source:** `MeasEpoch` header — `WNc` (u2) + `TOW` (u4, milliseconds).
-**Source block:** ReceiverTime (ΔLS), RefGuide-4.14.0 p.369.
-
-GPS Time uses a fixed epoch and has no leap seconds; UTC is obtained by
-subtracting the current GPS–UTC offset ΔLS:
+The receiver time follows the GPS convention: `WNc` counts complete weeks
+since 1980-01-06 and there are no leap seconds (RefGuide-4.14.0,
+Section 2.3, p.53). The epoch is stored in GPS time, the time scale of
+RINEX files and of the orbit and clock products, and the `epoch`
+coordinate records `time_system: GPS`:
 
 $$
-t_\text{UTC} = t_\text{GPS epoch} + \frac{WN_c \times 604800 \times 10^3 + TOW}{10^3} - \Delta_\text{LS}
+t_\text{GPS} = t_\text{GPS epoch} + \frac{WN_c \times 604800 \times 10^3 + TOW}{10^3}
 $$
 
 | Symbol | Meaning | Value |
 |--------|---------|-------|
-| $t_\text{GPS epoch}$ | GPS reference epoch | 1980-01-06 00:00:00 UTC |
+| $t_\text{GPS epoch}$ | GPS reference epoch | 1980-01-06 00:00:00 |
 | $WN_c$ | Continuous GPS week number | from `MeasEpoch.WNc` |
 | $TOW$ | Time of Week | ms, from `MeasEpoch.TOW` |
-| $\Delta_\text{LS}$ | GPS − UTC leap-second offset | 18 s (valid from 2017-01-01; updated from `ReceiverTime` when present) |
+
+No leap seconds are subtracted. A file named for a GPS day therefore
+starts at 00:00:00 of that day and its epochs lie on the receiver's
+sampling grid. (Earlier versions stored UTC, 18 s earlier: such stores
+start at 23:59:42 of the previous day.)
 
 ---
 
@@ -362,7 +367,7 @@ Page references: DOP block p.348, PVTGeodetic pp.337–339, ReceiverStatus pp.39
 | **θ (polar angle)** | Elevation → co-elevation (90° −  elevation), then degrees → radians |
 | **φ (azimuth)** | Scale 0.01°/LSB, degrees → radians |
 | **GLONASS frequencies** | Slot-dependent FDMA formula required for λ and Type2 Doppler |
-| **Epoch** | GPS week + TOW (ms) → UTC datetime via leap-second subtraction |
+| **Epoch** | GPS week + TOW (ms) → GPS time datetime (no leap seconds) |
 | **CN0HighRes** | Bit-field extraction (bits 0–2) then scale 1/32 dB-Hz/LSB |
 | **CarMPCorr** | Integer division by 512 to convert i1 to fractional cycles |
 
@@ -372,7 +377,6 @@ Page references: DOP block p.348, PVTGeodetic pp.337–339, ReceiverStatus pp.39
 
 - Septentrio AsteRx SB3 ProBase Firmware v4.14.0 Reference Guide
 - Septentrio AsteRx SB3 ProBase Firmware v4.15.1 Reference Guide
-- IS-GPS-200 Rev. N §20.3.3.5.2.4 — GPS time and leap seconds
 - RINEX 3.04 signal nomenclature — used verbatim for SID code strings
 
 ---

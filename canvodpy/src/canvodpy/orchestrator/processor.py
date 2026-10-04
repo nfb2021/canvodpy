@@ -1179,16 +1179,13 @@ class RinexDataProcessor:
             t1 = time.perf_counter()
             sampling_interval = sampling_interval_from_epochs(first_ds.epoch.values)
             # day_start stays as derived from the known YYYYDOY -- do NOT
-            # re-derive it from first_ds.epoch here. SBF files (the only ones
-            # that hit this fallback, since their filenames never match the
-            # RINEX v3 pattern parse_sampling_interval_from_filename()
-            # expects) sample on a grid offset by a few seconds from the day
-            # boundary, so the very first file of a day can have its first
-            # epoch fall a few seconds into the *previous* UTC day.
-            # Truncating that epoch to a date used to silently shift the whole
-            # day's target_epochs grid back by 24h, which pushed nearly every
-            # real observation epoch outside the aux data's interpolated range
-            # -- .sel(..., method="nearest") then clamped every one of them to
+            # re-derive it from first_ds.epoch here. A file's first epoch can
+            # fall a few seconds before the day boundary (SBF epochs did, by
+            # the 18 leap seconds, while they were stored in UTC). Truncating
+            # that epoch to a date used to silently shift the whole day's
+            # target_epochs grid back by 24h, which pushed nearly every real
+            # observation epoch outside the aux data's interpolated range --
+            # .sel(..., method="nearest") then clamped every one of them to
             # the grid's last (wrong-day) point, producing a single constant,
             # usually-wrong satellite position reused for the entire day
             # (canvodpy #geometry-augmentation-bug round 2, 2026-08).

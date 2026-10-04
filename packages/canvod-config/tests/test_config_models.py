@@ -445,6 +445,42 @@ class TestSiteConfig:
         )
         assert list(site.vod_analyses) == ["custom"]
 
+    @pytest.mark.parametrize(
+        ("canopy", "reference"),
+        [("sbf", "sbf"), ("rinex3", "rinex3_stripped"), ("auto", "sbf")],
+    )
+    def test_same_file_format_accepted(self, canopy, reference):
+        """rinex3_stripped reads RINEX 3; auto is checked once detected."""
+        self._make_site(
+            receivers={
+                "canopy_01": ReceiverConfig(
+                    type="canopy", directory="c", reader_format=canopy
+                ),
+                "reference_01": ReceiverConfig(
+                    type="reference",
+                    directory="r",
+                    paired_canopies="all",
+                    reader_format=reference,
+                ),
+            }
+        )
+
+    def test_mixed_file_formats_raise(self):
+        with pytest.raises(ValidationError, match="same file format"):
+            self._make_site(
+                receivers={
+                    "canopy_01": ReceiverConfig(
+                        type="canopy", directory="c", reader_format="sbf"
+                    ),
+                    "reference_01": ReceiverConfig(
+                        type="reference",
+                        directory="r",
+                        paired_canopies="all",
+                        reader_format="rinex3",
+                    ),
+                }
+            )
+
 
 # ===================================================================
 # VodAnalysisConfig.reference_store_group

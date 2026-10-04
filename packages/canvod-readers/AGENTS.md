@@ -27,14 +27,14 @@ Background: `docs/packages/readers/architecture.md`,
   contract from `base.py`; it never restates it.
 - SIDs are built in `builder.py` only, so readers and stores agree.
 - `epoch.attrs["time_system"]` records the epoch time scale: RINEX takes
-  it from the header (`TIME OF FIRST OBS` is mandatory), SBF and NMEA are
-  UTC. `DatasetBuilder(time_system=...)` is required. No fixed leap-second
-  shift is applied.
+  it from the header (`TIME OF FIRST OBS` is mandatory), SBF is GPS time
+  (TOW/WNc, no leap seconds), NMEA is UTC. `DatasetBuilder(time_system=...)`
+  is required. No fixed leap-second shift is applied.
 - RINEX 3: the validated parser is the default. `parser="unvalidated_fast"`
   stays opt-in, warns on every use (`UnvalidatedParserWarning`) and must
   give the same dataset on valid files.
 - SBF: one decoder for observations and auxiliary blocks, paired by time
-  of week. SBF epochs (UTC) and RINEX epochs differ; that is accepted.
+  of week. Epochs stay in GPS time; never subtract leap seconds.
 - Readers don't read the settings file. Options arrive as arguments;
   `keep_data_vars=None` keeps every variable.
 

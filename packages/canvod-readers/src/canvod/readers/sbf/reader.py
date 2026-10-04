@@ -103,17 +103,14 @@ _SBF_CN0_METADATA: dict[str, Any] = {
 }
 
 # ---------------------------------------------------------------------------
-# GPS ↔ UTC time conversion
-# Source: IS-GPS-200, §20.3.3.5.2.4
-# GPS epoch: 1980-01-06 00:00:00 UTC (no leap seconds at that date)
+# Receiver time stamp
+# TOW and WNc follow the GPS convention: weeks since 1980-01-06, no leap
+# seconds (RefGuide-4.14.0, Section 2.3, p.53). Epochs are stored in GPS
+# time, the time scale of RINEX files and of the orbit and clock products.
 # ---------------------------------------------------------------------------
 
 _GPS_EPOCH = datetime(1980, 1, 6, tzinfo=UTC)
 _SECONDS_PER_GPS_WEEK: int = 604_800
-
-# Leap second offset GPS - UTC.  Valid from 2017-01-01; next scheduled: TBD.
-# Replaced by the DeltaLS field of the ReceiverTime block when one is logged.
-_DEFAULT_DELTA_LS: int = 18
 
 # ---------------------------------------------------------------------------
 # Block grouping and identifiers
@@ -188,8 +185,8 @@ def _iter_epoch_groups(fpath: Path) -> Iterator[dict[str, dict[str, Any]]]:
         yield group
 
 
-def _tow_wn_to_utc(tow_ms: int, wn: int, delta_ls: int) -> datetime:
-    """Convert GPS TOW + WN to a UTC datetime.
+def _tow_wn_to_gps(tow_ms: int, wn: int) -> datetime:
+    """Convert the receiver time stamp (TOW + WNc) to a GPS time datetime.
 
     Parameters
     ----------
@@ -198,21 +195,19 @@ def _tow_wn_to_utc(tow_ms: int, wn: int, delta_ls: int) -> datetime:
     wn : int
         GPS Week Number (continuous, post-rollover correction applied by
         the receiver).
-    delta_ls : int
-        Leap second count: GPS - UTC (seconds).
 
     Returns
     -------
     datetime
-        Timezone-aware UTC timestamp.
+        GPS time. It carries ``tzinfo=UTC`` only to be timezone-aware, as
+        the RINEX readers' times do; no leap seconds are subtracted.
 
     Notes
     -----
-    Source: IS-GPS-200, §20.3.3.5.2.4.
+    Source: RefGuide-4.14.0, Section 2.3, p.53.
     """
     gps_seconds = wn * _SECONDS_PER_GPS_WEEK + tow_ms / 1000.0
-    utc_seconds = gps_seconds - delta_ls
-    return _GPS_EPOCH + timedelta(seconds=utc_seconds)
+    return _GPS_EPOCH + timedelta(seconds=gps_seconds)
 
 
 # ---------------------------------------------------------------------------
@@ -1348,18 +1343,6 @@ def _optional(value: float, unit: Any) -> Any:
     return None if math.isnan(value) else value * unit
 
 
-def _delta_ls(group: dict[str, dict[str, Any]], current: int) -> int:
-    """GPS - UTC leap seconds from the group's ReceiverTime block, if valid.
-
-    DeltaLS is ``i1``, Do-Not-Use -128 (RefGuide-4.14.0, ReceiverTime).
-    """
-    rt = group.get("ReceiverTime")
-    if rt is None:
-        return current
-    value = int(rt["DeltaLS"])
-    return current if value == -128 else value
-
-
 class SbfReader(GNSSDataReader):
     """Read and decode a Septentrio Binary Format (SBF) observation file.
 
@@ -1421,7 +1404,7 @@ class SbfReader(GNSSDataReader):
         Returns
         -------
         datetime
-            Timezone-aware UTC datetime of the first observation epoch.
+            First observation epoch, in GPS time.
 
         Raises
         ------
@@ -1439,7 +1422,7 @@ class SbfReader(GNSSDataReader):
         Returns
         -------
         datetime
-            Timezone-aware UTC datetime of the last observation epoch.
+            Last observation epoch, in GPS time.
 
         Raises
         ------
@@ -1560,13 +1543,9 @@ class SbfReader(GNSSDataReader):
         - The file is scanned from start to finish on each call.
         - ``cn0`` includes the MeasExtra CN0HighRes value of the same epoch
           where it is logged, as the ``SNR`` variable of :meth:`to_ds`.
-        - ``delta_ls`` (leap seconds) is taken from the most recent
-          ReceiverTime block; defaults to 18 if none has been seen yet.
         - Signals not in the signal table are skipped.
         """
-        delta_ls = _DEFAULT_DELTA_LS
         for group in _iter_epoch_groups(self.fpath):
-            delta_ls = _delta_ls(group, delta_ls)
             meas = group["MeasEpoch"]
             tow_ms = int(meas["TOW"])
             wn = int(meas["WNc"])
@@ -1607,7 +1586,7 @@ class SbfReader(GNSSDataReader):
             yield SbfEpoch(
                 tow_ms=tow_ms,
                 wn=wn,
-                timestamp=_tow_wn_to_utc(tow_ms, wn, delta_ls),
+                timestamp=_tow_wn_to_gps(tow_ms, wn),
                 common_flags=int(meas["CommonFlags"]),
                 cum_clk_jumps=int(meas["CumClkJumps"]),
                 observations=tuple(observations),
@@ -1726,11 +1705,9 @@ class SbfReader(GNSSDataReader):
         """
         groups: list[dict[str, dict[str, Any]]] = []
         timestamps: list[np.datetime64] = []
-        delta_ls = _DEFAULT_DELTA_LS
         for group in _iter_epoch_groups(self.fpath):
-            delta_ls = _delta_ls(group, delta_ls)
             meas = group["MeasEpoch"]
-            ts = _tow_wn_to_utc(int(meas["TOW"]), int(meas["WNc"]), delta_ls)
+            ts = _tow_wn_to_gps(int(meas["TOW"]), int(meas["WNc"]))
             timestamps.append(np.datetime64(ts.replace(tzinfo=None), "ns"))
             groups.append(group)
 
@@ -1780,7 +1757,7 @@ class SbfReader(GNSSDataReader):
         ssi_arr = _snr_dbhz_to_ssi(snr_arr).astype(DTYPES["SSI"])
 
         coords_obs: dict[str, Any] = {
-            "epoch": ("epoch", timestamps, epoch_coord_attrs("UTC")),
+            "epoch": ("epoch", timestamps, epoch_coord_attrs("GPS")),
             "sid": xr.DataArray(
                 np.array(sorted_sids, dtype=object),
                 dims=["sid"],
@@ -2046,7 +2023,7 @@ class SbfReader(GNSSDataReader):
                         pvt_status_arr[t, cols] = pvt_raw
 
         coords_meta: dict[str, Any] = {
-            "epoch": ("epoch", timestamps, epoch_coord_attrs("UTC")),
+            "epoch": ("epoch", timestamps, epoch_coord_attrs("GPS")),
             "sid": xr.DataArray(
                 sorted_sids, dims=["sid"], attrs=COORDS_METADATA["sid"]
             ),

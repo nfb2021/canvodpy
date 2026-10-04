@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+import pytest
 from canvodpy.orchestrator.discovery import ReceiverDay, clear_discovery_cache
 from canvodpy.orchestrator.pipeline import PipelineOrchestrator
 
@@ -16,10 +17,10 @@ def _touch(directory: Path, *names: str) -> None:
         (directory / name).write_text("")
 
 
-def _orchestrator(base: Path) -> PipelineOrchestrator:
+def _orchestrator(base: Path, canopy_format: str = "sbf") -> PipelineOrchestrator:
     receivers = {
         "canopy_01": SimpleNamespace(
-            type="canopy", directory="canopy", reader_format="rinex3", recipe=None
+            type="canopy", directory="canopy", reader_format=canopy_format, recipe=None
         ),
         "reference_01": SimpleNamespace(
             type="reference", directory="ref", reader_format="auto", recipe=None
@@ -48,8 +49,8 @@ def test_days_where_both_receivers_have_files(tmp_path: Path) -> None:
     clear_discovery_cache()
     _touch(
         tmp_path / "canopy",
-        "ROSA01TUW_R_20250010000_15M_05S_AA.rnx",
-        "ROSA01TUW_R_20250020000_15M_05S_AA.rnx",
+        "ROSA01TUW_R_20250010000_15M_05S_AA.sbf",
+        "ROSA01TUW_R_20250020000_15M_05S_AA.sbf",
     )
     _touch(tmp_path / "ref" / "25002", "ROSR01TUW_R_20250020000_15M_05S_AA.sbf")
     _touch(tmp_path / "ref" / "25003", "ROSR01TUW_R_20250030000_15M_05S_AA.sbf")
@@ -59,7 +60,7 @@ def test_days_where_both_receivers_have_files(tmp_path: Path) -> None:
     assert list(grouped) == ["2025002"]
     canopy_day, _, canopy_pos, canopy_fmt = grouped["2025002"]["canopy_01"]
     assert canopy_day == ReceiverDay("canopy_01", tmp_path / "canopy", "2025002")
-    assert (canopy_pos, canopy_fmt) == (None, "rinex3")
+    assert (canopy_pos, canopy_fmt) == (None, "sbf")
     ref_day, ref_type, ref_pos, ref_fmt = grouped["2025002"]["reference_01_canopy_01"]
     assert ref_day == ReceiverDay("reference_01", tmp_path / "ref", "2025002")
     assert ref_type == "reference"
@@ -73,8 +74,8 @@ def test_unprocessed_files_are_warned_about_not_fatal(tmp_path: Path) -> None:
     clear_discovery_cache()
     _touch(
         tmp_path / "canopy",
-        "ROSA01TUW_R_20250020000_15M_05S_AA.rnx",
-        "ROSA01TUW_R_20250020015_15M_05S_AA.sbf",  # canopy reads rinex3 only
+        "ROSA01TUW_R_20250020000_15M_05S_AA.sbf",
+        "ROSA01TUW_R_20250020015_15M_05S_AA.rnx",  # canopy reads sbf only
         "rosa0020.25o",  # not a canonical name, no recipe
         "rosa0030.25o",
     )
@@ -94,5 +95,16 @@ def test_unprocessed_files_are_warned_about_not_fatal(tmp_path: Path) -> None:
     assert fields["n_files"] == 3
     assert fields["by_file_type"] == {
         ".##o": "2 (e.g. rosa0020.25o)",
-        ".sbf": "1 (e.g. ROSA01TUW_R_20250020015_15M_05S_AA.sbf)",
+        ".rnx": "1 (e.g. ROSA01TUW_R_20250020015_15M_05S_AA.rnx)",
     }
+
+
+def test_canopy_and_reference_of_different_formats_fail(tmp_path: Path) -> None:
+    """A reference detected as SBF next to a RINEX 3 canopy stops the run
+    before any file is read (mixed formats are not supported)."""
+    clear_discovery_cache()
+    _touch(tmp_path / "canopy", "ROSA01TUW_R_20250020000_15M_05S_AA.rnx")
+    _touch(tmp_path / "ref", "ROSR01TUW_R_20250020000_15M_05S_AA.sbf")
+
+    with pytest.raises(ValueError, match="same file format"):
+        _orchestrator(tmp_path, canopy_format="rinex3")._group_by_date_and_receiver()

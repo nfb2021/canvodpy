@@ -19,6 +19,7 @@ from typing import Any
 
 import numpy as np
 
+from canvod.config.models import mixed_format_error
 from canvodpy.orchestrator.discovery import (
     DiscoveredFile,
     DiscoveryError,
@@ -309,4 +310,13 @@ def check_site_data(
         report.receivers[name] = check_receiver_data(
             name, cfg, base_path, site, check_sampling, reader_options
         )
+    for ref, canopy in site_config.get_reference_canopy_pairs():
+        mixed = mixed_format_error(
+            canopy,
+            report.receivers[canopy].reader_format,
+            ref,
+            report.receivers[ref].reader_format,
+        )
+        if mixed:
+            report.errors.append(mixed)
     return report

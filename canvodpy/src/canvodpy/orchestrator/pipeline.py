@@ -25,7 +25,7 @@ import pint
 import xarray as xr
 
 from canvod.config import load_config
-from canvod.config.models import reference_store_group
+from canvod.config.models import mixed_format_error, reference_store_group
 from canvod.ops import preprocess_files
 from canvod.readers import MatchedDirs
 from canvod.readers.gnss_specs.constants import UREG
@@ -404,6 +404,11 @@ class PipelineOrchestrator:
                 ref_fmt = ref_cfg.reader_format
                 if ref_fmt == "auto":
                     ref_fmt = self._detect_reader_format(reference_day)
+                mixed = mixed_format_error(
+                    canopy_rx, grouped[date_key][canopy_rx][3], ref_name, ref_fmt
+                )
+                if mixed:
+                    raise ValueError(f"{date_key}: {mixed}")
                 for canopy_name in site_config.resolve_paired_canopies(ref_name):
                     store_group = reference_store_group(ref_name, canopy_name)
                     if store_group in grouped[date_key]:

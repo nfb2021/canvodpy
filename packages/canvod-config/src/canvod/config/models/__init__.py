@@ -41,6 +41,7 @@ from .sites import (
     SiteConfig,
     SitesConfig,
     VodAnalysisConfig,
+    mixed_format_error,
     reference_store_group,
 )
 from .storage import MaintenanceConfig, StorageConfig
@@ -74,6 +75,7 @@ __all__ = [
     "TemporalAggregationConfig",
     "VodAnalysisConfig",
     "_StrictModel",
+    "mixed_format_error",
     "preprocessing_record",
     "reference_store_group",
 ]

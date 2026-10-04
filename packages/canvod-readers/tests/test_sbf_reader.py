@@ -163,25 +163,19 @@ class TestSbfReaderABC:
         st = reader.start_time
         et = reader.end_time
         assert st < et
-        assert st.tzinfo is not None  # tz-aware UTC
+        assert st.tzinfo is not None  # timezone-aware (GPS time)
         assert st.tzinfo == UTC
 
-    def test_start_time_near_midnight(self, reader: SbfReader) -> None:
-        """ROSR01TUW_R_20250010000_15M_05S_AA.sbf straddles the 2024-12-31/2025-01-01 GPS midnight.
+    def test_start_time_is_gps_time(self, reader: SbfReader) -> None:
+        """ROSR01TUW_R_20250010000_15M_05S_AA.sbf starts at the GPS day boundary.
 
-        GPS time precedes UTC by 18 leap seconds, so the first epoch of the
-        GPS slot starting at 2025-01-01 00:00:00 GPS falls at
-        2024-12-31 23:59:42 UTC.  Verify the file boundary is within
-        60 seconds of 2025-01-01 00:00:00 UTC.
+        Its first MeasEpoch has TOW 259200 s (Wednesday 00:00:00 GPS time).
+        Stored in GPS time, the first epoch is 2025-01-01 00:00:00, not
+        2024-12-31 23:59:42 (UTC, 18 leap seconds earlier).
         """
         from datetime import datetime
 
-        boundary = datetime(2025, 1, 1, 0, 0, 0, tzinfo=UTC)
-        delta_s = abs((reader.start_time - boundary).total_seconds())
-        assert delta_s < 60, (
-            f"Start time {reader.start_time} is more than 60 s from "
-            f"the expected file boundary {boundary}"
-        )
+        assert reader.start_time == datetime(2025, 1, 1, tzinfo=UTC)
 
     def test_systems(self, reader: SbfReader) -> None:
         valid = {"G", "R", "E", "C", "J", "I", "S"}
@@ -473,9 +467,16 @@ class TestSbfObsDataset:
         for coord in ("pdop", "hdop", "n_sv"):
             assert coord in meta_ds.coords, f"Missing epoch coord: {coord}"
 
-    def test_epochs_record_utc(self, meta_ds: xr.Dataset, obs_ds: xr.Dataset) -> None:
+    def test_epochs_record_gps_time(
+        self, meta_ds: xr.Dataset, obs_ds: xr.Dataset
+    ) -> None:
         for ds in (obs_ds, meta_ds):
-            assert ds["epoch"].attrs["time_system"] == "UTC"
+            assert ds["epoch"].attrs["time_system"] == "GPS"
+
+    def test_epochs_lie_on_the_sampling_grid(self, obs_ds: xr.Dataset) -> None:
+        """GPS time keeps the receiver's 5 s grid; UTC would shift it by 2 s."""
+        seconds = obs_ds["epoch"].values.astype("datetime64[s]").astype(np.int64)
+        assert (seconds % 5 == 0).all()
 
     def test_sbf_obs_pdop_plausible(self, meta_ds: xr.Dataset) -> None:
         pdop = meta_ds["pdop"].values

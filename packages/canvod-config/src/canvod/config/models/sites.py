@@ -141,6 +141,40 @@ def reference_store_group(reference_receiver: str, canopy_receiver: str) -> str:
     return f"{reference_receiver}_{canopy_receiver}"
 
 
+#: File format read by each reader format; ``rinex3_stripped`` reads RINEX 3.
+_FILE_FORMAT: dict[str, str] = {"rinex3_stripped": "rinex3"}
+
+
+def mixed_format_error(
+    canopy: str, canopy_format: str, reference: str, reference_format: str
+) -> str | None:
+    """Error message if a canopy and its reference record different file formats.
+
+    A canopy receiver and its reference receiver must record the same file
+    format (e.g. both SBF): the reference's position is read from the
+    canopy's files with the reference's reader, and both receivers' epochs
+    must be in the same time scale. ``"auto"`` is not checked here; check
+    again once the format is detected from the files.
+
+    Returns
+    -------
+    str | None
+        The message, or ``None`` if the formats agree or one is ``"auto"``.
+    """
+    if "auto" in (canopy_format, reference_format):
+        return None
+    if _FILE_FORMAT.get(canopy_format, canopy_format) == _FILE_FORMAT.get(
+        reference_format, reference_format
+    ):
+        return None
+    return (
+        f"Canopy receiver '{canopy}' records {canopy_format!r} files, its "
+        f"reference receiver '{reference}' records {reference_format!r} files. "
+        "A canopy and its reference must record the same file format; "
+        "mixed formats are not supported."
+    )
+
+
 class VodAnalysisConfig(_StrictModel):
     """VOD analysis pair configuration."""
 
@@ -299,6 +333,27 @@ class SiteConfig(_StrictModel):
             )
             for ref, canopy in pairs
         }
+        return self
+
+    @model_validator(mode="after")
+    def validate_same_file_format(self) -> SiteConfig:
+        """Reject a canopy and reference that record different file formats."""
+        pairs = set(self.get_reference_canopy_pairs())
+        pairs |= {
+            (a.reference_receiver, a.canopy_receiver)
+            for a in (self.vod_analyses or {}).values()
+        }
+        for ref, canopy in sorted(pairs):
+            if ref not in self.receivers or canopy not in self.receivers:
+                continue
+            msg = mixed_format_error(
+                canopy,
+                self.receivers[canopy].reader_format,
+                ref,
+                self.receivers[ref].reader_format,
+            )
+            if msg:
+                raise ValueError(msg)
         return self
 
     def get_reference_canopy_pairs(self) -> list[tuple[str, str]]:
