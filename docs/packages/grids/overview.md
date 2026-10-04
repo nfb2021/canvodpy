@@ -30,8 +30,8 @@ Seven implementations are available, all inheriting from `BaseGridBuilder`:
 
     ---
 
-    Simple rectangular latitude/longitude grid. Fast to compute;
-    strong area distortion at low elevations.
+    The same number of azimuth sectors in every θ band, no zenith cap.
+    Fast to compute; cells shrink strongly toward the zenith.
 
 -   :fontawesome-solid-dice-d20: &nbsp; **GeodesicBuilder**
 
@@ -68,7 +68,17 @@ Seven implementations are available, all inheriting from `BaseGridBuilder`:
 
 </div>
 
-All builders accept `angular_resolution` (degrees) and `cutoff_theta` (maximum polar angle) and return a `GridData` object.
+All builders accept `angular_resolution` (degrees), `cutoff_theta` and
+`phi_rotation` (degrees) and return a `GridData` object. `cutoff_theta`
+(default 0) leaves out the sky within that many degrees of the horizon:
+the grid ends near θ = 90° − `cutoff_theta`, the exact last edge depends
+on the grid type. A run's grid assignment uses `cutoff_theta = 0`.
+
+!!! bug "`EqualAreaBuilder` with `cutoff_theta > 0`"
+    `EqualAreaBuilder` currently applies `cutoff_theta` at the zenith as
+    well: with `cutoff_theta=10` it also leaves out the cells within
+    about 10° of the zenith. Use `cutoff_theta=0` with this grid type
+    until this is fixed.
 
 ### Optional dependencies
 
@@ -105,8 +115,8 @@ All builders accept `angular_resolution` (degrees) and `cutoff_theta` (maximum p
     from canvod.grids import create_hemigrid
 
     grid = create_hemigrid("equal_area", angular_resolution=5.0)
-    print(grid.ncells)   # 216
-    print(grid.nbands)   # 18
+    print(grid.ncells)           # 1005
+    print(len(grid.theta_lims))  # 18 θ bands
     ```
 
 === "Builder pattern"
@@ -114,7 +124,7 @@ All builders accept `angular_resolution` (degrees) and `cutoff_theta` (maximum p
     ```python
     from canvod.grids import EqualAreaBuilder
 
-    builder = EqualAreaBuilder(angular_resolution=5.0, cutoff_theta=10.0)
+    builder = EqualAreaBuilder(angular_resolution=5.0)
     grid = builder.build()
     ```
 
@@ -136,10 +146,15 @@ The `GridData` object returned by all builders provides:
 
 | Attribute | Type | Description |
 | --------- | ---- | ----------- |
-| `grid` | `polars.DataFrame` | Cell geometry (boundaries, centres, solid angles) |
+| `grid` | `polars.DataFrame` | One row per cell: centre (`phi`, `theta`), bounds (`phi_min`, `phi_max`, `theta_min`, `theta_max`), `cell_id` |
 | `ncells` | `int` | Total number of grid cells |
-| `nbands` | `int` | Number of elevation bands |
-| `definition` | `str` | Human-readable grid description |
+| `grid_type` | `str` | Grid type, e.g. `"equal_area"` |
+| `theta_lims`, `phi_lims`, `cell_ids` | arrays | Band edges, azimuth edges and cell ids per θ band |
+| `get_solid_angles()` | `np.ndarray` | Solid angle of each cell (sr) |
+| `get_grid_stats()` | `dict` | Summary: cell count, solid-angle statistics |
+
+For the Fibonacci, geodesic, HEALPix and HTM grids the bounds are
+bounding boxes, not the true (curved or triangular) cell boundaries.
 
 ---
 
@@ -261,10 +276,12 @@ flowchart TD
     A --> B["`**Grid Assignment**
     add_cell_ids_to_ds_fast`"]
     B --> C["`**Gridded Dataset**
-    + cell_id coordinate`"]
-    C --> D["`**VOD per cell**
-    Tau-Omega inversion`"]
-    D --> E["`**Hemispherical Map**
+    + cell_id_* variable`"]
+    C --> D["`**VOD per observation**
+    tau-omega, carries cell_id_*`"]
+    D --> F["`**Per-cell statistics**
+    compute_hemisphere_percell`"]
+    F --> E["`**Hemispherical Map**
     canvod-viz`"]
 ```
 

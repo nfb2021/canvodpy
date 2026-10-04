@@ -6,7 +6,8 @@ The `canvod-utils` package provides date/time utilities and processing
 diagnostics shared across the canVODpy ecosystem. Configuration management
 moved to a dedicated package — see
 [canvod-config](../config/overview.md) — so `canvod-utils` has no
-Pydantic/YAML dependency and no CLI code of its own.
+YAML dependency and no CLI code of its own (it depends on `pydantic` and
+`structlog` only).
 
 ---
 
@@ -27,6 +28,8 @@ file_hash(path)                    # SHA-256 of a file, used by store dedup guar
 | `file_hash` | SHA-256 hashing used by the store's dedup guardrails |
 | `isfloat` | Safe float-parsing check |
 | `get_version_from_pyproject` | Read a package version directly from `pyproject.toml` |
+| `deprecated` | Decorator that marks code left over from development: warns on use and names the replacement |
+| `sanitize_directory` | Remove files the OS drops into data folders (e.g. `.DS_Store`) |
 
 ---
 
@@ -34,7 +37,7 @@ file_hash(path)                    # SHA-256 of a file, used by store dedup guar
 
 `canvod.utils.logging` holds the run identifier (`get_run_id`, `set_run_id`,
 `reset_run_id`) and the stage timing (`stage_timer`, `timed_stage`,
-`emit_run_summary`), so that every canvod package can use them without
+`emit_run_summary`, `reset_run_stats`), so that every canvod package can use them without
 depending on canvodpy. The log output is configured by
 `canvodpy.logging.configure_logging`. See the [Diagnostics & Performance
 Monitoring guide](../../guides/diagnostics.md).
@@ -51,7 +54,7 @@ one-stop reference:
 === "Setup"
 
     ```bash
-    canvodpy config init                # Scaffold canvod-settings.yaml + recipe templates
+    canvodpy config init                # Scaffold canvod-settings.yaml (recipes: just naming-init SITE NAME)
     canvodpy config init --interactive  # ...or answer a few questions instead of hand-editing YAML
     canvodpy config validate            # Validate configuration
     canvodpy config show                # Display resolved configuration
@@ -73,9 +76,10 @@ one-stop reference:
 === "Processing"
 
     ```bash
-    just process          # Run full pipeline
-    just process-date YYYYDOY     # Process single day
-    just process-range START END  # Process date range
+    just run SITE START END       # Process days START to END (YYYYDOY) and compute VOD
+    canvodpy run --site SITE      # Resume from the last processed day up to today
+    canvodpy vod --help           # Compute VOD from an existing GNSS store
+    canvodpy vod-reconcile --help # Find days with observations but no VOD
     ```
 
 === "Store inspection"
@@ -86,4 +90,5 @@ one-stop reference:
     canvodpy store info <site> --group X   # Full dataset + metadata table for one group
     canvodpy store log <site>              # Commit graph
     canvodpy store log <site> --ops        # Ops audit trail
+    canvodpy store maintain <site>         # Snapshot expiry + garbage collection (dry run unless --execute)
     ```

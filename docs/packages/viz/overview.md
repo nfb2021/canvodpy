@@ -114,7 +114,7 @@ The `canvod-viz` package provides 2D and 3D hemispheric visualization for GNSS-T
 | `create_interactive_style()` | Browser-ready Plotly, dark mode option |
 | `create_rse_style()` | Remote Sensing of Environment journal guidelines |
 
-Both return a `PlotStyle` / `PolarPlotStyle` object passed to `viz.set_style()`.
+Each returns a `PlotStyle`, passed to `viz.set_style()`; `PlotStyle.to_polar_style()` gives the `PolarPlotStyle` the 2D functions take.
 
 ### RSE Journal Style
 
@@ -168,8 +168,10 @@ cs2 = Colorscale.from_colors(["#0072B2", "#D55E00", "#009E73"])
 
 ## Interactive Grid Exploration
 
-The `demo/20_grid_exploration.py` marimo notebook provides interactive
-exploration of per-cell VOD data on the hemispheric grid:
+The `demo/19_grid_exploration.py` marimo notebook shows interactive
+exploration of per-cell VOD on the hemispheric grid, with synthetic data
+(real per-cell time series come from
+`AnalysisStorage.load_percell_timeseries()`):
 
 - **3D view** — Plotly Scatter3d with click-to-select cells (anywidget)
 - **2D view** — Canvas polar projection with hover tooltips (anywidget)
@@ -177,22 +179,19 @@ exploration of per-cell VOD data on the hemispheric grid:
 - **Timeseries** — per-cell VOD timeseries plotted for selected cells
 
 ```bash
-uv run marimo edit demo/20_grid_exploration.py
+just open-notebook 19_grid_exploration.py
 ```
 
 ---
 
 ## Dependencies
 
-!!! info "Optional backends"
+!!! info "Backends"
 
-    - **matplotlib** — required for `HemisphereVisualizer2D` and all 2D functions
-    - **plotly** — required for `HemisphereVisualizer3D` and all 3D functions
-    - **anywidget** — required for interactive hemisphere selectors in marimo notebooks
-    - **canvod-grids** — always required for grid geometry
-
-    Neither backend is a hard dependency of `canvod-viz` itself; import errors are
-    raised only when the corresponding visualizer is instantiated.
+    - **matplotlib** (2D) and **plotly** (3D) — installed with `canvod-viz`
+    - **canvod-grids** — grid geometry, installed with `canvod-viz`
+    - **anywidget** — only for the interactive hemisphere selectors in the
+      marimo notebooks; not a dependency of `canvod-viz`
 
 ---
 

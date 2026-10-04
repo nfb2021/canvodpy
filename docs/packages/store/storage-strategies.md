@@ -1,10 +1,18 @@
 # Storage Strategies
 
-The write strategy controls what `MyIcechunkStore` does when a file's hash/time-range
-already exists in the store (new files are always written, regardless of strategy). Set
-it per store type in `canvod-settings.yaml` under `processing.storage:` —
-`gnss_store_strategy` for the GNSS observation store, `vod_store_strategy` for the VOD
-store.
+The write strategy controls what a run does when a file is already in the
+GNSS store (same file hash, or an overlapping epoch range). New files are
+always written, whatever the strategy. Set it in `canvod-settings.yaml`
+under `processing.storage.gnss_store_strategy`.
+
+!!! warning "`vod_store_strategy` has no effect yet"
+    The settings also accept `processing.storage.vod_store_strategy`
+    (default `overwrite`), but VOD writes do not read it. A VOD result is
+    always skipped when the store already holds one computed from the same
+    source files, or one whose epoch range overlaps it; the value is only
+    recorded in the store's log book. To recompute VOD for days already in
+    the store, write to a new VOD store (set another
+    `processing.storage.vod_store_name`).
 
 <div class="grid cards" markdown>
 
@@ -54,20 +62,11 @@ store.
 processing:
   storage:
     gnss_store_strategy: skip      # raw observations are immutable
-    vod_store_strategy: overwrite  # recompute as algorithms improve
 ```
 
-The strategy is read from config, not passed to `MyIcechunkStore()` directly — there is
-no `strategy=` constructor argument. `GnssResearchSite` (what `Site` wraps internally)
-picks it up automatically:
-
-```python
-from canvod.store import GnssResearchSite
-
-site = GnssResearchSite("ExampleSite")
-site.gnss_store._gnss_store_strategy   # → "skip" (from config)
-site.vod_store._gnss_store_strategy    # → "overwrite" (from config)
-```
+The strategy comes from the settings file; `MyIcechunkStore()` has no
+`strategy=` argument. `canvodpy config show` prints the value in use under
+**Storage**.
 
 ---
 
@@ -77,11 +76,6 @@ site.vod_store._gnss_store_strategy    # → "overwrite" (from config)
     Raw GNSS data doesn't change after collection — there's no legitimate "two versions
     of the same file." A re-run over already-ingested files should be a no-op, not a
     rewrite. `skip` is the default for exactly this reason.
-
-!!! info "Processed VOD products → `overwrite`"
-    As the tau-omega inversion improves or auxiliary data quality changes, re-running the
-    pipeline should replace old values. Each overwrite creates a new Icechunk snapshot so
-    you can compare before/after.
 
 !!! danger "`unsafe_append` can corrupt unguarded reads"
     `unsafe_append` does **not** merge or deduplicate — it writes the file's data again on
@@ -111,11 +105,11 @@ site.vod_store._gnss_store_strategy    # → "overwrite" (from config)
 | Strategy | Typical write throughput | Storage overhead | Read safety |
 |----------|--------------------------|-------------------|-------------|
 | `skip` | Fastest — hash check only | None | Safe |
-| `overwrite` | Moderate — delete + write | Low (old chunks GC'd) | Safe |
-| `unsafe_append` | Slowest — full write, no dedup check | Higher (old + new chunks kept) | Unsafe outside the two guarded read paths above |
+| `overwrite` | Slowest — rewrites the receiver's whole group | Low after garbage collection | Safe |
+| `unsafe_append` | Like a new file — full write, no check | Higher (old + new chunks kept) | Unsafe outside the two guarded read paths above |
 
 !!! tip "Garbage collection"
-    Overwritten chunks remain in the Icechunk object store until you run GC. The old
+    Overwritten chunks remain in the Icechunk object store until you run garbage collection (`canvodpy store maintain <site>`, a dry run unless you pass `--execute`). The old
     versions are still accessible via snapshot IDs — useful for auditing before cleaning
     up. `unsafe_append`'s duplicate chunks are unaffected by GC in the same way, since
     they're still referenced by the current snapshot — GC only reclaims chunks that
