@@ -148,14 +148,13 @@ unresolved-import = "ignore"
 [tool.ty.src]
 # Tests use assert, magic numbers and intentional patterns — skip entirely.
 # Demo notebooks are not production code.
-# The two store files below have deep icechunk/xarray generics that need
+# The store file below have deep icechunk/xarray generics that need
 # dedicated refactoring before ty can analyse them cleanly.
 exclude = [
     "**/tests/**",
     "demo/**",
     "dev/**",
     "prototypes/**",
-    "packages/canvod-store/src/canvod/store/grid_adapters/grid_storage.py",
     "packages/canvod-store/src/canvod/store/store.py",
 ]
 
@@ -255,22 +254,6 @@ scopes = [
 
 [[tool.ty.overrides]]
 include = ["packages/canvod-store/src/canvod/store/store.py"]
-
-[tool.ty.overrides.rules]
-invalid-argument-type = "ignore"
-not-subscriptable = "ignore"
-unresolved-attribute = "ignore"
-invalid-assignment = "ignore"
-unresolved-import = "ignore"
-unsupported-operator = "ignore"
-no-matching-overload = "ignore"
-invalid-return-type = "ignore"
-missing-argument = "ignore"
-possibly-missing-submodule = "ignore"
-deprecated = "ignore"
-
-[[tool.ty.overrides]]
-include = ["packages/canvod-store/src/canvod/store/grid_adapters/grid_storage.py"]
 
 [tool.ty.overrides.rules]
 invalid-argument-type = "ignore"
