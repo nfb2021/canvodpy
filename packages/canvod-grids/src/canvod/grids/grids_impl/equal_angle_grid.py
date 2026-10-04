@@ -35,7 +35,9 @@ class EqualAngleBuilder(BaseGridBuilder):
     Mathematical construction
     -------------------------
     1. A zenith cap cell covers [0, Δθ/2] × [0, 2π).
-    2. Theta band edges are placed at Δθ/2, 3Δθ/2, … up to π/2.
+    2. Theta band edges are placed at Δθ/2, 3Δθ/2, … and a last edge at
+       π/2 − cutoff_theta, so the grid reaches the horizon (or the cutoff);
+       the last band is usually narrower than Δθ.
     3. Within every band, the full azimuth is split into ``n_phi`` sectors of
        equal width Δφ = 2π / n_phi.
     4. Cell centres are at the midpoint of each (phi, theta) rectangle.
@@ -85,6 +87,11 @@ class EqualAngleBuilder(BaseGridBuilder):
             max_theta - self.cutoff_theta_rad,
             self.angular_resolution_rad,
         )
+        # The last band ends at the outer edge of the grid (the horizon, or
+        # 90° - cutoff_theta); it is narrower when the band width does not
+        # divide the remaining range.
+        if not np.isclose(theta_edges[-1], max_theta - self.cutoff_theta_rad):
+            theta_edges = np.append(theta_edges, max_theta - self.cutoff_theta_rad)
 
         n_phi_divisions = int(2 * np.pi / self.angular_resolution_rad)
 

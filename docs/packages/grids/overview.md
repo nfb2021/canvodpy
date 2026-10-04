@@ -70,9 +70,22 @@ Seven implementations are available, all inheriting from `BaseGridBuilder`:
 
 All builders accept `angular_resolution` (degrees), `cutoff_theta` and
 `phi_rotation` (degrees) and return a `GridData` object. `cutoff_theta`
-(default 0) leaves out the sky within that many degrees of the horizon:
-the grid ends near θ = 90° − `cutoff_theta`, the exact last edge depends
-on the grid type. A run's grid assignment uses `cutoff_theta = 0`.
+(default 0) leaves out the sky within that many degrees of the horizon.
+A run's grid assignment uses `cutoff_theta = 0`.
+
+Where a grid ends depends on its type:
+
+| Grid type | Outer edge | Observations near the horizon |
+|---|---|---|
+| `equal_area`, `equal_angle`, `equirectangular` | exactly θ = 90° − `cutoff_theta`; the last band is narrower when the band width does not divide the range (half a band for `equal_area` and `equal_angle` at a cutoff that is a multiple of the resolution) | all get a cell up to the outer edge, none beyond |
+| `htm`, `geodesic` | the triangles whose center lies above the outer edge; some extend below it | all get a cell above the horizon (with `cutoff_theta = 0`) |
+| `healpix` | the pixels whose center lies at or above the outer edge; some extend below it | all get a cell above the horizon (with `cutoff_theta = 0`) |
+| `fibonacci` | the Voronoi cells whose lattice point lies above the outer edge | some low observations get no cell: up to about 1°, 3° and 6° elevation at 2°, 5° and 10° resolution |
+
+So the solid angles of the ring grids add up to the hemisphere (2π sr
+with `cutoff_theta = 0`); those of the triangle and pixel grids add up to
+somewhat more (geodesic 1.01 to 1.05 × 2π, HEALPix 1.01 to 1.08 × 2π at
+2° to 10°).
 
 !!! bug "`EqualAreaBuilder` with `cutoff_theta > 0`"
     `EqualAreaBuilder` currently applies `cutoff_theta` at the zenith as
@@ -168,10 +181,16 @@ bounding boxes, not the true (curved or triangular) cell boundaries.
 
     ---
 
-    `add_cell_ids_to_ds_fast` — assigns each observation to the cell with
-    the nearest center (KDTree, O(n log m) for n observations, m cells),
-    eagerly or lazily for dask arrays. `canvodpy run` uses the same function
-    when grid assignment is set.
+    `add_cell_ids_to_ds_fast` — assigns each observation to the cell that
+    contains it, eagerly or lazily for dask arrays: by band and sector
+    edges for the ring grids, by spherical triangle for HTM and geodesic,
+    by pixel for HEALPix, by Voronoi cell for Fibonacci. Observations
+    outside the grid get NaN (see the table above). The nearest cell
+    center is not used: near a cell's corner it often belongs to a
+    neighboring cell. `canvodpy run` uses the same function when grid
+    assignment is set. The lookup needs the grid's full geometry, so use
+    a grid built with `create_hemigrid`; a grid read back with `load_grid`
+    works for the ring grids only.
 
 -   :fontawesome-solid-floppy-disk: &nbsp; **Grid Persistence**
 

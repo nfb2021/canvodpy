@@ -5,7 +5,7 @@ instances and VOD xarray Datasets.
 
 Cell assignment
 ---------------
-``add_cell_ids_to_ds_fast``    – nearest cell center via KDTree, eager or dask-lazy
+``add_cell_ids_to_ds_fast``    – the cell that contains each observation, eager or dask-lazy
 
 Vertex / grid conversion
 ------------------------
@@ -21,8 +21,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import structlog
 import xarray as xr
-from scipy.spatial import cKDTree  # type: ignore[unresolved-import]
 
+from canvod.grids._internal.cell_lookup import cell_lookup
 from canvod.utils.tools import deprecated
 
 if TYPE_CHECKING:
@@ -60,50 +60,6 @@ _RESOLUTION_DESCRIPTIONS: dict[str, str] = {
 
 
 # ==============================================================================
-# Internal: KDTree builder
-# ==============================================================================
-
-
-def _build_kdtree(grid: GridData) -> cKDTree:
-    """Build a KDTree from grid cell centres (φ, θ → Cartesian)."""
-    phi = grid.grid["phi"].to_numpy()
-    theta = grid.grid["theta"].to_numpy()
-    x = np.sin(theta) * np.cos(phi)
-    y = np.sin(theta) * np.sin(phi)
-    z = np.cos(theta)
-    return cKDTree(np.column_stack([x, y, z]))
-
-
-def _query_points(
-    tree: cKDTree, cell_id_col: np.ndarray, phi: np.ndarray, theta: np.ndarray
-) -> np.ndarray:
-    """Vectorised nearest-cell lookup via KDTree.
-
-    Parameters
-    ----------
-    tree : cKDTree
-        KDTree built from grid cell centres.
-    cell_id_col : np.ndarray
-        ``cell_id`` column of the grid DataFrame (length = ncells).
-    phi : np.ndarray
-        Azimuth angles of query points.
-    theta : np.ndarray
-        Polar angles of query points.
-
-    Returns
-    -------
-    np.ndarray
-        Cell IDs for each query point.
-
-    """
-    x = np.sin(theta) * np.cos(phi)
-    y = np.sin(theta) * np.sin(phi)
-    z = np.cos(theta)
-    _, indices = tree.query(np.column_stack([x, y, z]), workers=-1)
-    return cell_id_col[indices]
-
-
-# ==============================================================================
 # Cell assignment
 # ==============================================================================
 
@@ -114,10 +70,21 @@ def add_cell_ids_to_ds_fast(
     grid_name: str,
     data_var: str | None = None,
 ) -> xr.Dataset:
-    """Assign every observation to the grid cell with the nearest center.
+    """Assign every observation to the grid cell that contains it.
 
-    A KDTree built from the grid's cell centers is queried with each
-    observation's direction (O(n log m) for n observations and m cells).
+    Each grid type is looked up by its own cell boundaries: theta band and
+    phi sector for ``equal_area``, ``equal_angle`` and ``equirectangular``;
+    the spherical triangle for ``htm`` and ``geodesic``; the pixel for
+    ``healpix``; the Voronoi cell for ``fibonacci``. Bands and sectors are
+    closed at their inner edge and open at their outer edge; the last band
+    also includes its outer edge.
+
+    An observation outside the grid gets NaN: below the outer edge of the
+    last band of a ring grid (the horizon, or ``90° - cutoff_theta``), or,
+    for the triangle, pixel and Voronoi grids, in a cell the hemisphere
+    filter left out (these grids keep a cell when its center lies above
+    ``90° - cutoff_theta``, so their edge near the horizon is not a circle).
+
     ``phi`` and ``theta`` may be data variables (as the runs write them) or
     coordinates, with ``(epoch, sid)`` dimensions in either order. If they
     are dask arrays, the cell IDs are computed lazily, block by block.
@@ -128,7 +95,9 @@ def add_cell_ids_to_ds_fast(
         Dataset with ``phi(epoch, sid)`` and ``theta(epoch, sid)`` in
         radians.
     grid : GridData
-        Hemisphere grid instance.
+        Hemisphere grid built with ``create_hemigrid()``. A grid loaded with
+        ``load_grid()`` works for the ring grids only; the others lose the
+        geometry the lookup needs (ValueError).
     grid_name : str
         Grid identifier; the output variable is ``cell_id_<grid_name>``.
     data_var : str | None
@@ -138,7 +107,8 @@ def add_cell_ids_to_ds_fast(
     -------
     xr.Dataset
         *ds* with a ``cell_id_<grid_name>(epoch, sid)`` float64 data
-        variable; NaN where ``phi`` or ``theta`` is not finite.
+        variable; NaN where ``phi`` or ``theta`` is not finite or the
+        observation lies outside the grid.
     """
     import dask.array as da
 
@@ -151,8 +121,7 @@ def add_cell_ids_to_ds_fast(
             stacklevel=2,
         )
 
-    tree = _build_kdtree(grid)
-    cell_id_col = grid.grid["cell_id"].to_numpy()
+    lookup = cell_lookup(grid)
 
     def _assign_block(phi_block: np.ndarray, theta_block: np.ndarray) -> np.ndarray:
         phi_flat = phi_block.ravel()
@@ -160,9 +129,7 @@ def add_cell_ids_to_ds_fast(
         valid = np.isfinite(phi_flat) & np.isfinite(theta_flat)
         cell_ids = np.full(len(phi_flat), np.nan, dtype=np.float64)
         if np.any(valid):
-            cell_ids[valid] = _query_points(
-                tree, cell_id_col, phi_flat[valid], theta_flat[valid]
-            )
+            cell_ids[valid] = lookup(phi_flat[valid], theta_flat[valid])
         return cell_ids.reshape(phi_block.shape)
 
     phi = ds["phi"].transpose("epoch", "sid").data
@@ -179,7 +146,7 @@ def add_cell_ids_to_ds_fast(
     log.info(
         "cell_assignment_complete",
         grid_name=grid_name,
-        grid_cells=len(cell_id_col),
+        grid_cells=grid.ncells,
         lazy=isinstance(cell_ids, da.Array),
     )
     return ds
@@ -517,6 +484,9 @@ def grid_to_dataset(grid: GridData) -> xr.Dataset:
             "cutoff_theta_deg": float(
                 grid.metadata.get("cutoff_theta", 0.0) if grid.metadata else 0.0
             ),
+            "phi_rotation_deg": float(
+                grid.metadata.get("phi_rotation", 0.0) if grid.metadata else 0.0
+            ),
             "n_cells": n_cells,
         },
     )
@@ -782,6 +752,7 @@ def load_grid(
         metadata={
             "angular_resolution": angular_resolution,
             "cutoff_theta": cutoff_theta,
+            "phi_rotation": ds_grid.attrs.get("phi_rotation_deg", 0.0),
         },
     )
 

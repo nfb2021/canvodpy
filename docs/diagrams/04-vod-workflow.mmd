@@ -26,7 +26,7 @@ sequenceDiagram
     VOD-->>User: VOD Dataset
 
     User->>Grid: add_cell_ids_to_vod_fast(vod_ds, grid, grid_name)
-    Grid->>Grid: KDTree query: (φ,θ) → cell_id
+    Grid->>Grid: Containing cell: (φ,θ) → cell_id
     Grid-->>User: Gridded VOD
 
     User->>Viz: HemisphereVisualizer(grid).plot_2d(gridded_vod)

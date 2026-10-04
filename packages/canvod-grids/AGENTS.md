@@ -17,8 +17,10 @@ Background: `docs/packages/grids/overview.md`.
 
 ## Invariants
 
-- **One cell assignment**: `add_cell_ids_to_ds_fast` (nearest cell center,
-  KD-tree, float64). `GridAssignment` in canvod-ops calls it. Its other
+- **One cell assignment**: `add_cell_ids_to_ds_fast` (the cell that
+  contains the observation, per grid type in `_internal/cell_lookup.py`;
+  float64, NaN outside the grid). Never the nearest cell center: near a
+  corner it belongs to a neighboring cell. `GridAssignment` in canvod-ops calls it. Its other
   variants are deprecated; don't add a new one.
 - Outlier filtering (Hampel and similar) was removed on purpose; it does
   not belong in canvodpy.

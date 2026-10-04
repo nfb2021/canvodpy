@@ -144,6 +144,7 @@ class BaseGridBuilder(ABC):
         builder_meta = {
             "angular_resolution": self.angular_resolution,
             "cutoff_theta": self.cutoff_theta,
+            "phi_rotation": self.phi_rotation,
         }
         if extra_kwargs.get("metadata"):
             extra_kwargs["metadata"] = {**builder_meta, **extra_kwargs["metadata"]}

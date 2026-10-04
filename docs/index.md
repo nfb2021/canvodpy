@@ -52,7 +52,7 @@ signal-to-noise ratio observations.
 
     ---
 
-    Hemispheric tessellations (equal-area and equal-angle verified; others experimental) defined in 3D, enabling full spatial analyses. KDTree-backed cell assignment and interactive data exploration.
+    Hemispheric tessellations (equal-area and equal-angle verified; others experimental) defined in 3D, enabling full spatial analyses. Each observation is assigned to the cell that contains it; interactive data exploration.
 
     [:octicons-arrow-right-24: canvod-grids](packages/grids/overview.md)
 
@@ -184,7 +184,7 @@ flowchart TD
     ---
 
     7 hemispheric grid types — equal-area, geodesic, HTM and more.
-    KDTree-backed O(n log m) cell assignment.
+    Assignment of each observation to the cell that contains it.
 
 -   :fontawesome-solid-leaf: &nbsp; **canvod-vod**
 

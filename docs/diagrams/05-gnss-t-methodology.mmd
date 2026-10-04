@@ -39,7 +39,7 @@ flowchart TD
 
     subgraph GRIDDING[Hemispheric Grid Assignment]
         GRID["Grid Construction<br/>(equal-area, equal-angle, ...)"]
-        KDTREE["KDTree Cell Assignment (O(n log m) spatial query)"]
+        KDTREE["Cell Assignment (cell containing each observation)"]
     end
 
     subgraph OUTPUT[Output]

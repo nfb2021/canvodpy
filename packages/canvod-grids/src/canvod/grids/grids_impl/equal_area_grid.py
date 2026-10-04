@@ -38,9 +38,13 @@ class EqualAreaBuilder(BaseGridBuilder):
     2. **Zenith cap** – a single cell covers [0, Δθ/2] in theta and the full
        azimuth [0, 2π).
 
-    3. **Theta bands** – edges are placed at Δθ/2, 3Δθ/2, 5Δθ/2, … up to
-       π/2 − cutoff_theta.  For each band [θ_inner, θ_outer] the band's
-       total solid angle is::
+    3. **Theta bands** – edges are placed at Δθ/2, 3Δθ/2, 5Δθ/2, … and a
+       last edge at π/2 − cutoff_theta, so the grid reaches the horizon (or
+       the cutoff).  With the zenith cap of half width the last band is
+       usually narrower than Δθ (half as wide when the cutoff is a multiple
+       of Δθ); its phi divisions follow from its solid angle like any other
+       band's.  For each band [θ_inner, θ_outer] the band's total solid
+       angle is::
 
            Ω_band = 2π (cos θ_inner − cos θ_outer)
 
@@ -102,6 +106,11 @@ class EqualAreaBuilder(BaseGridBuilder):
             max_theta - self.cutoff_theta_rad,
             self.angular_resolution_rad,
         )
+        # The last band ends at the outer edge of the grid (the horizon, or
+        # 90° - cutoff_theta); it is narrower when the band width does not
+        # divide the remaining range.
+        if not np.isclose(theta_edges[-1], max_theta - self.cutoff_theta_rad):
+            theta_edges = np.append(theta_edges, max_theta - self.cutoff_theta_rad)
 
         # Target solid angle per cell
         target_omega = 2 * np.pi * (1 - np.cos(self.angular_resolution_rad / 2))

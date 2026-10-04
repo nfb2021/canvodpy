@@ -285,7 +285,7 @@ def assign_grid_cells(
     Notes
     -----
     Pure function - no side effects on input.
-    Uses KDTree-based assignment for performance.
+    Each observation gets the cell that contains it.
     """
     log.info("assign_grid_cells")
 
