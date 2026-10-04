@@ -259,7 +259,7 @@ sites:
       reference_01:
         type: reference
         directory: 01_reference
-        reader_format: auto          # 'auto', 'rinex3', or 'sbf'
+        reader_format: auto          # auto, rinex3, rinex3_stripped, rinex2, sbf, nmea
         paired_canopies: all         # 'all' or list of canopy receiver names
         description: null
         # recipe: my_site_reference  # → <config dir>/recipes/my_site/my_site_reference.yaml

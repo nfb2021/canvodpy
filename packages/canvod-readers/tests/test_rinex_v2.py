@@ -119,6 +119,10 @@ class TestRnxv2Obs:
         assert obs.fpath == rinex_v2_file
         assert obs.header is not None
 
+    def test_source_format(self, rinex_v2_file):
+        """The reader names itself as registered, not as RINEX 3."""
+        assert Rnxv2Obs(fpath=rinex_v2_file).source_format == "rinex2"
+
     def test_obs_header_access(self, rinex_v2_file):
         """Test header is accessible from obs object."""
         obs = Rnxv2Obs(fpath=rinex_v2_file)

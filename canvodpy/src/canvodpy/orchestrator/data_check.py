@@ -227,9 +227,15 @@ def check_receiver_data(
     report.unrecognized = unprocessed_files(directory, reader_format, recipe_path)
 
     if configured_format == "auto" and files_of_day:
-        report.reader_format = detect_reader_format(
-            [f for files in files_of_day.values() for f in files]
-        )
+        # One file per day: a run detects the format per day, from all of
+        # that day's files; reading every header here would be slow.
+        try:
+            report.reader_format = detect_reader_format(
+                [files[0] for files in files_of_day.values() if files]
+            )
+        except DiscoveryError as exc:
+            report.errors.append(str(exc))
+            return report
 
     if not report.files:
         if report.unrecognized:

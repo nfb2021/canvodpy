@@ -690,6 +690,11 @@ class Rnxv2Obs(GNSSDataReader, BaseModel):
     def header(self) -> Rnxv2Header:
         return self._header
 
+    @property
+    def source_format(self) -> str:
+        """Format identifier of this reader, as registered: ``"rinex2"``."""
+        return "rinex2"
+
     def __str__(self) -> str:
         return (
             f"{self.__class__.__name__}:\n"

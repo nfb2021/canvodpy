@@ -50,11 +50,17 @@ class ReceiverConfig(_StrictModel):
             "Example keys: site_url, antenna_height, species."
         ),
     )
-    reader_format: str = Field(
+    reader_format: Literal[
+        "auto", "rinex3", "rinex3_stripped", "rinex2", "sbf", "nmea"
+    ] = Field(
         "auto",
         description=(
-            "GNSS data reader format: 'auto', 'rinex3', 'sbf'. "
-            "When 'auto', detected from files at pipeline start."
+            "Reader for the receiver's files: 'rinex3' (RINEX 3), "
+            "'rinex3_stripped' (RINEX 3 with signal strengths only, faster), "
+            "'rinex2' (RINEX 2.11), 'sbf' (Septentrio binary), 'nmea'. "
+            "'auto': detected per day from the files (SBF and NMEA by file "
+            "type, RINEX 2 or 3 from the header); a day whose files need "
+            "different readers is an error."
         ),
     )
     recipe: str | None = Field(

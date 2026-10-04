@@ -339,7 +339,7 @@ sites:
       reference_01:
         type: reference
         directory: 01_reference
-        reader_format: auto           # rinex3, sbf, or auto
+        reader_format: auto           # auto, rinex3, rinex3_stripped, rinex2, sbf, nmea
         paired_canopies: all          # 'all' or list of canopy receiver names
       canopy_01:
         type: canopy
@@ -358,7 +358,7 @@ sites:
 | ----------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `type`            | --      | `reference` or `canopy`.                                                                                                                                                                                                                           |
 | `directory`       | --      | Subdirectory under `gnss_site_data_root` holding this receiver's files.                                                                                                                                                                            |
-| `reader_format`   | `auto`  | Force a specific reader: `rinex3`, `sbf`, or `auto` (detect from file).                                                                                                                                                                            |
+| `reader_format`   | `auto`  | Reader for the receiver's files: `rinex3`, `rinex3_stripped` (signal strengths only, faster), `rinex2`, `sbf`, `nmea`. `auto` detects it per day: SBF and NMEA by file type, RINEX 2 or 3 from the header. A day whose files need different readers stops the run with an error; then set the reader, or keep each format in its own directory. |
 | `paired_canopies` | --      | Which canopy receivers this reference is paired with: `all` or a list of canopy receiver names. Required for reference receivers, must not be set for canopy receivers. (The old name `scs_from` is deprecated and still accepted with a warning.) |
 
 ---

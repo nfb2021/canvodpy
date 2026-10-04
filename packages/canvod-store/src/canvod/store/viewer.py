@@ -30,7 +30,9 @@ if TYPE_CHECKING:
 _FORMAT_LABELS: dict[str, str] = {
     "sbf": "SBF",
     "rinex3": "RINEX v3.04",
+    "rinex3_stripped": "RINEX v3 (signal strengths only)",
     "rinex2": "RINEX v2",
+    "nmea": "NMEA",
 }
 
 

@@ -84,12 +84,55 @@ def test_installed_filemap_does_not_widen_discovery(tmp_path: Path) -> None:
         assert _names(tmp_path) == [CANONICAL]
 
 
-def test_detect_reader_format() -> None:
-    rnx = DiscoveredFile(Path("a"), CANONICAL)
+def _rinex(path: Path, version: str) -> DiscoveredFile:
+    """A RINEX file whose header gives ``version``."""
+    path.write_text(
+        f"{version:>9}           OBSERVATION DATA    M                   "
+        "RINEX VERSION / TYPE\n"
+        "G    1 C1C                                                  "
+        "SYS / # / OBS TYPES\n"
+        "                                                            "
+        "END OF HEADER\n"
+    )
+    return DiscoveredFile(path, CANONICAL)
+
+
+def test_detect_reader_format_by_file_type() -> None:
     sbf = DiscoveredFile(Path("b"), CANONICAL.replace(".rnx", ".sbf"))
+    nmea = DiscoveredFile(Path("c"), CANONICAL.replace(".rnx", ".nmea"))
     assert detect_reader_format([sbf]) == "sbf"
-    assert detect_reader_format([rnx, sbf]) == "rinex3"
-    assert detect_reader_format([]) == "rinex3"
+    assert detect_reader_format([nmea]) == "nmea"
+
+
+def test_detect_reader_format_rinex_version_from_header(tmp_path: Path) -> None:
+    assert detect_reader_format([_rinex(tmp_path / "a", "3.04")]) == "rinex3"
+    assert detect_reader_format([_rinex(tmp_path / "b", "2.11")]) == "rinex2"
+
+
+def test_detect_reader_format_refuses_mixed_files(tmp_path: Path) -> None:
+    """A day whose files need different readers is an error, never a guess."""
+    rnx3 = _rinex(tmp_path / "a", "3.04")
+    rnx2 = _rinex(tmp_path / "b", "2.11")
+    sbf = DiscoveredFile(Path("c"), CANONICAL.replace(".rnx", ".sbf"))
+    with pytest.raises(DiscoveryError, match="different readers"):
+        detect_reader_format([rnx3, sbf])
+    with pytest.raises(DiscoveryError, match="different readers"):
+        detect_reader_format([rnx3, rnx2])
+    with pytest.raises(DiscoveryError, match="No files"):
+        detect_reader_format([])
+    empty = tmp_path / "empty"
+    empty.write_text("")
+    with pytest.raises(DiscoveryError, match="Set reader_format"):
+        detect_reader_format([DiscoveredFile(empty, CANONICAL)])
+
+
+def test_rinex2_and_nmea_files_are_discovered(tmp_path: Path) -> None:
+    nmea = CANONICAL.replace(".rnx", ".nmea")
+    sbf = CANONICAL.replace(".rnx", ".sbf")
+    _touch(tmp_path, CANONICAL, nmea, sbf)
+    assert _names(tmp_path, "rinex2") == [CANONICAL]
+    assert _names(tmp_path, "nmea") == [nmea]
+    assert len(_names(tmp_path, "auto")) == 3
 
 
 def test_missing_directory_yields_nothing(tmp_path: Path) -> None:

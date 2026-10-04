@@ -27,6 +27,10 @@ from canvod.config.models import SiteConfig
 
 CANOPY_RNX = "ROSA01TUW_R_20250010000_15M_05S_AA.rnx"
 REFERENCE_RNX = "ROSR01TUW_R_20250010000_15M_05S_AA.rnx"
+#: First header line of a RINEX 3 file: ``reader_format: auto`` reads it.
+RINEX3_HEADER = (
+    "     3.04           OBSERVATION DATA    M                   RINEX VERSION / TYPE\n"
+)
 
 
 def _site_config(tmp_path) -> MagicMock:
@@ -387,7 +391,7 @@ class TestValidateDataDirs:
     def test_valid_site(self, tmp_path):
         for directory, name in (("canopy", CANOPY_RNX), ("reference", REFERENCE_RNX)):
             (tmp_path / directory).mkdir()
-            (tmp_path / directory / name).touch()
+            (tmp_path / directory / name).write_text(RINEX3_HEADER)
             (tmp_path / directory / "notes.txt").touch()
         config = _site_config(tmp_path)
         config.processing.params.aggregate_glonass_fdma = False
@@ -403,7 +407,7 @@ class TestValidateDataDirs:
 
     def test_missing_directory_fails(self, tmp_path):
         (tmp_path / "canopy").mkdir()
-        (tmp_path / "canopy" / CANOPY_RNX).touch()
+        (tmp_path / "canopy" / CANOPY_RNX).write_text(RINEX3_HEADER)
         config = _site_config(tmp_path)
         config.processing.params.aggregate_glonass_fdma = False
         with patch(

@@ -187,12 +187,19 @@ def _load_recipe(recipe_path: Path) -> Any:
 
 
 #: File types each reader format reads (``None``/``"auto"``: all of them).
+#: RINEX 2 and 3 share the canonical type ``rnx``; the header tells them apart.
 _READER_FILE_TYPES: dict[str | None, frozenset[str]] = {
     "sbf": frozenset({"sbf"}),
     "rinex3": frozenset({"rnx"}),
+    "rinex3_stripped": frozenset({"rnx"}),
+    "rinex2": frozenset({"rnx"}),
     "rinex": frozenset({"rnx"}),
+    "nmea": frozenset({"nmea"}),
 }
-_ALL_FILE_TYPES = frozenset({"rnx", "sbf"})
+_ALL_FILE_TYPES = frozenset({"rnx", "sbf", "nmea"})
+
+#: Reader format of each canonical file type that needs no look inside.
+_FORMAT_OF_FILE_TYPE = {"sbf": "sbf", "nmea": "nmea"}
 
 
 def _receiver_identity(cfg: dict[str, Any], base_path: Path, site: str) -> str | None:
@@ -514,10 +521,43 @@ def unprocessed_files(
 def detect_reader_format(files: list[DiscoveredFile]) -> str:
     """Reader format for a receiver whose config says ``reader_format: auto``.
 
-    Decided from the canonical names of the discovered files: ``"sbf"`` if
-    they are all SBF, otherwise ``"rinex3"``.
+    SBF and NMEA files are recognized by their canonical file type, RINEX
+    files by the version in their header: ``"rinex2"`` or ``"rinex3"``.
+
+    Raises
+    ------
+    DiscoveryError
+        If ``files`` is empty, a RINEX header cannot be read, or the files
+        need different readers (e.g. SBF next to RINEX, or RINEX 2 next to
+        RINEX 3): set ``reader_format`` of the receiver, or keep the formats
+        in separate directories.
     """
-    suffixes = {Path(f.canonical_name).suffix for f in files if f.canonical_name}
-    if suffixes == {".sbf"}:
-        return "sbf"
-    return "rinex3"
+    from canvodpy.factories import ReaderFactory
+
+    if not files:
+        raise DiscoveryError("No files to detect the reader format from")
+    formats: dict[str, Path] = {}
+    for f in files:
+        file_type = Path(f.canonical_name).suffix[1:]
+        fmt = _FORMAT_OF_FILE_TYPE.get(file_type)
+        if fmt is None:
+            # The stripped RINEX 3 reader is an opt-in speed-up, never chosen
+            # automatically; the full RINEX 3 reader reads those files too.
+            try:
+                fmt = ReaderFactory.detect_reader(f.path).replace("_stripped", "")
+            except (OSError, ValueError) as exc:
+                raise DiscoveryError(
+                    f"Cannot tell the reader of {f.path}: {exc}. Set reader_format "
+                    "for this receiver."
+                ) from exc
+        formats.setdefault(fmt, f.path)
+    if len(formats) > 1:
+        examples = ", ".join(
+            f"{fmt} ({path.name})" for fmt, path in sorted(formats.items())
+        )
+        raise DiscoveryError(
+            f"Files of one receiver need different readers: {examples}. Set "
+            "reader_format for this receiver, or keep each format in its own "
+            "directory."
+        )
+    return next(iter(formats))

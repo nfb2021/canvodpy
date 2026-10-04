@@ -272,6 +272,16 @@ class TestReceiverConfig:
         rc = ReceiverConfig(type="canopy", directory="can/raw")
         assert rc.paired_canopies is None
 
+    def test_reader_format_accepts_every_reader(self):
+        for fmt in ("auto", "rinex3", "rinex3_stripped", "rinex2", "sbf", "nmea"):
+            rc = ReceiverConfig(type="canopy", directory="can/raw", reader_format=fmt)
+            assert rc.reader_format == fmt
+
+    def test_unknown_reader_format_raises(self):
+        """A typo fails when the settings load, not later in a run."""
+        with pytest.raises(ValidationError, match="reader_format"):
+            ReceiverConfig(type="canopy", directory="can/raw", reader_format="rinex")
+
     def test_canopy_with_paired_canopies_raises(self):
         with pytest.raises(ValidationError, match="must not be set for canopy"):
             ReceiverConfig(type="canopy", directory="can/raw", paired_canopies="all")

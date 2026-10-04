@@ -233,6 +233,23 @@ class ReaderFactory(ComponentFactory):
             If the format cannot be determined or no reader is registered
             for the detected format.
         """
+        return cls.create(cls.detect_reader(fpath), fpath=fpath, **kwargs)
+
+    @classmethod
+    def detect_reader(cls, fpath: str | Any) -> str:
+        """Name of the registered reader for the file at *fpath*.
+
+        Decided from the file's content: the RINEX version in the first
+        header line, NMEA by its sentences.
+
+        Raises
+        ------
+        FileNotFoundError
+            If *fpath* does not exist.
+        ValueError
+            If the format cannot be determined or no reader is registered
+            for the detected format.
+        """
         from pathlib import Path
 
         fpath = Path(fpath)
@@ -256,7 +273,7 @@ class ReaderFactory(ComponentFactory):
             format=format_id,
             reader=name,
         )
-        return cls.create(name, fpath=fpath, **kwargs)
+        return name
 
     @staticmethod
     def _detect_format(fpath: Any) -> str:
