@@ -23,6 +23,7 @@ members = [
     "canvod-vod",
     "canvodpy",
 ]
+overrides = [{ name = "canvod-preflight", editable = "packages/canvod-preflight" }]
 
 [manifest.dependency-groups]
 dev = [
@@ -44,7 +45,7 @@ dev = [
     { name = "ty", specifier = ">=0.0.84" },
     { name = "zensical", specifier = ">=0.0.65" },
 ]
-filemap = [{ name = "canvod-filemap", git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap&branch=feat%2Ffilemap-recipes" }]
+filemap = [{ name = "canvod-filemap", git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap&rev=d2a77bc443262a89b61ad88ae7fe03648398cd0b" }]
 
 [[package]]
 name = "altair"
@@ -268,8 +269,9 @@ requires-dist = [
 [[package]]
 name = "canvod-filemap"
 version = "0.1.0"
-source = { git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap&branch=feat%2Ffilemap-recipes#753db564850611e4e43671f10ef51c0e71beb322" }
+source = { git = "https://github.com/nfb2021/canvodpy-extensions.git?subdirectory=packages%2Fcanvod-filemap&rev=d2a77bc443262a89b61ad88ae7fe03648398cd0b#d2a77bc443262a89b61ad88ae7fe03648398cd0b" }
 dependencies = [
+    { name = "canvod-preflight" },
     { name = "natsort" },
     { name = "pydantic" },
     { name = "pyyaml" },
