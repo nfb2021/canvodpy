@@ -57,6 +57,7 @@ from canvodpy.orchestrator.discovery import (
 from canvodpy.orchestrator.processor import (
     RinexDataProcessor,
     _processing_progress,
+    _warn_if_epoch_count_differs_from_name,
     _worker_init_with_run_id,
     preprocess_reference_with_hermite_aux_fanout,
     preprocess_with_hermite_aux,
@@ -1122,6 +1123,13 @@ class PipelineOrchestrator:
                             continue
 
                         processor = doy_contexts[date_key][0]
+                        for fname, ds in group_results:
+                            _warn_if_epoch_count_differs_from_name(
+                                processor._logger,
+                                fname,
+                                processor._canonical_name(fname),
+                                ds,
+                            )
                         # processing.preprocessing (if set) on the whole
                         # receiver-day, so time bins can span two files
                         augmented = preprocess_files(

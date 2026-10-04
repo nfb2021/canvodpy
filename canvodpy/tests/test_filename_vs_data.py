@@ -47,3 +47,30 @@ def test_warns_when_first_epoch_is_outside_named_span() -> None:
     _warn_if_name_disagrees_with_data(log, Path("f"), name, inside)  # 3 s early
     _warn_if_name_disagrees_with_data(log, Path("f"), "", ok)  # no name
     log.warning.assert_not_called()
+
+
+def test_warns_when_epoch_count_differs_from_name() -> None:
+    from canvodpy.orchestrator.processor import (
+        _warn_if_epoch_count_differs_from_name,
+    )
+
+    name = "ROSA01TUW_R_20250010015_15M_05S_AA.rnx"  # 180 epochs
+    log = mock.Mock()
+    _warn_if_epoch_count_differs_from_name(log, Path("f"), name, _epochs(5, n=170))
+    log.warning.assert_called_once()
+    kwargs = log.warning.call_args.kwargs
+    assert (kwargs["expected_epochs"], kwargs["missing_epochs"]) == (180, 10)
+
+    log = mock.Mock()
+    _warn_if_epoch_count_differs_from_name(log, Path("f"), name, _epochs(5, n=180))
+    _warn_if_epoch_count_differs_from_name(log, Path("f"), "", _epochs(5, n=3))
+    log.warning.assert_not_called()
+
+
+def test_run_turns_the_rinex_readers_own_check_off() -> None:
+    """A run checks every format against the name instead."""
+    from canvodpy.orchestrator.processor import run_reader_options
+
+    assert run_reader_options("rinex3") == {"completeness_mode": "off"}
+    assert run_reader_options("rinex3_stripped") == {"completeness_mode": "off"}
+    assert run_reader_options("sbf") == {}

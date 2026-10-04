@@ -54,6 +54,7 @@ from canvod.config import load_config
 from canvod.config.models import reference_store_group
 from canvod.ops import preprocess_files
 from canvod.readers import DataDirMatcher, MatchedDirs
+from canvod.readers.gnss_specs.exceptions import NmeaError, RinexError
 from canvod.store import GnssResearchSite, scoped_zarr_concurrency
 from canvod.store.store import _with_run_id
 from canvod.utils.logging import get_run_id, set_run_id, stage_timer
@@ -143,6 +144,57 @@ def _warn_if_name_disagrees_with_data(
             hint=(
                 "The file is processed for the day in its name. Check the "
                 "filename or the naming recipe."
+            ),
+        )
+
+
+def run_reader_options(reader_name: str) -> dict[str, Any]:
+    """Options a run passes to a reader besides the file path.
+
+    The RINEX v3 readers check their number of epochs on construction, but
+    only know the intended file length when told. A run checks every file
+    against the period and sampling interval of its canonical name instead
+    (:func:`_warn_if_epoch_count_differs_from_name`), for all formats, and
+    keeps the epochs a file has, so the readers' own check is off.
+    """
+    if reader_name in ("rinex3", "rinex3_stripped"):
+        return {"completeness_mode": "off"}
+    return {}
+
+
+def _warn_if_epoch_count_differs_from_name(
+    log: Any, fname: Path, canonical_name: str, ds: xr.Dataset
+) -> None:
+    """Warn if a file holds fewer or more epochs than its name implies.
+
+    The canonical name gives the file's period and sampling interval
+    (``15M_05S``: 180 epochs). Fewer epochs mean the receiver stopped
+    logging (e.g. a power loss) or epochs were dropped as invalid while
+    reading; the epochs the file has are kept. Call it on the dataset as
+    read, before any temporal aggregation.
+    """
+    from canvod.preflight.convention import CanVODFilename
+
+    if not canonical_name:
+        return
+    try:
+        named = CanVODFilename.from_filename(canonical_name)
+    except ValueError:
+        return
+    n_expected = round(named.batch_duration / named.sampling_interval)
+    n_found = int(np.unique(ds.epoch.values).size) if "epoch" in ds.dims else 0
+    if n_found != n_expected:
+        log.warning(
+            "epoch_count_differs_from_name",
+            file=str(Path(fname).name),
+            canonical_name=canonical_name,
+            expected_epochs=n_expected,
+            found_epochs=n_found,
+            missing_epochs=max(0, n_expected - n_found),
+            hint=(
+                "Fewer epochs: the receiver stopped logging or epochs were "
+                "dropped as invalid; the file's other epochs are kept. More "
+                "epochs: check the sampling field of the filename or recipe."
             ),
         )
 
@@ -250,7 +302,9 @@ def _preprocess_file(
             log.debug("reading_gnss_file", file=str(rnx_file.name), reader=reader_name)
             from canvodpy.factories import ReaderFactory
 
-            rnx = ReaderFactory.create(reader_name, fpath=rnx_file)
+            rnx = ReaderFactory.create(
+                reader_name, fpath=rnx_file, **run_reader_options(reader_name)
+            )
             ds, aux_datasets = rnx.to_ds_and_auxiliary(
                 keep_data_vars=keep_vars,
                 write_global_attrs=True,
@@ -409,7 +463,14 @@ def _preprocess_file(
                 status="ok",
                 **_stage_ctx,
             )
-        except (OSError, RuntimeError, ValueError, ValidationError) as e:
+        except (
+            OSError,
+            RuntimeError,
+            ValueError,
+            ValidationError,
+            RinexError,
+            NmeaError,
+        ) as e:
             log.error(
                 "rinex_preprocessing_failed",
                 error=str(e),
@@ -1043,10 +1104,12 @@ class RinexDataProcessor:
         from canvodpy.factories import ReaderFactory
 
         aggregate = self._config.processing.params.aggregate_glonass_fdma
+        name = reader_format or self._reader_name
         return ReaderFactory.create(
-            reader_format or self._reader_name,
+            name,
             fpath=fpath,
             aggregate_glonass_fdma=aggregate,
+            **run_reader_options(name),
         )
 
     _parse_sampling_interval_from_filename = staticmethod(
@@ -1856,7 +1919,13 @@ class RinexDataProcessor:
                             failed_count=failed_count,
                             hint="worker process likely killed by OOM or segfault",
                         )
-                    except (OSError, RuntimeError, ValueError) as e:
+                    except (
+                        OSError,
+                        RuntimeError,
+                        ValueError,
+                        RinexError,
+                        NmeaError,
+                    ) as e:
                         failed_file = futures[fut].name
                         failed_count += 1
                         self._logger.error(
@@ -4317,6 +4386,10 @@ class RinexDataProcessor:
         # SCS recompute above (which needs the unprocessed observations)
         preprocessing = self._config.processing.preprocessing
         for name, (aug, aux_ds, sid_iss) in per_receiver_results.items():
+            for fname, ds in aug:
+                _warn_if_epoch_count_differs_from_name(
+                    self._logger, fname, self._canonical_name(fname), ds
+                )
             per_receiver_results[name] = (
                 preprocess_files(aug, preprocessing),
                 aux_ds,

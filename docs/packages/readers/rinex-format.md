@@ -87,13 +87,22 @@ What happens on construction:
    `"strict"`; `"warn"` or `"off"` to relax it, see below).
 4. The whole file is read into memory and hashed (`file_hash`).
 
-!!! warning "Sampling intervals the reader accepts"
-    The completeness check infers the sampling interval from the epochs
-    and accepts only 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30 or 60 s, or 2, 5,
-    10, 15, 30 or 60 min. A file sampled at any other interval (e.g. 3 s
-    or 20 s) raises a `ValidationError` on construction, also in a run.
-    `Rnxv3Obs(fpath=..., completeness_mode="off")` reads such a file in
-    your own scripts; `canvodpy run` has no setting for it yet.
+!!! info "Epoch completeness check"
+    The file must hold dump interval / sampling interval epochs.
+
+    | You pass | Dump interval | Sampling interval | Finds |
+    |---|---|---|---|
+    | nothing | first to last epoch, plus one interval | most common step between epochs | gaps inside the file |
+    | `expected_dump_interval`, `expected_sampling_interval` (e.g. `"15 min"`, `"5 s"`) | as given | as given | gaps, and a file cut short |
+
+    Any positive sampling interval works (e.g. 3 s, 0.5 s). A mismatch
+    raises `MissingEpochError` (`"strict"`), warns (`"warn"`), or is not
+    checked (`"off"`).
+
+    `canvodpy run` turns this check off and checks every file, of every
+    format, against the period and sampling interval of its canonical name
+    (`15M_05S`: 180 epochs). A file with fewer epochs is kept and logged
+    as `epoch_count_differs_from_name`.
 
 ### Step 2 — Epoch Iteration
 

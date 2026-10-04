@@ -1422,9 +1422,9 @@ class Rnxv3Obs(GNSSDataReader):
                     day=int(info.day),
                     hour=int(info.hour),
                     minute=int(info.minute),
-                    second=int(info.seconds),
                     tzinfo=UTC,
                 )
+                + timedelta(seconds=float(info.seconds))
             )
         return dts
 
@@ -1444,9 +1444,10 @@ class Rnxv3Obs(GNSSDataReader):
         deltas: list[timedelta] = [b - a for a, b in pairwise(dts) if b >= a]
         if not deltas:
             return None
-        # Pick the most common delta (robust to an occasional missing epoch)
+        # Pick the most common delta (robust to missing epochs); rounded to
+        # the millisecond so sub-second sampling (e.g. 0.1 s) is kept.
         seconds = Counter(
-            int(dt.total_seconds()) for dt in deltas if dt.total_seconds() > 0
+            round(dt.total_seconds(), 3) for dt in deltas if dt.total_seconds() > 0
         )
         if not seconds:
             return None
@@ -1456,43 +1457,34 @@ class Rnxv3Obs(GNSSDataReader):
     def infer_dump_interval(
         self, sampling_interval: pint.Quantity | None = None
     ) -> pint.Quantity | None:
-        """Infer the intended dump interval for the RINEX file.
+        """Infer the dump interval from the time the epochs span.
+
+        The span from the first to the last epoch plus one sampling
+        interval. Epochs missing between the first and the last epoch
+        therefore show up in the completeness check; epochs missing before
+        the first or after the last epoch (e.g. a file cut short) do not,
+        since only the file name or the caller knows the intended length.
 
         Parameters
         ----------
         sampling_interval : pint.Quantity, optional
-            Known sampling interval. If provided, returns (#epochs * sampling_interval)
+            Known sampling interval. Inferred from the epochs if not given.
 
         Returns
         -------
         pint.Quantity or None
-            Dump interval in seconds, or None if cannot be inferred
+            Dump interval in seconds, or None if it cannot be inferred
+            (fewer than two epochs).
 
         """
-        idx = self.get_epoch_record_batches()
-        n_epochs = len(idx)
-        if n_epochs == 0:
-            return None
-
-        if sampling_interval is not None:
-            return (n_epochs * sampling_interval).to(UREG.seconds)
-
-        # Fallback: time coverage inclusive (last - first) + typical step
         dts = self._epoch_datetimes()
-        if len(dts) == 0:
+        if len(dts) < 2:
             return None
-        if len(dts) == 1:
-            # single epoch: treat as 1 * unknown step (cannot infer)
+        step = sampling_interval or self.infer_sampling_interval()
+        if step is None:
             return None
-
-        # Estimate step from data
-        est_step = self.infer_sampling_interval()
-        if est_step is None:
-            return None
-
-        # Inclusive coverage often equals (n_epochs - 1) * step; intended
-        # dump interval is n_epochs * step.
-        return (n_epochs * est_step.to(UREG.seconds)).to(UREG.seconds)
+        span = (dts[-1] - dts[0]).total_seconds() * UREG.seconds
+        return (span + step.to(UREG.seconds)).to(UREG.seconds)
 
     def validate_epoch_completeness(
         self,
@@ -1501,12 +1493,18 @@ class Rnxv3Obs(GNSSDataReader):
     ) -> None:
         """Validate that the number of epochs matches the expected dump interval.
 
+        The file must hold dump interval / sampling interval epochs.
+
         Parameters
         ----------
         dump_interval : str or pint.Quantity, optional
-            Expected file dump interval. If None, inferred from epochs.
+            Expected file dump interval (e.g. ``"15 min"``). If None, the
+            span of the epochs is used (:meth:`infer_dump_interval`), which
+            detects gaps between the first and the last epoch but not a
+            file cut short.
         sampling_interval : str or pint.Quantity, optional
-            Expected sampling interval. If None, inferred from epochs.
+            Expected sampling interval. If None, the most common interval
+            between consecutive epochs.
 
         Returns
         -------

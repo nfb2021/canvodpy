@@ -139,8 +139,14 @@ def data_sampling_seconds(
     ``reader_options`` are passed to the reader, as a run passes them.
     """
     from canvodpy.factories import ReaderFactory
+    from canvodpy.orchestrator.processor import run_reader_options
 
-    reader = ReaderFactory.create(reader_format, fpath=path, **reader_options)
+    reader = ReaderFactory.create(
+        reader_format,
+        fpath=path,
+        **reader_options,
+        **run_reader_options(reader_format),
+    )
     epochs = reader.to_ds(keep_data_vars=[]).epoch.values
     if len(epochs) < 2:
         msg = f"{path.name} has fewer than two epochs"

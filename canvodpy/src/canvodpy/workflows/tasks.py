@@ -138,6 +138,26 @@ def _day_files(
 # ---------------------------------------------------------------------------
 
 
+def _warn_epoch_counts(
+    processed: list[tuple[Path, xr.Dataset]], discovered: list | None
+) -> None:
+    """Compare each file's epochs with its canonical name, as a run does.
+
+    ``discovered`` are the day's ``DiscoveredFile`` entries, which carry the
+    canonical names of recipe files; without them the physical name is used.
+    """
+    from canvodpy.orchestrator.discovery import canonical_name_for
+    from canvodpy.orchestrator.processor import (
+        _warn_if_epoch_count_differs_from_name,
+    )
+
+    names = {f.path: f.canonical_name for f in discovered or []}
+    for fpath, ds in processed:
+        _warn_if_epoch_count_differs_from_name(
+            logger, fpath, names.get(fpath) or canonical_name_for(fpath), ds
+        )
+
+
 def check_day(site: str, yyyydoy: str) -> dict:
     """Check whether every receiver has files for the given date.
 
@@ -669,6 +689,7 @@ def process_rinex(
                 continue
             processed.append((rnx_file, augmented_ds))
 
+        _warn_epoch_counts(processed, day_files[recv_name] if day_files else None)
         # processing.preprocessing (if set) on the whole day, so time bins
         # can span two files; then write each file as before
         for rnx_file, augmented_ds in preprocess_files(
@@ -861,6 +882,7 @@ def process_sbf(
             processed.append((sbf_file, augmented_ds))
             aux_by_file[sbf_file] = aux_datasets
 
+        _warn_epoch_counts(processed, day_files[recv_name] if day_files else None)
         # processing.preprocessing (if set) on the whole day, so time bins
         # can span two files; then write each file as before
         for sbf_file, augmented_ds in preprocess_files(
