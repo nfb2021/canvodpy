@@ -2953,8 +2953,11 @@ class RinexDataProcessor:
                         " (config drift detected)" if drifted else "",
                     )
         except Exception:
-            log.debug(
-                "canvod-store-metadata not available or write failed",
+            # The data is already committed; the run goes on, but the
+            # store metadata no longer describes it.
+            log.warning(
+                "Store metadata write failed; the data is committed, but its "
+                "metadata (coverage, summaries, history, config) is stale",
                 exc_info=True,
             )
 
@@ -3559,8 +3562,11 @@ class RinexDataProcessor:
                         " (config drift detected)" if drifted else "",
                     )
         except Exception:
-            log.debug(
-                "canvod-store-metadata not available or write failed",
+            # The data is already committed; the run goes on, but the
+            # store metadata no longer describes it.
+            log.warning(
+                "Store metadata write failed; the data is committed, but its "
+                "metadata (coverage, summaries, history, config) is stale",
                 exc_info=True,
             )
 

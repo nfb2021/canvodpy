@@ -59,8 +59,8 @@ Store metadata aligns with four established standards:
 
 ## Metadata Schema (11 Sections)
 
-The root `StoreMetadata` model composes 11 section models, each a frozen
-Pydantic `BaseModel`:
+The root `StoreMetadata` model composes 11 section models, each a Pydantic
+`BaseModel`, plus a `metadata_version` for the schema:
 
 | Section | Model | Fields | What it captures |
 |---------|-------|--------|-----------------|
@@ -119,7 +119,7 @@ from canvod.store_metadata import update_metadata
 # After ingesting new data, update timestamps and summaries
 update_metadata(store_path, {
     "temporal.updated": "2026-03-09T12:00:00Z",
-    "temporal.collected_end": "2025-031",
+    "temporal.collected_end": "2025-01-31T23:59:55",
 })
 ```
 
@@ -158,8 +158,9 @@ from canvod.store_metadata import scan_stores_as_stac, write_stac_catalog
 # Generate a STAC Catalog JSON
 stac = scan_stores_as_stac(root_dir=Path("/data/stores/"))
 
-# Write STAC catalog and collection files to disk
-write_stac_catalog(root_dir, output_dir=Path("/data/stac/"))
+# Write catalog.json (default: root_dir / "catalog.json") and a
+# collection.json next to each store
+write_stac_catalog(Path("/data/stores/"), output_path=Path("/data/stac/catalog.json"))
 ```
 
 ### Display
@@ -179,18 +180,17 @@ text = format_metadata(metadata)
 ## Storage Location
 
 Metadata is stored as a JSON-serializable dictionary in the Zarr store's **root
-attributes** under the key `canvod_metadata`:
+attributes** under the key `canvod_metadata`, on branch `main`:
 
 ```
-store_root/
-├── .zattrs                    ← contains {"canvod_metadata": {...}}
+store_root/                    ← root attributes: {"canvod_metadata": {...}}
 ├── canopy_01/
 │   ├── SNR
 │   ├── metadata/
 │   │   ├── table/             ← file registry (canvod-store)
-│   │   └── sbf_obs/           ← SBF quality monitoring (canvod-store)
+│   │   └── sbf_obs/           ← SBF receivers only (canvod-store)
 │   └── ...
-└── reference_01/
+└── reference_01_canopy_01/    ← a reference, stored once per paired canopy
     └── ...
 ```
 
@@ -198,12 +198,22 @@ store_root/
 
 ## Orchestrator Integration
 
-The orchestrator writes metadata automatically during data ingestion:
+Runs write the metadata of both stores themselves, after each day written
+to the GNSS store and after each VOD write:
 
-1. **First write** to a new store: `collect_metadata()` gathers all 11 sections, `write_metadata()` persists them
-2. **Every subsequent write**: `update_metadata()` refreshes the `temporal.updated` timestamp and increments summaries
+1. **First write** to a store: `collect_metadata()` gathers all 11 sections,
+   `summarize_store()` adds the coverage and summaries of the stored data,
+   `write_metadata()` persists them.
+2. **Every later write**: `update_metadata()` sets `temporal.updated`, adds a
+   line to `summaries.history`, recomputes coverage and summaries from the
+   stored data, and replaces the config snapshot if the settings changed
+   (noted in the history with the old and new config hash).
 
-No user action is required — every run (`canvodpy run`, `Site.pipeline()`, Airflow) collects and writes the metadata.
+No user action is required: every run (`canvodpy run`, `Site.pipeline()`,
+Airflow) goes through this code. A failed metadata write does not stop the
+run and is logged as a warning. The data of that write is committed
+anyway (the metadata goes in a separate commit), so after such a warning
+the metadata no longer describes all of the stored data.
 
 ---
 
