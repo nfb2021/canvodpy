@@ -1247,6 +1247,15 @@ class RinexDataProcessor:
             self._canonical_names[found.path] = found.canonical_name
         return [found.path for found in discovered]
 
+    def _file_start(self, fname: Path) -> datetime | None:
+        """Start time from the canonical name of ``fname`` (``None`` if none)."""
+        from canvod.preflight.convention import CanVODFilename
+
+        canonical = self._canonical_name(fname)
+        if not canonical:
+            return None
+        return CanVODFilename.from_filename(canonical).start
+
     def _canonical_name(self, fname: Path) -> str:
         """Canonical canVOD filename for a discovered file (``""`` if none)."""
         cached = self._canonical_names.get(fname)
@@ -3799,32 +3808,31 @@ class RinexDataProcessor:
         )
         rinex_v3_parser = self._config.processing.params.rinex_v3_parser
 
-        # In broadcast + shared position mode, build a mapping from
-        # timestamp suffix → canopy file path so reference tasks can
-        # read the matching canopy file's sbf_obs on the fly
-        canopy_file_by_timestamp: dict[str, Path] | None = None
-        canopy_reader_fmt: str | None = None
+        # In broadcast + shared position mode, a reference file takes the
+        # satellite geometry of the file of its paired canopy (its
+        # position_data_dir) that starts at the same time. Index the files
+        # of every canopy, by receiver name, by the start time of their
+        # canonical names.
+        canopy_files_by_start: dict[str, tuple[dict[datetime, Path], str]] = {}
         position_mode = self._config.processing.params.receiver_position_mode
         if self.use_sbf_geometry and position_mode == "shared":
             for rc_name, rc_type, rc_dir, _, rc_fmt in receiver_configs:
-                if rc_type == "canopy":
-                    canopy_files = self._get_rinex_files(rc_dir, rc_fmt)
-                    if canopy_files:
-                        import re
-
-                        canopy_file_by_timestamp = {}
-                        canopy_reader_fmt = rc_fmt or self._reader_name
-                        for cf in canopy_files:
-                            # Extract timestamp: last chars before extension
-                            # e.g. "ract001a15.25_" → "a15"
-                            m = re.search(r"([a-x]\d{2})\.\d{2}_$", cf.name)
-                            if m:
-                                canopy_file_by_timestamp[m.group(1)] = cf
-                        self._logger.info(
-                            "canopy_broadcast_file_index_built",
-                            canopy_files=len(canopy_file_by_timestamp),
-                        )
-                    break
+                if rc_type != "canopy":
+                    continue
+                by_start = {}
+                for cf in self._get_rinex_files(rc_dir, rc_fmt):
+                    start = self._file_start(cf)
+                    if start is not None:
+                        by_start[start] = cf
+                canopy_files_by_start[rc_dir.receiver] = (
+                    by_start,
+                    rc_fmt or self._reader_name,
+                )
+                self._logger.info(
+                    "canopy_broadcast_file_index_built",
+                    canopy=rc_name,
+                    canopy_files=len(by_start),
+                )
 
         # Reference receivers paired against multiple canopies share the same
         # physical file set (same data_dir/reader_format) -- group them so
@@ -3905,18 +3913,29 @@ class RinexDataProcessor:
 
             effective_reader = reader_format or self._reader_name
             for rnx_file in rinex_files:
-                # For reference receivers in broadcast + shared mode,
-                # find matching canopy file by timestamp suffix
+                # For reference receivers in broadcast + shared mode, the
+                # file of the paired canopy that starts at the same time
                 broadcast_canopy_file = None
-                if (
-                    _receiver_type == "reference"
-                    and canopy_file_by_timestamp is not None
-                ):
-                    import re
-
-                    m = re.search(r"([a-x]\d{2})\.\d{2}_$", rnx_file.name)
-                    if m:
-                        broadcast_canopy_file = canopy_file_by_timestamp.get(m.group(1))
+                canopy_reader_fmt = None
+                canopy_index = (
+                    canopy_files_by_start.get(position_data_dir.receiver)
+                    if _receiver_type == "reference" and position_data_dir
+                    else None
+                )
+                if canopy_index is not None:
+                    by_start, canopy_reader_fmt = canopy_index
+                    start = self._file_start(rnx_file)
+                    broadcast_canopy_file = (
+                        by_start.get(start) if start is not None else None
+                    )
+                    if broadcast_canopy_file is None:
+                        self._logger.warning(
+                            "no_canopy_file_for_reference_geometry",
+                            receiver=receiver_name,
+                            file=rnx_file.name,
+                            reason="the reference file's own broadcast "
+                            "geometry is used",
+                        )
 
                 task_descriptors.append(
                     _task_args(
