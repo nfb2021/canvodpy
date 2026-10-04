@@ -146,3 +146,36 @@ def make_synthetic_dataset(
             "receiver": "canopy_01",
         },
     )
+
+
+def make_synthetic_vod_dataset(
+    slot: int,
+    n_epochs: int = 180,
+    seed: int = 0,
+    day: str = "2025-01-01",
+) -> xr.Dataset:
+    """Return a synthetic VOD dataset meeting the VOD dataset contract.
+
+    Same epochs and sids as :func:`make_synthetic_dataset`; ``VOD``,
+    ``phi`` and ``theta`` (radians) with the full sid coordinates.
+    """
+    from canvod.readers.base import SignalID
+    from canvod.readers.builder import sid_coords
+    from canvod.readers.gnss_specs.signals import SignalIDMapper
+
+    obs = make_synthetic_dataset(slot, n_epochs=n_epochs, seed=seed, day=day)
+    rng = np.random.default_rng(seed + slot)
+    vod = rng.uniform(0.0, 1.5, (n_epochs, N_SIDS))
+    vod[np.isnan(obs["S1C"].values)] = np.nan
+    signals = [SignalID.from_string(sid) for sid in _SIDS]
+    return xr.Dataset(
+        {
+            "VOD": (("epoch", "sid"), vod),
+            "phi": (("epoch", "sid"), rng.uniform(0, 2 * np.pi, vod.shape)),
+            "theta": (("epoch", "sid"), rng.uniform(0, np.pi / 2, vod.shape)),
+        },
+        coords={
+            "epoch": obs["epoch"].values.astype("datetime64[ns]"),
+            **sid_coords(signals, mapper=SignalIDMapper()),
+        },
+    )

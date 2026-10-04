@@ -6,9 +6,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import xarray as xr
 
-from canvod.readers.base import GNSSDataReader, validate_dataset
-from canvod.readers.builder import DatasetBuilder
+from canvod.readers.base import GNSSDataReader, SignalID, validate_dataset
+from canvod.readers.builder import DatasetBuilder, sid_coords
+from canvod.readers.gnss_specs.signals import SignalIDMapper
 
 # ---------------------------------------------------------------------------
 # Concrete reader stub for tests
@@ -246,3 +248,20 @@ class TestDatasetBuilder:
     def test_unknown_time_system_is_rejected(self, reader: _StubReader):
         with pytest.raises(ValueError, match="unknown epoch time system"):
             DatasetBuilder(reader, time_system="LOCAL")
+
+
+class TestSidCoords:
+    def test_coordinates_of_signals(self):
+        signals = [
+            SignalID(sv="E05", band="E5a", code="Q"),
+            SignalID(sv="G01", band="L1", code="u"),
+        ]
+        coords = sid_coords(signals, mapper=SignalIDMapper())
+        ds = xr.Dataset(coords=coords)
+        assert list(ds["sid"].values) == ["E05|E5a|Q", "G01|L1|u"]
+        assert list(ds["system"].values) == ["E", "G"]
+        assert list(ds["code"].values) == ["Q", "u"]
+        assert ds["freq_center"].dtype == np.float32
+        np.testing.assert_allclose(ds["freq_center"].values, [1176.45, 1575.42])
+        assert np.all(ds["freq_min"].values < ds["freq_center"].values)
+        assert np.all(ds["freq_max"].values > ds["freq_center"].values)

@@ -26,6 +26,7 @@ from canvod.readers.gnss_specs.constants import (
 )
 from canvod.readers.gnss_specs.constellations import SV_PATTERN
 from canvod.readers.gnss_specs.exceptions import IncompleteEpochError, MissingEpochError
+from canvod.utils.tools import deprecated
 
 _log = structlog.get_logger(__name__)
 
@@ -668,6 +669,11 @@ class Rnxv3ObsEpochRecord:
         return [sat for sat in self.data if sat.sv.startswith(system)]
 
 
+@deprecated(
+    "`VodDataValidator` is left over from development and will be removed "
+    "with the next major version. Use `canvod.readers.validate_vod_dataset` "
+    "instead."
+)
 class VodDataValidator(BaseModel):
     """Validates VOD (Vegetation Optical Depth) data structure.
 

@@ -18,6 +18,7 @@ import structlog
 import xarray as xr
 import zarr
 from canvod.config.models import PREPROCESSING_ATTR
+from canvod.readers.base import validate_vod_dataset
 from canvod.utils.logging import get_run_id, stage_timer
 from canvod.utils.tools import get_version_from_pyproject, sanitize_directory
 from icechunk.session import ForkSession
@@ -2365,7 +2366,14 @@ class MyIcechunkStore:
         -------
         bool
             ``True`` if written, ``False`` if skipped as a duplicate.
+
+        Raises
+        ------
+        ValueError
+            If ``dataset`` does not meet the VOD dataset contract
+            (:func:`canvod.readers.base.validate_vod_dataset`).
         """
+        validate_vod_dataset(dataset)
         start = dataset.epoch.min().values
         end = dataset.epoch.max().values
 
@@ -2470,8 +2478,10 @@ class MyIcechunkStore:
         session/write/commit -- `group_name`-scoped only (its own metadata
         table), zero cross-group reads, so safe to run for every item in a
         batch before any fork exists. Returns `(skip_result, None)` if this
-        item should be skipped as a duplicate, else `(None, plan)`.
+        item should be skipped as a duplicate, else `(None, plan)`. Raises
+        `ValueError` if the dataset does not meet the VOD dataset contract.
         """
+        validate_vod_dataset(item.dataset)
         start = item.dataset.epoch.min().values
         end = item.dataset.epoch.max().values
 

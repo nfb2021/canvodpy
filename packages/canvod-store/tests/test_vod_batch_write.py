@@ -20,7 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from _helpers import make_synthetic_dataset
+from _helpers import make_synthetic_vod_dataset
 
 from canvod.store import MyIcechunkStore
 from canvod.store.store import VodWriteItem
@@ -39,7 +39,7 @@ def _item(
     day: str = "2025-03-28",
     source_id: str = "src",
 ) -> VodWriteItem:
-    ds = make_synthetic_dataset(slot=slot, day=day, seed=hash(source_id) % 1000)
+    ds = make_synthetic_vod_dataset(slot=slot, day=day, seed=hash(source_id) % 1000)
     return VodWriteItem(
         group_name=group_name,
         dataset=ds,

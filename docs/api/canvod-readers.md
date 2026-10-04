@@ -10,8 +10,10 @@ RINEX observation file parsing with validation and GNSS signal specifications.
         - GNSSDataReader
         - SignalID
         - DatasetBuilder
+        - sid_coords
         - DatasetStructureValidator
         - validate_dataset
+        - validate_vod_dataset
         - Rnxv3Obs
         - SbfReader
         - DataDirMatcher

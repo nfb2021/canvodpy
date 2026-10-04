@@ -48,6 +48,77 @@ _VAR_METADATA: dict[str, dict] = {
 }
 
 
+def sid_coords(
+    signals: list[SignalID], *, mapper: SignalIDMapper
+) -> dict[str, xr.DataArray | tuple]:
+    """Coordinates of the ``sid`` dimension for the given signals.
+
+    ``sid`` and its per-signal coordinates (``sv``, ``system``, ``band``,
+    ``code``, ``freq_center``, ``freq_min``, ``freq_max``) as required by
+    :data:`~canvod.readers.base.REQUIRED_COORDS`, with their metadata.
+    Frequencies come from the band; a band without a known frequency gets
+    NaN.
+
+    Parameters
+    ----------
+    signals : list of SignalID
+        Signals in the order of the ``sid`` dimension.
+    mapper : SignalIDMapper
+        Band lookup for the frequencies.
+
+    Returns
+    -------
+    dict
+        Coordinates to pass to :class:`xarray.Dataset`.
+    """
+    freq_center = np.array(
+        [mapper.get_band_frequency(sig.band) or np.nan for sig in signals],
+        dtype=np.float32,
+    )
+    bandwidths = np.array(
+        [mapper.get_band_bandwidth(sig.band) or 0.0 for sig in signals],
+        dtype=np.float32,
+    )
+
+    def _strings(values: list[str]) -> np.ndarray:
+        return np.array(values, dtype=object)
+
+    return {
+        "sid": xr.DataArray(
+            _strings([sig.sid for sig in signals]),
+            dims=["sid"],
+            attrs=COORDS_METADATA["sid"],
+        ),
+        "sv": ("sid", _strings([sig.sv for sig in signals]), COORDS_METADATA["sv"]),
+        "system": (
+            "sid",
+            _strings([sig.system for sig in signals]),
+            COORDS_METADATA["system"],
+        ),
+        "band": (
+            "sid",
+            _strings([sig.band for sig in signals]),
+            COORDS_METADATA["band"],
+        ),
+        "code": (
+            "sid",
+            _strings([sig.code for sig in signals]),
+            COORDS_METADATA["code"],
+        ),
+        "freq_center": ("sid", freq_center, COORDS_METADATA["freq_center"]),
+        "freq_min": (
+            "sid",
+            (freq_center - bandwidths / 2).astype(np.float32),
+            COORDS_METADATA["freq_min"],
+        ),
+        "freq_max": (
+            "sid",
+            (freq_center + bandwidths / 2).astype(np.float32),
+            COORDS_METADATA["freq_max"],
+        ),
+    }
+
+
 class DatasetBuilder:
     """Guided builder for constructing valid GNSSDataReader output Datasets.
 
@@ -165,30 +236,6 @@ class DatasetBuilder:
             np.datetime64(ts.replace(tzinfo=None) if ts.tzinfo else ts, "ns")
             for ts in self._epochs
         ]
-        sv_arr = np.array([self._signals[s].sv for s in sorted_sids], dtype=object)
-        system_arr = np.array(
-            [self._signals[s].system for s in sorted_sids], dtype=object
-        )
-        band_arr = np.array([self._signals[s].band for s in sorted_sids], dtype=object)
-        code_arr = np.array([self._signals[s].code for s in sorted_sids], dtype=object)
-
-        # Frequency resolution via SignalIDMapper
-        freq_center = np.array(
-            [
-                self._mapper.get_band_frequency(self._signals[s].band) or np.nan
-                for s in sorted_sids
-            ],
-            dtype=np.float32,
-        )
-        bandwidths = np.array(
-            [
-                self._mapper.get_band_bandwidth(self._signals[s].band) or 0.0
-                for s in sorted_sids
-            ],
-            dtype=np.float32,
-        )
-        freq_min = (freq_center - bandwidths / 2).astype(np.float32)
-        freq_max = (freq_center + bandwidths / 2).astype(np.float32)
 
         # --- Determine which variables to include ---
         all_vars = set(self._values.keys())
@@ -214,18 +261,7 @@ class DatasetBuilder:
         # --- Coordinates ---
         coords = {
             "epoch": ("epoch", epoch_arr, self._epoch_attrs),
-            "sid": xr.DataArray(
-                np.array(sorted_sids, dtype=object),
-                dims=["sid"],
-                attrs=COORDS_METADATA["sid"],
-            ),
-            "sv": ("sid", sv_arr, COORDS_METADATA["sv"]),
-            "system": ("sid", system_arr, COORDS_METADATA["system"]),
-            "band": ("sid", band_arr, COORDS_METADATA["band"]),
-            "code": ("sid", code_arr, COORDS_METADATA["code"]),
-            "freq_center": ("sid", freq_center, COORDS_METADATA["freq_center"]),
-            "freq_min": ("sid", freq_min, COORDS_METADATA["freq_min"]),
-            "freq_max": ("sid", freq_max, COORDS_METADATA["freq_max"]),
+            **sid_coords([self._signals[s] for s in sorted_sids], mapper=self._mapper),
         }
 
         # --- Global attributes ---
@@ -241,4 +277,4 @@ class DatasetBuilder:
         return ds
 
 
-__all__ = ["DatasetBuilder"]
+__all__ = ["DatasetBuilder", "sid_coords"]

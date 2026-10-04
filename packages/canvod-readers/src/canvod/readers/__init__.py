@@ -43,12 +43,14 @@ from canvod.readers.base import (
     REQUIRED_ATTRS,
     REQUIRED_COORDS,
     REQUIRED_DIMS,
+    VOD_REQUIRED_VARS,
     DatasetStructureValidator,
     GNSSDataReader,
     SignalID,
     validate_dataset,
+    validate_vod_dataset,
 )
-from canvod.readers.builder import DatasetBuilder
+from canvod.readers.builder import DatasetBuilder, sid_coords
 from canvod.readers.matching import (
     DataDirMatcher,
     MatchedDirs,
@@ -68,6 +70,7 @@ __all__ = [
     "REQUIRED_ATTRS",
     "REQUIRED_COORDS",
     "REQUIRED_DIMS",
+    "VOD_REQUIRED_VARS",
     "YYYYDOY",
     "DataDirMatcher",
     "DatasetBuilder",
@@ -84,5 +87,7 @@ __all__ = [
     "SbfReader",
     "SbfSignalObs",
     "SignalID",
+    "sid_coords",
     "validate_dataset",
+    "validate_vod_dataset",
 ]
