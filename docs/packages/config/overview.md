@@ -27,8 +27,8 @@ A single `canvod-settings.yaml` controls all aspects of a canVODpy deployment:
 
     ---
 
-    Research site definitions — data root paths, receiver types,
-    directory layout, SCS expansion (`scs_from`), VOD analysis pairs.
+    Research site definitions — data root paths, receivers (type, directory,
+    reader format, naming recipe, `paired_canopies`), VOD analysis pairs.
 
 -   :fontawesome-solid-broadcast-tower: &nbsp; **`sids:`**
 
@@ -39,7 +39,7 @@ A single `canvod-settings.yaml` controls all aspects of a canVODpy deployment:
 
 </div>
 
-User values override package defaults for any specified keys. Unset keys fall back to bundled defaults. Any field can also be overridden via environment variable or `config/.env` — see [Configuration Guide](../../guides/configuration.md).
+User values override package defaults for any specified keys. Unset keys take the defaults documented on the settings models. Any field can also be overridden via environment variable or `config/.env` — see [Configuration Guide](../../guides/configuration.md).
 
 ---
 
@@ -74,7 +74,7 @@ processing:
     product_type: final
 
   params:
-    keep_rnx_vars: [SNR]
+    keep_gnss_observables: [SNR]
     store_radial_distance: false
     receiver_position_mode: shared     # or per_receiver
     file_pairing: complete             # or paired
@@ -94,22 +94,22 @@ processing:
   #     grid_type: equal_area
   #     angular_resolution: 2.0    # degrees
 
-  compression:
+  netcdf_compression:
     zlib: true
     complevel: 5
 
   icechunk:
-    compression_level: 5
+    compression_level: 3
     compression_algorithm: zstd
-    inline_threshold: 512
-    get_concurrency: 1
+    inline_chunk_threshold_bytes: 512
+    get_partial_values_concurrency: 1
     chunk_strategies:
-      rinex_store: {epoch: 17280, sid: -1}
+      gnss_store: {epoch: 17280, sid: -1}
       vod_store:   {epoch: 17280, sid: -1}
 
   storage:
     stores_root_dir: /path/to/your/gnss/stores
-    rinex_store_strategy: skip
+    gnss_store_strategy: skip
     vod_store_strategy: overwrite
 
 sites:
@@ -121,7 +121,7 @@ sites:
         directory: 01_reference
         recipe: examplesite_reference
         reader_format: auto
-        scs_from: all
+        paired_canopies: all
       canopy_01:
         type: canopy
         directory: 02_canopy
@@ -157,16 +157,16 @@ n_cores = config.processing.params.n_max_threads
 
 !!! tip "Validation at load time"
 
-    All values are validated by Pydantic models. Invalid emails, non-existent paths,
-    and out-of-range parameters produce structured error messages immediately
-    — not at runtime hours into a long processing run.
+    All values are validated by Pydantic models. Unknown keys (typos), invalid
+    emails and out-of-range parameters produce structured error messages
+    immediately — not at runtime hours into a long processing run.
 
 ---
 
 ## CLI Quick Reference
 
 ```bash
-canvodpy config init                # Scaffold canvod-settings.yaml + recipe templates
+canvodpy config init                # Scaffold canvod-settings.yaml (recipes: just naming-init SITE NAME)
 canvodpy config init --interactive  # ...or answer a few questions instead of hand-editing YAML
 canvodpy config validate            # Validate configuration
 canvodpy config show                # Display resolved configuration

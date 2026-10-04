@@ -99,7 +99,7 @@ processing:
   params:
     ephemeris_source: "final"
   aux_data:
-    agencies: ["COD"]
+    agency: "COD"
     product_type: "final"
     ftp_timeout_s: 30
     fetch_clock: true  # set false to skip CLK download/interpolation

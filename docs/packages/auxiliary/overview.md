@@ -30,7 +30,7 @@ GNSS-T analysis requires combining two data sources with fundamentally different
 Combining these requires:
 
 1. **Dimension conversion** — sv (32 satellites) → sid (384 signal IDs)
-2. **Temporal interpolation** — 15 min → 30 s sampling
+2. **Temporal interpolation** — 15 min → the observations' sampling interval, on a grid from 00:00
 3. **Coordinate transform** — ECEF → geodetic → spherical (r, θ, φ)
 4. **Physically correct interpolation** per data type
 
@@ -138,38 +138,31 @@ Different data types require different methods based on the underlying physics:
 
 ## Usage
 
-=== "Full RINEX augmentation"
+=== "Add satellite geometry to a dataset"
+
+    In a run, an ephemeris provider does every step below; use it the same
+    way in your own code:
 
     ```python
-    from canvod.auxiliary import (
-        Sp3File, prep_aux_ds,
-        Sp3InterpolationStrategy, Sp3Config,
-        compute_spherical_coordinates, ECEFPosition,
-        add_spherical_coords_to_dataset,
-    )
+    from canvod.auxiliary import ECEFPosition
+    from canvod.auxiliary.ephemeris.provider import AgencyEphemerisProvider
+    from canvod.config import load_config
+    from canvod.readers import Rnxv3Obs
 
-    rinex_ds = Rnxv3Obs("station.25o").to_ds()
-    target_epochs = rinex_ds.epoch.values
+    site_config = load_config().sites.sites["ExampleSite"]
+    ds = Rnxv3Obs(fpath="ROSA01TUW_R_20250010000_01D_05S_AA.rnx").to_ds()
 
-    # Download and parse
-    sp3_raw = Sp3File.from_url(date, "CODE", "final").to_dataset()
-
-    # Preprocess: sv → sid
-    sp3_sid = prep_aux_ds(sp3_raw)
-
-    # Interpolate to obs epochs
-    interp = Sp3InterpolationStrategy(config=Sp3Config(use_velocities=True))
-    sp3_at_obs = interp.interpolate(sp3_sid, target_epochs)
-
-    # Compute geometry
-    rx_pos = ECEFPosition.from_ds_metadata(rinex_ds)
-    r, theta, phi = compute_spherical_coordinates(
-        sp3_at_obs["X"], sp3_at_obs["Y"], sp3_at_obs["Z"], rx_pos
-    )
-
-    # Augment dataset
-    augmented = add_spherical_coords_to_dataset(rinex_ds, r, theta, phi)
+    provider = AgencyEphemerisProvider(agency="COD", product_type="final", fetch_clock=True)
+    provider.preprocess_day("2025001", site_config)  # download and read SP3 (and CLK)
+    augmented = provider.augment_dataset(ds, ECEFPosition.from_ds_metadata(ds))
+    # augmented has theta and phi (radians) on (epoch, sid)
     ```
+
+    `augment_dataset` interpolates the day once onto the epoch grid (00:00 plus
+    multiples of the dataset's sampling interval,
+    `canvod.auxiliary.interpolation.day_grid`), caches it, gives each observation
+    the nearest grid epoch and converts ECEF positions to θ, φ relative to the
+    receiver position from the data.
 
 === "Data flow"
 
@@ -181,14 +174,14 @@ Different data types require different methods based on the underlying physics:
         participant Interpolator
         participant Coordinates
 
-        User->>Sp3File: from_url(date, agency, product_type)
+        User->>Sp3File: Sp3File(date, agency, product_type, ...)
         Sp3File->>Sp3File: FTP download + parse
         Sp3File-->>User: to_dataset() {epoch: 96, sv: 32}
 
         User->>Preprocessor: prep_aux_ds(sp3_raw)
         Preprocessor-->>User: {epoch: 96, sid: 384}
 
-        User->>Interpolator: interpolate(sp3_sid, target_epochs)
+        User->>Interpolator: interpolate onto the day's epoch grid
         Interpolator->>Interpolator: Hermite splines
         Interpolator-->>User: {epoch: 2880, sid: 384}
 

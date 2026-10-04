@@ -32,6 +32,11 @@ The `canvod-vod` package implements vegetation optical depth (VOD) estimation fr
 
 ## Usage
 
+In a run, VOD is computed by `VodComputer` (`Site(site).vod`, `canvodpy run`,
+`canvodpy vod`): it picks the configured canopy/reference pairs and days, calls the
+calculator and writes the VOD store. Use the calculator directly only for your own
+analyses.
+
 === "Direct instantiation"
 
     ```python
@@ -61,15 +66,16 @@ The `canvod-vod` package implements vegetation optical depth (VOD) estimation fr
     vod_result = TauOmegaZerothOrder.from_icechunkstore(
         icechunk_store_pth="path/to/store",
         canopy_group="canopy_01",
-        sky_group="reference_01",
+        sky_group="reference_01_canopy_01",  # reference data paired with canopy_01
     )
     ```
 
 !!! info "Input requirements"
 
-    Both datasets must contain an `SNR` data variable.
-    Both should be augmented with spherical coordinates (θ, φ) from `canvod-auxiliary`
-    and assigned to grid cells by `canvod-grids`.
+    Both datasets must contain an `SNR` data variable on `(epoch, sid)`, and the
+    canopy dataset the polar angle `theta` (radians) from `canvod-auxiliary`.
+    The result passes `canvod.readers.validate_vod_dataset`, which the VOD store
+    checks on every write.
 
 ---
 
@@ -85,9 +91,9 @@ The `canvod-vod` package implements vegetation optical depth (VOD) estimation fr
 
 ---
 
-## Multi-Receiver SCS Expansion
+## One reference receiver, several canopy receivers
 
-When a single reference receiver serves multiple canopy positions, satellite geometry must be recomputed relative to each canopy location. The `scs_from` field in `canvod-settings.yaml` (`sites.<name>.receivers.<ref>.scs_from`) drives this expansion.
+When a single reference receiver serves multiple canopy positions, satellite geometry must be recomputed relative to each canopy location. The `paired_canopies` field in `canvod-settings.yaml` (`sites.<name>.receivers.<ref>.paired_canopies`) drives this: the reference data is stored once per paired canopy, in the group `{reference}_{canopy}`.
 
 ```mermaid
 flowchart TD
@@ -100,7 +106,7 @@ flowchart TD
         open sky`"]
     end
 
-    subgraph STORE["RINEX Store Groups"]
+    subgraph STORE["Observation Store Groups"]
         SG1["canopy_01"]
         SG2["canopy_02"]
         SG3["`**reference_01_canopy_01**
@@ -133,7 +139,7 @@ flowchart TD
     receivers:
       reference_01:
         type: reference
-        scs_from:
+        paired_canopies:   # or: all
           - canopy_01    # recompute geometry at canopy_01 position
           - canopy_02    # recompute geometry at canopy_02 position
     ```

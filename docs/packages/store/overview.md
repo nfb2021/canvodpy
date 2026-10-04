@@ -60,7 +60,7 @@ This gives the store three properties that matter for reproducible science:
 
 ## Architecture
 
-`GnssResearchSite` coordinates **two separate Icechunk repositories per site**, not one — a RINEX/SBF store for raw, standardized observations and a VOD store for retrieval results:
+`GnssResearchSite` coordinates **two separate Icechunk repositories per site**, not one — an observation store (RINEX, SBF or NMEA data) and a VOD store for retrieval results:
 
 ```mermaid
 graph TD
@@ -70,12 +70,12 @@ graph TD
     encoding, padding`"]
     B --> C["RINEX/SBF Icechunk Repository"]
     C --> D1["`**receiver group**
-    canopy/, reference/
+    canopy_01/, reference_01_canopy_01/
     epoch x sid`"]
     D1 --> E["VOD Calculation"]
     E --> F["VOD Icechunk Repository"]
     F --> G["`**calculator/analysis group**
-    e.g. TauOmegaZerothOrder/canopy_reference
+    {calculator}/{analysis}
     epoch x sid`"]
 ```
 
@@ -86,19 +86,22 @@ graph TD
 === "Storage Manager"
 
     ```python
-    from canvod.store import create_rinex_store, create_vod_store
+    from canvod.store import create_gnss_store, create_vod_store
 
-    # Create or open a RINEX observations store
-    store = create_rinex_store(store_path)
+    # Create or open an observation store
+    store = create_gnss_store(store_path)
 
     # Write a new group (first ingest for this receiver)
-    store.write_initial_group(dataset, group_name="canopy")
+    store.write_initial_group(dataset, group_name="canopy_01")
 
     # Append subsequent days
-    store.append_to_group(dataset, group_name="canopy")
+    store.append_to_group(dataset, group_name="canopy_01")
 
     # Or let the store decide automatically
-    store.write_or_append_group(dataset, group_name="canopy")
+    store.write_or_append_group(dataset, group_name="canopy_01")
+
+    # Runs write through the orchestrator, which runs the deduplication
+    # checks first; write directly only in your own scripts.
     ```
 
 === "Site Interface"
@@ -107,11 +110,11 @@ graph TD
     from canvodpy import Site
 
     site = Site("ExampleSite")
-    site.rinex_store.list_groups()          # ["canopy_01", "reference_01"]
-    site.rinex_store.get_group_info("canopy_01")
+    site.gnss_store.list_groups()          # ["canopy_01", "reference_01_canopy_01"]
+    site.gnss_store.get_group_info("canopy_01")
 
     # Read a group back as an xarray.Dataset
-    ds = site.rinex_store.read_group("canopy_01")
+    ds = site.gnss_store.read_group("canopy_01")
 
     # Time-range selection is done with xarray after loading
     ds_subset = ds.sel(epoch=slice("2025-01-01", "2025-01-15"))
@@ -123,13 +126,15 @@ graph TD
 
 ```
 {store_root}/
-└── {receiver_name}/            # e.g. "canopy", "reference"
+└── {group}/                    # canopy receiver: "canopy_01"; reference
+    │                           # receiver, per paired canopy: "reference_01_canopy_01"
     ├── SNR                     # Data variables (epoch × sid), at group root
     ├── Phase
     ├── Pseudorange
     ├── Doppler
     └── metadata/
-        └── table               # Per-file ingest ledger (hash, start, end, path)
+        ├── table               # Per-file ingest ledger (hash, start, end, path)
+        └── sbf_obs             # SBF only: per-file receiver metadata (geometry, PVT, DOP, ...)
 ```
 
 Variables are written directly at the receiver group root — there is no
@@ -140,15 +145,17 @@ per-file ingest registry used by the deduplication guardrails.
 
 ## Data Flow
 
-1. **Ingest** — Raw GNSS data (RINEX via `Rnxv3Obs` or SBF via `SbfReader`) + ephemerides
-2. **Preprocess** — Normalise encodings, pad to global SID, strip fill values
+1. **Ingest** — Raw GNSS data (RINEX, SBF or NMEA readers) + satellite geometry
+2. **Preprocess** — Normalise encodings, pad to global SID, strip fill values; the
+   optional preprocessing (`processing.preprocessing`) only if set
 3. **Store observations** — Append to `{group}/` with three-layer deduplication
 4. **Query** — Retrieve by time range, signal, or group name
-5. **Analyse** — VOD calculation using stored observations and grid geometry
+5. **VOD** — `VodComputer` reads canopy and reference groups and writes the VOD store
 
-Writes are committed one snapshot per receiver-day, sequentially. Icechunk's
-local-filesystem backend serialises commits, so parallel receiver processing
-converges to a sequential write phase.
+Icechunk on a local or network file system cannot detect two commits at the same
+time, so a run has exactly one writer. With the default write strategy (`skip`) the
+receivers of a day are written into forks of one session and committed once; with
+`overwrite`, one commit per receiver.
 
 ---
 
@@ -159,11 +166,13 @@ written:
 
 | Layer | What it checks | Guard location |
 |-------|----------------|----------------|
-| **1. Hash match** | SHA-256 of the source file; identical file is always a no-op | `append_to_group()` internal check |
-| **2. Temporal overlap** | A new file covering an already-ingested time range is rejected, even if renamed or re-split (catches daily-vs-sub-daily file overlap) | `_check_existing_with_temporal_overlap()` in orchestrator |
-| **3. Intra-batch overlap** | Duplicate epochs within a single ingest batch are caught before the commit | `append_to_group()` batch validation |
+| **1. Hash match** | SHA-256 of the source file against the group's ingest ledger | `_check_existing_with_temporal_overlap()` in the orchestrator; again in `append_to_group()` |
+| **2. Temporal overlap** | A new file covering an already-ingested time range, even if renamed or re-split (catches daily-vs-sub-daily file overlap) | same |
+| **3. Intra-batch overlap** | Two files of one batch covering the same time | `_check_existing_with_temporal_overlap()` |
 
-All three layers must pass before `session.commit()` is called.
+A file that fails a check counts as already stored: the default write strategy
+`skip` does not write it (and logs it), `overwrite` replaces its time range. See
+[Storage Strategies](storage-strategies.md).
 
 ---
 
@@ -174,7 +183,7 @@ All three layers must pass before `session.commit()` is called.
 | Backend format | Icechunk (Zarr v3) |
 | Default chunks | `epoch: 17280`, `sid: -1` |
 | Compression | Zstd level 3 |
-| Storage backend | Local filesystem (Icechunk library supports S3) |
+| Storage backend | Local or network file system (Icechunk library supports S3) |
 | Versioning | Git-like snapshots, hash-addressable |
 | Deduplication | Three-layer: hash + temporal overlap + intra-batch |
 

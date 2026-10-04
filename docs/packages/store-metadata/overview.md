@@ -90,7 +90,7 @@ metadata = collect_metadata(
     config=config,
     site_name="ExampleSite",
     site_config=site_config,
-    store_type="rinex_store",
+    store_type="gnss_store",
     source_format="rinex3",
     store_path=store_path,
 )
@@ -203,7 +203,7 @@ The orchestrator writes metadata automatically during data ingestion:
 1. **First write** to a new store: `collect_metadata()` gathers all 11 sections, `write_metadata()` persists them
 2. **Every subsequent write**: `update_metadata()` refreshes the `temporal.updated` timestamp and increments summaries
 
-No user action is required — metadata collection is a side effect of the standard `process_date()` / `process_range()` pipeline.
+No user action is required — every run (`canvodpy run`, `Site.pipeline()`, Airflow) collects and writes the metadata.
 
 ---
 

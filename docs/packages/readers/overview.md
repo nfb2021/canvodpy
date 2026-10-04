@@ -45,6 +45,15 @@ The `canvod-readers` package provides validated parsers for [GNSS](https://gssc.
 
     [:octicons-arrow-right-24: SBF reader](sbf.md)
 
+-   :fontawesome-solid-file-lines: &nbsp; **NMEA 0183 v4.00 — `NmeaObs`**
+
+    ---
+
+    Signal strengths from GSV sentences (GPS, GLONASS, Galileo, BeiDou), epochs
+    from RMC/GGA (UTC), checksums validated. Band and tracking code come from the
+    GSV signal ID where the sentence has one, else the system's main band with
+    code `X`. NMEA carries SNR only, no pseudorange or phase.
+
 </div>
 
 ---
@@ -333,9 +342,8 @@ Both share the SID space, the array allocation, the epoch-time conversion and th
 
 !!! tip "Batch processing"
 
-    For many files, the orchestrator parallelises across receivers using
-    `ThreadPoolExecutor` (Wave A/B) and across files using
-    `ProcessPoolExecutor`. Each worker handles one file at a time.
+    For many files, a run reads them in a pool of worker processes, one file
+    per task, across all receivers and the days of a batch.
     See [Parallel Processing](../../guides/parallel-processing.md)
     for configuration and resource limits.
 
