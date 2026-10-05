@@ -5,6 +5,8 @@ Tests basic imports and package structure to ensure
 the package is properly configured.
 """
 
+from importlib.metadata import version
+
 
 # Tests
 def test_package_imports():
@@ -101,4 +103,4 @@ def test_version_attribute():
     import canvod.auxiliary
 
     assert hasattr(canvod.auxiliary, "__version__")
-    assert canvod.auxiliary.__version__ == "0.1.0"
+    assert canvod.auxiliary.__version__ == version("canvod-auxiliary")

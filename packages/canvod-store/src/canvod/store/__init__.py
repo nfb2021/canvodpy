@@ -4,6 +4,8 @@ This package provides versioned storage for GNSS VOD data using Icechunk.
 Manages both RINEX observation storage and VOD analysis results.
 """
 
+from importlib.metadata import version as _version
+
 from canvod.store.manager import GnssResearchSite
 from canvod.store.reader import IcechunkDataReader
 from canvod.store.store import (
@@ -13,7 +15,7 @@ from canvod.store.store import (
 )
 from canvod.store.zarr_concurrency import scoped_zarr_concurrency
 
-__version__ = "0.1.0"
+__version__ = _version("canvod-store")
 
 __all__ = [
     "GnssResearchSite",

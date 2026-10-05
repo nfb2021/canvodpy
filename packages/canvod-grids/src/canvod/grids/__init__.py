@@ -3,6 +3,7 @@
 Provides hemisphere grid structures for GNSS signal observation analysis.
 """
 
+from importlib.metadata import version as _version
 from typing import Any, Literal
 
 from canvod.grids.aggregation import (
@@ -37,7 +38,7 @@ from canvod.grids.operations import (
     store_grid,
 )
 
-__version__ = "0.1.0"
+__version__ = _version("canvod-grids")
 
 __all__ = [
     # Core

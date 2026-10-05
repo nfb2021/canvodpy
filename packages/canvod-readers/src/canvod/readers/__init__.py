@@ -38,6 +38,8 @@ for matched_dirs in matcher:
 ```
 """
 
+from importlib.metadata import version as _version
+
 from canvod.readers.base import (
     DEFAULT_REQUIRED_VARS,
     REQUIRED_ATTRS,
@@ -63,7 +65,7 @@ from canvod.readers.rinex.v3_04 import Rnxv3Obs
 from canvod.readers.sbf import SbfEpoch, SbfHeader, SbfReader, SbfSignalObs
 from canvod.utils.tools import YYYYDOY
 
-__version__ = "0.1.0"
+__version__ = _version("canvod-readers")
 
 __all__ = [
     "DEFAULT_REQUIRED_VARS",

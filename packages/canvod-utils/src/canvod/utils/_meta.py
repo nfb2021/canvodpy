@@ -6,7 +6,9 @@ that gets written to processed files. These values should not be
 modified by users.
 """
 
-__version__ = "0.1.0"
+from importlib.metadata import version as _version
+
+__version__ = _version("canvod-utils")
 
 SOFTWARE_NAME = "canvodpy"
 SOFTWARE_URL = "https://github.com/climers-tuwien/canvodpy"

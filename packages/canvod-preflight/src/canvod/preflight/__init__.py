@@ -13,7 +13,9 @@ by the file discovery of ``canvodpy run``.
     (``canvod-filemap``) and ``canvodpy config validate`` instead.
 """
 
-__version__ = "0.1.0"
+from importlib.metadata import version as _version
+
+__version__ = _version("canvod-preflight")
 
 # Config models — describe the site/receiver naming setup
 from .config_models import DirectoryLayout, ReceiverNamingConfig, SiteNamingConfig

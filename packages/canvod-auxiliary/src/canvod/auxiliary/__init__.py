@@ -5,6 +5,8 @@ Handles downloading, parsing, and interpolating SP3 ephemerides and
 clock corrections for GNSS satellite data processing.
 """
 
+from importlib.metadata import version as _version
+
 # Aux cache fingerprinting (dev/todo_later.md §44)
 from canvod.readers.preprocessing import (
     add_future_datavars,
@@ -81,7 +83,7 @@ from canvod.auxiliary.products import (
     list_products,
 )
 
-__version__ = "0.1.0"
+__version__ = _version("canvod-auxiliary")
 
 __all__ = [
     "AugmentationContext",

@@ -1,6 +1,8 @@
 """canvod.ops — Preprocessing operations pipeline for GNSS VOD data."""
 
-__version__ = "0.1.0"
+from importlib.metadata import version as _version
+
+__version__ = _version("canvod-ops")
 
 from canvod.ops.base import Op, OpResult
 from canvod.ops.files import preprocess_files
