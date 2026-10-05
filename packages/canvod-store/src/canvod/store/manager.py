@@ -29,6 +29,7 @@ from canvod.store.store import (
     create_gnss_store,
     create_vod_store,
 )
+from canvod.store.time_encoding import prepare_times
 
 
 class GnssResearchSite:
@@ -810,10 +811,20 @@ class GnssResearchSite:
             groups = self.vod_store.list_groups() or []
 
             if analysis_name not in groups:
-                to_icechunk(vod_ds, session, group=analysis_name, mode="w")
+                to_icechunk(
+                    prepare_times(vod_ds, session.store, analysis_name),
+                    session,
+                    group=analysis_name,
+                    mode="w",
+                )
                 action = "write"
             else:
-                to_icechunk(vod_ds, session, group=analysis_name, append_dim="epoch")
+                to_icechunk(
+                    prepare_times(vod_ds, session.store, analysis_name),
+                    session,
+                    group=analysis_name,
+                    append_dim="epoch",
+                )
                 action = "append"
 
             version = importlib.metadata.version("canvod-store")

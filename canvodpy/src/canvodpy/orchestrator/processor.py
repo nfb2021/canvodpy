@@ -57,6 +57,7 @@ from canvod.readers import DataDirMatcher, MatchedDirs
 from canvod.readers.gnss_specs.exceptions import NmeaError, RinexError
 from canvod.store import GnssResearchSite, scoped_zarr_concurrency
 from canvod.store.store import _with_run_id
+from canvod.store.time_encoding import prepare_times, with_time_units
 from canvod.utils.logging import get_run_id, set_run_id, stage_timer
 from canvod.utils.tools import (
     _worker_init,
@@ -716,7 +717,7 @@ def write_initial_rinex_ds_to_store(
     group: str,
 ) -> ForkSession:
     """Write a new receiver group to the store."""
-    ds = _sanitize_ds_for_write(ds)
+    ds = prepare_times(_sanitize_ds_for_write(ds), fork.store, group)
     ds.to_zarr(
         fork.store,
         group=group,
@@ -733,7 +734,7 @@ def append_rinex_ds_to_store(
     group: str,
 ) -> ForkSession:
     """Append to an existing receiver group in the store."""
-    ds = _sanitize_ds_for_write(ds)
+    ds = prepare_times(_sanitize_ds_for_write(ds), fork.store, group)
     ds.to_zarr(
         fork.store,
         region="auto",
@@ -816,7 +817,9 @@ def worker_task_append_only(
         reader_name,
     )
 
-    ds_clean = _sanitize_ds_for_write(ds_augmented)
+    ds_clean = prepare_times(
+        _sanitize_ds_for_write(ds_augmented), fork.store, receiver_name
+    )
     ds_clean.to_zarr(
         fork.store,
         group=receiver_name,
@@ -852,7 +855,7 @@ def worker_task_with_region_auto(
         store_sbf_raw_observables=store_sbf_raw_observables,
     )
 
-    ds_clean = _sanitize_ds_for_write(ds)
+    ds_clean = prepare_times(_sanitize_ds_for_write(ds), fork.store, receiver_name)
     ds_clean.to_zarr(
         fork.store,
         group=receiver_name,
@@ -2118,7 +2121,12 @@ class RinexDataProcessor:
         metadata_backup = store.backup_metadata_table(receiver_name, session)
 
         ds_rewrite = store._normalize_encodings(ds_rewrite)
-        to_icechunk(ds_rewrite, session, group=receiver_name, mode="w")
+        to_icechunk(
+            prepare_times(ds_rewrite, session.store, receiver_name),
+            session,
+            group=receiver_name,
+            mode="w",
+        )
 
         if metadata_backup is not None:
             store.restore_metadata_table(receiver_name, metadata_backup, session)
@@ -2351,7 +2359,7 @@ class RinexDataProcessor:
                         # epoch-uniqueness check, see StorageConfig.
                         # gnss_store_strategy docstring for the risk.
                         to_icechunk(
-                            ds_clean,
+                            prepare_times(ds_clean, fork_session.store, receiver_name),
                             fork_session,
                             group=receiver_name,
                             append_dim="epoch",
@@ -2362,7 +2370,7 @@ class RinexDataProcessor:
 
                     case (False, _):
                         to_icechunk(
-                            ds_clean,
+                            prepare_times(ds_clean, fork_session.store, receiver_name),
                             fork_session,
                             group=receiver_name,
                             append_dim="epoch",
@@ -2599,10 +2607,12 @@ class RinexDataProcessor:
                     ds_clean = self.site.gnss_store._cleanse_dataset_attrs(first_ds)
                     ds_clean = self.site.gnss_store._normalize_encodings(ds_clean)
                     to_icechunk(
-                        ds_clean,
+                        prepare_times(ds_clean, prepass_session.store, receiver_name),
                         prepass_session,
                         group=receiver_name,
-                        encoding=self.site.gnss_store.chunk_encoding_for(ds_clean),
+                        encoding=with_time_units(
+                            ds_clean, self.site.gnss_store.chunk_encoding_for(ds_clean)
+                        ),
                     )
                     self._write_sbf_obs(
                         prepass_session, receiver_name, aux_datasets, [first_fname]
@@ -3181,11 +3191,16 @@ class RinexDataProcessor:
                                 # chunk_encoding_for docstring for the full
                                 # investigation).
                                 to_icechunk(
-                                    ds_clean,
+                                    prepare_times(
+                                        ds_clean, session.store, receiver_name
+                                    ),
                                     session,
                                     group=receiver_name,
-                                    encoding=self.site.gnss_store.chunk_encoding_for(
-                                        ds_clean
+                                    encoding=with_time_units(
+                                        ds_clean,
+                                        self.site.gnss_store.chunk_encoding_for(
+                                            ds_clean
+                                        ),
                                     ),
                                 )
                                 groups.append(receiver_name)
@@ -3203,7 +3218,9 @@ class RinexDataProcessor:
                                 # epoch-uniqueness check, see StorageConfig.
                                 # gnss_store_strategy docstring for the risk.
                                 to_icechunk(
-                                    ds_clean,
+                                    prepare_times(
+                                        ds_clean, session.store, receiver_name
+                                    ),
                                     session,
                                     group=receiver_name,
                                     append_dim="epoch",
@@ -3215,7 +3232,9 @@ class RinexDataProcessor:
                             case (False, _):
                                 # New file, write it
                                 to_icechunk(
-                                    ds_clean,
+                                    prepare_times(
+                                        ds_clean, session.store, receiver_name
+                                    ),
                                     session,
                                     group=receiver_name,
                                     append_dim="epoch",
@@ -3228,7 +3247,9 @@ class RinexDataProcessor:
                                 # Only reached when the rewrite had nothing to
                                 # replace; the old data is already gone
                                 to_icechunk(
-                                    ds_clean,
+                                    prepare_times(
+                                        ds_clean, session.store, receiver_name
+                                    ),
                                     session,
                                     group=receiver_name,
                                     append_dim="epoch",
@@ -4793,7 +4814,12 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
         empty_ds = first_ds.isel(epoch=[]).expand_dims({"epoch": len(all_epochs)})
         empty_ds = empty_ds.assign_coords({"epoch": np.sort(all_epochs)})
 
-        to_icechunk(empty_ds, session, group=receiver_name, mode="w")
+        to_icechunk(
+            prepare_times(empty_ds, session.store, receiver_name),
+            session,
+            group=receiver_name,
+            mode="w",
+        )
         session.commit(_with_run_id(f"Initialize {receiver_name} structure"))
 
         # STEP 2: Now do cooperative distributed writes

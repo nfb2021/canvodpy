@@ -25,6 +25,7 @@ from icechunk.session import ForkSession
 from icechunk.xarray import to_icechunk
 from zarr.dtype import VariableLengthUTF8
 
+from canvod.store.time_encoding import prepare_times, with_time_units
 from canvod.store.viewer import add_rich_display_to_store
 from canvod.store.zarr_concurrency import scoped_zarr_concurrency
 
@@ -442,6 +443,9 @@ class MyIcechunkStore:
         ``throttle`` overrides the config-derived default when explicitly
         passed; leave it ``None`` to defer to config.
         """
+        dataset = prepare_times(dataset, session.store, kwargs["group"])
+        if "encoding" in kwargs:
+            kwargs["encoding"] = with_time_units(dataset, kwargs["encoding"])
         should_throttle = (
             self._zarr_async_concurrency is not None if throttle is None else throttle
         )
