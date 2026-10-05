@@ -1,6 +1,5 @@
 """Temporal aggregation operation."""
 
-import json
 import time
 from typing import Any
 
@@ -12,10 +11,6 @@ import xarray as xr
 from canvod.ops.base import Op, OpResult
 
 logger = structlog.get_logger(__name__)
-
-#: Dataset attribute recording an aggregation (JSON): the sampling interval
-#: of the input, the bin length (both in seconds) and the method.
-TEMPORAL_AGGREGATION_ATTR = "Temporal Aggregation"
 
 #: canvodpy readers mark a missing integer value (e.g. no LLI recorded) with -1.
 INTEGER_MISSING = -1
@@ -101,9 +96,10 @@ class TemporalAggregate(Op):
     to the first value of its bin.
 
     The result has the variables, dimensions, data types, attributes and
-    encodings of the input. It adds one dataset attribute,
-    ``Temporal Aggregation``, which records the input sampling, the bin
-    length and the method.
+    encodings of the input. The input sampling and the bin length (in
+    seconds) are reported in the ``result`` of the returned
+    :class:`~canvod.ops.base.OpResult`, which the stores keep in their log
+    book.
 
     Parameters
     ----------
@@ -132,13 +128,10 @@ class TemporalAggregate(Op):
         freq_ns = int(pd.tseries.frequencies.to_offset(self._freq).nanos)
         epochs = np.asarray(ds["epoch"].values, dtype="datetime64[ns]")
         bins = _bin_starts(epochs, freq_ns)
-        record = json.dumps(
-            {
-                "input_sampling_s": _sampling_seconds(epochs),
-                "output_sampling_s": freq_ns / 1e9,
-                "method": self._method,
-            }
-        )
+        sampling = {
+            "input_sampling_s": _sampling_seconds(epochs),
+            "output_sampling_s": freq_ns / 1e9,
+        }
 
         # --- Nothing to do if every epoch already is the start of its own bin ---
         if np.array_equal(bins, epochs) and len(np.unique(bins)) == len(bins):
@@ -150,8 +143,9 @@ class TemporalAggregate(Op):
                 output_shape=input_shape,
                 duration_seconds=time.perf_counter() - t0,
                 notes=f"no-op: every epoch is already the start of a {self._freq} bin",
+                result={**sampling, "aggregated": False},
             )
-            return ds.assign_attrs({TEMPORAL_AGGREGATION_ATTR: record}), result
+            return ds, result
 
         # --- Bin and slot (position within the bin, in time order) per epoch ---
         order = np.argsort(epochs, kind="stable")
@@ -182,7 +176,7 @@ class TemporalAggregate(Op):
         out = xr.Dataset(
             {name: variables[str(name)] for name in ds.data_vars},
             coords={name: variables[str(name)] for name in ds.coords},
-            attrs={**ds.attrs, TEMPORAL_AGGREGATION_ATTR: record},
+            attrs=dict(ds.attrs),
         )
         out.encoding = dict(ds.encoding)
 
@@ -201,6 +195,7 @@ class TemporalAggregate(Op):
             input_shape=input_shape,
             output_shape=output_shape,
             duration_seconds=duration,
+            result={**sampling, "aggregated": True},
         )
         return out, result
 

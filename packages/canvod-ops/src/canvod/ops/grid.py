@@ -72,6 +72,7 @@ class GridAssignment(Op):
                 output_shape=input_shape,
                 duration_seconds=time.perf_counter() - t0,
                 notes="skipped: missing phi/theta",
+                result={"assigned": False, "reason": "no phi/theta (epoch, sid)"},
             )
             return ds, result
 
@@ -90,6 +91,11 @@ class GridAssignment(Op):
             input_shape=input_shape,
             output_shape=output_shape,
             duration_seconds=duration,
+            result={
+                "assigned": True,
+                "variable": f"cell_id_{grid_name}",
+                "n_cells": int(grid.ncells),
+            },
         )
         return ds, result
 

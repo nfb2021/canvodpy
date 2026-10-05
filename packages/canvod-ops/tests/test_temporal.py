@@ -1,16 +1,10 @@
 """Tests for temporal aggregation operation."""
 
-import json
-
 import numpy as np
 import pytest
 import xarray as xr
 
-from canvod.ops.temporal import (
-    TEMPORAL_AGGREGATION_ATTR,
-    TemporalAggregate,
-    temporal_aggregate,
-)
+from canvod.ops.temporal import TemporalAggregate, temporal_aggregate
 
 
 class TestTemporalAggregate:
@@ -56,18 +50,20 @@ class TestTemporalAggregate:
         assert out.coords["theta"].dims == ("epoch", "sid")
 
     def test_early_exit_coarse_data(self, coarse_ds: xr.Dataset):
-        """Data already on the bin starts is unchanged, apart from the record."""
+        """Data already on the bin starts is unchanged; the result says so."""
         op = TemporalAggregate(freq="1min")
         out, result = op(coarse_ds)
 
         assert "no-op" in result.notes
-        xr.testing.assert_identical(
-            out.drop_attrs(deep=False), coarse_ds.drop_attrs(deep=False)
-        )
-        assert json.loads(out.attrs[TEMPORAL_AGGREGATION_ATTR]) == {
-            "input_sampling_s": 60.0,
-            "output_sampling_s": 60.0,
-            "method": "mean",
+        xr.testing.assert_identical(out, coarse_ds)
+        assert result.step() == {
+            "op": "temporal_aggregate",
+            "settings": {"freq": "1min", "method": "mean"},
+            "result": {
+                "aggregated": False,
+                "input_sampling_s": 60.0,
+                "output_sampling_s": 60.0,
+            },
         }
 
     def test_median_method(self, sample_ds: xr.Dataset):
@@ -205,7 +201,7 @@ class TestSignature:
     @pytest.mark.parametrize("method", ["mean", "median"])
     def test_same_signature_as_input(self, method):
         ds = _reader_like_ds()
-        out, _ = TemporalAggregate("1min", method)(ds)
+        out, result = TemporalAggregate("1min", method)(ds)
 
         assert list(out.data_vars) == list(ds.data_vars)
         assert list(out.coords) == list(ds.coords)
@@ -216,14 +212,12 @@ class TestSignature:
             assert out[name].encoding == var.encoding, name
         for name in ("sid", "sv", "band", "freq_center"):
             xr.testing.assert_identical(out[name], ds[name])
-        added = {k: v for k, v in out.attrs.items() if k not in ds.attrs}
-        assert {k: out.attrs[k] for k in ds.attrs} == ds.attrs
-        assert json.loads(added.pop(TEMPORAL_AGGREGATION_ATTR)) == {
+        assert out.attrs == ds.attrs
+        assert result.result == {
+            "aggregated": True,
             "input_sampling_s": 5.0,
             "output_sampling_s": 60.0,
-            "method": method,
         }
-        assert added == {}
 
     @pytest.mark.parametrize("method", ["mean", "median"])
     def test_values_match_xarray_resample(self, method):

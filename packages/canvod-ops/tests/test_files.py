@@ -7,6 +7,7 @@ import xarray as xr
 
 from canvod.config.models import PreprocessingConfig
 from canvod.ops import TemporalAggregate, preprocess_files
+from canvod.ops.base import ops_version
 
 CONFIG = PreprocessingConfig.model_validate(
     {
@@ -46,7 +47,12 @@ def test_nothing_set_only_records_it():
     out = preprocess_files([("a", FILE_A)], None)
     assert out[0][0] == "a"
     xr.testing.assert_identical(out[0][1].drop_attrs(), FILE_A.drop_attrs())
-    assert out[0][1].attrs == {"File Hash": "A", "Preprocessing": "{}"}
+    assert out[0][1].attrs["File Hash"] == "A"
+    assert json.loads(out[0][1].attrs["Preprocessing"]) == {
+        "format_version": 1,
+        "canvod_ops_version": ops_version(),
+        "steps": [],
+    }
 
 
 def test_bin_spanning_two_files_uses_both():
@@ -80,10 +86,24 @@ def test_each_file_keeps_its_attrs_and_records_the_operations():
     out = dict(preprocess_files([("a", FILE_A), ("b", FILE_B)], CONFIG))
     assert out["a"].attrs["File Hash"] == "A"
     assert out["b"].attrs["File Hash"] == "B"
-    assert json.loads(out["a"].attrs["Preprocessing"]) == {
-        "grid_assignment": {"angular_resolution": 10.0, "grid_type": "equal_area"},
-        "temporal_aggregation": {"freq": "1min", "method": "median"},
+    record = json.loads(out["a"].attrs["Preprocessing"])
+    assert out["b"].attrs["Preprocessing"] == out["a"].attrs["Preprocessing"]
+    assert record["format_version"] == 1
+    assert record["canvod_ops_version"] == ops_version()
+    aggregate, grid = record["steps"]
+    assert aggregate == {
+        "op": "temporal_aggregate",
+        "settings": {"freq": "1min", "method": "median"},
+        "result": {
+            "aggregated": True,
+            "input_sampling_s": 5.0,
+            "output_sampling_s": 60.0,
+        },
     }
+    assert grid["op"] == "grid_assign"
+    assert grid["settings"] == {"grid_type": "equal_area", "angular_resolution": 10.0}
+    assert grid["result"]["variable"] == "cell_id_equal_area_10.0deg"
+    assert grid["result"]["n_cells"] > 0
     assert "cell_id_equal_area_10.0deg" in out["b"].data_vars
 
 
@@ -98,7 +118,7 @@ def test_signals_of_all_files_keep_their_coordinates():
 
 
 def test_signature_of_each_file_is_kept():
-    """Same variables, dtypes, attributes as the files; only records added."""
+    """Same variables, dtypes, attributes as the files; only the record added."""
     out = dict(preprocess_files([("a", FILE_A), ("b", FILE_B)], CONFIG))
     for key, src in (("a", FILE_A), ("b", FILE_B)):
         ds = out[key]
@@ -107,12 +127,7 @@ def test_signature_of_each_file_is_kept():
         for name, var in src.variables.items():
             assert ds[name].dtype == var.dtype, name
             assert ds[name].attrs == var.attrs, name
-        assert set(ds.attrs) == {"File Hash", "Preprocessing", "Temporal Aggregation"}
-        assert json.loads(ds.attrs["Temporal Aggregation"]) == {
-            "input_sampling_s": 5.0,
-            "output_sampling_s": 60.0,
-            "method": "median",
-        }
+        assert set(ds.attrs) == {"File Hash", "Preprocessing"}
 
 
 def test_file_inside_an_earlier_bin_is_left_out():

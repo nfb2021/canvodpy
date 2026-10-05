@@ -29,8 +29,15 @@ Background: `docs/packages/store/overview.md`,
   `packages/canvod-config/src/canvod/config/models/storage.py`; keep code
   and that description in step.
 - **VOD writes** check `validate_vod_dataset` (canvod-readers) first.
-- **Preprocessing**: a group refuses data whose `processing.preprocessing`
-  differs from what it already holds (`check_preprocessing_matches`).
+- **Preprocessing record**: a dataset carries its record in memory
+  (`PREPROCESSING_ATTR`, canvod-config); every write drops it from the data
+  (`prepare.prepare_write`, call it before every `to_icechunk`/`to_zarr`)
+  and the log-book row stores it in the `preprocessing` column (GNSS: the
+  record; VOD: `{receiver: [records]}`). Never store it as a data attribute.
+  A group refuses data whose settings differ from any record in its log book
+  (`check_preprocessing_matches`, raises `PreprocessingMismatchError`, which
+  is not a `ValueError` so runs stop on it).
+- **Log-book rows are JSON or text only** (`_json_log_row`).
 - **One committer per branch.** On local or network file systems icechunk
   cannot detect concurrent commits; the second silently wins. Parallel
   writes go through fork/merge into one session and one `commit()`.

@@ -313,7 +313,10 @@ from `IcechunkConfig`. Once that is wired up, tune these knobs in order of impac
 ## Deduplication
 
 Each group keeps a log of the files it holds (`{group}/metadata/table`: file
-hash, start, end, file name). Before a run writes a file, the orchestrator checks
+hash, start, end, file name, the dataset attributes as JSON and the
+preprocessing record, see
+[Preprocessing during a run](../ops/overview.md#the-preprocessing-record)).
+Every value in the log is text, JSON or a time. Before a run writes a file, the orchestrator checks
 the file's hash and time span against that log and against the other files of the
 batch; `append_to_group()` checks hash and overlap again at the write. A file that
 is already stored is not written with the default write strategy (`skip`); see

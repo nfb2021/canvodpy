@@ -6,6 +6,7 @@ dependencies. Task functions are plain Python — no Airflow required.
 
 from __future__ import annotations
 
+import json
 import shutil
 from unittest.mock import MagicMock, patch
 
@@ -545,7 +546,10 @@ class TestProcessRinexPreprocessing:
     def test_not_set_writes_files_unchanged(self, tmp_path):
         written = self._run(tmp_path, None)
         assert [ds.sizes["epoch"] for ds in written] == [18, 18]
-        assert all(ds.attrs["Preprocessing"] == "{}" for ds in written)
+        # Carried to the store, which moves it into the log book.
+        assert all(
+            json.loads(ds.attrs["Preprocessing"])["steps"] == [] for ds in written
+        )
 
     def test_aggregates_the_day_before_writing(self, tmp_path):
         written = self._run(

@@ -23,13 +23,13 @@ import structlog
 from canvod.config.models import VodAnalysisConfig
 from canvod.utils.tools import deprecated
 
+from canvod.store.prepare import prepare_write
 from canvod.store.store import (
     VodWriteItem,
     VodWriteResult,
     create_gnss_store,
     create_vod_store,
 )
-from canvod.store.time_encoding import prepare_times
 
 
 class GnssResearchSite:
@@ -386,6 +386,19 @@ class GnssResearchSite:
             if hashes:
                 return ",".join(hashes)
         return str(ds.attrs.get("File Hash", "unknown"))
+
+    def preprocessing_records_for(self, group_name: str, ds: xr.Dataset) -> list[str]:
+        """Preprocessing records of the GNSS data behind ``ds``.
+
+        ``ds`` is data read from GNSS store group ``group_name``; the records
+        come from that group's log book, for the files overlapping ``ds``'s
+        epoch range (as :meth:`source_file_hashes_for`).
+        """
+        if not ds.sizes.get("epoch", 0):
+            return []
+        return self.gnss_store.preprocessing_records(
+            group_name, ds.epoch.min().values, ds.epoch.max().values
+        )
 
     def read_receiver_data(
         self, receiver_name: str, time_range: tuple[datetime, datetime] | None = None
@@ -812,7 +825,7 @@ class GnssResearchSite:
 
             if analysis_name not in groups:
                 to_icechunk(
-                    prepare_times(vod_ds, session.store, analysis_name),
+                    prepare_write(vod_ds, session.store, analysis_name),
                     session,
                     group=analysis_name,
                     mode="w",
@@ -820,7 +833,7 @@ class GnssResearchSite:
                 action = "write"
             else:
                 to_icechunk(
-                    prepare_times(vod_ds, session.store, analysis_name),
+                    prepare_write(vod_ds, session.store, analysis_name),
                     session,
                     group=analysis_name,
                     append_dim="epoch",

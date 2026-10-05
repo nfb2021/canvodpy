@@ -40,20 +40,33 @@ Custom calculator::
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import structlog
 
-if TYPE_CHECKING:
-    from datetime import datetime
+from canvod.config.models import (
+    PREPROCESSING_ATTR,
+    describe_settings,
+    vod_preprocessing_record,
+    vod_preprocessing_settings,
+)
+from canvodpy.utils.history import history_entry
 
+if TYPE_CHECKING:
     import xarray as xr
 
     from canvodpy.api import Site
 
 
-def ensure_vod_store_metadata(site: Site, calculator_name: str) -> None:
+def ensure_vod_store_metadata(
+    site: Site, calculator_name: str, records: dict[str, str]
+) -> None:
     """Write or update rich store metadata for a site's VOD store.
+
+    ``records`` holds, per VOD analysis written, its preprocessing record
+    (``vod_preprocessing_record``); the history entry of the write names
+    the preprocessing and the canVODpy version.
 
     VOD writes never called ``collect_metadata()``/``write_metadata()``
     before this — every VOD store showed "No metadata found" (see
@@ -88,6 +101,15 @@ def ensure_vod_store_metadata(site: Site, calculator_name: str) -> None:
             return
 
         store_path = site._site.vod_store.store_path
+        now = datetime.now(UTC).isoformat()
+        write_entry = history_entry(
+            now,
+            f"VOD write ({calculator_name})",
+            {
+                name: describe_settings(vod_preprocessing_settings(record))
+                for name, record in records.items()
+            },
+        )
 
         if not metadata_exists(store_path):
             meta = collect_metadata(
@@ -99,17 +121,16 @@ def ensure_vod_store_metadata(site: Site, calculator_name: str) -> None:
                 store_path=store_path,
             )
             meta = apply_updates(meta, summarize_store(store_path))
+            meta = apply_updates(
+                meta, {"summaries.history": [*meta.summaries.history, write_entry]}
+            )
             write_metadata(store_path, meta)
             log.info("vod_store_metadata_written")
         else:
-            from datetime import UTC
-            from datetime import datetime as _datetime
-
-            now = _datetime.now(UTC).isoformat()
             existing_meta = read_metadata(store_path)
             new_snapshot = collect_config_snapshot(config)
 
-            history_entries = [f"{now}: VOD write ({calculator_name})"]
+            history_entries = [write_entry]
             updates: dict[str, object] = {"temporal.updated": now}
 
             drifted = new_snapshot.config_hash != existing_meta.config.config_hash
@@ -506,13 +527,29 @@ class VodComputer:
         gnss_store_path = str(research_site.gnss_store.store_path)
 
         items = []
+        records: dict[str, str] = {}
         for analysis_name, vod_ds, canopy_ds, sky_ds in entries:
             analysis_cfg = self._get_analysis_config(analysis_name)
             canopy_name = analysis_cfg.canopy_receiver
             ref_name = analysis_cfg.reference_receiver
+            # Raises PreprocessingMismatchError if canopy and reference were
+            # preprocessed differently.
+            record = vod_preprocessing_record(
+                {
+                    canopy_name: research_site.preprocessing_records_for(
+                        canopy_name, canopy_ds
+                    ),
+                    ref_name: research_site.preprocessing_records_for(
+                        analysis_cfg.reference_store_group, sky_ds
+                    ),
+                }
+            )
+            records[analysis_name] = record
             items.append(
                 {
-                    "vod_dataset": self._prepare_for_store(vod_ds),
+                    "vod_dataset": self._prepare_for_store(vod_ds).assign_attrs(
+                        {PREPROCESSING_ATTR: record}
+                    ),
                     "analysis_name": analysis_name,
                     "calculator_name": self._calculator_name,
                     "source_file_hashes": {
@@ -534,7 +571,17 @@ class VodComputer:
             )
 
         results = research_site.store_vod_analyses_batch(items=items)
-        ensure_vod_store_metadata(self._site, self._calculator_name)
+        ensure_vod_store_metadata(
+            self._site,
+            self._calculator_name,
+            {
+                name: record
+                for name, record in records.items()
+                if getattr(
+                    results.get(f"{self._calculator_name}/{name}"), "written", False
+                )
+            },
+        )
 
         for analysis_name, *_ in entries:
             self.log.info(

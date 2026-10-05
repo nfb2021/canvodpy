@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, field_validator
 
@@ -123,32 +123,170 @@ class PreprocessingConfig(_StrictModel):
     )
 
 
-#: Dataset and store-group attribute recording the applied preprocessing.
+#: Version of the layout of the preprocessing record (:func:`preprocessing_record`);
+#: changes only when the layout changes, independently of the software version.
+PREPROCESSING_RECORD_VERSION = 1
+
+#: Key under which a dataset carries its preprocessing record in memory, from
+#: the preprocessing to the store write. The stores never write it into the
+#: data: they move it into the ``preprocessing`` column of their log book.
 PREPROCESSING_ATTR = "Preprocessing"
 
 
-def preprocessing_record(config: PreprocessingConfig | None) -> str:
-    """JSON record of the operations ``config`` applies (``"{}"`` for none).
+class PreprocessingMismatchError(Exception):
+    """Data preprocessed differently from the data they would be stored with.
 
-    Stored in the ``Preprocessing`` attribute of every written dataset, so a
-    store group never mixes data preprocessed in different ways.
+    Deliberately not a ``ValueError``: a run stops on it instead of skipping
+    the receiver-day, because every later day would be refused the same way.
+    """
+
+
+def preprocessing_record(steps: list[dict[str, Any]], software: str) -> str:
+    """JSON record of the preprocessing applied to a dataset.
 
     Parameters
     ----------
-    config : PreprocessingConfig | None
-        The ``processing.preprocessing`` section.
+    steps : list[dict]
+        One ``{"op", "settings", "result"}`` mapping per operation, in the
+        order they ran (see ``canvod.ops.OpResult.step``). ``settings`` are
+        the configured values, ``result`` what the operation measured or
+        derived (e.g. the input sampling). An empty list records that no
+        preprocessing was applied.
+    software : str
+        Version of canvod-ops that ran the operations (e.g. ``"1.0.0"``).
 
     Returns
     -------
     str
-        Sorted-key JSON of the enabled operations and their settings.
+        ``{"format_version", "canvod_ops_version", "steps"}`` as sorted-key
+        JSON. ``format_version`` is the version of this record's layout,
+        not of the software.
     """
-    record: dict[str, dict] = {}
-    if config is not None:
-        temporal = config.temporal_aggregation
-        if temporal is not None and temporal.enabled:
-            record["temporal_aggregation"] = temporal.model_dump(exclude={"enabled"})
-        grid = config.grid_assignment
-        if grid is not None and grid.enabled:
-            record["grid_assignment"] = grid.model_dump(exclude={"enabled"})
-    return json.dumps(record, sort_keys=True)
+    return json.dumps(
+        {
+            "format_version": PREPROCESSING_RECORD_VERSION,
+            "canvod_ops_version": software,
+            "steps": steps,
+        },
+        sort_keys=True,
+    )
+
+
+def preprocessing_steps(record: str) -> list[dict[str, Any]]:
+    """Steps of a record; ``""`` (no record) gives no steps.
+
+    Log-book rows written before the record existed hold ``""``; no
+    preprocessing was applied by canVODpy then.
+
+    Raises
+    ------
+    ValueError
+        If the record has an unknown format version.
+    """
+    if not record:
+        return []
+    parsed = json.loads(record)
+    version = parsed.get("format_version")
+    if version != PREPROCESSING_RECORD_VERSION:
+        msg = (
+            f"Preprocessing record format {version!r} is not supported "
+            f"(this canVODpy reads format {PREPROCESSING_RECORD_VERSION})"
+        )
+        raise ValueError(msg)
+    return list(parsed["steps"])
+
+
+def preprocessing_settings(record: str) -> list[dict[str, Any]]:
+    """The operations and settings of a record, without their results.
+
+    Two datasets may be stored together if and only if these are equal; the
+    results (e.g. the measured input sampling) may differ.
+    """
+    return [
+        {"op": step["op"], "settings": step["settings"]}
+        for step in preprocessing_steps(record)
+    ]
+
+
+def describe_settings(settings: list[dict[str, Any]]) -> str:
+    """Short text of operations and settings, e.g. for a store history entry.
+
+    ``settings`` as :func:`preprocessing_settings` returns them; no
+    operations give ``"none"``.
+    """
+    if not settings:
+        return "none"
+    return ", ".join(
+        f"{step['op']}("
+        + ", ".join(f"{k}={v}" for k, v in sorted(step["settings"].items()))
+        + ")"
+        for step in settings
+    )
+
+
+def describe_preprocessing(record: str) -> str:
+    """Short text of a record's operations and settings."""
+    return describe_settings(preprocessing_settings(record))
+
+
+def vod_preprocessing_record(sources: dict[str, list[str]]) -> str:
+    """Record of a VOD result: the records of the GNSS data behind it.
+
+    Parameters
+    ----------
+    sources : dict[str, list[str]]
+        Per receiver, the preprocessing records of the GNSS data the result
+        was computed from (usually one; several if the data span days with
+        different results, e.g. another input sampling).
+
+    Returns
+    -------
+    str
+        ``sources`` as sorted-key JSON.
+
+    Raises
+    ------
+    PreprocessingMismatchError
+        If the receivers' data were preprocessed with different operations
+        or settings: their VOD would compare unlike observations.
+    """
+    distinct = {
+        json.dumps(preprocessing_settings(record), sort_keys=True): record
+        for records in sources.values()
+        for record in records
+    }
+    if len(distinct) > 1:
+        described = "; ".join(
+            f"{name}: " + " | ".join(describe_preprocessing(r) for r in records)
+            for name, records in sources.items()
+        )
+        msg = (
+            "The receivers of a VOD analysis must be preprocessed the same "
+            f"way, but their GNSS data have: {described}"
+        )
+        raise PreprocessingMismatchError(msg)
+    return json.dumps(sources, sort_keys=True)
+
+
+def vod_preprocessing_settings(record: str) -> list[dict[str, Any]]:
+    """Operations and settings behind a VOD result (see
+    :func:`vod_preprocessing_record`); ``""`` gives none."""
+    if not record:
+        return []
+    for records in json.loads(record).values():
+        for gnss_record in records:
+            return preprocessing_settings(gnss_record)
+    return []
+
+
+def split_preprocessing(attrs: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """Separate the in-memory record from the other dataset attributes.
+
+    Returns
+    -------
+    tuple[dict, str]
+        The attributes without :data:`PREPROCESSING_ATTR`, and the record
+        (``""`` if the dataset carries none).
+    """
+    rest = {k: v for k, v in attrs.items() if k != PREPROCESSING_ATTR}
+    return rest, str(attrs.get(PREPROCESSING_ATTR, ""))

@@ -51,13 +51,18 @@ from canvod.auxiliary.position import (
     compute_spherical_coordinates,
 )
 from canvod.config import load_config
-from canvod.config.models import reference_store_group
+from canvod.config.models import (
+    PREPROCESSING_ATTR,
+    describe_preprocessing,
+    reference_store_group,
+)
 from canvod.ops import preprocess_files
 from canvod.readers import DataDirMatcher, MatchedDirs
 from canvod.readers.gnss_specs.exceptions import NmeaError, RinexError
 from canvod.store import GnssResearchSite, scoped_zarr_concurrency
+from canvod.store.prepare import prepare_write
 from canvod.store.store import _with_run_id
-from canvod.store.time_encoding import prepare_times, with_time_units
+from canvod.store.time_encoding import with_time_units
 from canvod.utils.logging import get_run_id, set_run_id, stage_timer
 from canvod.utils.tools import (
     _worker_init,
@@ -72,6 +77,7 @@ from canvodpy.orchestrator.discovery import (
     parse_sampling_interval_from_filename,
     recipe_file,
 )
+from canvodpy.utils.history import history_entry
 
 # ============================================================================
 # MODULE-LEVEL FUNCTIONS (Required for loky / ProcessPoolExecutor serialization)
@@ -717,7 +723,7 @@ def write_initial_rinex_ds_to_store(
     group: str,
 ) -> ForkSession:
     """Write a new receiver group to the store."""
-    ds = prepare_times(_sanitize_ds_for_write(ds), fork.store, group)
+    ds = prepare_write(_sanitize_ds_for_write(ds), fork.store, group)
     ds.to_zarr(
         fork.store,
         group=group,
@@ -734,7 +740,7 @@ def append_rinex_ds_to_store(
     group: str,
 ) -> ForkSession:
     """Append to an existing receiver group in the store."""
-    ds = prepare_times(_sanitize_ds_for_write(ds), fork.store, group)
+    ds = prepare_write(_sanitize_ds_for_write(ds), fork.store, group)
     ds.to_zarr(
         fork.store,
         region="auto",
@@ -817,7 +823,7 @@ def worker_task_append_only(
         reader_name,
     )
 
-    ds_clean = prepare_times(
+    ds_clean = prepare_write(
         _sanitize_ds_for_write(ds_augmented), fork.store, receiver_name
     )
     ds_clean.to_zarr(
@@ -855,7 +861,7 @@ def worker_task_with_region_auto(
         store_sbf_raw_observables=store_sbf_raw_observables,
     )
 
-    ds_clean = prepare_times(_sanitize_ds_for_write(ds), fork.store, receiver_name)
+    ds_clean = prepare_write(_sanitize_ds_for_write(ds), fork.store, receiver_name)
     ds_clean.to_zarr(
         fork.store,
         group=receiver_name,
@@ -2122,7 +2128,7 @@ class RinexDataProcessor:
 
         ds_rewrite = store._normalize_encodings(ds_rewrite)
         to_icechunk(
-            prepare_times(ds_rewrite, session.store, receiver_name),
+            prepare_write(ds_rewrite, session.store, receiver_name),
             session,
             group=receiver_name,
             mode="w",
@@ -2267,6 +2273,21 @@ class RinexDataProcessor:
             epochs=n_epochs,
         )
 
+    def _check_preprocessing(
+        self, receiver_name: str, augmented_datasets: list[tuple[Path, xr.Dataset]]
+    ) -> None:
+        """Refuse files preprocessed differently from ``receiver_name``'s data.
+
+        Checks once per distinct record (each check reads the log book);
+        raises ``PreprocessingMismatchError``, which stops the run.
+        """
+        checked: set[str] = set()
+        for _fname, ds in augmented_datasets:
+            record = str(ds.attrs.get(PREPROCESSING_ATTR, ""))
+            if record not in checked:
+                checked.add(record)
+                self.site.gnss_store.check_preprocessing_matches(receiver_name, ds)
+
     def _prepare_group_write(
         self,
         augmented_datasets: list[tuple[Path, xr.Dataset]],
@@ -2283,8 +2304,7 @@ class RinexDataProcessor:
         `batch_check_existing`, `check_temporal_overlaps` all key off
         `receiver_name`), zero cross-group reads, no store write.
         """
-        for _fname, ds in augmented_datasets:
-            self.site.gnss_store.check_preprocessing_matches(receiver_name, ds)
+        self._check_preprocessing(receiver_name, augmented_datasets)
         file_hash_map = {
             fname: ds.attrs.get("File Hash") for fname, ds in augmented_datasets
         }
@@ -2359,7 +2379,7 @@ class RinexDataProcessor:
                         # epoch-uniqueness check, see StorageConfig.
                         # gnss_store_strategy docstring for the risk.
                         to_icechunk(
-                            prepare_times(ds_clean, fork_session.store, receiver_name),
+                            prepare_write(ds_clean, fork_session.store, receiver_name),
                             fork_session,
                             group=receiver_name,
                             append_dim="epoch",
@@ -2370,7 +2390,7 @@ class RinexDataProcessor:
 
                     case (False, _):
                         to_icechunk(
-                            prepare_times(ds_clean, fork_session.store, receiver_name),
+                            prepare_write(ds_clean, fork_session.store, receiver_name),
                             fork_session,
                             group=receiver_name,
                             append_dim="epoch",
@@ -2476,6 +2496,15 @@ class RinexDataProcessor:
         5. One `base_session.merge(*forks)` + one `base_session.commit(...)`
            for the groups written this round via fork.
         """
+        # Preprocessing of each group, for the store history (one record
+        # per receiver-day, so the first file's stands for all).
+        preprocessing_text = {
+            name: describe_preprocessing(
+                str(datasets[0][1].attrs.get(PREPROCESSING_ATTR, ""))
+            )
+            for name, datasets, *_ in group_inputs
+            if datasets
+        }
         version = get_version_from_pyproject()
         log = self._logger
         yyyydoy = str(self.matched_data_dirs.yyyydoy)
@@ -2607,7 +2636,7 @@ class RinexDataProcessor:
                     ds_clean = self.site.gnss_store._cleanse_dataset_attrs(first_ds)
                     ds_clean = self.site.gnss_store._normalize_encodings(ds_clean)
                     to_icechunk(
-                        prepare_times(ds_clean, prepass_session.store, receiver_name),
+                        prepare_write(ds_clean, prepass_session.store, receiver_name),
                         prepass_session,
                         group=receiver_name,
                         encoding=with_time_units(
@@ -2895,6 +2924,19 @@ class RinexDataProcessor:
                 reader_fmt = next(iter(results.values())).reader_format or (
                     self._reader_name
                 )
+                # Per-action counts, as in the commit message: a skipped
+                # file is in the log book but not newly stored.
+                per_receiver = ", ".join(
+                    f"{name}("
+                    + ", ".join(f"{k}={v}" for k, v in r.actions.items() if v > 0)
+                    + ")"
+                    for name, r in results.items()
+                )
+                ingest_entry = history_entry(
+                    datetime.now(UTC).isoformat(),
+                    f"Ingest {yyyydoy}: {per_receiver}",
+                    {name: preprocessing_text[name] for name in results},
+                )
                 if not metadata_exists(store_path, branch="main"):
                     resources = self._config.processing.params.resolve_resources()
                     meta = collect_metadata(
@@ -2915,22 +2957,17 @@ class RinexDataProcessor:
                             receivers=set(meta.instruments.receivers),
                         ),
                     )
+                    meta = apply_updates(
+                        meta,
+                        {"summaries.history": [*meta.summaries.history, ingest_entry]},
+                    )
                     write_metadata(store_path, meta, branch="main")
                     log.info("Wrote rich store metadata")
                 else:
                     now = datetime.now(UTC).isoformat()
                     existing_meta = read_metadata(store_path, branch="main")
                     new_snapshot = collect_config_snapshot(self._config)
-
-                    # Per-action counts, as in the commit message: a
-                    # skipped file is in the log book but not newly stored.
-                    per_receiver = ", ".join(
-                        f"{name}("
-                        + ", ".join(f"{k}={v}" for k, v in r.actions.items() if v > 0)
-                        + ")"
-                        for name, r in results.items()
-                    )
-                    history_entries = [f"{now}: Ingest {yyyydoy}: {per_receiver}"]
+                    history_entries = [ingest_entry]
                     updates: dict[str, object] = {"temporal.updated": now}
 
                     drifted = (
@@ -3019,8 +3056,7 @@ class RinexDataProcessor:
             files=len(augmented_datasets),
         )
 
-        for _fname, ds in augmented_datasets:
-            self.site.gnss_store.check_preprocessing_matches(receiver_name, ds)
+        self._check_preprocessing(receiver_name, augmented_datasets)
 
         file_hash_map = {
             fname: ds.attrs.get("File Hash") for fname, ds in augmented_datasets
@@ -3191,7 +3227,7 @@ class RinexDataProcessor:
                                 # chunk_encoding_for docstring for the full
                                 # investigation).
                                 to_icechunk(
-                                    prepare_times(
+                                    prepare_write(
                                         ds_clean, session.store, receiver_name
                                     ),
                                     session,
@@ -3218,7 +3254,7 @@ class RinexDataProcessor:
                                 # epoch-uniqueness check, see StorageConfig.
                                 # gnss_store_strategy docstring for the risk.
                                 to_icechunk(
-                                    prepare_times(
+                                    prepare_write(
                                         ds_clean, session.store, receiver_name
                                     ),
                                     session,
@@ -3232,7 +3268,7 @@ class RinexDataProcessor:
                             case (False, _):
                                 # New file, write it
                                 to_icechunk(
-                                    prepare_times(
+                                    prepare_write(
                                         ds_clean, session.store, receiver_name
                                     ),
                                     session,
@@ -3247,7 +3283,7 @@ class RinexDataProcessor:
                                 # Only reached when the rewrite had nothing to
                                 # replace; the old data is already gone
                                 to_icechunk(
-                                    prepare_times(
+                                    prepare_write(
                                         ds_clean, session.store, receiver_name
                                     ),
                                     session,
@@ -3511,6 +3547,22 @@ class RinexDataProcessor:
 
             if site_cfg is not None:
                 reader_fmt = reader_format or self._reader_name
+                # Per-action counts, as in the commit message: a skipped
+                # file is in the log book but not newly stored.
+                action_counts = ", ".join(
+                    f"{k}={v}" for k, v in actions.items() if v > 0
+                )
+                record = (
+                    str(augmented_datasets[0][1].attrs.get(PREPROCESSING_ATTR, ""))
+                    if augmented_datasets
+                    else ""
+                )
+                ingest_entry = history_entry(
+                    datetime.now(UTC).isoformat(),
+                    f"Ingest {receiver_name} {self.matched_data_dirs.yyyydoy}: "
+                    f"{action_counts}",
+                    {receiver_name: describe_preprocessing(record)},
+                )
                 if not metadata_exists(store_path, branch=branch):
                     resources = self._config.processing.params.resolve_resources()
                     meta = collect_metadata(
@@ -3531,6 +3583,10 @@ class RinexDataProcessor:
                             receivers=set(meta.instruments.receivers),
                         ),
                     )
+                    meta = apply_updates(
+                        meta,
+                        {"summaries.history": [*meta.summaries.history, ingest_entry]},
+                    )
                     write_metadata(store_path, meta, branch=branch)
                     log.info("Wrote rich store metadata")
                 else:
@@ -3538,15 +3594,7 @@ class RinexDataProcessor:
                     existing_meta = read_metadata(store_path, branch=branch)
                     new_snapshot = collect_config_snapshot(self._config)
 
-                    # Per-action counts, as in the commit message: a
-                    # skipped file is in the log book but not newly stored.
-                    action_counts = ", ".join(
-                        f"{k}={v}" for k, v in actions.items() if v > 0
-                    )
-                    history_entries = [
-                        f"{now}: Ingest {receiver_name}"
-                        f" {self.matched_data_dirs.yyyydoy}: {action_counts}"
-                    ]
+                    history_entries = [ingest_entry]
                     updates: dict[str, object] = {"temporal.updated": now}
 
                     drifted = (
@@ -4815,7 +4863,7 @@ class DistributedRinexDataProcessor(RinexDataProcessor):
         empty_ds = empty_ds.assign_coords({"epoch": np.sort(all_epochs)})
 
         to_icechunk(
-            prepare_times(empty_ds, session.store, receiver_name),
+            prepare_write(empty_ds, session.store, receiver_name),
             session,
             group=receiver_name,
             mode="w",

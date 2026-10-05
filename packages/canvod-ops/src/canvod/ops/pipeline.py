@@ -7,7 +7,8 @@ from typing import Any
 import structlog
 import xarray as xr
 
-from canvod.ops.base import Op, OpResult
+from canvod.config.models import preprocessing_record
+from canvod.ops.base import Op, OpResult, ops_version
 
 logger = structlog.get_logger(__name__)
 
@@ -18,6 +19,10 @@ class PipelineResult:
 
     results: list[OpResult] = field(default_factory=list)
     total_duration_seconds: float = 0.0
+
+    def record(self) -> str:
+        """Preprocessing record (JSON) of the operations, in the order they ran."""
+        return preprocessing_record([r.step() for r in self.results], ops_version())
 
     def to_metadata_dict(self) -> dict[str, Any]:
         """Serialise to a dict suitable for ``ds.attrs``."""

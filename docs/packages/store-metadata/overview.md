@@ -203,11 +203,17 @@ to the GNSS store and after each VOD write:
 
 1. **First write** to a store: `collect_metadata()` gathers all 11 sections,
    `summarize_store()` adds the coverage and summaries of the stored data,
-   `write_metadata()` persists them.
+   `write_metadata()` persists them, with the first history line of the write.
 2. **Every later write**: `update_metadata()` sets `temporal.updated`, adds a
    line to `summaries.history`, recomputes coverage and summaries from the
    stored data, and replaces the config snapshot if the settings changed
    (noted in the history with the old and new config hash).
+
+Each history line of a write names what was written, the canVODpy version and
+the preprocessing of every group written, e.g.
+`2026-10-05T12:00:00+00:00: Ingest 2025003: canopy_01(written=96) (canvodpy 1.0.0); preprocessing: canopy_01: temporal_aggregate(freq=1min, method=mean)`.
+The full record of each file is in the group's log book (see
+[the preprocessing record](../ops/overview.md#the-preprocessing-record)).
 
 No user action is required: every run (`canvodpy run`, `Site.pipeline()`,
 Airflow) goes through this code. A failed metadata write does not stop the

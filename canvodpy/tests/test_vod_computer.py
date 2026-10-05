@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest.mock
 
 import numpy as np
@@ -10,15 +11,25 @@ import pytest
 import xarray as xr
 from canvodpy.vod_computer import VodComputer
 
+from canvod.config.models import (
+    PREPROCESSING_ATTR,
+    PreprocessingMismatchError,
+    preprocessing_record,
+)
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+NO_PREPROCESSING = preprocessing_record([], "1.0.0")
 
 
 def _make_site(vod_analyses: dict | None = None):
     site = unittest.mock.MagicMock()
     site.name = "TestSite"
     site.vod_analyses = vod_analyses or {}
+    site._site.preprocessing_records_for.return_value = [NO_PREPROCESSING]
     return site
 
 
@@ -249,6 +260,43 @@ class TestVodComputerCompute:
         calls = site._site.source_file_hashes_for.call_args_list
         assert [c.args[0] for c in calls] == ["canopy_01", "reference_01_canopy_01"]
         assert all(c.args[1].sizes["epoch"] == 4 for c in calls)
+
+    def test_vod_carries_the_receivers_preprocessing(self):
+        site = _make_site({"a": _make_analysis_cfg()})
+        vc = VodComputer(site)
+
+        with unittest.mock.patch("canvodpy.vod_computer.ensure_vod_store_metadata"):
+            vc.compute_day(_day_datasets(), "a")
+
+        (item,) = site._site.store_vod_analyses_batch.call_args.kwargs["items"]
+        assert json.loads(item["vod_dataset"].attrs[PREPROCESSING_ATTR]) == {
+            "canopy_01": [NO_PREPROCESSING],
+            "reference_01": [NO_PREPROCESSING],
+        }
+        calls = site._site.preprocessing_records_for.call_args_list
+        assert [c.args[0] for c in calls] == ["canopy_01", "reference_01_canopy_01"]
+
+    def test_receivers_preprocessed_differently_are_refused(self):
+        site = _make_site({"a": _make_analysis_cfg()})
+        aggregated = preprocessing_record(
+            [
+                {
+                    "op": "temporal_aggregate",
+                    "settings": {"freq": "1min", "method": "mean"},
+                    "result": {},
+                }
+            ],
+            "1.0.0",
+        )
+        site._site.preprocessing_records_for.side_effect = [
+            [aggregated],
+            [NO_PREPROCESSING],
+        ]
+        vc = VodComputer(site)
+
+        with pytest.raises(PreprocessingMismatchError, match="same way"):
+            vc.compute_day(_day_datasets(), "a")
+        site._site.store_vod_analyses_batch.assert_not_called()
 
     def test_prepare_for_store_drops_encodings_without_mutating(self):
         vc = VodComputer(_make_site(), rechunk={"epoch": 2, "sid": -1})

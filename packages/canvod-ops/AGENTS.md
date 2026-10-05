@@ -8,11 +8,11 @@ temporal aggregation and grid assignment, configured in
 
 | Path (under `src/canvod/ops/`) | What |
 |---|---|
-| `base.py` | `Op` ABC |
-| `temporal.py` | `TemporalAggregate`: bins from 00:00, NaN/-1 skipped, integers rounded, `phi` averaged as an angle; output has the input's signature plus the `Temporal Aggregation` attribute; numpy blocks, no polars |
+| `base.py` | `Op` ABC; `OpResult` with `result` and `step()` (the op's entry in the preprocessing record) |
+| `temporal.py` | `TemporalAggregate`: bins from 00:00, NaN/-1 skipped, integers rounded, `phi` averaged as an angle; output has exactly the input's signature (no added attribute; sampling reported in `OpResult.result`); numpy blocks, no polars |
 | `grid.py` | `GridAssignment`: calls canvod-grids' `add_cell_ids_to_ds_fast` |
 | `pipeline.py`, `registry.py` | `Pipeline`; `build_default_pipeline` builds it from the settings (empty if unset) |
-| `files.py` | `preprocess_files`: the one step every run calls per receiver-day; joins the files in preallocated arrays (no `xr.concat`) |
+| `files.py` | `preprocess_files`: the one step every run calls per receiver-day; joins the files in preallocated arrays (no `xr.concat`); attaches the day's preprocessing record in memory (`PREPROCESSING_ATTR`), which the stores move into their log books |
 
 Background: `docs/packages/ops/overview.md`.
 

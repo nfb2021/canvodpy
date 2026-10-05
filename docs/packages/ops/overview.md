@@ -59,12 +59,14 @@ can lose its meaning in a bin (a loss of lock in one epoch of a bin
 disappears). A bin keeps no count of the epochs behind it.
 
 The result has the same variables, dimensions, data types, attributes and
-encodings as the input, with fewer epochs. It adds one dataset attribute,
-`Temporal Aggregation`, which records the sampling of the input, the bin length
-and the method, e.g.
-`{"input_sampling_s": 5.0, "output_sampling_s": 60.0, "method": "mean"}`. The
-aggregation runs on numpy arrays in blocks of bins of bounded size; a day of
-1 s data with 300 signals takes about one second.
+encodings as the input, with fewer epochs, so aggregated data cannot be told
+apart from unaggregated data by their structure. What was done is reported in
+the `result` of the returned `OpResult` instead, e.g.
+`{"aggregated": true, "input_sampling_s": 5.0, "output_sampling_s": 60.0}`,
+and kept in the stores' log books (see
+[The preprocessing record](#the-preprocessing-record)). The aggregation runs on
+numpy arrays in blocks of bins of bounded size; a day of 1 s data with 300
+signals takes about one second.
 
 `SNR` is averaged as stored, in dB-Hz, not as linear power. Because VOD is
 linear in the SNR difference in dB, the mean of the dB values gives the mean of
@@ -85,9 +87,10 @@ ds_out, result = op(ds_in)
 | `freq` | `"1min"` | Target frequency (pandas offset alias) |
 | `method` | `"mean"` | Aggregation: `"mean"` or `"median"` |
 
-If every epoch already is the start of its own bin, the operation is a no-op and
-returns the dataset unchanged, apart from the `Temporal Aggregation` attribute. Data at the target interval but off the bin
-starts (e.g. epochs at `:02`) are relabeled to the bin starts.
+If every epoch already is the start of its own bin, the operation is a no-op:
+it returns the dataset unchanged and reports `"aggregated": false`. Data at the
+target interval but off the bin starts (e.g. epochs at `:02`) are relabeled to
+the bin starts.
 
 #### Per-SID independence
 
@@ -171,13 +174,16 @@ class MyOp(Op):
 
 Each `OpResult` records:
 
-- Operation name and parameters
+- Operation name and parameters (the settings)
+- `result`: what the operation measured or derived (e.g. the input sampling)
 - Input/output dataset dimensions
 - Execution time
 - Optional notes (e.g., "no-op: data already at target frequency")
 
-The `PipelineResult` aggregates all `OpResult` objects and can be serialized
-to dataset attributes via `to_metadata_dict()`.
+`OpResult.step()` gives the operation's entry in the preprocessing record,
+`{"op", "settings", "result"}`, and `PipelineResult.record()` the record of
+all operations in the order they ran. A new operation therefore records itself:
+it only has to fill `parameters` and `result`.
 
 ---
 
@@ -208,10 +214,56 @@ stored file keeps its own attributes (e.g. the file hash) and all `sid`
 coordinates. VOD is then
 computed from the aggregated data and carries the `cell_id_*` variables along.
 
-Every written dataset records the applied operations in its `Preprocessing`
-attribute. A store group never mixes data preprocessed in different ways: if
-the setting changes, writing into an existing group stops with an error, so
-keep the setting for the life of a store or start a new store.
+### The preprocessing record
+
+For traceability, transparency and reproducibility, every write records which
+preprocessing produced the data. The record is written by the operations
+themselves and has this form (here for one day of 5 s data):
+
+```json
+{
+  "format_version": 1,
+  "canvod_ops_version": "1.0.0",
+  "steps": [
+    {
+      "op": "temporal_aggregate",
+      "settings": {"freq": "1min", "method": "mean"},
+      "result": {"aggregated": true, "input_sampling_s": 5.0, "output_sampling_s": 60.0}
+    },
+    {
+      "op": "grid_assign",
+      "settings": {"grid_type": "equal_area", "angular_resolution": 2.0},
+      "result": {"assigned": true, "variable": "cell_id_equal_area_2.0deg", "n_cells": 6563}
+    }
+  ]
+}
+```
+
+`format_version` is the version of the record's layout, not of the software;
+`canvod_ops_version` is the version of the package that ran the operations.
+Without `processing.preprocessing`, `steps` is empty, which records that no
+preprocessing was applied.
+
+The record is kept in the log books of the stores, never in the data: stored
+data have exactly the variables and attributes of data without preprocessing.
+
+- **GNSS store**: the `preprocessing` column of `{group}/metadata/table` holds
+  the record of each file, written in the same commit as the file's data.
+- **VOD store**: the `preprocessing` column of the analysis group's log book
+  holds, per receiver, the records of the GNSS data the result was computed
+  from, e.g. `{"canopy_01": [record], "reference_01": [record]}`.
+- **Store history**: each entry (`summaries.history` of the store metadata,
+  shown by `canvod.store_metadata.show_metadata`) names the preprocessing of
+  every group written and the canVODpy version.
+
+A store group never mixes data preprocessed with different operations or
+settings. Before each write, the store compares the settings of the new data
+with every record in the group's log book; the results may differ (e.g. data
+at 1 s and at 5 s, both aggregated to 1 min). A VOD result is computed only
+from canopy and reference data preprocessed with the same settings. On a
+mismatch, the write raises `PreprocessingMismatchError` and `canvodpy run`
+stops with exit code 1, since every later day would be refused the same way:
+keep the setting for the life of a store, or start a new store.
 
 `build_default_pipeline(config)` builds the same pipeline from a
 `PreprocessingConfig`; called without one, it reads the setting.

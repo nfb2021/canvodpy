@@ -133,7 +133,7 @@ graph TD
     ├── Pseudorange
     ├── Doppler
     └── metadata/
-        ├── table               # Per-file ingest ledger (hash, start, end, path)
+        ├── table               # Per-file ingest ledger (hash, start, end, path, preprocessing record)
         └── sbf_obs             # SBF only: per-file receiver metadata (geometry, PVT, DOP, ...)
 ```
 

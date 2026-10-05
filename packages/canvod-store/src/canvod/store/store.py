@@ -17,7 +17,13 @@ import polars as pl
 import structlog
 import xarray as xr
 import zarr
-from canvod.config.models import PREPROCESSING_ATTR
+from canvod.config.models import (
+    PreprocessingMismatchError,
+    describe_settings,
+    preprocessing_settings,
+    split_preprocessing,
+    vod_preprocessing_settings,
+)
 from canvod.readers.base import validate_vod_dataset
 from canvod.utils.logging import get_run_id, stage_timer
 from canvod.utils.tools import get_version_from_pyproject, sanitize_directory
@@ -25,7 +31,8 @@ from icechunk.session import ForkSession
 from icechunk.xarray import to_icechunk
 from zarr.dtype import VariableLengthUTF8
 
-from canvod.store.time_encoding import prepare_times, with_time_units
+from canvod.store.prepare import prepare_write
+from canvod.store.time_encoding import with_time_units
 from canvod.store.viewer import add_rich_display_to_store
 from canvod.store.zarr_concurrency import scoped_zarr_concurrency
 
@@ -83,6 +90,45 @@ def _with_run_id(commit_message: str) -> str:
     if run_id is None:
         return commit_message
     return f"{commit_message} (run={run_id})"
+
+
+def _json_log_row(row: dict[str, Any]) -> dict[str, Any]:
+    """A log-book row with JSON or plain-text values only.
+
+    The dataset attributes (``dataset_attrs``, as the run passes them, or
+    ``attrs``) become JSON in the ``attrs`` column; the preprocessing record
+    they carry moves to the ``preprocessing`` column; paths become text.
+    """
+    row = dict(row)
+    attrs = row.pop("dataset_attrs", row.get("attrs", {}))
+    if isinstance(attrs, str):
+        attrs = json.loads(attrs) if attrs else {}
+    attrs, record = split_preprocessing(attrs)
+    row["attrs"] = json.dumps(attrs, default=str)
+    row.setdefault("preprocessing", record)
+    return {k: str(v) if isinstance(v, Path) else v for k, v in row.items()}
+
+
+def _written_rows_overlapping(
+    df: pl.DataFrame, start: np.datetime64, end: np.datetime64
+) -> pl.DataFrame:
+    """Log-book rows whose data overlap ``[start, end]``, without rows of
+    files skipped as already ingested (nothing was written for them)."""
+    start_ns = np.datetime64(start, "ns")
+    end_ns = np.datetime64(end, "ns")
+    rows = df.filter((pl.col("start") <= end_ns) & (pl.col("end") >= start_ns))
+    # Older rows have no action, only ``exists``; API rows have no ``exists``.
+    exists = pl.col("exists") == "True" if "exists" in rows.columns else pl.lit(False)
+    if "action" in rows.columns:
+        skipped = (pl.col("action") == "skipped") | ((pl.col("action") == "") & exists)
+    else:
+        skipped = exists
+    return rows.filter(~skipped)
+
+
+def _describe(record: str, settings_of: Any) -> str:
+    """Operations and settings of a GNSS or VOD record, as text."""
+    return describe_settings(settings_of(record))
 
 
 def _append_log_rows(zmeta: zarr.Group, df: pl.DataFrame) -> None:
@@ -443,7 +489,7 @@ class MyIcechunkStore:
         ``throttle`` overrides the config-derived default when explicitly
         passed; leave it ``None`` to defer to config.
         """
-        dataset = prepare_times(dataset, session.store, kwargs["group"])
+        dataset = prepare_write(dataset, session.store, kwargs["group"])
         if "encoding" in kwargs:
             kwargs["encoding"] = with_time_units(dataset, kwargs["encoding"])
         should_throttle = (
@@ -888,14 +934,44 @@ class MyIcechunkStore:
         )
         return exists
 
+    def preprocessing_records(
+        self,
+        group_name: str,
+        start: np.datetime64 | None = None,
+        end: np.datetime64 | None = None,
+        branch: str = "main",
+    ) -> list[str]:
+        """Preprocessing records in ``group_name``'s log book, without repeats.
+
+        In ingest order; rows written before the record existed give ``""``.
+        With ``start`` and ``end``, only rows whose data overlap that range,
+        without rows of files skipped as already ingested (as
+        :meth:`source_file_hashes`). A group without a log book gives none.
+        """
+        try:
+            with self.readonly_session(branch) as session:
+                df = self.load_metadata(session.store, group_name)
+        except KeyError, zarr.errors.GroupNotFoundError:
+            return []
+        if start is not None and end is not None:
+            df = _written_rows_overlapping(df, start, end)
+        if df.is_empty():
+            return []
+        if "preprocessing" not in df.columns:
+            return [""]
+        return list(dict.fromkeys(df.sort("index")["preprocessing"].to_list()))
+
     def check_preprocessing_matches(
         self, group_name: str, dataset: xr.Dataset, branch: str = "main"
     ) -> None:
         """Refuse data preprocessed differently from the data in ``group_name``.
 
-        Compares the ``Preprocessing`` attribute (see
-        ``processing.preprocessing``) of ``dataset`` with the one of the
-        existing group. Data written without it count as not preprocessed.
+        Compares the operations and settings of the record ``dataset``
+        carries (:data:`~canvod.config.models.PREPROCESSING_ATTR`; none
+        counts as no preprocessing) with every record in the group's log
+        book. The results of the operations (e.g. the input sampling) may
+        differ. In a VOD store, the records are those of the GNSS data
+        behind each result (``vod_preprocessing_record``).
 
         Parameters
         ----------
@@ -908,26 +984,26 @@ class MyIcechunkStore:
 
         Raises
         ------
-        ValueError
-            If the group exists and was preprocessed differently.
+        PreprocessingMismatchError
+            If the group holds data preprocessed differently.
         """
-        try:
-            with self.readonly_session(branch) as session:
-                root = zarr.open_group(session.store, mode="r")
-                if group_name not in root:
-                    return
-                stored = root[group_name].attrs.get(PREPROCESSING_ATTR, "{}")
-        except zarr.errors.GroupNotFoundError:
-            return
-        new = dataset.attrs.get(PREPROCESSING_ATTR, "{}")
-        if json.loads(str(stored)) != json.loads(str(new)):
-            msg = (
-                f"Group '{group_name}' holds data with processing.preprocessing "
-                f"{stored}, but the new data have {new}. One group must not "
-                "mix both: restore the previous processing.preprocessing "
-                "setting, or write to a new store."
-            )
-            raise ValueError(msg)
+        _, new = split_preprocessing(dataset.attrs)
+        settings_of = (
+            vod_preprocessing_settings
+            if self.store_type == "vod_store"
+            else preprocessing_settings
+        )
+        new_settings = settings_of(new)
+        for stored in self.preprocessing_records(group_name, branch=branch):
+            if settings_of(stored) != new_settings:
+                msg = (
+                    f"Group '{group_name}' holds data with preprocessing "
+                    f"{_describe(stored, settings_of)}, but the new data have "
+                    f"{_describe(new, settings_of)}. One group must not mix "
+                    "both: restore the previous processing.preprocessing "
+                    "setting, or write to a new store."
+                )
+                raise PreprocessingMismatchError(msg)
 
     def read_group(
         self,
@@ -1951,7 +2027,11 @@ class MyIcechunkStore:
                     self.write_metadata_parts([meta_ds], group_name, name, session)
                 if commit_message is None:
                     commit_message = f"Appended to group '{group_name}'"
-                session.commit(_with_run_id(commit_message))
+                commit_message = _with_run_id(commit_message)
+                self._log_group_write(
+                    session, group_name, dataset, "append", commit_message
+                )
+                session.commit(commit_message)
             self._logger.info(
                 f"Appended {len(dataset.epoch)} epochs to group '{group_name}'"
             )
@@ -1964,11 +2044,43 @@ class MyIcechunkStore:
                     self.write_metadata_parts([meta_ds], group_name, name, session)
                 if commit_message is None:
                     commit_message = f"Created group '{group_name}'"
-                session.commit(_with_run_id(commit_message))
+                commit_message = _with_run_id(commit_message)
+                self._log_group_write(
+                    session, group_name, dataset, "write", commit_message
+                )
+                session.commit(commit_message)
             self._logger.info(
                 f"Created group '{group_name}' with {len(dataset.epoch)} epochs"
             )
         return True
+
+    def _log_group_write(
+        self,
+        session: Any,
+        group_name: str,
+        dataset: xr.Dataset,
+        action: str,
+        commit_message: str,
+    ) -> None:
+        """Log-book row of a :meth:`write_or_append_group` write, in its session.
+
+        Records the file hash, epoch range, attributes and preprocessing
+        record of ``dataset``, so the write is traceable and the duplicate
+        check of later writes sees it.
+        """
+        self._append_metadata_row(
+            zroot=zarr.open_group(session.store, mode="a"),
+            group_name=group_name,
+            rinex_hash=str(dataset.attrs.get("File Hash", "")),
+            start=dataset.epoch.min().values,
+            end=dataset.epoch.max().values,
+            snapshot_id="",
+            action=action,
+            commit_msg=commit_message,
+            dataset_attrs=dict(dataset.attrs),
+            canonical_name=dataset.attrs.get("canonical_name"),
+            physical_path=dataset.attrs.get("physical_path"),
+        )
 
     def _append_metadata_row(
         self,
@@ -2003,9 +2115,13 @@ class MyIcechunkStore:
             written_at      str   (UTF-8, ISO8601, UTC)
             write_strategy  str   (UTF-8)
             attrs           str   (UTF-8, JSON dump of dataset attrs)
+            preprocessing   str   (UTF-8, JSON preprocessing record, see
+                                  ``canvod.config.models.preprocessing_record``;
+                                  "" in rows written before it existed)
             canonical_name  str   (UTF-8)
             physical_path   str   (UTF-8)
         """
+        dataset_attrs, record = split_preprocessing(dataset_attrs)
         written_at = datetime.now(UTC).isoformat()
         row = {
             "rinex_hash": str(rinex_hash),
@@ -2019,6 +2135,7 @@ class MyIcechunkStore:
             if self.store_type == "gnss_store"
             else str(self._vod_store_strategy),
             "attrs": json.dumps(dataset_attrs, default=str),
+            "preprocessing": record,
             "canonical_name": str(canonical_name) if canonical_name else "",
             "physical_path": str(physical_path) if physical_path else "",
         }
@@ -2102,6 +2219,7 @@ class MyIcechunkStore:
         # needing `float()` coercion (confirmed 2026-07-21 with a minimal
         # repro -- `_append_vod_metadata_row` already pins to "ns" for the
         # same reason, this was the one remaining unpinned call site).
+        rows = [_json_log_row(row) for row in rows]
         for row in rows:
             if row.get("start") is not None:
                 row["start"] = np.datetime64(row["start"], "ns")
@@ -2190,7 +2308,12 @@ class MyIcechunkStore:
             write_strategy      str (UTF-8)
             calculator_name     str (UTF-8)
             attrs               str (UTF-8, JSON dump of dataset attrs)
+            preprocessing       str (UTF-8, JSON {receiver_name: [records]}:
+                                 the preprocessing records of the GNSS data
+                                 behind the result, see
+                                 ``canvod.config.models.vod_preprocessing_record``)
         """
+        dataset_attrs, record = split_preprocessing(dataset_attrs)
         written_at = datetime.now(UTC).isoformat()
         row = {
             "source_file_hashes": json.dumps(source_file_hashes, sort_keys=True),
@@ -2205,6 +2328,7 @@ class MyIcechunkStore:
             "write_strategy": str(self._vod_store_strategy),
             "calculator_name": str(calculator_name),
             "attrs": json.dumps(dataset_attrs, default=str),
+            "preprocessing": record,
         }
         df_row = pl.DataFrame([row])
         zmeta = zroot.require_group(f"{group_name}/metadata/table")
@@ -2378,6 +2502,7 @@ class MyIcechunkStore:
             (:func:`canvod.readers.base.validate_vod_dataset`).
         """
         validate_vod_dataset(dataset)
+        self.check_preprocessing_matches(group_name, dataset, branch)
         start = dataset.epoch.min().values
         end = dataset.epoch.max().values
 
@@ -2486,6 +2611,7 @@ class MyIcechunkStore:
         `ValueError` if the dataset does not meet the VOD dataset contract.
         """
         validate_vod_dataset(item.dataset)
+        self.check_preprocessing_matches(item.group_name, item.dataset, branch)
         start = item.dataset.epoch.min().values
         end = item.dataset.epoch.max().values
 
@@ -3016,18 +3142,7 @@ class MyIcechunkStore:
         if df is None or df.is_empty():
             return []
 
-        start_ns = np.datetime64(start, "ns")
-        end_ns = np.datetime64(end, "ns")
-        rows = df.filter((pl.col("start") <= end_ns) & (pl.col("end") >= start_ns))
-        if "action" in rows.columns:
-            skipped = (pl.col("action") == "skipped") | (
-                (pl.col("action") == "") & (pl.col("exists") == "True")
-            )
-        elif "exists" in rows.columns:
-            skipped = pl.col("exists") == "True"
-        else:
-            skipped = pl.lit(False)
-        rows = rows.filter(~skipped).sort("index")
+        rows = _written_rows_overlapping(df, start, end).sort("index")
         return list(dict.fromkeys(str(h) for h in rows["rinex_hash"].to_list()))
 
     def load_metadata_for_dedup(

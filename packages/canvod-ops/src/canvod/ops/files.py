@@ -13,6 +13,7 @@ from canvod.config.models import (
     PreprocessingConfig,
     preprocessing_record,
 )
+from canvod.ops.base import ops_version
 from canvod.ops.registry import build_default_pipeline
 from canvod.ops.temporal import missing_value
 
@@ -29,8 +30,12 @@ def preprocess_files[K](
     bin that spans two files is aggregated from the observations of both.
     The result is split back into one dataset per file: each bin goes to the
     file that holds its earliest observation. Every dataset keeps its own
-    attributes (e.g. the file hash) and records the applied operations in
-    the ``Preprocessing`` attribute, also when none are set.
+    attributes (e.g. the file hash) and carries the preprocessing record of
+    the day (see ``canvod.config.models.preprocessing_record``) under
+    :data:`~canvod.config.models.PREPROCESSING_ATTR`, also when nothing is
+    applied. The record is only carried in memory: the stores move it into
+    the ``preprocessing`` column of their log book and never write it into
+    the data.
 
     Parameters
     ----------
@@ -46,9 +51,9 @@ def preprocess_files[K](
         ``(key, dataset)`` per file, in time order. A file whose observations
         all fall into bins of an earlier file is left out.
     """
-    record = preprocessing_record(config)
     pipeline = build_default_pipeline(config) if config is not None else None
     if pipeline is None or len(pipeline) == 0:
+        record = preprocessing_record([], ops_version())
         return [
             (key, ds.assign_attrs({PREPROCESSING_ATTR: record})) for key, ds in parts
         ]
@@ -65,7 +70,8 @@ def preprocess_files[K](
     source = np.repeat(np.arange(len(datasets)), [ds.sizes["epoch"] for ds in datasets])
     epochs = joined["epoch"].values
 
-    out, _ = pipeline(joined)
+    out, result = pipeline(joined)
+    record = result.record()
 
     # Owner of each output epoch (a bin start): the file with the earliest
     # observation at or after that bin start, i.e. the bin's first observation.
@@ -83,9 +89,7 @@ def preprocess_files[K](
                 hint="all observations fall into time bins of an earlier file",
             )
             continue
-        # The joined dataset has no attributes: ``out.attrs`` holds only what
-        # the operations record (e.g. the temporal aggregation).
-        attrs = {**ds.attrs, **out.attrs, PREPROCESSING_ATTR: record}
+        attrs = {**ds.attrs, PREPROCESSING_ATTR: record}
         split.append((key, part.assign_attrs(attrs)))
     return split
 
