@@ -29,7 +29,9 @@ def _file(start: str, n: int, sids: list[str], file_hash: str, seed: int):
         coords={
             "epoch": epochs,
             "sid": sids,
+            "sv": ("sid", [s.split("|")[0] for s in sids]),
             "band": ("sid", [s.split("|")[1] for s in sids]),
+            "freq_center": ("sid", [1575.42 if "L1" in s else 1227.6 for s in sids]),
         },
         attrs={"File Hash": file_hash},
     )
@@ -63,7 +65,9 @@ def test_bin_spanning_two_files_uses_both():
 
     # Same values as aggregating the joined day at once.
     joined = xr.concat(
-        [FILE_A.drop_vars("band"), FILE_B.drop_vars("band")], "epoch", join="outer"
+        [f.drop_vars(["sv", "band", "freq_center"]) for f in (FILE_A, FILE_B)],
+        "epoch",
+        join="outer",
     )
     expected, _ = TemporalAggregate("1min", "median")(joined)
     got = xr.concat([ds for _, ds in out], "epoch")
@@ -84,10 +88,31 @@ def test_each_file_keeps_its_attrs_and_records_the_operations():
 
 
 def test_signals_of_all_files_keep_their_coordinates():
+    """All sid coordinates survive, not only one (lost before 2026-10-05)."""
     out = dict(preprocess_files([("a", FILE_A), ("b", FILE_B)], CONFIG))
     for ds in out.values():
         assert list(ds["sid"].values) == ["G01|L1", "G02|L1", "G03|L2"]
+        assert list(ds["sv"].values) == ["G01", "G02", "G03"]
         assert list(ds["band"].values) == ["L1", "L1", "L2"]
+        assert list(ds["freq_center"].values) == [1575.42, 1575.42, 1227.6]
+
+
+def test_signature_of_each_file_is_kept():
+    """Same variables, dtypes, attributes as the files; only records added."""
+    out = dict(preprocess_files([("a", FILE_A), ("b", FILE_B)], CONFIG))
+    for key, src in (("a", FILE_A), ("b", FILE_B)):
+        ds = out[key]
+        assert list(ds.coords) == list(src.coords)
+        assert list(ds.data_vars) == [*src.data_vars, "cell_id_equal_area_10.0deg"]
+        for name, var in src.variables.items():
+            assert ds[name].dtype == var.dtype, name
+            assert ds[name].attrs == var.attrs, name
+        assert set(ds.attrs) == {"File Hash", "Preprocessing", "Temporal Aggregation"}
+        assert json.loads(ds.attrs["Temporal Aggregation"]) == {
+            "input_sampling_s": 5.0,
+            "output_sampling_s": 60.0,
+            "method": "median",
+        }
 
 
 def test_file_inside_an_earlier_bin_is_left_out():

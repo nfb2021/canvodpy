@@ -1,17 +1,28 @@
 """Temporal aggregation operation."""
 
+import json
 import time
 from typing import Any
 
 import numpy as np
 import pandas as pd
-import polars as pl
 import structlog
 import xarray as xr
 
 from canvod.ops.base import Op, OpResult
 
 logger = structlog.get_logger(__name__)
+
+#: Dataset attribute recording an aggregation (JSON): the sampling interval
+#: of the input, the bin length (both in seconds) and the method.
+TEMPORAL_AGGREGATION_ATTR = "Temporal Aggregation"
+
+#: canvodpy readers mark a missing integer value (e.g. no LLI recorded) with -1.
+INTEGER_MISSING = -1
+
+#: Elements of the (bin, epoch in bin, signal) block aggregated at once; bounds
+#: the memory of one step independently of the size of the day.
+_BLOCK_ELEMENTS = 2**23
 
 
 def _bin_starts(epochs: np.ndarray, freq_ns: int) -> np.ndarray:
@@ -20,19 +31,79 @@ def _bin_starts(epochs: np.ndarray, freq_ns: int) -> np.ndarray:
     return (ns - ns % freq_ns).astype("datetime64[ns]")
 
 
-def _wrap_pi(x: pl.Expr) -> pl.Expr:
-    """Wrap an angle in radians to [-pi, pi)."""
-    return (x + np.pi) % (2 * np.pi) - np.pi
+def _sampling_seconds(epochs: np.ndarray) -> float | None:
+    """Most common spacing of the distinct epochs in seconds (None below two)."""
+    steps = np.diff(np.unique(epochs)).astype(np.int64)
+    if steps.size == 0:
+        return None
+    values, counts = np.unique(steps, return_counts=True)
+    return int(values[np.argmax(counts)]) / 1e9
+
+
+def missing_value(name: str, var: xr.Variable) -> Any:
+    """Value that marks a missing observation in ``var``.
+
+    NaN for floating-point variables, the ``_FillValue`` attribute (else -1,
+    the readers' convention) for integer variables, None for strings.
+
+    Raises
+    ------
+    TypeError
+        For any other data type, which has no defined missing value.
+    """
+    kind = var.dtype.kind
+    if kind == "f":
+        return np.nan
+    if kind == "i":
+        return var.attrs.get("_FillValue", INTEGER_MISSING)
+    if kind in "OUT":
+        return None
+    msg = f"Variable {name!r} has dtype {var.dtype}, which has no missing value"
+    raise TypeError(msg)
+
+
+def _reduce(cube: np.ndarray, method: str) -> np.ndarray:
+    """Mean or median over axis 1 of a ``(bin, slot, signal)`` block, NaN skipped.
+
+    A bin without any value gives NaN.
+    """
+    valid = ~np.isnan(cube)
+    count = valid.sum(axis=1)
+    if method == "mean":
+        total = np.where(valid, cube, 0.0).sum(axis=1)
+        with np.errstate(invalid="ignore"):
+            return total / count
+    # NaN sorts last, so the valid values of a bin come first.
+    ordered = np.sort(cube, axis=1)
+    lower = np.take_along_axis(ordered, np.maximum(count - 1, 0)[:, None] // 2, 1)
+    upper = np.take_along_axis(ordered, (count // 2)[:, None], 1)
+    return (lower[:, 0] + upper[:, 0]) / 2
+
+
+def _reduce_angle(cube: np.ndarray, method: str) -> np.ndarray:
+    """Like :func:`_reduce` for an angle in radians, relative to the bin's first value."""
+    first = np.argmax(~np.isnan(cube), axis=1)
+    ref = np.take_along_axis(cube, first[:, None], 1)
+    relative = (cube - ref + np.pi) % (2 * np.pi) - np.pi
+    return (_reduce(relative, method) + ref[:, 0]) % (2 * np.pi)
 
 
 class TemporalAggregate(Op):
     """Aggregate an ``(epoch, sid)`` dataset to regular time bins.
 
     Each bin starts at a multiple of ``freq`` counted from 00:00 of the day
-    and is labeled with its start. Missing values (NaN) are ignored; a bin
-    without any value stays NaN. The azimuth ``phi`` (radians) is aggregated
-    as an angle, so a satellite crossing north (0 rad) does not average to
-    south: each value is taken relative to the first value of its bin.
+    and is labeled with its start. Every variable along ``epoch`` is
+    aggregated per signal; the others pass unchanged. Missing values (NaN,
+    -1 for integers) are ignored; a bin without any value stays missing.
+    Integer variables are rounded to the nearest integer. The azimuth
+    ``phi`` (radians) is aggregated as an angle, so a satellite crossing
+    north (0 rad) does not average to south: each value is taken relative
+    to the first value of its bin.
+
+    The result has the variables, dimensions, data types, attributes and
+    encodings of the input. It adds one dataset attribute,
+    ``Temporal Aggregation``, which records the input sampling, the bin
+    length and the method.
 
     Parameters
     ----------
@@ -59,11 +130,18 @@ class TemporalAggregate(Op):
         input_shape = {str(k): int(v) for k, v in dict(ds.sizes).items()}
 
         freq_ns = int(pd.tseries.frequencies.to_offset(self._freq).nanos)
-        epoch_vals = np.asarray(ds.epoch.values, dtype="datetime64[ns]")
-        bins = _bin_starts(epoch_vals, freq_ns)
+        epochs = np.asarray(ds["epoch"].values, dtype="datetime64[ns]")
+        bins = _bin_starts(epochs, freq_ns)
+        record = json.dumps(
+            {
+                "input_sampling_s": _sampling_seconds(epochs),
+                "output_sampling_s": freq_ns / 1e9,
+                "method": self._method,
+            }
+        )
 
         # --- Nothing to do if every epoch already is the start of its own bin ---
-        if np.array_equal(bins, epoch_vals) and len(np.unique(bins)) == len(bins):
+        if np.array_equal(bins, epochs) and len(np.unique(bins)) == len(bins):
             logger.info("temporal_aggregation_skipped", requested=self._freq)
             result = OpResult(
                 op_name=self.name,
@@ -73,79 +151,40 @@ class TemporalAggregate(Op):
                 duration_seconds=time.perf_counter() - t0,
                 notes=f"no-op: every epoch is already the start of a {self._freq} bin",
             )
-            return ds, result
+            return ds.assign_attrs({TEMPORAL_AGGREGATION_ATTR: record}), result
 
-        # --- Identify coordinate roles ---
-        sid_only_coords: list[str] = []
-        epoch_sid_coords: list[str] = []
-        for cname, coord in ds.coords.items():
-            if cname in ("epoch", "sid"):
-                continue
-            dims = coord.dims
-            if dims == ("sid",):
-                sid_only_coords.append(str(cname))
-            elif set(dims) == {"epoch", "sid"}:
-                epoch_sid_coords.append(str(cname))
+        # --- Bin and slot (position within the bin, in time order) per epoch ---
+        order = np.argsort(epochs, kind="stable")
+        if np.array_equal(order, np.arange(len(order))):
+            order = None
+        sorted_bins = bins if order is None else bins[order]
+        new_epochs, first, counts = np.unique(
+            sorted_bins, return_index=True, return_counts=True
+        )
+        bin_of = np.repeat(np.arange(len(new_epochs)), counts)
+        slot = np.arange(len(sorted_bins)) - first[bin_of]
+        bounds = np.append(first, len(sorted_bins))
 
-        data_var_names: list[str] = [str(v) for v in ds.data_vars]
-        agg_columns: list[str] = data_var_names + epoch_sid_coords
-
-        # --- Long-form Polars DataFrame; NaN becomes null so it is skipped ---
-        n_epoch, n_sid = len(epoch_vals), ds.sizes["sid"]
-        columns: dict[str, Any] = {
-            "time_bin": pl.Series(np.repeat(bins, n_sid)),
-            "sid_idx": np.tile(np.arange(n_sid), n_epoch),
-        }
-        for col in agg_columns:
-            arr = ds[col].transpose("epoch", "sid").values.astype(np.float64)
-            columns[col] = pl.Series(col, arr.ravel(), nan_to_null=True)
-        df = pl.DataFrame(columns)
-
-        keys = ["time_bin", "sid_idx"]
-        agg_exprs = []
-        for col in agg_columns:
-            value = pl.col(col)
-            if col == "phi":
-                ref = value.drop_nulls().first()
-                value = _wrap_pi(value - ref)
-                agg = value.mean() if self._method == "mean" else value.median()
-                agg = (agg + ref) % (2 * np.pi)
+        variables: dict[str, xr.Variable] = {}
+        for name, var in ds.variables.items():
+            name = str(name)
+            if name == "epoch":
+                variables[name] = xr.Variable(
+                    var.dims, new_epochs, var.attrs, var.encoding
+                )
+            elif "epoch" in var.dims:
+                variables[name] = self._aggregate(
+                    name, var, order, bin_of, slot, bounds, int(counts.max())
+                )
             else:
-                agg = value.mean() if self._method == "mean" else value.median()
-            agg_exprs.append(agg.alias(col))
-        grouped = df.group_by(keys).agg(agg_exprs)
+                variables[name] = var
 
-        # --- Pivot back to (epoch, sid) ---
-        new_epochs = np.unique(bins)
-        ei = np.searchsorted(new_epochs, grouped["time_bin"].to_numpy())
-        si = grouped["sid_idx"].to_numpy()
-        var_arrays: dict[str, np.ndarray] = {}
-        for col in agg_columns:
-            arr = np.full((len(new_epochs), n_sid), np.nan, dtype=np.float64)
-            arr[ei, si] = grouped[col].fill_null(np.nan).to_numpy()
-            dtype = ds[col].dtype
-            var_arrays[col] = arr.astype(dtype) if dtype.kind == "f" else arr
-
-        # --- Rebuild xarray Dataset ---
-        new_coords: dict[str, Any] = {
-            "epoch": ("epoch", new_epochs, ds["epoch"].attrs),
-            "sid": ds["sid"],
-        }
-        for cname in sid_only_coords:
-            new_coords[cname] = ds.coords[cname]
-        for cname in epoch_sid_coords:
-            new_coords[cname] = (
-                ("epoch", "sid"),
-                var_arrays.pop(cname),
-                ds.coords[cname].attrs,
-            )
-
-        new_data_vars: dict[str, Any] = {
-            vname: (("epoch", "sid"), var_arrays[vname], ds[vname].attrs)
-            for vname in data_var_names
-        }
-
-        out = xr.Dataset(new_data_vars, coords=new_coords, attrs=ds.attrs.copy())
+        out = xr.Dataset(
+            {name: variables[str(name)] for name in ds.data_vars},
+            coords={name: variables[str(name)] for name in ds.coords},
+            attrs={**ds.attrs, TEMPORAL_AGGREGATION_ATTR: record},
+        )
+        out.encoding = dict(ds.encoding)
 
         duration = time.perf_counter() - t0
         output_shape = {str(k): int(v) for k, v in dict(out.sizes).items()}
@@ -164,6 +203,49 @@ class TemporalAggregate(Op):
             duration_seconds=duration,
         )
         return out, result
+
+    def _aggregate(
+        self,
+        name: str,
+        var: xr.Variable,
+        order: np.ndarray | None,
+        bin_of: np.ndarray,
+        slot: np.ndarray,
+        bounds: np.ndarray,
+        width: int,
+    ) -> xr.Variable:
+        """Aggregate one variable along ``epoch``, block of bins by block."""
+        missing = missing_value(name, var)
+        if missing is None:
+            msg = f"Variable {name!r} holds strings and cannot be aggregated"
+            raise TypeError(msg)
+        is_int = var.dtype.kind == "i"
+        reduce = _reduce_angle if name == "phi" else _reduce
+
+        axis = var.dims.index("epoch")
+        values = np.moveaxis(np.asarray(var.values), axis, 0)
+        rest = values.shape[1:]
+        values = values.reshape(values.shape[0], -1)
+        if order is not None:
+            values = values[order]
+
+        n_bins, n_cols = len(bounds) - 1, values.shape[1]
+        reduced = np.empty((n_bins, n_cols), dtype=np.float64)
+        step = max(1, _BLOCK_ELEMENTS // max(1, width * n_cols))
+        for b0 in range(0, n_bins, step):
+            b1 = min(b0 + step, n_bins)
+            e0, e1 = bounds[b0], bounds[b1]
+            block = values[e0:e1].astype(np.float64)
+            if is_int:
+                block[values[e0:e1] == missing] = np.nan
+            cube = np.full((b1 - b0, width, n_cols), np.nan)
+            cube[bin_of[e0:e1] - b0, slot[e0:e1]] = block
+            reduced[b0:b1] = reduce(cube, self._method)
+
+        if is_int:
+            reduced = np.where(np.isnan(reduced), missing, np.rint(reduced))
+        data = np.moveaxis(reduced.astype(var.dtype).reshape(n_bins, *rest), 0, axis)
+        return xr.Variable(var.dims, data, var.attrs, var.encoding)
 
 
 def temporal_aggregate(

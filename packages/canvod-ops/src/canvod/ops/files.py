@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from functools import reduce
 
 import numpy as np
 import structlog
@@ -15,6 +14,7 @@ from canvod.config.models import (
     preprocessing_record,
 )
 from canvod.ops.registry import build_default_pipeline
+from canvod.ops.temporal import missing_value
 
 logger = structlog.get_logger(__name__)
 
@@ -61,41 +61,11 @@ def preprocess_files[K](
         return []
 
     datasets = [ds for _, ds in ordered]
-    sid_only = sorted(
-        {
-            str(c)
-            for ds in datasets
-            for c, v in ds.coords.items()
-            if c != "sid" and v.dims == ("sid",)
-        }
-    )
-    # Files of one receiver may observe different signals: take each signal's
-    # sid-only coordinates (band, frequency, ...) from any file that has it.
-    sid_coords = reduce(
-        lambda a, b: a.combine_first(b),
-        [
-            xr.Dataset({c: ds.coords[c] for c in sid_only if c in ds.coords})
-            for ds in datasets
-        ],
-    )
-    joined = xr.concat(
-        [ds.drop_vars(sid_only, errors="ignore") for ds in datasets],
-        dim="epoch",
-        join="outer",
-        coords="minimal",
-        compat="override",
-        combine_attrs="drop",
-    )
-    joined = joined.assign_coords(
-        {c: sid_coords[c].reindex(sid=joined["sid"]) for c in sid_coords.data_vars}
-    )
-    source = np.concatenate(
-        [np.full(ds.sizes["epoch"], i) for i, ds in enumerate(datasets)]
-    )
+    joined = _join_along_epoch(datasets)
+    source = np.repeat(np.arange(len(datasets)), [ds.sizes["epoch"] for ds in datasets])
     epochs = joined["epoch"].values
 
-    out, result = pipeline(joined)
-    pipeline_attrs = result.to_metadata_dict()
+    out, _ = pipeline(joined)
 
     # Owner of each output epoch (a bin start): the file with the earliest
     # observation at or after that bin start, i.e. the bin's first observation.
@@ -113,8 +83,86 @@ def preprocess_files[K](
                 hint="all observations fall into time bins of an earlier file",
             )
             continue
-        attrs = dict(ds.attrs)
-        attrs.update(pipeline_attrs)
-        attrs[PREPROCESSING_ATTR] = record
+        # The joined dataset has no attributes: ``out.attrs`` holds only what
+        # the operations record (e.g. the temporal aggregation).
+        attrs = {**ds.attrs, **out.attrs, PREPROCESSING_ATTR: record}
         split.append((key, part.assign_attrs(attrs)))
     return split
+
+
+def _join_along_epoch(datasets: Sequence[xr.Dataset]) -> xr.Dataset:
+    """Join the files of one receiver along ``epoch`` into one dataset.
+
+    Files may observe different signals: the result holds the union of their
+    ``sid`` values (in the files' order if all files have the same), and a
+    signal a file lacks is missing (NaN, -1 for integers) in that file's
+    epochs. ``sid``-only coordinates come from the first file that has the
+    signal. Variables keep the dimensions, data type, attributes and encoding
+    of the first file that has them. Built in preallocated arrays, without
+    ``xr.concat``.
+
+    Raises
+    ------
+    ValueError
+        If a variable has a dimension other than ``epoch`` and ``sid``.
+    """
+    sid_arrays = [np.asarray(ds["sid"].values) for ds in datasets]
+    columns: list[slice | np.ndarray]
+    if all(np.array_equal(s, sid_arrays[0]) for s in sid_arrays[1:]):
+        sids = sid_arrays[0]
+        columns = [slice(None)] * len(datasets)
+    else:
+        sids = np.array(sorted(set().union(*sid_arrays)), dtype=sid_arrays[0].dtype)
+        lookup = {sid: i for i, sid in enumerate(sids)}
+        columns = [np.array([lookup[sid] for sid in arr]) for arr in sid_arrays]
+    sizes = [ds.sizes["epoch"] for ds in datasets]
+    offsets = np.concatenate([[0], np.cumsum(sizes)])
+    length = {"epoch": int(offsets[-1]), "sid": len(sids)}
+
+    variables: dict[str, xr.Variable] = {}
+    data_vars: list[str] = []
+    coords: list[str] = []
+    for ds in datasets:
+        data_vars += [str(n) for n in ds.data_vars if str(n) not in data_vars]
+        coords += [str(n) for n in ds.coords if str(n) not in coords]
+
+    for name in coords + data_vars:
+        holders = [
+            (i, ds.variables[name])
+            for i, ds in enumerate(datasets)
+            if name in ds.variables
+        ]
+        template = holders[0][1]
+        dims = template.dims
+        if name == "epoch":
+            data = np.concatenate([np.asarray(v.values) for _, v in holders])
+        elif name == "sid":
+            data = sids
+        elif not dims:
+            data = template.values
+        else:
+            if not set(dims) <= {"epoch", "sid"}:
+                msg = (
+                    f"Variable {name!r} has dimensions {dims}; only 'epoch' "
+                    "and 'sid' can be joined"
+                )
+                raise ValueError(msg)
+            dtype = np.result_type(*(v.dtype for _, v in holders))
+            data = np.full(
+                tuple(length[str(d)] for d in dims),
+                missing_value(name, template),
+                dtype=dtype,
+            )
+            # Reversed: the first file that has a value wins.
+            for i, var in reversed(holders):
+                index = tuple(
+                    slice(offsets[i], offsets[i + 1]) if d == "epoch" else columns[i]
+                    for d in dims
+                )
+                data[index] = var.values
+        variables[name] = xr.Variable(dims, data, template.attrs, template.encoding)
+
+    return xr.Dataset(
+        {n: variables[n] for n in data_vars},
+        coords={n: variables[n] for n in coords},
+    )

@@ -9,10 +9,10 @@ temporal aggregation and grid assignment, configured in
 | Path (under `src/canvod/ops/`) | What |
 |---|---|
 | `base.py` | `Op` ABC |
-| `temporal.py` | `TemporalAggregate`: bins from 00:00, NaN skipped, `phi` averaged as an angle |
+| `temporal.py` | `TemporalAggregate`: bins from 00:00, NaN/-1 skipped, integers rounded, `phi` averaged as an angle; output has the input's signature plus the `Temporal Aggregation` attribute; numpy blocks, no polars |
 | `grid.py` | `GridAssignment`: calls canvod-grids' `add_cell_ids_to_ds_fast` |
 | `pipeline.py`, `registry.py` | `Pipeline`; `build_default_pipeline` builds it from the settings (empty if unset) |
-| `files.py` | `preprocess_files`: the one step every run calls per receiver-day |
+| `files.py` | `preprocess_files`: the one step every run calls per receiver-day; joins the files in preallocated arrays (no `xr.concat`) |
 
 Background: `docs/packages/ops/overview.md`.
 

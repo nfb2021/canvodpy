@@ -337,7 +337,6 @@ dependencies = [
     { name = "canvod-grids" },
     { name = "numpy" },
     { name = "pandas" },
-    { name = "polars" },
     { name = "structlog" },
     { name = "xarray" },
 ]
@@ -354,7 +353,6 @@ requires-dist = [
     { name = "canvod-grids", editable = "packages/canvod-grids" },
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "pandas", specifier = ">=2.1.0" },
-    { name = "polars", specifier = ">=1.0.0" },
     { name = "structlog", specifier = ">=24.1.0" },
     { name = "xarray", specifier = ">=2024.1.0" },
 ]

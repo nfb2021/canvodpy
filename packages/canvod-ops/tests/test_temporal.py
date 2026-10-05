@@ -1,9 +1,16 @@
 """Tests for temporal aggregation operation."""
 
+import json
+
 import numpy as np
+import pytest
 import xarray as xr
 
-from canvod.ops.temporal import TemporalAggregate, temporal_aggregate
+from canvod.ops.temporal import (
+    TEMPORAL_AGGREGATION_ATTR,
+    TemporalAggregate,
+    temporal_aggregate,
+)
 
 
 class TestTemporalAggregate:
@@ -49,12 +56,19 @@ class TestTemporalAggregate:
         assert out.coords["theta"].dims == ("epoch", "sid")
 
     def test_early_exit_coarse_data(self, coarse_ds: xr.Dataset):
-        """If data is already at/coarser than freq, should return unchanged."""
+        """Data already on the bin starts is unchanged, apart from the record."""
         op = TemporalAggregate(freq="1min")
         out, result = op(coarse_ds)
 
         assert "no-op" in result.notes
-        xr.testing.assert_identical(out, coarse_ds)
+        xr.testing.assert_identical(
+            out.drop_attrs(deep=False), coarse_ds.drop_attrs(deep=False)
+        )
+        assert json.loads(out.attrs[TEMPORAL_AGGREGATION_ATTR]) == {
+            "input_sampling_s": 60.0,
+            "output_sampling_s": 60.0,
+            "method": "mean",
+        }
 
     def test_median_method(self, sample_ds: xr.Dataset):
         """median method should work without errors."""
@@ -155,3 +169,88 @@ class TestTemporalAggregateValues:
         out, result = TemporalAggregate("1min", "mean")(ds)
         assert "no-op" not in result.notes
         assert (out["epoch"].values.astype(np.int64) % 60_000_000_000 == 0).all()
+
+
+def _reader_like_ds(n: int = 36, step_s: int = 5) -> xr.Dataset:
+    """Shaped like a reader's output: several sid coordinates, int8 flags."""
+    rng = np.random.default_rng(3)
+    sids = np.array(["G01|L1|C", "G02|L1|C", "E05|E5a|Q"], dtype=object)
+    shape = (n, len(sids))
+    missing = rng.random(shape) < 0.3
+    snr = np.where(missing, np.nan, rng.uniform(20, 50, shape)).astype("float32")
+    lli = np.where(missing, -1, rng.integers(0, 3, shape)).astype("int8")
+    epochs = np.datetime64("2025-01-01", "ns") + np.arange(n) * np.timedelta64(
+        step_s, "s"
+    )
+    ds = xr.Dataset(
+        {
+            "SNR": (("epoch", "sid"), snr, {"units": "dB-Hz"}),
+            "theta": (("epoch", "sid"), rng.uniform(0, 1.5, shape), {"units": "rad"}),
+            "LLI": (("epoch", "sid"), lli, {"valid_range": [-1, 7]}),
+        },
+        coords={
+            "epoch": ("epoch", epochs, {"time_system": "GPS"}),
+            "sid": ("sid", sids, {"long_name": "signal"}),
+            "sv": ("sid", np.array(["G01", "G02", "E05"], dtype=object)),
+            "band": ("sid", np.array(["L1", "L1", "E5a"], dtype=object)),
+            "freq_center": ("sid", np.array([1575.42, 1575.42, 1176.45], "float32")),
+        },
+        attrs={"File Hash": "abc", "Software": "canVODpy"},
+    )
+    ds["SNR"].encoding = {"dtype": "float32"}
+    return ds
+
+
+class TestSignature:
+    @pytest.mark.parametrize("method", ["mean", "median"])
+    def test_same_signature_as_input(self, method):
+        ds = _reader_like_ds()
+        out, _ = TemporalAggregate("1min", method)(ds)
+
+        assert list(out.data_vars) == list(ds.data_vars)
+        assert list(out.coords) == list(ds.coords)
+        for name, var in ds.variables.items():
+            assert out[name].dims == var.dims, name
+            assert out[name].dtype == var.dtype, name
+            assert out[name].attrs == var.attrs, name
+            assert out[name].encoding == var.encoding, name
+        for name in ("sid", "sv", "band", "freq_center"):
+            xr.testing.assert_identical(out[name], ds[name])
+        added = {k: v for k, v in out.attrs.items() if k not in ds.attrs}
+        assert {k: out.attrs[k] for k in ds.attrs} == ds.attrs
+        assert json.loads(added.pop(TEMPORAL_AGGREGATION_ATTR)) == {
+            "input_sampling_s": 5.0,
+            "output_sampling_s": 60.0,
+            "method": method,
+        }
+        assert added == {}
+
+    @pytest.mark.parametrize("method", ["mean", "median"])
+    def test_values_match_xarray_resample(self, method):
+        ds = _reader_like_ds()
+        out, _ = TemporalAggregate("1min", method)(ds)
+        expected = getattr(ds[["SNR", "theta"]].resample(epoch="1min"), method)()
+        # xarray sums float32 in float32; the operation sums in float64.
+        np.testing.assert_allclose(out["SNR"].values, expected["SNR"].values, rtol=1e-6)
+        np.testing.assert_allclose(out["theta"].values, expected["theta"].values)
+
+    @pytest.mark.parametrize("method", ["mean", "median"])
+    def test_integers_skip_missing_and_are_rounded(self, method):
+        ds = _reader_like_ds()
+        out, _ = TemporalAggregate("1min", method)(ds)
+        valid = ds["LLI"].where(ds["LLI"] != -1)
+        expected = getattr(valid.resample(epoch="1min"), method)()
+        expected = np.rint(expected).fillna(-1).astype("int8")
+        np.testing.assert_array_equal(out["LLI"].values, expected.values)
+
+    def test_bin_without_integer_values_stays_missing(self):
+        ds = _reader_like_ds()
+        ds["LLI"][:12] = -1
+        out, _ = TemporalAggregate("1min", "mean")(ds)
+        assert (out["LLI"].values[0] == -1).all()
+
+    def test_strings_along_epoch_are_refused(self):
+        ds = _reader_like_ds()
+        ds["label"] = (("epoch",), np.array(["a"] * ds.sizes["epoch"], dtype=object))
+        with pytest.raises(TypeError, match="label"):
+            TemporalAggregate("1min", "mean")(ds)

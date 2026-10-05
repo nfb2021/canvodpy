@@ -52,11 +52,19 @@ flowchart TD
 Aggregates observations into regular time bins. Reduces the number of epochs by
 grouping into frequency buckets and computing the mean or median. Bins start at
 multiples of `freq` counted from 00:00 and are labeled with their start.
-Missing values (NaN) are ignored; a bin without any value stays NaN. Variables
-keep their attributes. Floating-point variables keep their data type; integer
-variables (e.g. `LLI`, `SSI`) come out as `float64` and are averaged as
-numbers, including their fill value -1, so a bit flag or an indicator loses its
-meaning in a bin. A bin keeps no count of the epochs behind it.
+Missing values (NaN, and -1 in integer variables) are ignored; a bin without
+any value stays missing. Integer variables (e.g. `LLI`, `SSI`) are aggregated
+as numbers and rounded to the nearest integer, so a bit flag or an indicator
+can lose its meaning in a bin (a loss of lock in one epoch of a bin
+disappears). A bin keeps no count of the epochs behind it.
+
+The result has the same variables, dimensions, data types, attributes and
+encodings as the input, with fewer epochs. It adds one dataset attribute,
+`Temporal Aggregation`, which records the sampling of the input, the bin length
+and the method, e.g.
+`{"input_sampling_s": 5.0, "output_sampling_s": 60.0, "method": "mean"}`. The
+aggregation runs on numpy arrays in blocks of bins of bounded size; a day of
+1 s data with 300 signals takes about one second.
 
 `SNR` is averaged as stored, in dB-Hz, not as linear power. Because VOD is
 linear in the SNR difference in dB, the mean of the dB values gives the mean of
@@ -78,7 +86,7 @@ ds_out, result = op(ds_in)
 | `method` | `"mean"` | Aggregation: `"mean"` or `"median"` |
 
 If every epoch already is the start of its own bin, the operation is a no-op and
-returns the dataset unchanged. Data at the target interval but off the bin
+returns the dataset unchanged, apart from the `Temporal Aggregation` attribute. Data at the target interval but off the bin
 starts (e.g. epochs at `:02`) are relabeled to the bin starts.
 
 #### Per-SID independence
@@ -195,7 +203,9 @@ The temporal aggregation runs first, then the grid cell assignment. Both run on
 all files of one receiver and day together (`preprocess_files`), after azimuth
 and elevation are computed and before the data are written to the GNSS store.
 A time bin that spans two files is therefore aggregated from the observations of
-both; it is stored with the file that holds its first observation. VOD is then
+both; it is stored with the file that holds its first observation. Each
+stored file keeps its own attributes (e.g. the file hash) and all `sid`
+coordinates. VOD is then
 computed from the aggregated data and carries the `cell_id_*` variables along.
 
 Every written dataset records the applied operations in its `Preprocessing`
