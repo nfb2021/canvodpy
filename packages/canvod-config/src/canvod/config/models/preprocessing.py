@@ -125,7 +125,12 @@ class PreprocessingConfig(_StrictModel):
 
 #: Version of the layout of the preprocessing record (:func:`preprocessing_record`);
 #: changes only when the layout changes, independently of the software version.
-PREPROCESSING_RECORD_VERSION = 1
+#: Format 1 named one version, ``canvod_ops_version``; format 2 names the
+#: version of every package whose code ran, under ``software``.
+PREPROCESSING_RECORD_VERSION = 2
+
+#: Record formats this version reads; the steps have the same layout in all.
+_READABLE_RECORD_VERSIONS = (1, 2)
 
 #: Key under which a dataset carries its preprocessing record in memory, from
 #: the preprocessing to the store write. The stores never write it into the
@@ -141,7 +146,7 @@ class PreprocessingMismatchError(Exception):
     """
 
 
-def preprocessing_record(steps: list[dict[str, Any]], software: str) -> str:
+def preprocessing_record(steps: list[dict[str, Any]], software: dict[str, str]) -> str:
     """JSON record of the preprocessing applied to a dataset.
 
     Parameters
@@ -152,20 +157,21 @@ def preprocessing_record(steps: list[dict[str, Any]], software: str) -> str:
         the configured values, ``result`` what the operation measured or
         derived (e.g. the input sampling). An empty list records that no
         preprocessing was applied.
-    software : str
-        Version of canvod-ops that ran the operations (e.g. ``"1.0.0"``).
+    software : dict[str, str]
+        Version of each package whose code ran the operations, e.g.
+        ``{"canvod-grids": "1.0.3", "canvod-ops": "1.2.0"}``.
 
     Returns
     -------
     str
-        ``{"format_version", "canvod_ops_version", "steps"}`` as sorted-key
-        JSON. ``format_version`` is the version of this record's layout,
-        not of the software.
+        ``{"format_version", "software", "steps"}`` as sorted-key JSON.
+        ``format_version`` is the version of this record's layout, not of
+        the software.
     """
     return json.dumps(
         {
             "format_version": PREPROCESSING_RECORD_VERSION,
-            "canvod_ops_version": software,
+            "software": software,
             "steps": steps,
         },
         sort_keys=True,
@@ -187,10 +193,10 @@ def preprocessing_steps(record: str) -> list[dict[str, Any]]:
         return []
     parsed = json.loads(record)
     version = parsed.get("format_version")
-    if version != PREPROCESSING_RECORD_VERSION:
+    if version not in _READABLE_RECORD_VERSIONS:
         msg = (
             f"Preprocessing record format {version!r} is not supported "
-            f"(this canVODpy reads format {PREPROCESSING_RECORD_VERSION})"
+            f"(this canVODpy reads formats {_READABLE_RECORD_VERSIONS})"
         )
         raise ValueError(msg)
     return list(parsed["steps"])

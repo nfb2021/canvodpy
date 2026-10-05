@@ -22,6 +22,8 @@ class GridAssignment(Op):
         Grid resolution in degrees.
     """
 
+    packages = ("canvod-ops", "canvod-grids")
+
     def __init__(
         self,
         grid_type: str = "equal_area",

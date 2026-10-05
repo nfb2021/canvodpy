@@ -26,8 +26,9 @@ AGGREGATE = {
     "settings": {"freq": "1min", "method": "median"},
     "result": {"aggregated": True, "input_sampling_s": 5.0, "output_sampling_s": 60.0},
 }
-AGGREGATED = preprocessing_record([AGGREGATE], "1.0.0")
-NONE = preprocessing_record([], "1.0.0")
+SOFTWARE = {"canvod-ops": "1.0.0"}
+AGGREGATED = preprocessing_record([AGGREGATE], SOFTWARE)
+NONE = preprocessing_record([], SOFTWARE)
 
 
 def _with_record(slot: int, record: str | None) -> xr.Dataset:
@@ -67,12 +68,12 @@ def test_results_may_differ_settings_may_not(tmp_store):
     tmp_store.write_or_append_group(_with_record(0, AGGREGATED), group_name=GROUP)
     from_1s = preprocessing_record(
         [{**AGGREGATE, "result": {**AGGREGATE["result"], "input_sampling_s": 1.0}}],
-        "1.0.1",
+        {"canvod-ops": "1.0.1"},
     )
     tmp_store.write_or_append_group(_with_record(1, from_1s), group_name=GROUP)
 
     other_freq = preprocessing_record(
-        [{**AGGREGATE, "settings": {"freq": "30s", "method": "median"}}], "1.0.0"
+        [{**AGGREGATE, "settings": {"freq": "30s", "method": "median"}}], SOFTWARE
     )
     with pytest.raises(PreprocessingMismatchError, match="freq=30s"):
         tmp_store.write_or_append_group(_with_record(2, other_freq), group_name=GROUP)
@@ -85,6 +86,18 @@ def test_unrecorded_group_counts_as_not_preprocessed(tmp_store):
     tmp_store.check_preprocessing_matches(GROUP, _with_record(1, NONE))
     with pytest.raises(PreprocessingMismatchError, match="must not mix"):
         tmp_store.write_or_append_group(_with_record(1, AGGREGATED), group_name=GROUP)
+
+
+def test_format_1_records_stay_readable(tmp_store):
+    """Format 1 named one version (``canvod_ops_version``); the steps are alike."""
+    format_1 = json.dumps(
+        {"canvod_ops_version": "0.4.0", "format_version": 1, "steps": [AGGREGATE]},
+        sort_keys=True,
+    )
+    tmp_store.write_or_append_group(_with_record(0, format_1), group_name=GROUP)
+    tmp_store.write_or_append_group(_with_record(1, AGGREGATED), group_name=GROUP)
+    with pytest.raises(PreprocessingMismatchError, match="must not mix"):
+        tmp_store.write_or_append_group(_with_record(2, NONE), group_name=GROUP)
 
 
 def test_different_preprocessing_is_refused(tmp_store):

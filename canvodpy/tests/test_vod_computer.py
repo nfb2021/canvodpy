@@ -22,7 +22,7 @@ from canvod.config.models import (
 # ---------------------------------------------------------------------------
 
 
-NO_PREPROCESSING = preprocessing_record([], "1.0.0")
+NO_PREPROCESSING = preprocessing_record([], {"canvod-ops": "1.0.0"})
 
 
 def _make_site(vod_analyses: dict | None = None):
@@ -286,7 +286,7 @@ class TestVodComputerCompute:
                     "result": {},
                 }
             ],
-            "1.0.0",
+            {"canvod-ops": "1.0.0"},
         )
         site._site.preprocessing_records_for.side_effect = [
             [aggregated],

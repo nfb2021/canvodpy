@@ -8,7 +8,7 @@ import structlog
 import xarray as xr
 
 from canvod.config.models import preprocessing_record
-from canvod.ops.base import Op, OpResult, ops_version
+from canvod.ops.base import Op, OpResult, software_versions
 
 logger = structlog.get_logger(__name__)
 
@@ -19,10 +19,13 @@ class PipelineResult:
 
     results: list[OpResult] = field(default_factory=list)
     total_duration_seconds: float = 0.0
+    packages: tuple[str, ...] = ("canvod-ops",)
 
     def record(self) -> str:
         """Preprocessing record (JSON) of the operations, in the order they ran."""
-        return preprocessing_record([r.step() for r in self.results], ops_version())
+        return preprocessing_record(
+            [r.step() for r in self.results], software_versions(self.packages)
+        )
 
     def to_metadata_dict(self) -> dict[str, Any]:
         """Serialise to a dict suitable for ``ds.attrs``."""
@@ -57,7 +60,13 @@ class Pipeline:
             results.append(op_result)
 
         total = time.perf_counter() - t0
-        pr = PipelineResult(results=results, total_duration_seconds=total)
+        pr = PipelineResult(
+            results=results,
+            total_duration_seconds=total,
+            packages=tuple(
+                sorted({"canvod-ops", *(p for op in self._ops for p in op.packages)})
+            ),
+        )
 
         logger.info(
             "pipeline_complete",

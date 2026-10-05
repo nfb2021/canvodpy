@@ -183,7 +183,10 @@ Each `OpResult` records:
 `OpResult.step()` gives the operation's entry in the preprocessing record,
 `{"op", "settings", "result"}`, and `PipelineResult.record()` the record of
 all operations in the order they ran. A new operation therefore records itself:
-it only has to fill `parameters` and `result`.
+it only has to fill `parameters` and `result`. If it runs code of another
+package, it names that package in `packages` (`GridAssignment` sets
+`packages = ("canvod-ops", "canvod-grids")`), so the record gives its version
+too.
 
 ---
 
@@ -222,8 +225,8 @@ themselves and has this form (here for one day of 5 s data):
 
 ```json
 {
-  "format_version": 1,
-  "canvod_ops_version": "1.0.0",
+  "format_version": 2,
+  "software": {"canvod-grids": "1.0.0", "canvod-ops": "1.0.0"},
   "steps": [
     {
       "op": "temporal_aggregate",
@@ -239,8 +242,12 @@ themselves and has this form (here for one day of 5 s data):
 }
 ```
 
-`format_version` is the version of the record's layout, not of the software;
-`canvod_ops_version` is the version of the package that ran the operations.
+`format_version` is the version of the record's layout, not of the software.
+`software` gives the version of every package whose code ran the operations
+(canVODpy packages are released separately): canvod-ops always, canvod-grids
+when cells were assigned. Records of format 1, written by canVODpy up to
+0.4.0, name only the canvod-ops version (`canvod_ops_version`) and are still
+read.
 Without `processing.preprocessing`, `steps` is empty, which records that no
 preprocessing was applied.
 

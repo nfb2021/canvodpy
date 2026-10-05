@@ -13,7 +13,7 @@ from canvod.config.models import (
     PreprocessingConfig,
     preprocessing_record,
 )
-from canvod.ops.base import ops_version
+from canvod.ops.base import software_versions
 from canvod.ops.registry import build_default_pipeline
 from canvod.ops.temporal import missing_value
 
@@ -53,7 +53,7 @@ def preprocess_files[K](
     """
     pipeline = build_default_pipeline(config) if config is not None else None
     if pipeline is None or len(pipeline) == 0:
-        record = preprocessing_record([], ops_version())
+        record = preprocessing_record([], software_versions(["canvod-ops"]))
         return [
             (key, ds.assign_attrs({PREPROCESSING_ATTR: record})) for key, ds in parts
         ]

@@ -2,15 +2,22 @@
 
 import importlib.metadata
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 import xarray as xr
 
 
-def ops_version() -> str:
-    """Installed canvod-ops version, recorded with every preprocessing."""
-    return importlib.metadata.version("canvod-ops")
+def software_versions(packages: Iterable[str]) -> dict[str, str]:
+    """Installed version of each package, recorded with every preprocessing.
+
+    Parameters
+    ----------
+    packages : Iterable[str]
+        Distribution names, e.g. ``["canvod-ops", "canvod-grids"]``.
+    """
+    return {name: importlib.metadata.version(name) for name in sorted(set(packages))}
 
 
 @dataclass(frozen=True)
@@ -44,6 +51,10 @@ class Op(ABC):
     Each ``Op`` is a callable carrying config set at construction time.
     At call time it is a pure ``Dataset -> (Dataset, OpResult)`` transform.
     """
+
+    #: Packages whose code the operation runs; their versions go into the
+    #: preprocessing record.
+    packages: ClassVar[tuple[str, ...]] = ("canvod-ops",)
 
     @property
     @abstractmethod

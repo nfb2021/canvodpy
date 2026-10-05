@@ -7,7 +7,7 @@ import xarray as xr
 
 from canvod.config.models import PreprocessingConfig
 from canvod.ops import TemporalAggregate, preprocess_files
-from canvod.ops.base import ops_version
+from canvod.ops.base import software_versions
 
 CONFIG = PreprocessingConfig.model_validate(
     {
@@ -49,8 +49,8 @@ def test_nothing_set_only_records_it():
     xr.testing.assert_identical(out[0][1].drop_attrs(), FILE_A.drop_attrs())
     assert out[0][1].attrs["File Hash"] == "A"
     assert json.loads(out[0][1].attrs["Preprocessing"]) == {
-        "format_version": 1,
-        "canvod_ops_version": ops_version(),
+        "format_version": 2,
+        "software": software_versions(["canvod-ops"]),
         "steps": [],
     }
 
@@ -88,8 +88,9 @@ def test_each_file_keeps_its_attrs_and_records_the_operations():
     assert out["b"].attrs["File Hash"] == "B"
     record = json.loads(out["a"].attrs["Preprocessing"])
     assert out["b"].attrs["Preprocessing"] == out["a"].attrs["Preprocessing"]
-    assert record["format_version"] == 1
-    assert record["canvod_ops_version"] == ops_version()
+    assert record["format_version"] == 2
+    assert record["software"] == software_versions(["canvod-ops", "canvod-grids"])
+    assert list(record["software"]) == ["canvod-grids", "canvod-ops"]
     aggregate, grid = record["steps"]
     assert aggregate == {
         "op": "temporal_aggregate",
