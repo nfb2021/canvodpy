@@ -23,21 +23,41 @@ from .compression import (
 from .logging import LoggingConfig
 from .metadata import CredentialsConfig, MetadataConfig
 from .preprocessing import (
+    PREPROCESSING_ATTR,
+    PREPROCESSING_RECORD_VERSION,
     GridAssignmentConfig,
     HistogramBinsConfig,
     PreprocessingConfig,
+    PreprocessingMismatchError,
     StatisticsConfig,
     TemporalAggregationConfig,
+    describe_preprocessing,
+    describe_settings,
+    preprocessing_record,
+    preprocessing_settings,
+    preprocessing_steps,
+    split_preprocessing,
+    vod_preprocessing_record,
+    vod_preprocessing_settings,
 )
 from .processing import ProcessingConfig
 from .processing_params import ProcessingParams
 from .references import FundingRef, PublicationRef, ReferencesConfig
 from .root import CanvodConfig
 from .sids import SidsConfig
-from .sites import ReceiverConfig, SiteConfig, SitesConfig, VodAnalysisConfig
+from .sites import (
+    ReceiverConfig,
+    SiteConfig,
+    SitesConfig,
+    VodAnalysisConfig,
+    mixed_format_error,
+    reference_store_group,
+)
 from .storage import MaintenanceConfig, StorageConfig
 
 __all__ = [
+    "PREPROCESSING_ATTR",
+    "PREPROCESSING_RECORD_VERSION",
     "AuxDataConfig",
     "CanvodConfig",
     "ChunkStrategy",
@@ -52,6 +72,7 @@ __all__ = [
     "MetadataConfig",
     "NetcdfCompressionConfig",
     "PreprocessingConfig",
+    "PreprocessingMismatchError",
     "ProcessingConfig",
     "ProcessingParams",
     "PublicationRef",
@@ -65,4 +86,14 @@ __all__ = [
     "TemporalAggregationConfig",
     "VodAnalysisConfig",
     "_StrictModel",
+    "describe_preprocessing",
+    "describe_settings",
+    "mixed_format_error",
+    "preprocessing_record",
+    "preprocessing_settings",
+    "preprocessing_steps",
+    "reference_store_group",
+    "split_preprocessing",
+    "vod_preprocessing_record",
+    "vod_preprocessing_settings",
 ]

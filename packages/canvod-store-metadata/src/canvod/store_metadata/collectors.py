@@ -42,6 +42,8 @@ def collect_software_versions() -> dict[str, str]:
     packages = [
         "canvodpy",
         "canvod-readers",
+        "canvod-ops",
+        "canvod-grids",
         "canvod-store",
         "canvod-store-metadata",
         "canvod-utils",

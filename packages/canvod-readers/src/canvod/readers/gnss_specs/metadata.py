@@ -96,11 +96,14 @@ OBSERVABLES_METADATA: Final[dict[str, dict[str, Any]]] = {
         "standard_name": "loss_of_lock_indicator",
         "long_name": "Loss of Lock Indicator",
         "units": "1",
-        "valid_range": [-1, 9],
+        "valid_range": [-1, 7],
         "description": (
-            "Indicator representing the loss of lock status of the signal. "
-            "-1 indicates no data, while values 0-9 indicate the indicator "
-            "value."
+            "Loss of lock indicator of the signal's carrier phase, a bit field "
+            "per RINEX 3.04 Table A3: bit 0 = lost lock, cycle slip possible; "
+            "bit 1 = half-cycle ambiguity/slip possible; bit 2 = Galileo "
+            "BOC-tracking of an MBOC-modulated signal. 0 = OK or not known, "
+            "-1 = no indicator recorded. Table A3 defines no further bits, so "
+            "7 is the largest defined value."
         ),
         "_FillValue": -1,
     },
@@ -110,9 +113,10 @@ OBSERVABLES_METADATA: Final[dict[str, dict[str, Any]]] = {
         "units": "1",
         "valid_range": [-1, 9],
         "description": (
-            "Indicator representing the signal strength of the observation. "
-            "-1 indicates no data, while values 0-9 indicate the measured "
-            "signal strength."
+            "Signal strength indicator per RINEX 3.04 Table A3, projected "
+            "into 1-9: 1 = minimum possible signal strength, 5 = average/good "
+            "S/N ratio, 9 = maximum possible signal strength. 0 = not known, "
+            "-1 = no indicator recorded."
         ),
         "_FillValue": -1,
     },
@@ -126,40 +130,25 @@ CN0_METADATA: Final[dict[str, Any]] = {
     "long_name": "Carrier-to-Noise Density Ratio (C/N0)",
     "units": "dB-Hz",
     "valid_min": 0,
-    "resolution": "0.25 dB-Hz (MeasEpoch); 0.03125 dB-Hz with MeasExtra CN0HighRes",
     "description": (
-        "Carrier-to-noise density ratio (C/N0) represents the carrier signal "
-        "strength relative to noise power density (per 1 Hz)."
-    ),
-    "comment": (
-        "C/N0 is a standard quality indicator of GNSS tracking performance. "
-        "Sourced from MeasEpoch.MeasEpochChannelType1.CN0 (u1, scale 0.25 dB-Hz/LSB, "
-        "Do-Not-Use 255). Resolution is 0.25 dB-Hz by default. "
-        "GPS L1P (sig 1, RINEX 1W) and GPS L2P (sig 2, RINEX 2W) use semi-codeless "
-        "tracking: formula is C/N0 = raw * 0.25 (no +10 dB-Hz offset). "
-        "All other signals: C/N0 = raw * 0.25 + 10. "
-        "If MeasExtra (Block 4000) is also logged, add cn0_highres_correction "
-        "(from MeasExtraChannelSub.Misc bits 0-2) to extend resolution to 0.03125 dB-Hz."
-    ),
-    "references": (
-        "Septentrio AsteRx SB3 ProBase Firmware v4.14.0 Reference Guide, "
-        "MeasEpoch block (Block 4027), MeasEpochChannelType1 sub-block, "
-        "field CN0, p.264; signal type table Section 4.1.10, pp.255-256; "
-        "MeasExtra block (Block 4000), MeasExtraChannelSub, field Misc (CN0HighRes), p.268."
+        "Carrier-to-noise density ratio (C/N0): carrier power relative to the "
+        "noise power density (per 1 Hz). RINEX 3.04 observation type S "
+        "with the header record SIGNAL STRENGTH UNIT DBHZ (sect. 5.7)."
     ),
     "_FillValue": np.nan,
 }
 
-SNR_METADATA: Final[dict[str, str | float | int]] = {
+SNR_METADATA: Final[dict[str, Any]] = {
     "standard_name": "signal_to_noise_ratio",
     "long_name": "Signal-to-Noise Ratio (SNR)",
     "units": "dB",
     "valid_min": 0,
     "description": (
-        "Signal-to-noise ratio (SNR) represents the received signal strength "
-        "relative to the noise floor across the signal bandwidth."
+        "Raw signal strength as given by the receiver (RINEX 3.04 "
+        "observation type S). RINEX 3.04 sect. 5.7 defines only the unit "
+        "DBHZ; without a SIGNAL STRENGTH UNIT DBHZ header record the unit "
+        "is not declared and dB is assumed."
     ),
-    "comment": "SNR is expressed in decibels (dB). Higher values indicate better signal quality.",
     "_FillValue": np.nan,
 }
 
@@ -222,6 +211,49 @@ COORDS_METADATA: Final[dict[str, dict[str, str]]] = {
         "units": f"{FREQ_UNIT:~}",
     },
 }
+
+# Time scale of the epoch coordinate, recorded in its "time_system"
+# attribute. Epochs are stored in the time scale the file is written in;
+# no reader converts between scales except the SBF reader (to UTC).
+# Identifiers follow RINEX 3.04 Table A2 (TIME OF FIRST OBS); RINEX "GLO"
+# is defined there as the UTC time system and is recorded as "UTC".
+EPOCH_TIME_SYSTEMS: Final[dict[str, str]] = {
+    "GPS": "GPS time",
+    "GAL": "Galileo System Time",
+    "QZS": "QZSS time",
+    "BDT": "BDS time",
+    "IRN": "IRNSS time",
+    "UTC": "UTC",
+}
+
+
+def epoch_coord_attrs(time_system: str) -> dict[str, str]:
+    """Return the epoch coordinate attributes, including its time scale.
+
+    Parameters
+    ----------
+    time_system : str
+        One of ``EPOCH_TIME_SYSTEMS`` or RINEX ``"GLO"`` (recorded as UTC).
+
+    Raises
+    ------
+    ValueError
+        If the time system is unknown.
+
+    """
+    scale = "UTC" if time_system == "GLO" else time_system
+    if scale not in EPOCH_TIME_SYSTEMS:
+        msg = (
+            f"unknown epoch time system {time_system!r}; "
+            f"expected one of {sorted(EPOCH_TIME_SYSTEMS)} or 'GLO'"
+        )
+        raise ValueError(msg)
+    return {
+        **COORDS_METADATA["epoch"],
+        "time_system": scale,
+        "time_system_name": EPOCH_TIME_SYSTEMS[scale],
+    }
+
 
 # -------------------
 # Encoding definitions

@@ -159,16 +159,17 @@ Once your `canvod-settings.yaml` points to a site with GNSS data, you can run th
 
 ### Check your data first (pre-flight)
 
-Before processing, validate that your data files match the expected
-[naming convention](../guides/configuration.md) with the standalone `canvod-preflight` tool:
+Before processing, check that each receiver's files are found as expected:
 
 ```bash
-canvod-preflight validate <path/to/your/data-dir>
+canvodpy config validate --site <site>
 ```
 
-This checks every file in the directory against the GNSS file naming convention
-(`{SIT}{T}{NN}{AGC}_R_{YYYY}{DOY}{HHMM}_{PERIOD}_{SAMPLING}_{CONTENT}.{TYPE}`)
-and reports mismatches **before** they cause cryptic errors mid-pipeline.
+This finds the files exactly as `canvodpy run` does. Without a naming recipe, only files
+that follow the GNSS file naming convention
+(`{SIT}{T}{NN}{AGC}_R_{YYYY}{DOY}{HHMM}_{PERIOD}_{SAMPLING}_{CONTENT}.{TYPE}`) are
+processed. The check reports the days and files a run would process, the files it would
+pass over, and problems that would stop it, **before** the run starts.
 
 ### Dates: the `YYYYDDD` format
 
@@ -205,5 +206,5 @@ custom pipeline? See the [Python Quickstart](python.md).
 ---
 
 !!! example "Try it"
-    [00 — CLI Quickstart](../notebooks/_build/00_cli_quickstart.html){target=_blank}
-    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/00_cli_quickstart.py)
+    [13 — CLI Pipeline](../notebooks/_build/13_cli_pipeline.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/13_cli_pipeline.py)

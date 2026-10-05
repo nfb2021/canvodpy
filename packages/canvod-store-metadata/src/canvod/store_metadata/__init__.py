@@ -16,13 +16,21 @@ from .inventory import (
     write_stac_catalog,
     write_stac_collection,
 )
-from .io import metadata_exists, read_metadata, update_metadata, write_metadata
+from .io import (
+    apply_updates,
+    metadata_exists,
+    read_metadata,
+    update_metadata,
+    write_metadata,
+)
 from .schema import StoreMetadata
 from .show import extract_env, format_metadata, show_metadata
+from .summary import summarize_store
 from .validate import validate_all, validate_datacite, validate_fair
 
 __all__ = [
     "StoreMetadata",
+    "apply_updates",
     "collect_config_snapshot",
     "collect_metadata",
     "extract_env",
@@ -32,6 +40,7 @@ __all__ = [
     "scan_stores",
     "scan_stores_as_stac",
     "show_metadata",
+    "summarize_store",
     "to_stac_collection",
     "to_stac_collection_json",
     "update_metadata",

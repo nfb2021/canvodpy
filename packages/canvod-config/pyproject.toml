@@ -14,6 +14,7 @@ dependencies = [
     "pydantic-settings>=2.0",
     "pyyaml>=6.0",
     "email-validator>=2.0",
+    "canvod-utils>=0.4.0",
 ]
 
 [project.urls]
@@ -25,6 +26,9 @@ Issues = "https://github.com/nfb2021/canvodpy/issues"
 [build-system]
 requires = ["uv_build>=0.9.17,<0.10.0"]
 build-backend = "uv_build"
+
+[tool.uv.sources]
+canvod-utils = { workspace = true }
 
 [tool.uv.build-backend]
 module-name = "canvod.config"

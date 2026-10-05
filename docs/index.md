@@ -52,7 +52,7 @@ signal-to-noise ratio observations.
 
     ---
 
-    Hemispheric tessellations (equal-area and equal-angle verified; others experimental) defined in 3D, enabling full spatial analyses. KDTree-backed cell assignment and interactive data exploration.
+    Hemispheric tessellations (equal-area and equal-angle verified; others experimental) defined in 3D, enabling full spatial analyses. Each observation is assigned to the cell that contains it; interactive data exploration.
 
     [:octicons-arrow-right-24: canvod-grids](packages/grids/overview.md)
 
@@ -105,9 +105,10 @@ signal-to-noise ratio observations.
 
 !!! success "Septentrio Binary Format (SBF)"
 
-    Binary format from [Septentrio](https://www.septentrio.com){:target="_blank"} receivers. Includes [broadcast ephemerides](https://gssc.esa.int/navipedia/index.php/Broadcast_Orbits){:target="_blank"}
-    (SatVisibility blocks) for standalone satellite geometry — no SP3/CLK
-    download required.
+    Binary format from [Septentrio](https://www.septentrio.com){:target="_blank"} receivers. Includes satellite azimuth and elevation that the receiver computes from
+    [broadcast ephemerides](https://gssc.esa.int/navipedia/index.php/Broadcast_Orbits){:target="_blank"}
+    (SatVisibility block; almanac-based angles are not used) for standalone
+    satellite geometry — no SP3/CLK download required.
 
     **Reader:** `SbfReader` — all GNSS constellations, PVT + DOP metadata
 
@@ -139,19 +140,7 @@ pip install canvodpy
     site = Site("ExampleSite")
     with site.pipeline() as pipeline:
         data = pipeline.process_date("2025001")
-        vod = pipeline.calculate_vod("canopy_01", "reference_01", "2025001")
-    ```
-
-=== "Functional — component-level"
-
-    Stateless functions for custom pipelines, Airflow, and analysis:
-
-    ```python
-    from canvodpy.functional import read_rinex, augment_with_ephemeris, calculate_vod
-
-    ds = read_rinex("ROSA01TUW_R_20250010000_15M_05S_AA.rnx")
-    ds = augment_with_ephemeris(ds, rx_pos, source="final", date="2025001", site_config=cfg)
-    vod = calculate_vod(canopy_ds, reference_ds)
+    vod = site.vod.compute_day_all(data)  # every configured analysis
     ```
 
 ---
@@ -195,7 +184,7 @@ flowchart TD
     ---
 
     7 hemispheric grid types — equal-area, geodesic, HTM and more.
-    KDTree-backed O(n log m) cell assignment.
+    Assignment of each observation to the cell that contains it.
 
 -   :fontawesome-solid-leaf: &nbsp; **canvod-vod**
 

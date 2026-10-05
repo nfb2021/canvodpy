@@ -5,9 +5,7 @@ instances and VOD xarray Datasets.
 
 Cell assignment
 ---------------
-``add_cell_ids_to_vod_fast``   – vectorised KDTree lookup (preferred)
-``add_cell_ids_to_vod``        – element-wise fallback
-``add_cell_ids_to_ds_fast``    – dask-lazy variant for out-of-core data
+``add_cell_ids_to_ds_fast``    – the cell that contains each observation, eager or dask-lazy
 
 Vertex / grid conversion
 ------------------------
@@ -17,19 +15,20 @@ Vertex / grid conversion
 
 from __future__ import annotations
 
-import time
+import warnings
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import structlog
 import xarray as xr
-from scipy.spatial import cKDTree  # type: ignore[unresolved-import]
 
-from canvod.grids._internal import get_logger
+from canvod.grids._internal.cell_lookup import cell_lookup
+from canvod.utils.tools import deprecated
 
 if TYPE_CHECKING:
     from canvod.grids.core import GridData
 
-log = get_logger(__name__)
+log = structlog.get_logger(__name__)
 
 # Per-grid-type description of what ``angular_resolution`` controls.
 _RESOLUTION_DESCRIPTIONS: dict[str, str] = {
@@ -61,276 +60,118 @@ _RESOLUTION_DESCRIPTIONS: dict[str, str] = {
 
 
 # ==============================================================================
-# Internal: KDTree builder
-# ==============================================================================
-
-
-def _build_kdtree(grid: GridData) -> cKDTree:
-    """Build a KDTree from grid cell centres (φ, θ → Cartesian)."""
-    phi = grid.grid["phi"].to_numpy()
-    theta = grid.grid["theta"].to_numpy()
-    x = np.sin(theta) * np.cos(phi)
-    y = np.sin(theta) * np.sin(phi)
-    z = np.cos(theta)
-    return cKDTree(np.column_stack([x, y, z]))
-
-
-def _query_points(
-    tree: cKDTree, cell_id_col: np.ndarray, phi: np.ndarray, theta: np.ndarray
-) -> np.ndarray:
-    """Vectorised nearest-cell lookup via KDTree.
-
-    Parameters
-    ----------
-    tree : cKDTree
-        KDTree built from grid cell centres.
-    cell_id_col : np.ndarray
-        ``cell_id`` column of the grid DataFrame (length = ncells).
-    phi : np.ndarray
-        Azimuth angles of query points.
-    theta : np.ndarray
-        Polar angles of query points.
-
-    Returns
-    -------
-    np.ndarray
-        Cell IDs for each query point.
-
-    """
-    x = np.sin(theta) * np.cos(phi)
-    y = np.sin(theta) * np.sin(phi)
-    z = np.cos(theta)
-    _, indices = tree.query(np.column_stack([x, y, z]), workers=-1)
-    return cell_id_col[indices]
-
-
-# ==============================================================================
 # Cell assignment
 # ==============================================================================
 
 
-def add_cell_ids_to_vod_fast(
-    vod_ds: xr.Dataset, grid: GridData, grid_name: str
-) -> xr.Dataset:
-    """Assign grid cells to every observation in a VOD dataset (vectorised).
-
-    Uses a KDTree built from the grid cell centres for O(n log m) lookup.
-
-    Parameters
-    ----------
-    vod_ds : xr.Dataset
-        VOD dataset with ``phi(epoch, sid)`` and ``theta(epoch, sid)``
-        coordinate variables and a ``VOD`` data variable.
-    grid : GridData
-        Hemisphere grid instance.
-    grid_name : str
-        Grid identifier used to name the output coordinate
-        (``cell_id_<grid_name>``).
-
-    Returns
-    -------
-    xr.Dataset
-        *vod_ds* with an additional ``cell_id_<grid_name>(epoch, sid)``
-        variable.  Observations with non-finite φ or θ receive NaN.
-
-    """
-    start_time = time.time()
-    print(f"\nAssigning cells for '{grid_name}'...")
-
-    log.info(
-        "cell_assignment_started",
-        grid_name=grid_name,
-        grid_cells=len(grid.grid),
-        observations=vod_ds["VOD"].size,
-        method="kdtree_fast",
-    )
-
-    tree = _build_kdtree(grid)
-    cell_id_col = grid.grid["cell_id"].to_numpy()
-
-    phi = vod_ds["phi"].values.ravel()
-    theta = vod_ds["theta"].values.ravel()
-
-    valid = np.isfinite(phi) & np.isfinite(theta)
-
-    cell_ids = np.full(len(phi), np.nan, dtype=np.float64)
-
-    if np.any(valid):
-        cell_ids[valid] = _query_points(tree, cell_id_col, phi[valid], theta[valid])
-
-    cell_ids_2d = cell_ids.reshape(vod_ds["VOD"].shape)
-
-    coord_name = f"cell_id_{grid_name}"
-    vod_ds[coord_name] = (("epoch", "sid"), cell_ids_2d)
-
-    n_assigned = np.sum(np.isfinite(cell_ids_2d))
-    n_unique = len(np.unique(cell_ids[np.isfinite(cell_ids)]))
-    duration = time.time() - start_time
-
-    print(f"  ✓ Assigned: {n_assigned:,} / {cell_ids_2d.size:,} observations")
-    print(f"  ✓ Unique cells: {n_unique:,}")
-
-    log.info(
-        "cell_assignment_complete",
-        grid_name=grid_name,
-        duration_seconds=round(duration, 2),
-        observations_assigned=int(n_assigned),
-        observations_total=cell_ids_2d.size,
-        unique_cells=int(n_unique),
-        coverage_percent=round(100 * n_assigned / cell_ids_2d.size, 2),
-    )
-
-    return vod_ds
-
-
-def add_cell_ids_to_vod(
-    vod_ds: xr.Dataset, grid: GridData, grid_name: str
-) -> xr.Dataset:
-    """Assign grid cells to a VOD dataset (element-wise fallback).
-
-    Slower than :func:`add_cell_ids_to_vod_fast`; kept for cases where the
-    full dataset does not fit in memory as numpy arrays.
-
-    Parameters
-    ----------
-    vod_ds : xr.Dataset
-        VOD dataset with ``phi``, ``theta``, and ``VOD`` variables.
-    grid : GridData
-        Hemisphere grid instance.
-    grid_name : str
-        Grid identifier for the output coordinate name.
-
-    Returns
-    -------
-    xr.Dataset
-        *vod_ds* with ``cell_id_<grid_name>(epoch, sid)`` added.
-
-    """
-    print(f"\nAssigning cells for '{grid_name}'...")
-
-    tree = _build_kdtree(grid)
-    cell_id_col = grid.grid["cell_id"].to_numpy()
-
-    phi_flat = vod_ds["phi"].to_numpy().ravel()
-    theta_flat = vod_ds["theta"].to_numpy().ravel()
-
-    cell_ids_flat = np.full(vod_ds["VOD"].size, np.nan)
-
-    for i in range(len(phi_flat)):
-        if np.isfinite(phi_flat[i]) and np.isfinite(theta_flat[i]):
-            cell_ids_flat[i] = _query_points(
-                tree, cell_id_col, np.array([phi_flat[i]]), np.array([theta_flat[i]])
-            )[0]
-
-    cell_ids_2d = cell_ids_flat.reshape(vod_ds["VOD"].shape)
-
-    coord_name = f"cell_id_{grid_name}"
-    vod_ds[coord_name] = (("epoch", "sid"), cell_ids_2d)
-
-    n_assigned = np.sum(~np.isnan(cell_ids_2d))
-    print(f"  ✓ Added coordinate '{coord_name}'")
-    print(f"  ✓ Assigned: {n_assigned:,} / {cell_ids_2d.size:,} observations")
-
-    # Track grid references in dataset attrs
-    if "grid_references" not in vod_ds.attrs:
-        vod_ds.attrs["grid_references"] = []
-    vod_ds.attrs["grid_references"].append(f"grids/{grid_name}")
-
-    return vod_ds
-
-
 def add_cell_ids_to_ds_fast(
-    ds: xr.Dataset, grid: GridData, grid_name: str, data_var: str = "VOD"
+    ds: xr.Dataset,
+    grid: GridData,
+    grid_name: str,
+    data_var: str | None = None,
 ) -> xr.Dataset:
-    """Assign grid cells lazily via dask (avoids loading full arrays).
+    """Assign every observation to the grid cell that contains it.
 
-    The output ``cell_id_<grid_name>`` variable is a dask array that
-    computes on access or save.
+    Each grid type is looked up by its own cell boundaries: theta band and
+    phi sector for ``equal_area``, ``equal_angle`` and ``equirectangular``;
+    the spherical triangle for ``htm`` and ``geodesic``; the pixel for
+    ``healpix``; the Voronoi cell for ``fibonacci``. Bands and sectors are
+    closed at their inner edge and open at their outer edge; the last band
+    also includes its outer edge.
+
+    An observation outside the grid gets NaN: below the outer edge of the
+    last band of a ring grid (the horizon, or ``90° - cutoff_theta``), or,
+    for the triangle, pixel and Voronoi grids, in a cell the hemisphere
+    filter left out (these grids keep a cell when its center lies above
+    ``90° - cutoff_theta``, so their edge near the horizon is not a circle).
+
+    ``phi`` and ``theta`` may be data variables (as the runs write them) or
+    coordinates, with ``(epoch, sid)`` dimensions in either order. If they
+    are dask arrays, the cell IDs are computed lazily, block by block.
 
     Parameters
     ----------
     ds : xr.Dataset
-        Dataset with dask-backed ``phi`` and ``theta`` arrays.
+        Dataset with ``phi(epoch, sid)`` and ``theta(epoch, sid)`` in
+        radians.
     grid : GridData
-        Hemisphere grid instance.
+        Hemisphere grid built with ``create_hemigrid()``. A grid loaded with
+        ``load_grid()`` works for the ring grids only; the others lose the
+        geometry the lookup needs (ValueError).
     grid_name : str
-        Grid identifier for the output coordinate name.
-    data_var : str
-        Name of the main data variable (used only for shape reference).
+        Grid identifier; the output variable is ``cell_id_<grid_name>``.
+    data_var : str | None
+        Not used. Passing it is deprecated.
 
     Returns
     -------
     xr.Dataset
-        *ds* with a lazy ``cell_id_<grid_name>(epoch, sid)`` variable.
-
+        *ds* with a ``cell_id_<grid_name>(epoch, sid)`` float64 data
+        variable; NaN where ``phi`` or ``theta`` is not finite or the
+        observation lies outside the grid.
     """
     import dask.array as da
 
-    print(f"\nAssigning cells for '{grid_name}'...")
-
-    tree = _build_kdtree(grid)
-    cell_id_col = grid.grid["cell_id"].to_numpy()
-
-    def _assign_chunk(
-        phi_chunk: np.ndarray,
-        theta_chunk: np.ndarray,
-    ) -> np.ndarray:
-        """Assign cell IDs for a chunk of data.
-
-        Parameters
-        ----------
-        phi_chunk : np.ndarray
-            Chunk of azimuth values.
-        theta_chunk : np.ndarray
-            Chunk of elevation values.
-
-        Returns
-        -------
-        np.ndarray
-            Chunk of cell IDs.
-
-        """
-        phi_flat = phi_chunk.ravel()
-        theta_flat = theta_chunk.ravel()
-
-        valid = np.isfinite(phi_flat) & np.isfinite(theta_flat)
-        cell_ids = np.full(len(phi_flat), np.nan, dtype=np.float32)
-
-        if np.any(valid):
-            cell_ids[valid] = _query_points(
-                tree, cell_id_col, phi_flat[valid], theta_flat[valid]
-            )
-
-        return cell_ids.reshape(phi_chunk.shape)
-
-    phi_data = ds["phi"].data
-    theta_data = ds["theta"].data
-
-    if isinstance(phi_data, da.Array):
-        cell_ids_arr = da.map_blocks(
-            _assign_chunk,
-            phi_data,
-            theta_data,
-            dtype=np.float32,
-            drop_axis=[],
+    if data_var is not None:
+        warnings.warn(
+            "The data_var argument of add_cell_ids_to_ds_fast() is left over "
+            "from development and will be removed with the next major version. "
+            "Use add_cell_ids_to_ds_fast(ds, grid, grid_name) instead.",
+            FutureWarning,
+            stacklevel=2,
         )
-        lazy = True
+
+    lookup = cell_lookup(grid)
+
+    def _assign_block(phi_block: np.ndarray, theta_block: np.ndarray) -> np.ndarray:
+        phi_flat = phi_block.ravel()
+        theta_flat = theta_block.ravel()
+        valid = np.isfinite(phi_flat) & np.isfinite(theta_flat)
+        cell_ids = np.full(len(phi_flat), np.nan, dtype=np.float64)
+        if np.any(valid):
+            cell_ids[valid] = lookup(phi_flat[valid], theta_flat[valid])
+        return cell_ids.reshape(phi_block.shape)
+
+    phi = ds["phi"].transpose("epoch", "sid").data
+    theta = ds["theta"].transpose("epoch", "sid").data
+    if isinstance(phi, da.Array) or isinstance(theta, da.Array):
+        theta = da.asarray(theta).rechunk(da.asarray(phi).chunks)
+        cell_ids = da.map_blocks(
+            _assign_block, da.asarray(phi), theta, dtype=np.float64
+        )
     else:
-        cell_ids_arr = _assign_chunk(np.asarray(phi_data), np.asarray(theta_data))
-        lazy = False
+        cell_ids = _assign_block(np.asarray(phi), np.asarray(theta))
 
-    coord_name = f"cell_id_{grid_name}"
-    ds[coord_name] = (("epoch", "sid"), cell_ids_arr)
-
-    print(
-        "  ✓ Cell IDs assigned as lazy dask array"
-        if lazy
-        else "  ✓ Cell IDs assigned eagerly"
+    ds[f"cell_id_{grid_name}"] = (("epoch", "sid"), cell_ids)
+    log.info(
+        "cell_assignment_complete",
+        grid_name=grid_name,
+        grid_cells=grid.ncells,
+        lazy=isinstance(cell_ids, da.Array),
     )
-    if lazy:
-        print("  ✓ Will compute on access/save")
-
     return ds
+
+
+@deprecated(
+    "add_cell_ids_to_vod_fast() is left over from development and will be "
+    "removed with the next major version. Use add_cell_ids_to_ds_fast() instead."
+)
+def add_cell_ids_to_vod_fast(
+    vod_ds: xr.Dataset, grid: GridData, grid_name: str
+) -> xr.Dataset:
+    """Assign grid cells to a VOD dataset; see :func:`add_cell_ids_to_ds_fast`."""
+    return add_cell_ids_to_ds_fast(vod_ds, grid, grid_name)
+
+
+@deprecated(
+    "add_cell_ids_to_vod() is left over from development and will be removed "
+    "with the next major version. Use add_cell_ids_to_ds_fast() instead."
+)
+def add_cell_ids_to_vod(
+    vod_ds: xr.Dataset, grid: GridData, grid_name: str
+) -> xr.Dataset:
+    """Assign grid cells to a VOD dataset; see :func:`add_cell_ids_to_ds_fast`."""
+    return add_cell_ids_to_ds_fast(vod_ds, grid, grid_name)
 
 
 # ==============================================================================
@@ -534,17 +375,8 @@ def grid_to_dataset(grid: GridData) -> xr.Dataset:
         ``cell_phi``, ``cell_theta``, ``vertices_phi``, ``vertices_theta``,
         ``n_vertices``, ``solid_angle``.
 
-    Notes
-    -----
-    This function is distinct from
-    :meth:`HemiGridStorageAdapter._prepare_vertices_dataframe` in
-    ``canvod-store``. That method produces a long-form DataFrame for zarr
-    ragged-array storage; this one produces a rectangular xarray Dataset
-    suitable for analysis and visualisation.
-
     """
-    # Reuse the commented-out logic pattern from gnssvodpy vertices.py:
-    # extract per-cell vertices into (n_cells, max_vertices) arrays.
+    # Extract per-cell vertices into (n_cells, max_vertices) arrays.
     n_cells = grid.ncells
     grid_type = grid.grid_type
 
@@ -651,6 +483,9 @@ def grid_to_dataset(grid: GridData) -> xr.Dataset:
             ),
             "cutoff_theta_deg": float(
                 grid.metadata.get("cutoff_theta", 0.0) if grid.metadata else 0.0
+            ),
+            "phi_rotation_deg": float(
+                grid.metadata.get("phi_rotation", 0.0) if grid.metadata else 0.0
             ),
             "n_cells": n_cells,
         },
@@ -917,6 +752,7 @@ def load_grid(
         metadata={
             "angular_resolution": angular_resolution,
             "cutoff_theta": cutoff_theta,
+            "phi_rotation": ds_grid.attrs.get("phi_rotation_deg", 0.0),
         },
     )
 

@@ -45,7 +45,7 @@ from canvod.viz import HemisphereVisualizer2D
 import numpy as np
 
 # Create grid
-grid = create_hemigrid(grid_type='equal_area', angular_resolution=10.0)
+grid = create_hemigrid(grid_type="equal_area", angular_resolution=10.0)
 
 # Generate sample data
 data = np.random.rand(grid.ncells)
@@ -55,11 +55,7 @@ viz = HemisphereVisualizer2D(grid)
 
 # Plot
 fig, ax = viz.plot_grid_patches(
-    data=data,
-    title="VOD Distribution",
-    cmap='viridis',
-    save_path="vod_2d.png",
-    dpi=300
+    data=data, title="VOD Distribution", cmap="viridis", save_path="vod_2d.png", dpi=300
 )
 ```
 
@@ -73,10 +69,7 @@ viz3d = HemisphereVisualizer3D(grid)
 
 # Create interactive plot
 fig = viz3d.plot_hemisphere_surface(
-    data=data,
-    title="Interactive VOD Explorer",
-    colorscale='Plasma',
-    opacity=0.8
+    data=data, title="Interactive VOD Explorer", colorscale="Plasma", opacity=0.8
 )
 
 # Display in browser
@@ -95,17 +88,10 @@ from canvod.viz import HemisphereVisualizer
 viz = HemisphereVisualizer(grid)
 
 # Create 2D plot
-fig_2d, ax_2d = viz.plot_2d(
-    data=data,
-    title="2D Polar View",
-    save_path="polar.png"
-)
+fig_2d, ax_2d = viz.plot_2d(data=data, title="2D Polar View", save_path="polar.png")
 
 # Create 3D plot
-fig_3d = viz.plot_3d(
-    data=data,
-    title="3D Interactive View"
-)
+fig_3d = viz.plot_3d(data=data, title="3D Interactive View")
 fig_3d.show()
 ```
 
@@ -118,14 +104,14 @@ from canvod.viz import PolarPlotStyle, create_publication_style
 
 # Create custom 2D style
 custom_style = PolarPlotStyle(
-    cmap='plasma',
-    edgecolor='darkgray',
+    cmap="plasma",
+    edgecolor="darkgray",
     linewidth=0.3,
     figsize=(12, 12),
     dpi=600,
-    colorbar_label='VOD',
+    colorbar_label="VOD",
     show_degree_labels=True,
-    theta_labels=[0, 15, 30, 45, 60, 75, 90]
+    theta_labels=[0, 15, 30, 45, 60, 75, 90],
 )
 
 fig, ax = viz.plot_2d(data=data, style=custom_style)
@@ -140,7 +126,7 @@ fig, ax = viz.create_publication_figure(
     title="VOD Distribution Over ExampleSite Site",
     save_path="paper_figure_3.png",
     dpi=600,
-    colorbar_label='VOD'
+    colorbar_label="VOD",
 )
 ```
 
@@ -149,10 +135,7 @@ fig, ax = viz.create_publication_figure(
 ```python
 # Create interactive explorer with dark theme
 fig = viz.create_interactive_explorer(
-    data=data,
-    title="VOD Data Explorer",
-    dark_mode=True,
-    save_html="explorer.html"
+    data=data, title="VOD Data Explorer", dark_mode=True, save_html="explorer.html"
 )
 ```
 
@@ -165,7 +148,7 @@ fig = viz.create_interactive_explorer(
     title_2d="2D Polar Projection",
     title_3d="3D Hemisphere View",
     save_2d="comparison_2d.png",
-    save_3d="comparison_3d.html"
+    save_3d="comparison_3d.html",
 )
 ```
 
@@ -174,10 +157,7 @@ fig = viz.create_interactive_explorer(
 ```python
 # Show cell boundaries in 3D
 fig_mesh = viz.plot_3d_mesh(
-    data=data,
-    title="VOD Mesh View",
-    opacity=0.7,
-    show_edges=True
+    data=data, title="VOD Mesh View", opacity=0.7, show_edges=True
 )
 fig_mesh.show()
 ```

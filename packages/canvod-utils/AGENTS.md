@@ -1,0 +1,27 @@
+# canvod-utils
+
+Small shared tools every package may use: dates, file hashes, the
+deprecation decorator, the logging run context. No CLI, no settings.
+
+## Where things live
+
+| Path (under `src/canvod/utils/`) | What |
+|---|---|
+| `tools/date_utils.py` | `YYYYDOY` and friends |
+| `tools/hashing.py` | File hash (the `"File Hash"` attribute) |
+| `tools/deprecation.py` | `deprecated`: the one deprecation decorator (`FutureWarning`) |
+| `logging/` | `run_context`, `stage_timer` |
+
+## Invariants
+
+- Lower packages deprecate with this decorator, so a package using it
+  lists canvod-utils as a dependency. See the `deprecate` guide.
+- Logging: every module uses `structlog.get_logger(__name__)`; no private
+  logger wrappers.
+- Nothing here imports another canvod package.
+
+## Tests
+
+```bash
+just test-package canvod-utils
+```

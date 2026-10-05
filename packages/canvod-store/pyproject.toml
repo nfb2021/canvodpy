@@ -20,12 +20,12 @@ classifiers = [
 ]
 
 dependencies = [
-    "canvod-grids>=0.1.0",
-    "canvod-utils>=0.1.0",
-    "canvod-config>=0.1.0",
-    "canvod-vod>=0.1.0",
-    "canvod-auxiliary>=0.1.0",
-    "canvod-readers>=0.1.0",
+    "canvod-grids>=0.4.0",
+    "canvod-utils>=0.4.0",
+    "canvod-config>=0.4.0",
+    "canvod-vod>=0.4.0",
+    "canvod-auxiliary>=0.4.0",
+    "canvod-readers>=0.4.0",
     "icechunk>=2.0.0",
     "zarr>=3.1.2",
     "xarray>=2023.12.0",

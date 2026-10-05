@@ -10,12 +10,15 @@ canvod-store's marimo/Jupyter-only IcechunkStoreViewer renders as HTML.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
+
+from canvodpy.cli.options import CONFIG_DIR_OPTION
 
 store_app = typer.Typer(
     name="store",
@@ -64,7 +67,9 @@ def _open_store(site_name: str, store_kind: str):
 
 
 @store_app.command("list")
-def list_stores() -> None:
+def list_stores(
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
+) -> None:
     """List every configured site's GNSS and VOD store paths and status."""
     from canvod.config import load_config
 
@@ -113,6 +118,7 @@ def info(
             help="Drill into one group's full content (dataset + metadata table)",
         ),
     ] = None,
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
 ) -> None:
     """Show branches, groups, and stats for one site's store."""
     if store not in _STORE_KINDS:
@@ -183,6 +189,7 @@ def log(
         ),
     ] = False,
     limit: Annotated[int, typer.Option("--limit", help="Max entries for --ops")] = 50,
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
 ) -> None:
     """Show commit history as a graph (or the ops audit trail with --ops)."""
     if store not in _STORE_KINDS:
@@ -226,6 +233,7 @@ def maintain(
             ),
         ),
     ] = False,
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
 ) -> None:
     """Run store maintenance (expiration + garbage collection).
 
@@ -319,6 +327,7 @@ def maintain_due(
         str,
         typer.Option("--store", help="Which store(s): gnss, vod, or both"),
     ] = "both",
+    config_dir: Annotated[Path | None, CONFIG_DIR_OPTION] = None,
 ) -> None:
     """Non-interactive maintenance: runs only what's actually due, or nothing.
 

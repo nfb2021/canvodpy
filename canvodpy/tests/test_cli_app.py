@@ -27,3 +27,21 @@ class TestVersion:
 
         assert "canvodpy CLI tools" in result.output
         assert "Commands" in result.output
+
+
+class TestRunStopsOnPreprocessingMismatch:
+    def test_exit_code_and_message(self, monkeypatch):
+        """Every later day would be refused too, so the run stops (exit 1)."""
+        from canvodpy.cli import run as run_module
+
+        from canvod.config.models import PreprocessingMismatchError
+
+        def refuse(_args):
+            raise PreprocessingMismatchError("Group 'canopy_01' holds data with ...")
+
+        monkeypatch.setattr(run_module, "_main_impl", refuse)
+        result = runner.invoke(main_app, ["run", "--site", "rosalia"])
+
+        assert result.exit_code == 1
+        assert "Group 'canopy_01' holds data with" in result.output
+        assert "Traceback" not in result.output

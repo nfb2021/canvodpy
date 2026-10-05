@@ -13,7 +13,8 @@ Before starting a release:
 - [ ] `main` branch is stable
 - [ ] All changes committed and pushed
 - [ ] You have push access to the repository (`main` requires a PR — see step 4 —
-      but tagging in step 6 is a direct push)
+      but tagging in step 5 is a direct push)
+- [ ] The working tree is clean: `just release` stages everything with `git add .`
 
 ---
 
@@ -45,15 +46,16 @@ just release 0.2.0
 
 This command:
 
-1. Runs all tests
-2. Generates `CHANGELOG.md` from conventional commits
-3. Bumps version in all `pyproject.toml` files
-4. Creates git commit + tag `v0.2.0`
+1. Runs all tests (`just test`)
+2. Generates `CHANGELOG.md` from conventional commits and commits it
+3. Bumps the version of all packages (`cz bump`), runs `uv lock`, and
+   commits everything changed (`git add .`)
+4. Tags the last commit `v0.2.0`
 
 ### 3. Review
 
 ```bash
-git log --oneline -5   # verify commit
+git log --oneline -5   # verify the two commits (changelog, version bump)
 git tag | tail -1      # verify tag
 ```
 

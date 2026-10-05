@@ -1,6 +1,6 @@
 # Product Registry
 
-The product registry provides declarative configuration for 37 SP3 and CLK products from 17 analysis centres. Products are defined in TOML — no hardcoded URLs in the processing code.
+The product registry provides declarative configuration for 37 SP3 and CLK products from 17 analysis centres (agency codes). Products are defined in TOML — no hardcoded URLs in the processing code.
 
 ---
 
@@ -48,79 +48,93 @@ The product registry provides declarative configuration for 37 SP3 and CLK produ
 
 ## Available Agencies
 
-| Agency | Code | Products |
-|--------|------|---------|
-| Center for Orbit Determination in Europe | CODE | Final, Rapid |
-| GeoForschungsZentrum Potsdam | GFZ | Final, Rapid |
-| European Space Agency | ESA | Final, Rapid, Ultra-rapid |
-| Jet Propulsion Laboratory | JPL | Final |
-| International GNSS Service | IGS | Final, Rapid, Ultra-rapid |
-| NASA CDDIS | — | FTP mirror for most products |
+| Code | Agency | Product types in the registry |
+|------|--------|-------------------------------|
+| COD | Center for Orbit Determination in Europe | final, rapid, ultrarapid |
+| EMR | Natural Resources Canada | final, rapid, ultrarapid |
+| ESA | European Space Agency | final, rapid, ultrarapid |
+| GFZ | GeoForschungsZentrum Potsdam | final, rapid, ultrarapid |
+| GRG | CNES | final, rapid, ultrarapid |
+| IAC | Information-Analytical Centre | final |
+| IGS | International GNSS Service | rapid, ultrarapid, real-time |
+| JAX, JGX | JAXA | final (JAX); final, rapid, ultrarapid (JGX) |
+| JPL | Jet Propulsion Laboratory | final, rapid |
+| MIT | Massachusetts Institute of Technology | final |
+| NGS | National Geodetic Survey | final, rapid |
+| SHA | Shanghai Observatory | ultrarapid |
+| SIO | Scripps Institution of Oceanography | rapid, ultrarapid |
+| USN | US Naval Observatory | rapid, ultrarapid |
+| WHU | Wuhan University | rapid, ultrarapid |
+| WUM | Wuhan University (Multi-GNSS) | rapid, near-real-time |
 
-!!! tip "Automatic fallback"
-    The pipeline tries the primary agency first; if the FTP connection fails
-    or the file is not yet available, it falls back to the NASA CDDIS mirror
-    automatically.
+`canvod.auxiliary.list_products()` lists them; the registry is the truth. The final
+products of EMR, GFZ, GRG, JGX, JPL, MIT and NGS are hosted by NASA CDDIS only
+(see below); COD and ESA final products come from ESA.
+
+!!! tip "Servers and fallback"
+    Products are downloaded from ESA GSSC (no account needed). NASA CDDIS is a
+    fallback, tried when ESA fails, once `credentials.nasa_earthdata_acc_mail`
+    holds the email of a free NASA Earthdata account. Products that only NASA
+    CDDIS hosts need that account.
 
 ---
 
 ## Usage
 
-=== "Lookup a product"
+=== "Look up a product"
 
     ```python
     from canvod.auxiliary import get_product_spec
 
-    spec = get_product_spec("CODE", "final")
-    print(spec.latency_hours)      # 336 (14 days)
-    print(spec.ftp_server)         # ftp.aiub.unibe.ch
-    print(spec.requires_auth)      # False
+    spec = get_product_spec("COD", "final")
+    spec.prefix              # "COD0MGXFIN"
+    spec.sampling_rate       # "05M"
+    spec.available_formats   # ["SP3", "CLK"]
+    [s.url for s in spec.ftp_servers]  # ESA first, then NASA CDDIS
     ```
 
-=== "Download and parse"
+=== "In a run"
 
-    ```python
-    from canvod.auxiliary import Sp3File
-    from datetime import date
-
-    sp3 = Sp3File.from_url(date(2024, 1, 1), agency="CODE", product="final")
-    ds = sp3.to_dataset()
-
-    # ds.dims: {'epoch': 96, 'sv': 32}
-    # ds.data_vars: X, Y, Z, Vx, Vy, Vz
-    ```
-
-=== "Configuration (canvod-settings.yaml)"
+    Runs pick the product from the settings; no manual lookup is needed:
 
     ```yaml
-    auxiliary:
-      agency:       ESA
-      product_type: final
-      cache_dir:    /data/aux_cache
+    processing:
+      aux_data:
+        agency: COD
+        product_type: final
+        fetch_clock: true   # false: skip CLK, which VOD does not use
     ```
 
-    The pipeline reads these keys automatically — no manual product lookup needed.
+    To add satellite geometry to a dataset in your own code, use an ephemeris
+    provider (see [canvod-auxiliary](overview.md)).
 
 ---
 
 ## Registry Format
 
-Products are declared in `packages/canvod-auxiliary/src/canvod/auxiliary/products/registry.toml`:
+Products are declared in
+`packages/canvod-auxiliary/src/canvod/auxiliary/products/products.toml`, one
+`[[products]]` table each, with its servers in priority order:
 
 ```toml
-[CODE.final]
-sp3_url_template = "ftp://ftp.aiub.unibe.ch/CODE/{yyyy}/COD{gpsweek}{dow}.EPH.Z"
-clk_url_template = "ftp://ftp.aiub.unibe.ch/CODE/{yyyy}/COD{gpsweek}{dow}.CLK.Z"
-latency_hours    = 336
-ftp_server       = "ftp.aiub.unibe.ch"
-requires_auth    = false
+[[products]]
+agency = "COD"
+type = "final"
+prefix = "COD0MGXFIN"
+sampling = "05M"
+duration = "01D"
+description = "CODE final multi-GNSS"
+formats = ["SP3", "CLK"]
+ftp_path = "/gnss/products/{gps_week}/{file}"
 
-[ESA.rapid]
-sp3_url_template = "..."
-clk_url_template = "..."
-latency_hours    = 18
-ftp_server       = "navigation.esa.int"
-requires_auth    = false
+[[products.ftp_servers]]
+url = "ftp://gssc.esa.int"
+priority = 1
+description = "ESA primary"
+
+[[products.ftp_servers]]
+url = "ftps://gdc.cddis.eosdis.nasa.gov"
+priority = 2
+description = "NASA CDDIS fallback"
+requires_auth = true
 ```
-
-URL templates support: `{yyyy}`, `{doy}`, `{gpsweek}`, `{dow}` (day-of-week within GPS week).

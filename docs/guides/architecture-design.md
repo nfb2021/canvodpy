@@ -165,19 +165,9 @@ detail; `FluentWorkflow`, the flat `process_date()`/`calculate_vod()`/
             site.vod.compute_day(datasets, "canopy_01_vs_reference_01")
     ```
 
-=== "Functional — Component-level scripting"
-
-    ```python
-    from canvodpy.functional import read_rinex, augment_with_ephemeris, calculate_vod
-
-    ds = read_rinex("ROSA01TUW_R_20250010000_15M_05S_AA.rnx")
-    ds = augment_with_ephemeris(ds, rx_pos, source="final", date="2025001", site_config=cfg)
-    vod_ds = calculate_vod(canopy_ds, reference_ds)
-    ```
-
 === "Direct Package Access — lowest level"
 
-    Bypassing the orchestrator entirely; used internally by all three surfaces
+    Bypassing the orchestrator entirely; used internally by both surfaces
     above.
 
     ```python
@@ -250,17 +240,8 @@ Every dataset produced by canVODpy is fully traceable:
 
 ## Airflow / Distributed Execution
 
-Level 1 API functions are stateless and suitable for distributed scheduling:
-
-```python
-from airflow.decorators import task
-
-@task
-def process_rinex_task(file_path: str, date: str) -> str:
-    from canvodpy import read_rinex
-    obs = read_rinex(file_path, date)
-    obs.to_zarr(f"/data/obs_{date}.zarr")
-    return f"/data/obs_{date}.zarr"
-```
+The optional `canvod-airflow` extension builds its DAGs on
+`canvodpy.workflows.tasks`, which uses the same file discovery and processing
+code as `canvodpy run`.
 
 Factory registration happens at module import time — each worker process has access to all registered implementations automatically.

@@ -179,6 +179,72 @@ class TestConvenienceFunctions:
         assert callable(preview_processing)
 
 
+class TestDeprecatedVodForDay:
+    """Pipeline.calculate_vod and canvodpy.calculate_vod delegate to site.vod."""
+
+    @staticmethod
+    def _site():
+        from types import SimpleNamespace
+
+        site = MagicMock()
+        site.vod_analyses = {
+            "canopy_01_vs_reference_01": SimpleNamespace(
+                canopy_receiver="canopy_01", reference_receiver="reference_01"
+            )
+        }
+        return site
+
+    def test_pipeline_calculate_vod_delegates_to_compute_bulk(self):
+        from datetime import datetime
+        from types import SimpleNamespace
+
+        from canvodpy import Pipeline
+
+        site = self._site()
+        with pytest.warns(FutureWarning, match="Site\\(<site>\\).vod.compute_bulk"):
+            result = Pipeline.calculate_vod(
+                SimpleNamespace(site=site), "canopy_01", "reference_01", "2025001"
+            )
+
+        site.vod.compute_bulk.assert_called_once()
+        args, kwargs = site.vod.compute_bulk.call_args
+        assert args == ("canopy_01_vs_reference_01",)
+        assert kwargs["start"] == datetime(2025, 1, 1)
+        assert kwargs["end"] == datetime(2025, 1, 1, 23, 59, 59, 999999)
+        assert kwargs["write"] is True
+        assert result is site.vod.compute_bulk.return_value
+
+    def test_unconfigured_pair_raises(self):
+        from types import SimpleNamespace
+
+        from canvodpy import Pipeline
+
+        site = self._site()
+        with (
+            pytest.warns(FutureWarning),
+            pytest.raises(ValueError, match="No VOD analysis configured"),
+        ):
+            Pipeline.calculate_vod(
+                SimpleNamespace(site=site), "canopy_01", "reference_02", "2025001"
+            )
+        site.vod.compute_bulk.assert_not_called()
+
+    def test_top_level_calculate_vod_delegates(self):
+        import canvodpy
+
+        site = self._site()
+        with (
+            patch("canvodpy.api.Site", return_value=site),
+            pytest.warns(FutureWarning) as record,
+        ):
+            canvodpy.calculate_vod(
+                "Rosalia", "canopy_01", "reference_01", "2025001", write_to_store=False
+            )
+
+        assert len(record) == 1
+        assert site.vod.compute_bulk.call_args.kwargs["write"] is False
+
+
 class TestAPICoexistence:
     """Test that all API tiers can coexist."""
 

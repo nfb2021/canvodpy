@@ -15,7 +15,7 @@ fact, hard constraints.
 
 ## 1. One data shape everywhere
 
-**What:** Every GNSS reader — RINEX v2, RINEX v3, Septentrio SBF — produces an
+**What:** Every GNSS reader — RINEX v2, RINEX v3, Septentrio SBF, NMEA — produces an
 `xarray.Dataset` with exactly two dimensions: `epoch` (observation timestamps) and
 `sid` (signal identifier, format `SV|Band|Code`, e.g. `G01|L1|C`). No other shape
 is accepted downstream.
@@ -30,43 +30,46 @@ minimal common language of the pipeline.
 storage never ask "is this RINEX or SBF?". They operate on datasets by dimension
 name. Adding a new reader requires only that it produce the `(epoch, sid)` shape.
 
-**How:** Enforced in `canvod-readers` at the reader base class. The attribute
-`"File Hash"` (SHA-256 of the source file) is required on every dataset — a
-missing hash causes a hard error, not a silent skip.
+**How:** `canvod.readers.validate_dataset` checks every reader's output: the two
+dimensions, the signal coordinates (`sv`, `system`, `band`, `code`, frequencies),
+an `SNR` variable, and attributes including `"File Hash"` (SHA-256 of the source
+file). It lists every violation at once and raises; nothing is skipped silently.
+VOD results have their own contract, `canvod.readers.validate_vod_dataset`
+(`VOD`, `theta`, `phi` in radians), which the VOD store enforces on every write.
 
 !!! note "What is a 'data contract'?"
     A data contract is an agreed shape for data passed between components. Here it
-    means: `dataset.dims == {"epoch", "sid"}` and `"File Hash" in dataset.attrs`.
-    Components are free to add extra coordinates (polar angle, azimuth, SNR per
-    signal) but the two required dimensions are never optional.
+    means: dimensions `epoch` and `sid`, the required coordinates, variables and
+    attributes. Components are free to add extra variables (polar angle, azimuth,
+    further observables), but the contract is never optional.
 
 ---
 
 ## 2. Validation as a hard gate
 
-**What:** Before any file is read or stored, `DataDirectoryValidator` checks every
-receiver directory. If any file cannot be mapped to the naming convention, or if
-any two files overlap in time, the pipeline stops and prints a diagnostic listing
-the problem files. There is no "skip and continue" mode.
+**What:** Before any file is read or stored, `canvodpy run` finds every receiver's
+files and checks them. If two files map to the same canonical name, if two files
+overlap in time, or if one directory holds files of more than one receiver, the run
+stops and prints a diagnostic listing the problem files. There is no "skip and
+continue" mode for these cases.
 
-**Why (scientific):** An unrecognized file is probably data — ignoring it would
-create a silent gap in the archive. Two files covering the same time window would
-double-count epochs, biasing SNR statistics and corrupting VOD. The cost of a
-false alarm (manual inspection) is far lower than the cost of silently wrong data.
+**Why (scientific):** Two files covering the same time window would double-count
+epochs, biasing SNR statistics and corrupting VOD. Files of two receivers in one
+directory would be stored under the wrong receiver. The cost of a false alarm
+(manual inspection) is far lower than the cost of silently wrong data.
 
-**Why (engineering):** Fail-loud design. The validator returns a `ValidationReport`
-with `is_valid`, `unmatched` (list of unrecognized paths), and `overlaps` (list of
-conflicting pairs), so the error message always tells the operator exactly what to
-fix.
+**Why (engineering):** Fail-loud design. The error message always names the files,
+so it tells the operator exactly what to fix.
 
-**How:** `DataDirectoryValidator.validate_receiver()` in `canvod-filemap`.
-Called by `validate_data_dirs()` in the orchestrator before any reading begins.
+**How:** `canvodpy.orchestrator.discovery`, used by `canvodpy run`, `Site.pipeline()`
+and the Airflow tasks alike. `canvodpy config validate` (and `validate_data_dirs()` in
+Airflow) runs the same discovery before processing and additionally lists the files a
+run passes over because neither the naming convention nor a recipe recognizes them.
 
 !!! warning "The naming convention is a hard gate, not an overridable default"
-    `DataDirectoryValidator` has no "permissive" or "warn-only" mode. Files that
-    do not match a recognized pattern or recipe are always rejected. Configuring a
-    `NamingRecipe` for non-standard filenames is the correct response to a
-    validation failure — not disabling the check.
+    Without a naming recipe, only files that follow the naming convention are
+    processed. Configuring a `NamingRecipe` for non-standard filenames is the
+    correct response to data that is not recognized, not renaming files by hand.
 
 ---
 
@@ -74,7 +77,9 @@ Called by `validate_data_dirs()` in the orchestrator before any reading begins.
 
 **What:** Every write to a canVODpy data store ends with an immutable commit. The
 entire state of the store — every array, every coordinate, every attribute — is
-captured as a numbered snapshot. Previous snapshots are never modified or deleted.
+captured as a snapshot with an ID. Previous snapshots are never modified; they are
+deleted only by store maintenance (snapshot expiry and garbage collection), which
+runs only when you start it or switch it on (`canvodpy store maintain`).
 
 **Why (scientific):** A published VOD time series must be traceable to the exact
 data that produced it. If a processing bug is discovered and a reanalysis is run,
@@ -113,12 +118,13 @@ without the full pipeline. Upward-free dependencies make this possible: install
 `canvod-vod` alone and it works.
 
 **Why (engineering):** Independent testing. The VOD formula can be unit-tested
-without a store, a reader, or an internet connection. The store can be tested
-without running readers. Circular imports are structurally impossible.
+without a store, a reader, or an internet connection.
 
-**How:** Declared in each package's `pyproject.toml`. Four packages have no
-inter-package dependencies at all: `canvod-utils`, `canvod-vod`,
-`canvod-filemap`, and `canvod-preflight`. See
+**How:** Declared in each package's `pyproject.toml`; a test
+(`canvodpy/tests/test_package_boundaries.py`) keeps every package from importing
+the umbrella package. `canvod-utils` has no inter-package dependencies at all.
+One exception remains to be removed: `canvod-grids` and `canvod-store` depend on
+each other. See
 [Architecture → Dependency Graph](architecture.md#dependency-graph) for the full
 declaration.
 
@@ -136,52 +142,87 @@ relies on a separate metadata database to interpret its filenames becomes opaque
 the moment that database is unavailable. A self-describing filename is still
 meaningful when found on a USB drive years later.
 
-**Why (engineering):** The canonical name drives three operations automatically,
-without additional configuration:
+**Why (engineering):** The canonical name drives these operations without
+additional configuration:
 
-- **Deduplication** — two files with the same canonical name are the same data.
-- **Receiver pairing** — reference (`T=R`) and canopy (`T=A`) files share all
-  fields except receiver type; the pipeline pairs them by diffing on that one
-  character.
-- **Store keying** — each group in the Icechunk store is addressed by canonical
-  name, so temporal range queries are computable from filenames alone.
+- **Day and receiver assignment** — the date, start time and receiver identity
+  come from the name, in any folder layout.
+- **Overlap checks** — period and start time give each file's time span, so
+  duplicates and overlapping files are found before anything is read.
+- **Reader selection** — the type field (`rnx`, `sbf`, `nmea`) says which reader
+  family applies.
 
-**How:** `canvod-filemap`. Physical files are never renamed — a virtual
-mapping layer (`FilenameMapper` + `VirtualFile`) attaches a canonical name to each
-physical path. All downstream processing uses the canonical name; the physical path
-is retained only for opening the file.
+Which canopy receiver is paired with which reference receiver is set in the
+settings (`vod_analyses`), not derived from names.
+
+**How:** The convention lives in `canvod-preflight` (`CanVODFilename`). Files with
+other names are processed through a naming recipe (`canvod-filemap`): physical
+files are never renamed, the recipe attaches a canonical name to each physical
+path. All downstream processing uses the canonical name; the physical path is
+retained only for opening the file.
 
 ---
 
-## 6. Three-layer deduplication — refuse, never silently skip
+## 6. Three-layer deduplication — never write the same data twice
 
 **What:** Before any dataset is appended to the store, three successive checks run:
 (1) does a file with this exact hash already exist? (2) does the time window of
 this file overlap with data already in the store? (3) does this file overlap with
-another file in the current batch? If any check fails, the write is refused with a
-diagnostic error.
+another file in the current batch? A file that fails a check is treated as already
+stored: with the default write strategy (`skip`) it is not written, and the run
+logs it; with `overwrite` its time range is replaced.
 
 **Why (scientific):** Duplicate epochs in the store corrupt canopy/reference
 alignment. If the reference receiver's DOY 1 is written twice, every
-canopy/reference SNR difference computed from that day will be wrong — and the
-error will be silent unless the audit suite catches it. The deduplication guard
-makes this class of mistake structurally impossible.
+canopy/reference SNR difference computed from that day will be wrong, without any
+error. The deduplication guard makes this class of mistake structurally
+impossible.
 
 **Why (engineering):** Idempotent ingestion. Running the same processing job twice
 (for example, after a crash and restart) produces the same store state, not a store
 with doubled data. The hash check is the fast path: identical content is detected
 before any write occurs.
 
-**How:** `append_to_group()` in `canvod-store` contains the hash and temporal
-overlap guard. `_check_existing_with_temporal_overlap()` in the orchestrator adds
-the intra-batch check before batches are submitted. Together they form an outer and
-inner defence that covers both inter-run and intra-run duplication.
+**How:** `_check_existing_with_temporal_overlap()` in the orchestrator runs all
+three checks against the store's log of ingested files before writing;
+`append_to_group()` in `canvod-store` checks hash and time overlap again at the
+write itself. Together they cover both inter-run and intra-run duplication.
 
 !!! note "What does 'idempotent' mean?"
     An operation is idempotent if running it twice produces the same result as
     running it once. Here: ingest the same file twice → the store contains exactly
     one copy of the data. The first run writes it; the second run detects the hash
     match and skips without error.
+
+---
+
+## 7. Code principles
+
+Four rules for all canVODpy code. New code is checked against them in review.
+
+**Explicit over implicit.** Problems fail loudly, with a message that says what
+to do. There is no silent failure and no silent default: a default you can see
+(in a function signature, or documented on a settings model) is fine; library
+code that reads the settings file behind the caller's back, or falls back to a
+value when something goes wrong, is not. Entry points (`canvodpy run`, `Site`)
+read the settings and pass the values down. One exception is deliberate: a long
+`canvodpy run` does not stop for one bad file; it warns, names the file and
+goes on.
+
+**One implementation per job (don't repeat yourself).** Every task has one code
+path, used by the CLI, the Python API and Airflow alike. Two implementations of
+the same job drift apart and give different results; the older one is
+deprecated and points to the one that stays.
+
+**Composition over inheritance.** Objects get their collaborators passed in
+(dependency injection) instead of inheriting behavior. Inheritance is used for
+pydantic models and for implementing an interface.
+
+**Interfaces are abstract base classes.** Readers, ephemeris providers, VOD
+calculators, grid builders and preprocessing steps implement an ABC
+(`GNSSDataReader`, `EphemerisProvider`, `VODCalculator`, `BaseGridBuilder`,
+`Op`), so a missing method fails as soon as the class is used, not halfway through
+a run.
 
 ---
 
@@ -225,7 +266,7 @@ hard validation gate rather than a default that can be bypassed — see
 | `SAMPLING` | 3 | Data frequency: 2-digit value + unit (S/M/H/D) | `01S`, `05S`, `05M` |
 | `CONTENT` | 2 | User-defined content code, default `AA` | `AA` |
 | `TYPE` | 3–4 | File format, lowercase | `rnx`, `sbf`, `ubx`, `nmea` |
-| `COMPRESSION` | — | Optional compression extension | `zip`, `gz`, `bz2`, `zst` |
+| `COMPRESSION` | — | Optional compression extension (part of the convention; runs do not read compressed files, decompress them first) | `zip`, `gz`, `bz2`, `zst` |
 
 !!! note "Receiver type: 'active' vs 'canopy'"
     In the filename, `T=A` denotes an **active** receiver — the below-canopy unit
@@ -317,4 +358,4 @@ and **do not** need renaming under this scheme.
 
 ---
 
-**Next in the trail:** [API Levels](guides/api-levels.md) · [Contributor Setup](guides/contributor-setup.md) · [Architecture](architecture.md) · [AI Development](guides/ai-development.md)
+**Next in the trail:** [API Levels](guides/api-levels.md) · [Contributor Setup](guides/contributor-setup.md) · [Architecture](architecture.md) · [Developing with coding agents](guides/ai-development.md)

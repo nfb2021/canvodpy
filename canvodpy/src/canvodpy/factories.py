@@ -37,9 +37,9 @@ from __future__ import annotations
 from abc import ABC
 from typing import Any, ClassVar, TypeVar
 
-from canvodpy.logging import get_logger
+import structlog
 
-log = get_logger(__name__)
+log = structlog.get_logger(__name__)
 
 T = TypeVar("T", bound=ABC)
 
@@ -233,6 +233,23 @@ class ReaderFactory(ComponentFactory):
             If the format cannot be determined or no reader is registered
             for the detected format.
         """
+        return cls.create(cls.detect_reader(fpath), fpath=fpath, **kwargs)
+
+    @classmethod
+    def detect_reader(cls, fpath: str | Any) -> str:
+        """Name of the registered reader for the file at *fpath*.
+
+        Decided from the file's content: the RINEX version in the first
+        header line, NMEA by its sentences.
+
+        Raises
+        ------
+        FileNotFoundError
+            If *fpath* does not exist.
+        ValueError
+            If the format cannot be determined or no reader is registered
+            for the detected format.
+        """
         from pathlib import Path
 
         fpath = Path(fpath)
@@ -256,7 +273,7 @@ class ReaderFactory(ComponentFactory):
             format=format_id,
             reader=name,
         )
-        return cls.create(name, fpath=fpath, **kwargs)
+        return name
 
     @staticmethod
     def _detect_format(fpath: Any) -> str:
@@ -396,13 +413,9 @@ class AugmentationFactory(ComponentFactory):
 
     Examples
     --------
-    >>> from canvod.auxiliary.augmentation import HampelFilter
-    >>> AugmentationFactory.register("hampel", HampelFilter)
-    >>> step = AugmentationFactory.create(
-    ...     "hampel",
-    ...     window_size=5,
-    ...     n_sigma=3.0,
-    ... )
+    >>> from canvod.auxiliary.augmentation import ClockCorrectionAugmentation
+    >>> AugmentationFactory.register("clock", ClockCorrectionAugmentation)
+    >>> step = AugmentationFactory.create("clock")
     """
 
     _registry: ClassVar[dict[str, type]] = {}

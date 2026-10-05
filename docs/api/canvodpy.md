@@ -1,7 +1,7 @@
 # canvodpy API Reference
 
-Umbrella package for the canVODpy framework. Two supported surfaces, plus the
-CLI on top of one of them — see [API Levels](../guides/api-levels.md).
+Umbrella package for the canVODpy framework. One supported surface, plus the
+CLI on top of it — see [API Levels](../guides/api-levels.md).
 
 ## Site and Pipeline (recommended — Python-native pipeline runs)
 
@@ -10,14 +10,6 @@ the CLI builds internally.
 
 ::: canvodpy.Site
 ::: canvodpy.Pipeline
-
-## Functional API (recommended — component-level scripting/analysis)
-
-Pure, stateless functions for composable pipelines, Airflow DAGs, and analysis.
-
-::: canvodpy.read_rinex
-::: canvodpy.create_grid
-::: canvodpy.assign_grid_cells
 
 ## Deprecated: Convenience Functions
 
@@ -36,6 +28,15 @@ terminal method (`.result()`, `.to_store()`, `.plot()`) is called.
 ::: canvodpy.workflow
 ::: canvodpy.FluentWorkflow
 
+## Deprecated: Functional API
+
+Single-step functions, no longer maintained; they give different results than
+`canvodpy run`. Use `Site(site).pipeline()` and `Site(site).vod` instead.
+
+::: canvodpy.read_rinex
+::: canvodpy.create_grid
+::: canvodpy.assign_grid_cells
+
 ## Deprecated: VODWorkflow
 
 Factory-based alternative to `Site` + `Pipeline`. Its augmentation step is a
@@ -52,4 +53,5 @@ no-op stub — VOD computed through it uses un-augmented angles. Do not use.
 ## Configuration
 
 ::: canvodpy.setup_logging
-::: canvodpy.get_logger
+
+`canvodpy.get_logger` is deprecated: use `structlog.get_logger(__name__)`.

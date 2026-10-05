@@ -1,42 +1,42 @@
 ---
 title: API Levels
-description: Running the pipeline via CLI or Site.pipeline(), and scripting/analysis via the functional API
+description: Running the pipeline via the CLI or from Python with Site.pipeline()
 ---
 
 # API Levels
 
-**Two supported surfaces, plus the CLI on top of one of them.**
+**One supported way to process data, from the terminal or from Python.**
 
 - **CLI** (`canvodpy run ...`) — recommended way to run the pipeline. Wraps `Site.pipeline()`.
 - **`Site.pipeline()`** (L3) — the same thing from Python, when you need to script a
   run rather than shell out (e.g. looping over sites, embedding in a notebook).
-- **`canvodpy.functional`** (L4) — stateless, component-level functions for
-  custom pipelines, testing, and analysis. Also what Airflow calls directly.
 
-All three produce the same `(epoch, sid)` xarray Dataset format.
+Both produce the same results.
 
 !!! warning "Deprecated surfaces"
 
     `FluentWorkflow` (L2), the flat convenience functions `process_date()` /
-    `calculate_vod()` / `preview_processing()` (L1), and `VODWorkflow` are all
-    deprecated (`DeprecationWarning` on use) — kept working, no longer taught.
-    `VODWorkflow` in particular has a broken augmentation step (`_augment_data`
-    is a no-op stub) and should not be used regardless. See the sections at the
-    bottom of this page if you're migrating code that still uses them.
+    `calculate_vod()` / `preview_processing()` (L1), `VODWorkflow`, and the
+    single-step functions of `canvodpy.functional` (L4) are all deprecated
+    (`FutureWarning` on use). They are left over from development, still work,
+    and will be removed with the next major version. `VODWorkflow` in
+    particular has a broken augmentation step (`_augment_data` is a no-op
+    stub) and should not be used regardless. See the sections below if you're
+    migrating code that still uses them.
 
 ---
 
 ## Quick Comparison
 
-| | CLI | L3: `Site.pipeline()` | L4: Functional |
-|---|---|---|---|
-| **Pattern** | `canvodpy run --site ... --start ... --end ...` | `site.pipeline().process_date(...)` | `read_rinex(path)` |
-| **Ephemeris** | Automatic (from config) | Automatic (from config) | `augment_with_ephemeris(ds, pos, ...)` |
-| **Store writes** | Automatic (Icechunk) | Automatic (Icechunk) | None (NetCDF / pickle files) |
-| **File discovery** | `canvod-filemap` `BUILTIN_PATTERNS` if installed, else canonical globs (`*.rnx`/`*.sbf`) | Same as CLI | Caller provides paths |
-| **Parallel workers** | Yes | Yes | No |
-| **Deduplication** | 3-layer | 3-layer | None |
-| **Best for** | Daily cron jobs, production runs | Multi-day batch runs from Python | Airflow / custom pipelines / analysis |
+| | CLI | L3: `Site.pipeline()` |
+|---|---|---|
+| **Pattern** | `canvodpy run --site ... --start ... --end ...` | `site.pipeline().process_date(...)` |
+| **Ephemeris** | Automatic (from config) | Automatic (from config) |
+| **Store writes** | Automatic (Icechunk) | Automatic (Icechunk) |
+| **File discovery** | Naming recipe (`canvod-filemap`) if configured, else canonical canVOD names only | Same as CLI |
+| **Parallel workers** | Yes | Yes |
+| **Deduplication** | 3-layer | 3-layer |
+| **Best for** | Daily cron jobs, production runs | Multi-day batch runs from Python |
 
 ---
 
@@ -44,7 +44,7 @@ All three produce the same `(epoch, sid)` xarray Dataset format.
 
 The recommended way to run the pipeline — production runs, cron jobs, resumable.
 `run` is a registered subcommand of the installed `canvodpy` console script
-(alongside `config`, `doctor`, `stats`, and `store` — see
+(alongside `config`, `doctor`, and `store` — see
 [Configuration](configuration.md)):
 
 ```bash
@@ -76,9 +76,11 @@ canvodpy run --site ExampleSite --site OtherSite
 | `--dry-run` | Preview the processing plan without executing |
 | `--workers` | Override worker count (default: from config) |
 | `--days-per-batch` | Override batch size (default: from config) |
+| `--config-dir` | Folder with `canvod-settings.yaml` and `recipes/` (default: `config/` of a canvodpy checkout, else `~/.config/canvodpy`) |
 | `--config` | Overlay YAML applied on top of `canvod-settings.yaml` |
 | `--ephemeris-source` | Override the configured ephemeris source: `final` (agency SP3/CLK) or `broadcast` (SBF SatVisibility) |
 | `--vod-calculator` | VOD calculator to use (currently only `tau_omega`) |
+| `--dashboard` | Also start the performance dashboard for the run's logs |
 
 Internally the CLI builds a `Site` and calls `.pipeline(...)` — see the next
 section for the exact same thing from Python.
@@ -89,10 +91,8 @@ section for the exact same thing from Python.
 
 `FluentWorkflow` (`canvodpy.workflow("ExampleSite").read(...).augment(...)...`) and
 the flat `process_date()` / `calculate_vod()` / `preview_processing()` functions
-are deprecated (`DeprecationWarning` on use). Both are thin wrappers around the
-same `Pipeline` class the CLI and `Site.pipeline()` use — they added a second and
-third syntax for identical capability without adding flexibility, so they're no
-longer taught. Use the CLI or `Site.pipeline()` (next section) instead.
+are deprecated (`FutureWarning` on use): left over from development, removed with
+the next major version. Use the CLI or `Site.pipeline()` (next section) instead.
 
 ---
 
@@ -126,103 +126,44 @@ anything the CLI's flags don't expose yet.
 |---|---|
 | `site.receivers` / `site.active_receivers` | Configured receivers |
 | `site.vod_analyses` | Configured VOD analysis pairs |
-| `site.rinex_store` / `site.vod_store` | The Icechunk stores |
+| `site.gnss_store` / `site.vod_store` | The Icechunk stores (observations, VOD) |
 | `site.vod` | `VodComputer` helper (see [VOD Computation](#vod-computation)) |
 | `site.pipeline(...)` | Create a `Pipeline` |
 
 `Pipeline` exposes `process_date(date)`, `process_range(start, end)` (a
-generator yielding `(date_key, datasets)`), `calculate_vod(canopy, reference,
-date)`, `preview()`, and `close()`; it is also a context manager, as shown
-above.
+generator yielding `(date_key, datasets)`), `preview()`, and `close()`; it is
+also a context manager, as shown above. `Pipeline.calculate_vod()` is
+deprecated; use `site.vod` (see [VOD Computation](#vod-computation)).
 
 !!! warning "Deprecated: `VODWorkflow`"
 
     `VODWorkflow` was a factory-based alternative to `Site` + `Pipeline`. It is
     deprecated — its augmentation step (`_augment_data`) is a no-op stub that
     never applies ephemeris augmentation, so VOD computed through it uses
-    un-augmented angles. Use `Site.pipeline()` above, or `canvodpy.functional`
-    below for component-level control (reader, grid, VOD calculator all as
-    direct keyword arguments).
+    un-augmented angles. Use `Site.pipeline()` above.
 
 ---
 
-## Functional API
+## Deprecated: `canvodpy.functional`
 
-*Functional* here means stateless: each function takes explicit inputs and
-returns explicit outputs, with no hidden objects holding state between calls.
-That makes the functions easy to test, easy to reason about, and safe to
-compose into your own pipeline (or an Airflow DAG). The caller provides file
-paths and manages all orchestration.
+!!! warning "Deprecated: `canvodpy.functional`"
 
-```python
-from canvodpy.functional import read_rinex, augment_with_ephemeris, calculate_vod
-from canvod.auxiliary.position.position import ECEFPosition
-from canvod.config import load_config
+    The single-step functions `read_rinex()`, `augment_with_ephemeris()`,
+    `create_grid()`, `assign_grid_cells()`, `calculate_vod()` and their
+    `*_to_file` twins are left over from development and will be removed with
+    the next major version. They are no longer maintained, and some give
+    different results than `canvodpy run`:
 
-# Read a single file
-ds = read_rinex("ROSA01TUW_R_20250010000_15M_05S_AA.rnx")
+    - `read_rinex()` reads without the configured observables and signals.
+    - `calculate_vod()` skips the configured VOD output options.
 
-# Receiver position comes from the RINEX header, not from config
-rx_pos = ECEFPosition.from_ds_metadata(ds)
+    Use `canvodpy run` or `Site.pipeline()` to process data, and `site.vod`
+    to compute VOD. For grids, use `canvod.grids.create_hemigrid()` and
+    `canvod.grids.add_cell_ids_to_ds_fast()`.
 
-# Add satellite geometry (downloads and caches SP3/CLK for that day)
-site_cfg = load_config().sites.sites["ExampleSite"]
-ds = augment_with_ephemeris(
-    ds,
-    rx_pos,
-    source="final",       # or "rapid"; "broadcast" for SBF-derived geometry
-    agency="COD",
-    date="2025001",
-    site_config=site_cfg,
-)
-
-# Compute VOD from two augmented datasets
-vod_ds = calculate_vod(canopy_ds, reference_ds)
-```
-
-!!! warning "Two functions named `calculate_vod`"
-
-    `from canvodpy import calculate_vod` gives you the **deprecated** flat
-    function (`site, canopy, reference, date` — reads from the store, writes
-    to the store; use `Site(site).pipeline().calculate_vod(...)` instead).
-    `from canvodpy.functional import calculate_vod` gives you the
-    **functional API** version (`canopy_ds, sky_ds` — pure, in-memory). Import
-    from the module that matches your intent.
-
-=== "Grid assignment"
-
-    ```python
-    from canvodpy.functional import create_grid, assign_grid_cells
-
-    grid = create_grid("equal_area", angular_resolution=5.0)
-    ds_with_cells = assign_grid_cells(ds, grid)
-    ```
-
-=== "Airflow-ready variants"
-
-    Every function has a `*_to_file` twin that reads/writes files and returns
-    a path string, which Airflow can serialize in XCom:
-
-    ```python
-    from canvodpy.functional import (
-        read_rinex_to_file,
-        create_grid_to_file,
-        assign_grid_cells_to_file,
-        calculate_vod_to_file,
-    )
-
-    canopy = read_rinex_to_file("canopy.rnx", "/tmp/canopy.nc")
-    sky = read_rinex_to_file("sky.rnx", "/tmp/sky.nc")
-    vod_path = calculate_vod_to_file(canopy, sky, "/tmp/vod.nc")
-    ```
-
-    Datasets are stored as NetCDF; grids are stored as pickle
-    (`create_grid_to_file` / `assign_grid_cells_to_file`).
-
-With the functional API, file discovery is the caller's job — pass explicit
-paths (e.g. from your own `Path.glob`, a workflow scheduler, or the optional
-`canvod.filemap.FilenameMapper` if your site uses non-canonical filenames —
-see [Optional Extensions](extensions.md)).
+    Note that `from canvodpy import calculate_vod` is a different deprecated
+    function (it reads from and writes to the stores); use
+    `Site(site).vod.compute_bulk(...)` instead.
 
 ---
 
@@ -235,8 +176,8 @@ which come from an ephemeris source.
 
 | Source | What it is | Internet | Provider class |
 |--------|------------|----------|----------------|
-| **Agency products** (`"final"`, `"rapid"`) | Post-processed SP3 orbit files from an analysis centre (COD, ESA, ...), downloaded and Hermite-interpolated; CLK clock files too, by default (`aux_data.fetch_clock`, unused by VOD, can be disabled) | Required (results cached locally) | `AgencyEphemerisProvider` |
-| **SBF broadcast** (`"broadcast"`) | Satellite geometry the receiver itself recorded (SBF `SatVisibility` block) | None — embedded in the SBF file | `SbfBroadcastProvider` |
+| **Agency products** (`"final"`) | Post-processed SP3 orbit files from an analysis centre (COD, ESA, ...), downloaded and Hermite-interpolated; CLK clock files too, by default (`aux_data.fetch_clock`, unused by VOD, can be disabled) | Required (results cached locally) | `AgencyEphemerisProvider` |
+| **SBF broadcast** (`"broadcast"`) | Satellite geometry the receiver itself recorded (SBF `SatVisibility` block); only angles computed from the broadcast ephemeris are used, almanac-based ones become NaN | None — embedded in the SBF file | `SbfBroadcastProvider` |
 
 A provider for RINEX navigation files (`RinexNavProvider`) is planned but not
 yet implemented.
@@ -261,15 +202,8 @@ flowchart LR
 
 ### Usage across levels
 
-```python
-# CLI / Site.pipeline(): config-driven (canvod-settings.yaml)
-# processing.params.ephemeris_source: "final" | "broadcast"
-# Not yet a CLI flag — see the note in the CLI section above.
-
-# canvodpy.functional: explicit function (all sources)
-augment_with_ephemeris(ds, rx_pos, source="final", date="2025001", site_config=cfg)
-augment_with_ephemeris(ds, rx_pos, source="broadcast")   # SBF only
-```
+Set it in the settings (`processing.params.ephemeris_source: final` or
+`broadcast`), or for one run with `canvodpy run --ephemeris-source`.
 
 ### EphemerisProvider architecture
 
@@ -283,12 +217,12 @@ class EphemerisProvider(ABC):
 
     @abstractmethod
     def preprocess_day(self, date, site_config) -> Path | None:
-        """Download/prepare ephemeris for a day. Returns cache path or None."""
+        """Download/prepare ephemeris for a day. Returns a cache directory or None."""
 ```
 
 | Provider | `preprocess_day()` | `augment_dataset()` |
 |----------|-------------------|---------------------|
-| `AgencyEphemerisProvider` | Downloads SP3 (+ CLK, unless `fetch_clock=False`), Hermite interpolation → Zarr cache | Opens cache, selects epochs, computes spherical coordinates |
+| `AgencyEphemerisProvider` | Downloads and reads SP3 (+ CLK, unless `fetch_clock=False`) | Interpolates the day onto the grid at the dataset's sampling interval (Hermite, once per interval, written to Zarr), takes the nearest grid epoch for each observation, computes spherical coordinates |
 | `SbfBroadcastProvider` | No-op (geometry embedded in file) | Extracts theta/phi from the SBF `sbf_obs` auxiliary dataset |
 
 ---
@@ -298,21 +232,25 @@ class EphemerisProvider(ABC):
 ```mermaid
 flowchart TD
     subgraph Input["Data Ingestion"]
-        FILES["GNSS Files<br/>(RINEX / SBF)"]
+        FILES["GNSS Files<br/>(RINEX / SBF / NMEA)"]
         EPHEM["Ephemeris Source<br/>(SP3/CLK / SBF)"]
     end
 
     subgraph Discovery["File Discovery"]
-        FM["BUILTIN_PATTERNS globs<br/>canvod-filemap if installed, else canonical fallback"]
+        FM["Naming recipe (canvod-filemap) if configured,<br/>else canonical canVOD names only"]
     end
 
     subgraph Reading["Parsing"]
-        READER["GNSSDataReader<br/>Rnxv3Obs / SbfReader"]
+        READER["GNSSDataReader<br/>Rnxv3Obs / Rnxv2Obs / SbfReader / NmeaObs"]
     end
 
     subgraph Augmentation["Geometry Augmentation"]
         EP["EphemerisProvider<br/>Agency / SBF"]
         SCS["θ, φ, r coordinates"]
+    end
+
+    subgraph Prep["Optional preprocessing (only if set)"]
+        PRE["Temporal aggregation,<br/>grid assignment"]
     end
 
     subgraph Storage["Versioned Storage"]
@@ -322,12 +260,13 @@ flowchart TD
 
     subgraph Analysis["VOD Analysis"]
         VOD["VodComputer<br/>tau-omega model"]
-        GRID["Grid Assignment<br/>equal-area hemigrid"]
+        GRID["Gridded analysis<br/>canvod-grids"]
     end
 
     FILES --> FM --> READER
     EPHEM --> EP --> SCS
     READER --> SCS
+    SCS -.-> PRE -.-> DEDUP
     SCS --> DEDUP --> ICE
     ICE --> VOD --> GRID
 
@@ -335,21 +274,23 @@ flowchart TD
     style Discovery fill:#e3f2fd,stroke:#1565c0
     style Reading fill:#ffecb3,stroke:#f57c00
     style Augmentation fill:#e1f5fe,stroke:#0277bd
+    style Prep fill:#eceff1,stroke:#546e7a
     style Storage fill:#f3e5f5,stroke:#4a148c
     style Analysis fill:#e8f5e9,stroke:#2e7d32
 ```
 
 ### What each surface handles
 
-| Step | CLI | `Site.pipeline()` | Functional |
-|------|:--:|:--:|:--:|
-| File discovery | :fontawesome-solid-check: | :fontawesome-solid-check: | caller |
-| Reading | :fontawesome-solid-check: | :fontawesome-solid-check: | :fontawesome-solid-check: |
-| Ephemeris augmentation | auto | auto | `augment_with_ephemeris()` |
-| Deduplication | :fontawesome-solid-check: | :fontawesome-solid-check: | — |
-| Store write | auto | auto | — |
-| VOD computation | `pipeline.calculate_vod()` | `pipeline.calculate_vod()` / `site.vod` | `functional.calculate_vod()` |
-| Parallel workers | :fontawesome-solid-check: | :fontawesome-solid-check: | — |
+| Step | CLI | `Site.pipeline()` |
+|------|:--:|:--:|
+| Optional preprocessing (if set) | auto | auto |
+| File discovery | :fontawesome-solid-check: | :fontawesome-solid-check: |
+| Reading | :fontawesome-solid-check: | :fontawesome-solid-check: |
+| Ephemeris augmentation | auto | auto |
+| Deduplication | :fontawesome-solid-check: | :fontawesome-solid-check: |
+| Store write | auto | auto |
+| VOD computation | auto | `site.vod` |
+| Parallel workers | :fontawesome-solid-check: | :fontawesome-solid-check: |
 
 ---
 
@@ -400,33 +341,28 @@ retrieval, and the result is written to the site's VOD store (pass
     `pipeline.process_range(start, end)`. Reuses the worker pool across days,
     gives direct access to the stores.
 
-??? question "I want to explore data or do custom analysis in a notebook"
-
-    **Functional API**: `read_rinex()`, `augment_with_ephemeris()`,
-    `create_grid()`, `calculate_vod()` — stateless, in-memory, no side effects.
-
 ??? question "I want to integrate with Airflow"
 
-    **Functional API**. Use `*_to_file` variants that return path strings
-    for XCom serialization. Each function is stateless.
+    Use the canvod-airflow extension. Its DAGs call `check_day` and
+    `process_day` from `canvodpy.workflows.tasks`, which run the code of
+    `canvodpy run` for one site and day (see [Optional Extensions](extensions.md)).
+    The older per-format tasks (`process_rinex`, `process_sbf`, ...) are
+    deprecated.
 
 ??? question "I want to read a single file quickly"
 
-    **Functional API**: `read_rinex("file.rnx")` or use the reader directly:
-    `SbfReader(fpath="file.sbf").to_ds()`.
+    Use the reader directly: `SbfReader(fpath="file.sbf").to_ds()`.
 
 ---
 
-**Next in the trail:** [Users guide](../users/index.md) · [Architecture](../architecture.md) · [AI Development](ai-development.md)
+**Next in the trail:** [Configuration](configuration.md) · [Users guide](../users/index.md) · [Architecture](../architecture.md)
 
 ---
 
 !!! example "Try it"
     [12 — API Overview](../notebooks/_build/12_api_overview.html){target=_blank}
     ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/12_api_overview.py))
-    · [13 — Site Pipeline](../notebooks/_build/13_site_pipeline.html){target=_blank}
-    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/13_site_pipeline.py))
-    · [14 — Functional API](../notebooks/_build/14_functional_api.html){target=_blank}
-    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/14_functional_api.py))
-    · [15 — Single-Day Workflow](../notebooks/_build/15_single_day_python.html){target=_blank}
-    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/15_single_day_python.py))
+    · [14 — Site Pipeline](../notebooks/_build/14_site_pipeline.html){target=_blank}
+    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/14_site_pipeline.py))
+    · [16 — Single-Day Workflow](../notebooks/_build/16_workflow_single_day.html){target=_blank}
+    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/16_workflow_single_day.py))

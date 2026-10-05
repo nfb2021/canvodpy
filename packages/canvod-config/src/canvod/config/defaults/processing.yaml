@@ -19,6 +19,7 @@ aux_data:
 params:
   keep_gnss_observables:
     - SNR
+  rinex_v3_parser: validated  # 'unvalidated_fast' is DANGEROUS: no checks, results are the user's responsibility
   aggregate_glonass_fdma: true
   store_radial_distance: false
   store_delta_snr: false
@@ -65,13 +66,3 @@ logging:
   log_dir: null  # Defaults to .logs/ in monorepo root
   log_file_name: canvodpy.log
   log_path_depth: 6
-
-preprocessing:
-  temporal_aggregation:
-    enabled: true
-    freq: "1min"
-    method: "mean"
-  grid_assignment:
-    enabled: true
-    grid_type: "equal_area"
-    angular_resolution: 2.0

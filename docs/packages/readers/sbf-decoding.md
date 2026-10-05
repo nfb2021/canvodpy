@@ -14,27 +14,32 @@ All page references are to the
 ## Epoch Timestamps
 
 **Source:** `MeasEpoch` header — `WNc` (u2) + `TOW` (u4, milliseconds).
-**Source block:** ReceiverTime (ΔLS), RefGuide-4.14.0 p.369.
-
-GPS Time uses a fixed epoch and has no leap seconds; UTC is obtained by
-subtracting the current GPS–UTC offset ΔLS:
+The receiver time follows the GPS convention: `WNc` counts complete weeks
+since 1980-01-06 and there are no leap seconds (RefGuide-4.14.0,
+Section 2.3, p.53). The epoch is stored in GPS time, the time scale of
+RINEX files and of the orbit and clock products, and the `epoch`
+coordinate records `time_system: GPS`:
 
 $$
-t_\text{UTC} = t_\text{GPS epoch} + \frac{WN_c \times 604800 \times 10^3 + TOW}{10^3} - \Delta_\text{LS}
+t_\text{GPS} = t_\text{GPS epoch} + \frac{WN_c \times 604800 \times 10^3 + TOW}{10^3}
 $$
 
 | Symbol | Meaning | Value |
 |--------|---------|-------|
-| $t_\text{GPS epoch}$ | GPS reference epoch | 1980-01-06 00:00:00 UTC |
+| $t_\text{GPS epoch}$ | GPS reference epoch | 1980-01-06 00:00:00 |
 | $WN_c$ | Continuous GPS week number | from `MeasEpoch.WNc` |
 | $TOW$ | Time of Week | ms, from `MeasEpoch.TOW` |
-| $\Delta_\text{LS}$ | GPS − UTC leap-second offset | 18 s (valid from 2017-01-01; updated from `ReceiverTime` when present) |
+
+No leap seconds are subtracted. A file named for a GPS day therefore
+starts at 00:00:00 of that day and its epochs lie on the receiver's
+sampling grid. (Earlier versions stored UTC, 18 s earlier: such stores
+start at 23:59:42 of the previous day.)
 
 ---
 
 ## Signal Number Decoding
 
-**Source:** `MeasEpochChannelType1.Type` (u1) and `ObsInfo` (u1), p.262.
+**Source:** `MeasEpochChannelType1.Type` (u1), p.261, and `ObsInfo` (u1), p.262.
 
 The 5 least-significant bits of `Type` carry a *signal index*:
 
@@ -56,7 +61,7 @@ to constellation / band / tracking code is defined in the signal type table
 
 ## C/N₀ (SNR)
 
-**Source:** `MeasEpochChannelType1.CN0` (u1), p.264.
+**Source:** `MeasEpochChannelType1.CN0` (u1), p.261.
 **Dataset variable:** `SNR` (units: `dB-Hz`).
 
 The raw byte encodes carrier-to-noise density in two different scales depending
@@ -69,7 +74,7 @@ C/N_0 = \begin{cases}
 \end{cases}
 $$
 
-Signals 1 and 2 are tracked *semi-codeless* and have a lower intrinsic $C/N_0$;
+Signals 1 and 2 are tracked *codelessly* (Septentrio reference guide 4.14.0, Sect. 3.2.4, `setCN0Mask`) and have a lower intrinsic $C/N_0$;
 the firmware omits the +10 dB offset and enforces a minimum of 1 dB‑Hz.
 
 **Do-Not-Use:** raw value 255 → stored as NaN.
@@ -85,7 +90,11 @@ $$
 C/N_{0,\,\text{final}} = C/N_0 + \underbrace{({\rm Misc} \;\&\; 0x07)}_{\text{CN0HighRes}\;\in\{0,\ldots,7\}} \times 0.03125
 $$
 
-If `MeasExtra` is absent the correction is zero (NaN guard prevents modification).
+The correction comes from the MeasExtra block with the same time stamp as the
+MeasEpoch block. Each MeasExtra entry is matched to its observation by receiver
+channel and signal number; for extended signals (SigIdxLo = 31) the signal
+number is in bits 3–7 of MeasExtra `Misc` (p.265). Where MeasExtra is absent
+the correction is not applied.
 
 | Resolution | Source |
 |---|---|
@@ -97,7 +106,7 @@ If `MeasExtra` is absent the correction is zero (NaN guard prevents modification
 ## Pseudorange
 
 **Source:** `MeasEpochChannelType1.Misc` bits 0–3 (`CodeMSB`, u4-equivalent),
-`CodeLSB` (u4), p.262.
+`CodeLSB` (u4), p.261.
 
 $$
 PR = \bigl(\text{CodeMSB} \times 2^{32} + \text{CodeLSB}\bigr) \times 10^{-3} \quad [\text{m}]
@@ -110,7 +119,7 @@ where $\text{CodeMSB} = \text{Misc} \;\&\; 0x0F$.
 ### Type2 (slave signal) pseudorange
 
 **Source:** `MeasEpochChannelType2.OffsetsMSB` bits 0–2 (`CodeOffsetMSB`,
-3-bit two's-complement, range −4 to +3), `CodeOffsetLSB` (u2), p.264.
+3-bit two's-complement, range −4 to +3), p.262, `CodeOffsetLSB` (u2), p.263.
 
 $$
 PR_2 = PR_1 + \bigl(\text{CodeOffsetMSB} \times 65536 + \text{CodeOffsetLSB}\bigr) \times 10^{-3} \quad [\text{m}]
@@ -122,7 +131,7 @@ $$
 
 ## Doppler Shift
 
-**Source:** `MeasEpochChannelType1.Doppler` (i4), p.263.
+**Source:** `MeasEpochChannelType1.Doppler` (i4), p.261.
 
 $$
 D = \text{Doppler}_\text{raw} \times 10^{-4} \quad [\text{Hz}]
@@ -135,7 +144,7 @@ Positive Doppler indicates a closing range (approaching satellite).
 ### Type2 (slave signal) Doppler
 
 **Source:** `MeasEpochChannelType2.OffsetsMSB` bits 3–7 (`DopplerOffsetMSB`,
-5-bit two's-complement, range −16 to +15), `DopplerOffsetLSB` (u2), p.264.
+5-bit two's-complement, range −16 to +15), p.262, `DopplerOffsetLSB` (u2), p.263.
 
 The Type2 Doppler includes a frequency-ratio correction to account for the
 different carrier frequency of the slave signal:
@@ -154,7 +163,7 @@ where $f_1, f_2$ are the carrier frequencies of the Type1 (master) and Type2
 
 ## Carrier Phase
 
-**Source:** `MeasEpochChannelType1.CarrierMSB` (i1), `CarrierLSB` (u2), p.263–264.
+**Source:** `MeasEpochChannelType1.CarrierMSB` (i1), `CarrierLSB` (u2), p.261.
 
 The carrier phase is encoded as a fractional offset relative to the pseudorange,
 expressed in cycles.  Let $\lambda = c / f$ be the carrier wavelength:
@@ -181,8 +190,9 @@ Uses $PR_2$ (Type2 pseudorange, above) and the slave signal wavelength $\lambda_
 
 ## GLONASS FDMA Carrier Frequencies
 
-**Source:** `ChannelStatus.ChannelSatInfo.FreqNr`, RefGuide-4.14.0 §4.1.10 p.256 and
-ChannelStatus Block 4013 p.393.
+**Source:** `MeasEpochChannelType1.ObsInfo` bits 3–7 (FreqNr, offset 8) for
+GLONASS FDMA signals (SigIdxLo 8–11), p.262; frequency formula §4.1.10, p.256.
+Type2 sub-blocks take FreqNr from their Type1 sub-block.
 
 GLONASS uses Frequency Division Multiple Access (FDMA).  The centre frequency
 depends on the frequency slot $K = \text{FreqNr} - 8$.
@@ -237,6 +247,17 @@ The stored azimuth is the geographic (compass) convention: 0 = North, π/2 = Eas
 measured clockwise.  Both θ and φ are stored in **radians** as `broadcast_theta`
 and `broadcast_phi` in the `sbf_obs` metadata dataset.
 
+**Do-Not-Use:** Elevation −32768 and Azimuth 65535 → NaN. Values come from the
+SatVisibility block with the same time stamp as the observations, and are
+copied to every signal of the satellite. SVID 62 (GLONASS slot unknown) is
+skipped.
+
+**Orbit source:** `SatVisibility.SatInfo.SatelliteInfo` (u1) states whether
+the angles were computed from the almanac (1) or the broadcast ephemeris (2);
+255 (unknown) is stored as −1. It is stored as `broadcast_angle_source`.
+Broadcast-mode geometry (`SbfBroadcastProvider`) uses only the
+ephemeris-based angles.
+
 ---
 
 ## MeasExtra Signal-Quality Fields
@@ -283,11 +304,11 @@ Raw field: u2, direct copy (scale = 1 mcycle²/LSB).  Maximum 65534 mcycles².
 The corresponding Doppler variance is:
 
 $$
-\sigma_D^2 = \sigma_\text{carrier}^2 \times D_\text{VarFactor} \quad [\text{Hz}^2]
+\sigma_D^2 = \sigma_\text{carrier}^2 \times D_\text{VarFactor} \quad [\text{mHz}^2]
 $$
 
 where `DopplerVarFactor` (MeasExtra block header, p.264) is a per-epoch scale
-factor that converts mcycles² to Hz².
+factor that converts mcycles² to mHz². The Doppler variance is not stored.
 
 ### Lock time
 
@@ -325,13 +346,13 @@ Fields stored with a simple scale or offset:
 
 | Variable | Source block | Raw field | Formula | Unit |
 |---|---|---|---|---|
-| `pdop`, `hdop`, `vdop` | DOP (Block 4001), fallback PVTGeodetic | u2 | raw × 0.01 | 1 |
+| `pdop`, `hdop`, `vdop` | DOP (Block 4001) | u2 | raw × 0.01; DNU 0 | 1 |
 | `h_accuracy_m` | PVTGeodetic (Block 4007) `HAccuracy` | u2 | raw × 0.01; DNU 65535 | m |
 | `v_accuracy_m` | PVTGeodetic (Block 4007) `VAccuracy` | u2 | raw × 0.01; DNU 65535 | m |
-| `mean_corr_age_s` | PVTGeodetic (Block 4007) `MeanCorrAge` | u2 | raw × 0.01 | s |
+| `mean_corr_age_s` | PVTGeodetic (Block 4007) `MeanCorrAge` | u2 | raw × 0.01; DNU 65535 | s |
 | `temperature_c` | ReceiverStatus (Block 4014) `Temperature` | u1 | raw − 100; DNU 0 | °C |
 
-Page references: DOP block p.349, PVTGeodetic pp.337–339, ReceiverStatus pp.396–399.
+Page references: DOP block p.348, PVTGeodetic pp.337–339, ReceiverStatus pp.396–398.
 
 ---
 
@@ -339,14 +360,14 @@ Page references: DOP block p.349, PVTGeodetic pp.337–339, ReceiverStatus pp.39
 
 | Observable | Non-trivial step |
 |---|---|
-| **SNR** | Signal-dependent formula (±10 dB offset); two-pass correction from MeasExtra |
+| **SNR** | Signal-dependent formula (+10 dB-Hz offset except signals 1 and 2); CN0HighRes from the MeasExtra block of the same epoch |
 | **Pseudorange** | 40-bit reconstruction from two fields (CodeMSB × 2³² + CodeLSB); Type2 adds delta |
 | **Carrier phase** | Mixed-unit formula: pseudorange converted to cycles via λ = c/f, then phase delta added |
 | **Type2 Doppler** | Frequency-ratio scale factor applied before adding delta |
 | **θ (polar angle)** | Elevation → co-elevation (90° −  elevation), then degrees → radians |
 | **φ (azimuth)** | Scale 0.01°/LSB, degrees → radians |
 | **GLONASS frequencies** | Slot-dependent FDMA formula required for λ and Type2 Doppler |
-| **Epoch** | GPS week + TOW (ms) → UTC datetime via leap-second subtraction |
+| **Epoch** | GPS week + TOW (ms) → GPS time datetime (no leap seconds) |
 | **CN0HighRes** | Bit-field extraction (bits 0–2) then scale 1/32 dB-Hz/LSB |
 | **CarMPCorr** | Integer division by 512 to convert i1 to fractional cycles |
 
@@ -356,7 +377,6 @@ Page references: DOP block p.349, PVTGeodetic pp.337–339, ReceiverStatus pp.39
 
 - Septentrio AsteRx SB3 ProBase Firmware v4.14.0 Reference Guide
 - Septentrio AsteRx SB3 ProBase Firmware v4.15.1 Reference Guide
-- IS-GPS-200 Rev. N §20.3.3.5.2.4 — GPS time and leap seconds
 - RINEX 3.04 signal nomenclature — used verbatim for SID code strings
 
 ---

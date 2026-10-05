@@ -21,8 +21,9 @@ Add support for a new GNSS data format by implementing the `GNSSDataReader` abst
     ---
 
     `file_hash`, `to_ds()`, `iter_epochs()`, `start_time`, `end_time`,
-    `systems`, `num_satellites`.  (`num_epochs` has a default that counts
-    via `iter_epochs()` — override for O(1) if your format stores the count.)
+    `systems`, `num_satellites`, and override `source_format` (its default
+    is `"rinex3"`). (`num_epochs` has a default that counts via
+    `iter_epochs()` — override for O(1) if your format stores the count.)
 
 -   :fontawesome-solid-shield-halved: &nbsp; **3. Use `DatasetBuilder` (recommended)**
 
@@ -79,12 +80,16 @@ class MyFormatReader(GNSSDataReader):
 
     model_config = ConfigDict(frozen=True)   # no arbitrary_types needed
     # no fpath field needed — inherited from GNSSDataReader
+
+    @property
+    def source_format(self) -> str:
+        return "my_format"   # the default would say "rinex3"
 ```
 
 ### Step 2 — File Hash
 
 ```python
-from canvod.readers.gnss_specs.utils import file_hash
+from canvod.utils.tools import file_hash
 
 class MyFormatReader(GNSSDataReader):
     ...
@@ -153,7 +158,8 @@ class MyFormatReader(GNSSDataReader):
         keep_data_vars: list[str] | None = None,
         **kwargs,
     ) -> xr.Dataset:
-        builder = DatasetBuilder(self)
+        # the time scale of the epochs: "GPS", "UTC", ... (required)
+        builder = DatasetBuilder(self, time_system="GPS")
         for epoch in self.iter_epochs():
             ei = builder.add_epoch(epoch.timestamp)
             for obs in epoch.observations:
@@ -177,7 +183,11 @@ class MyFormatReader(GNSSDataReader):
     import numpy as np
     import xarray as xr
     from canvod.readers.gnss_specs.signals import SignalIDMapper
-    from canvod.readers.gnss_specs.metadata import SNR_METADATA, COORDS_METADATA
+    from canvod.readers.gnss_specs.metadata import (
+        COORDS_METADATA,
+        SNR_METADATA,
+        epoch_coord_attrs,
+    )
     from canvod.readers.base import validate_dataset
 
     class MyFormatReader(GNSSDataReader):
@@ -192,7 +202,8 @@ class MyFormatReader(GNSSDataReader):
             mapper = SignalIDMapper()
 
             # Build SID index, coordinate arrays, data arrays...
-            # (see existing readers for full example)
+            # (see existing readers for full example). The epoch
+            # coordinate carries epoch_coord_attrs("GPS") (its time scale).
 
             ds = xr.Dataset(
                 data_vars={"SNR": (("epoch", "sid"), snr, SNR_METADATA)},
@@ -367,7 +378,7 @@ The default implementation calls `to_ds()` and returns an empty dict.
 
     # CORRECT — DatasetBuilder.build() calls validate_dataset() for you
     def to_ds(self, **kwargs) -> xr.Dataset:
-        builder = DatasetBuilder(self)
+        builder = DatasetBuilder(self, time_system="GPS")
         # ... add epochs, signals, values ...
         return builder.build()  # validates automatically
     ```
@@ -396,6 +407,12 @@ ReaderFactory.register("my_format", MyFormatReader)
 reader = ReaderFactory.create("my_format", fpath="file.dat")
 ```
 
-For RINEX files, `ReaderFactory.create_from_file(path)` auto-detects
-v2/v3 from the file header. Custom binary formats should use the
-name-based API above.
+`ReaderFactory.create_from_file(path)` detects RINEX 2, RINEX 3 and NMEA
+from the file content. Custom formats use the name-based API above.
+
+!!! note "Readers in runs"
+    `canvodpy run` picks readers by the receiver's `reader_format`
+    setting, which accepts only the built-in formats (`auto`, `rinex3`,
+    `rinex3_stripped`, `rinex2`, `sbf`, `nmea`). A registered custom
+    reader works in your own scripts; to use a new format in runs, add
+    the reader to canvod-readers (see [Building a Reader](building-a-reader.md)).

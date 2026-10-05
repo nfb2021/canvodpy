@@ -20,7 +20,8 @@ from canvodpy.logging import (
     timed_stage,
 )
 from canvodpy.logging.logging_config import PerformanceFilter
-from canvodpy.logging.stage_timer import reset_run_stats
+
+from canvod.utils.logging import reset_run_stats
 
 
 @pytest.fixture(autouse=True)

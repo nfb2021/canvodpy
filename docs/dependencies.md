@@ -41,7 +41,7 @@ graph TD
 
 !!! warning "canvod-grids ↔ canvod-store is circular"
     `canvod-store` depends on `canvod-grids` for grid assignment, and
-    `canvod-grids` depends on `canvod-store` for its `AdaptedVODWorkflow`
+    `canvod-grids` depends on `canvod-store` for its `AnalysisStorage`
     store-integration adapter (see `canvod-grids/CLAUDE.md`). This is
     intentional, not a bug — but it means the dependency graph is not a
     strict DAG, and "layer" below means "closer to zero-Ce", not a strict
@@ -110,7 +110,7 @@ Most packages can be extracted to independent repositories with zero or minimal 
 
     ```bash
     # canvod-grids and canvod-store depend on each other — extract together,
-    # or break the cycle first by moving AdaptedVODWorkflow out of canvod-grids
+    # or break the cycle first by moving AnalysisStorage out of canvod-grids
     packages/canvod-grids/  ─┐
     packages/canvod-store/  ─┘→ independent repo(s) (+ canvod-auxiliary,
                                  canvod-config, canvod-readers, canvod-utils,

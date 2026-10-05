@@ -5,8 +5,6 @@ local ENU (East-North-Up) topocentric frame.
 
 The azimuthal angle φ follows geographic/navigation standards with North=0°
 and clockwise rotation (0°=North, 90°=East, 180°=South, 270°=West).
-
-Migrated from gnssvodpy.position.spherical_coords
 """
 
 import numpy as np
@@ -136,7 +134,9 @@ _BROADCAST_OBS_THETA_ATTRS: dict[str, object] = {
     "convention": "physics (0=zenith, π/2=horizon)",
     "source": "SBF SatVisibility block — receiver firmware (broadcast ephemeris)",
     "comment": (
-        "Derived from the receiver's internal broadcast navigation solution. "
+        "Computed by the receiver firmware from the satellite's broadcast "
+        "ephemeris (SatVisibility SatelliteInfo = 2), reported in steps of "
+        "0.01 deg. Almanac-based angles are excluded (NaN). "
         "NOT from independently-computed satellite ephemerides (e.g. SP3/CLK)."
     ),
 }
@@ -150,7 +150,9 @@ _BROADCAST_OBS_PHI_ATTRS: dict[str, object] = {
     "convention": "navigation (0=North, π/2=East, π=South, 3π/2=West)",
     "source": "SBF SatVisibility block — receiver firmware (broadcast ephemeris)",
     "comment": (
-        "Derived from the receiver's internal broadcast navigation solution. "
+        "Computed by the receiver firmware from the satellite's broadcast "
+        "ephemeris (SatVisibility SatelliteInfo = 2), reported in steps of "
+        "0.01 deg. Almanac-based angles are excluded (NaN). "
         "NOT from independently-computed satellite ephemerides (e.g. SP3/CLK)."
     ),
 }
@@ -164,8 +166,9 @@ def add_broadcast_spherical_coords_to_dataset(
     """Add broadcast spherical coordinates to xarray Dataset.
 
     Same convention as :func:`add_spherical_coords_to_dataset` but attrs
-    reflect that values come from the SBF broadcast navigation solution
-    rather than independently-computed SP3/CLK ephemerides.
+    reflect that values come from the receiver's SBF SatVisibility block
+    (broadcast ephemeris) rather than independently-computed SP3/CLK
+    ephemerides.
 
     Parameters
     ----------

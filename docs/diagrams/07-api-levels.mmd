@@ -23,7 +23,7 @@ flowchart TD
         L3A --> L3E["site.vod.compute_bulk(date_range)"]
     end
 
-    subgraph L4["Level 4: Functional"]
+    subgraph L4["Level 4: Functional 🚫 deprecated"]
         L4A["read_rinex('file.rnx')"]
         L4A --> L4B["augment_with_ephemeris(ds)"]
         L4B --> L4G["assign_grid_cells(ds)"]
@@ -33,7 +33,7 @@ flowchart TD
     end
 
     subgraph Shared["Shared Components"]
-        FM["FilenameMapper<br/>(canvod-filemap, optional extra)"]
+        FM["File discovery<br/>(canonical names or naming recipe)"]
         EP["EphemerisProvider"]
         READER["GNSSDataReader"]
         STORE["Icechunk Store"]

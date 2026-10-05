@@ -205,6 +205,14 @@ class TestEpochRecordCorruption:
         assert len(epochs) == 1
         assert epochs[0].info.epoch_flag == 0
 
+    def test_epoch_flag_event_records_to_ds(self):
+        """The single-pass to_ds() path also skips the flag=4 event epoch."""
+        fpath = INVALID_DIR / "event_epoch.25o"
+        _skip_if_missing(fpath)
+        obs = Rnxv3Obs(fpath=fpath, completeness_mode="off")
+        ds = obs.to_ds(keep_data_vars=["SNR"])
+        assert ds.sizes["epoch"] == 1
+
 
 # ===================================================================
 # 5. Observation data corruption
@@ -379,6 +387,16 @@ class TestEpochEdgeCases:
         epochs = list(obs.iter_epochs())
         # Invalid flag epoch skipped, second epoch survives
         assert len(epochs) >= 1
+
+    def test_invalid_epoch_flag_to_ds(self):
+        """The single-pass to_ds() path also skips the flag=9 epoch."""
+        fpath = INVALID_DIR / "invalid_epoch_flag.25o"
+        _skip_if_missing(fpath)
+        obs = Rnxv3Obs(fpath=fpath, completeness_mode="off")
+        ds = obs.to_ds(keep_data_vars=["SNR"])
+        assert ds.epoch.values.astype("datetime64[s]").tolist() == [
+            np.datetime64("2025-01-01T00:00:05", "s").item()
+        ]
 
     def test_negative_seconds(self):
         """Epoch with negative seconds — should be skipped."""

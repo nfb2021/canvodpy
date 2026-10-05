@@ -29,7 +29,8 @@ from typing import Any
 import structlog
 
 from canvod.config import load_config
-from canvodpy.logging.run_context import get_run_id
+from canvod.utils.logging import get_run_id
+from canvod.utils.tools import deprecated
 
 
 def _process_log_suffix() -> str:
@@ -508,9 +509,9 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
         cache_logger_on_first_use=True,
     )
 
-    logger = structlog.get_logger("gnssvodpy")
+    logger = structlog.get_logger("canvodpy")
     # Ensure the underlying stdlib logger accepts all levels
-    logging.getLogger("gnssvodpy").setLevel(logging.DEBUG)
+    logging.getLogger("canvodpy").setLevel(logging.DEBUG)
 
     _install_excepthook(logger)
 
@@ -521,6 +522,11 @@ def configure_logging(logfile: Path | None = None) -> structlog.BoundLogger:
 LOGGER = configure_logging()
 
 
+@deprecated(
+    "`get_file_logger` is left over from development and will be removed with "
+    "the next major version. Use `structlog.get_logger(__name__).bind(file=...)` "
+    "instead."
+)
 def get_file_logger(fname: Path) -> structlog.BoundLogger:
     """Return logger bound with parent/parent/file path.
 

@@ -5,9 +5,9 @@ VOD workflow orchestration using component factories.
     ``VODWorkflow`` is deprecated and its ``_augment_data`` step is a
     no-op stub — it never applies ephemeris augmentation, so VOD
     computed through this class uses un-augmented angles. Use
-    ``Site(site).pipeline()`` for configured pipeline runs, or
-    ``canvodpy.functional`` for component-level scripting/analysis.
-    ``VODWorkflow`` emits a ``DeprecationWarning`` on instantiation.
+    ``Site(site).pipeline()`` to process data and ``Site(site).vod``
+    to compute VOD. Removed with the next major version.
+    ``VODWorkflow`` emits a ``FutureWarning`` on instantiation.
 
 Provides high-level workflow coordination with structured logging and
 extensibility through factory pattern.
@@ -40,22 +40,22 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+import structlog
 import xarray as xr
 
-from canvodpy._deprecation import deprecated
+from canvod.utils.tools import deprecated
 from canvodpy.api import Site
 from canvodpy.factories import GridFactory, ReaderFactory, VODFactory
-from canvodpy.logging import get_logger
 
 if TYPE_CHECKING:
     from structlog.stdlib import BoundLogger
 
 
 @deprecated(
-    "VODWorkflow is deprecated (its augmentation step is a no-op stub — "
-    "VOD computed through it uses un-augmented angles). Use "
-    "Site(site).pipeline() for configured pipeline runs, or "
-    "canvodpy.functional for component-level scripting."
+    "VODWorkflow is left over from development and will be removed with the next major version. "
+    "It never augments the data, so its VOD uses un-augmented angles. "
+    "Use canvodpy.Site(<site>).pipeline() to process data and "
+    "canvodpy.Site(<site>).vod to compute VOD instead."
 )
 class VODWorkflow:
     """
@@ -137,7 +137,7 @@ class VODWorkflow:
         self.site = Site(site) if isinstance(site, str) else site
 
         # Setup logging with site context
-        self.log: BoundLogger = get_logger(__name__).bind(site=site_name)
+        self.log: BoundLogger = structlog.get_logger(__name__).bind(site=site_name)
 
         # Store configuration
         self.reader_name = reader
@@ -406,7 +406,6 @@ class VODWorkflow:
         # TODO: Use AugmentationFactory for preprocessing
         # For now, pass through
         # augmentations = [
-        #     AugmentationFactory.create("hampel", window=5),
         #     AugmentationFactory.create("interpolate", method="linear"),
         # ]
         # for aug in augmentations:

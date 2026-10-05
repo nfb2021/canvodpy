@@ -5,24 +5,20 @@ vegetation optical depth (VOD) using the tau-omega model.
 
 Quick Start
 -----------
-Three levels of API to match your needs:
+**Site processing, from the terminal** (production runs, resumable)::
 
-**Level 1: Simple (one-liners)**
-    >>> from canvodpy import process_date, calculate_vod
-    >>> data = process_date("ExampleSite", "2025001")
-    >>> vod = calculate_vod("ExampleSite", "canopy_01", "reference_01", "2025001")
+    canvodpy run
 
-**Level 2: Object-oriented (more control)**
-    >>> from canvodpy import Site, Pipeline
+**Site processing, from Python** (same logic as ``canvodpy run``)
+    >>> from canvodpy import Site
     >>> site = Site("ExampleSite")
-    >>> pipeline = site.pipeline()
-    >>> data = pipeline.process_date("2025001")
-    >>> vod = pipeline.calculate_vod("canopy_01", "reference_01", "2025001")
+    >>> with site.pipeline() as pipeline:
+    ...     data = pipeline.process_date("2025001")
+    >>> vod = site.vod.compute_day_all(data)  # every configured analysis
 
-**Level 3: Low-level (full control)**
-    >>> from canvod.store import GnssResearchSite
-    >>> from canvod.vod import VODCalculator
-    >>> # Direct access to all internals
+The single-step functions of ``canvodpy.functional`` (``read_rinex`` and
+the others) are deprecated: they are no longer maintained and give different
+results than ``canvodpy run``.
 
 Community Extensions
 --------------------
@@ -49,22 +45,12 @@ Default variables and settings are in `globals.py`.
 
 Examples
 --------
-Process one day of data:
-    >>> from canvodpy import process_date
-    >>> data = process_date("ExampleSite", "2025001")
-
-Process a week:
-    >>> from canvodpy import Pipeline
-    >>> pipeline = Pipeline("ExampleSite")
-    >>> for date, datasets in pipeline.process_range("2025001", "2025007"):
-    ...     print(f"Processed {date}")
-
-Calculate and visualize VOD:
-    >>> from canvodpy import calculate_vod
-    >>> from canvod.viz import HemisphereVisualizer
-    >>> vod = calculate_vod("ExampleSite", "canopy_01", "reference_01", "2025001")
-    >>> viz = HemisphereVisualizer()
-    >>> fig = viz.plot_2d(vod)
+Process a week, computing VOD for every configured analysis per day:
+    >>> from canvodpy import Site
+    >>> site = Site("ExampleSite")
+    >>> with site.pipeline() as pipeline:
+    ...     for date, datasets in pipeline.process_range("2025001", "2025007"):
+    ...         site.vod.compute_day_all(datasets)
 
 """
 
@@ -87,7 +73,7 @@ from canvodpy.factories import (
 # Fluent workflow API (deferred execution)
 from canvodpy.fluent import FluentWorkflow
 
-# Functional API (Airflow-compatible)
+# Functional API (deprecated, see canvodpy.functional)
 from canvodpy.functional import (
     assign_grid_cells,
     assign_grid_cells_to_file,
@@ -168,6 +154,8 @@ def __getattr__(name: str):
 # Type-checker stubs so that static analysis tools (CodeQL, mypy, pyright) can
 # resolve the subpackage names that are lazily loaded via __getattr__ at runtime.
 from typing import TYPE_CHECKING
+
+import structlog
 
 if TYPE_CHECKING:
     import canvod.auxiliary as auxiliary
@@ -251,7 +239,7 @@ def _register_builtin_components() -> None:
     -----
     Uses lazy imports to avoid loading heavy dependencies unless needed.
     """
-    log = get_logger(__name__)
+    log = structlog.get_logger(__name__)
 
     # Set ABC classes for validation
     ReaderFactory._set_abc_class()

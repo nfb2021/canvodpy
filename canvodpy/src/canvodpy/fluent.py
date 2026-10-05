@@ -1,9 +1,9 @@
 """Fluent workflow API with deferred execution.
 
 .. deprecated::
-    Use ``Site(site).pipeline()`` for configured pipeline runs, or
-    ``canvodpy.functional`` for component-level scripting/analysis.
-    ``FluentWorkflow`` emits a ``DeprecationWarning`` on instantiation.
+    Use ``Site(site).pipeline()`` to process data and ``Site(site).vod``
+    to compute VOD. Removed with the next major version.
+    ``FluentWorkflow`` emits a ``FutureWarning`` on instantiation.
 
 Provides a chainable, lazy pipeline where steps are recorded and
 executed only when a terminal method is called.
@@ -36,10 +36,21 @@ from __future__ import annotations
 from functools import wraps
 from typing import TYPE_CHECKING, Any
 
-from canvodpy._deprecation import deprecated
+import structlog
+
+from canvod.utils.tools import deprecated
 from canvodpy.api import Site
 from canvodpy.factories import GridFactory, ReaderFactory, VODFactory
-from canvodpy.logging import get_logger
+
+#: File format that discovery selects for each reader (see
+#: :func:`canvodpy.orchestrator.discovery.discover_files`).
+_READER_FILE_FORMATS = {
+    "rinex3": "rinex3",
+    "rinex3_stripped": "rinex3",
+    "rinex2": "rinex",
+    "rinex_v2": "rinex",
+    "sbf": "sbf",
+}
 
 if TYPE_CHECKING:
     import xarray as xr
@@ -131,9 +142,9 @@ def terminal(method):
 
 
 @deprecated(
-    "FluentWorkflow is deprecated. Use Site(site).pipeline() for "
-    "configured pipeline runs, or canvodpy.functional for "
-    "component-level scripting."
+    "FluentWorkflow is left over from development and will be removed with the next major version. "
+    "Use canvodpy.Site(<site>).pipeline() to process data and "
+    "canvodpy.Site(<site>).vod to compute VOD instead."
 )
 class FluentWorkflow:
     """Chainable, deferred-execution workflow for VOD analysis.
@@ -179,7 +190,7 @@ class FluentWorkflow:
             keep_vars = load_config().processing.params.keep_gnss_observables
         self._keep_vars = keep_vars
 
-        self.log = get_logger(__name__).bind(site=self._site.name)
+        self.log = structlog.get_logger(__name__).bind(site=self._site.name)
 
     # ------------------------------------------------------------------
     # Steps (deferred)
@@ -187,12 +198,12 @@ class FluentWorkflow:
 
     @step
     def read(self, date: str, receivers: list[str] | None = None) -> FluentWorkflow:
-        """Load RINEX observations for *date*.
+        """Load the observations of *date*.
 
-        Uses :class:`~canvod.filemap.FilenameMapper` for file
-        discovery when naming config is available, preventing duplicate
-        files (e.g. daily + sub-daily) from being concatenated.  Falls
-        back to naive glob when naming config is missing.
+        Files are found as ``canvodpy run`` finds them (see
+        :mod:`canvodpy.orchestrator.discovery`): the receiver's naming recipe
+        if it has one, otherwise canonical canVOD names only, anywhere below
+        the receiver's directory.
 
         Parameters
         ----------
@@ -201,41 +212,41 @@ class FluentWorkflow:
         receivers : list[str], optional
             Receiver names to load.  If ``None``, all active receivers
             for the site are loaded.
+
+        Raises
+        ------
+        ValueError
+            If files cannot be selected for the workflow's reader.
         """
         self._last_date = date
         receiver_list = receivers or list(self._site.active_receivers.keys())
         log = self.log.bind(date=date)
 
-        from pathlib import Path
-
         from canvod.config import load_config
+        from canvodpy.workflows.tasks import _day_files, _resolve_date
 
-        config = load_config()
-        site_cfg = config.sites.sites[self._site.name]
-        data_root = Path(site_cfg.gnss_site_data_root)
-
-        year = int(date[:4])
-        doy = int(date[4:])
+        reader_format = _READER_FILE_FORMATS.get(self._reader_name)
+        if reader_format is None:
+            msg = (
+                f"FluentWorkflow cannot select files for the reader "
+                f"{self._reader_name!r}; use one of {sorted(_READER_FILE_FORMATS)}"
+            )
+            raise ValueError(msg)
+        site_cfg = load_config().sites.sites[self._site.name]
+        day_files = _day_files(
+            self._site.name, site_cfg, _resolve_date(date), reader_format
+        )
 
         for name in receiver_list:
-            recv_cfg = site_cfg.receivers[name]
-            recv_base = data_root / recv_cfg.directory
-
-            rnx_files = self._discover_files(
-                site_cfg,
-                recv_cfg,
-                name,
-                recv_base,
-                year,
-                doy,
-                log,
-            )
-            if not rnx_files:
+            files = day_files[name]
+            if not files:
+                log.warning("no_files", receiver=name)
                 continue
+            log.info("files_discovered", receiver=name, n_files=len(files))
 
             datasets_for_recv = []
-            for fpath in rnx_files:
-                reader_obj = ReaderFactory.create(self._reader_name, fpath=fpath)
+            for file in files:
+                reader_obj = ReaderFactory.create(self._reader_name, fpath=file.path)
                 ds = reader_obj.to_ds(write_global_attrs=True)
 
                 # Filter variables
@@ -251,87 +262,6 @@ class FluentWorkflow:
                 log.info("read_complete", receiver=name, files=len(datasets_for_recv))
 
         return self  # never reached (decorator returns self), but aids type checkers
-
-    @staticmethod
-    def _discover_files(
-        site_cfg,
-        recv_cfg,
-        recv_name,
-        recv_base,
-        year,
-        doy,
-        log,
-    ) -> list:
-        """Discover RINEX files using FilenameMapper or fallback glob."""
-
-        # Try FilenameMapper when naming config is available
-        if site_cfg.naming and recv_cfg.naming:
-            try:
-                from canvod.filemap import (
-                    FilenameMapper,
-                    ReceiverNamingConfig,
-                    SiteNamingConfig,
-                )
-
-                mapper = FilenameMapper(
-                    site_naming=SiteNamingConfig(**site_cfg.naming),
-                    receiver_naming=ReceiverNamingConfig(**recv_cfg.naming),
-                    receiver_type=recv_cfg.type,
-                    receiver_base_dir=recv_base,
-                )
-                vfs = mapper.discover_for_date(year, doy)
-
-                # Check for overlaps
-                overlaps = FilenameMapper.detect_overlaps(vfs)
-                if overlaps:
-                    overlap_msgs = [
-                        f"  {a.canonical_str} <-> {b.canonical_str}"
-                        for a, b in overlaps[:5]
-                    ]
-                    log.warning(
-                        "temporal_overlaps_detected",
-                        receiver=recv_name,
-                        overlaps=overlap_msgs,
-                    )
-
-                if vfs:
-                    log.info(
-                        "files_discovered",
-                        receiver=recv_name,
-                        n_files=len(vfs),
-                        method="FilenameMapper",
-                    )
-                    return [vf.physical_path for vf in vfs]
-
-                log.warning("no_files_via_mapper", receiver=recv_name)
-                return []
-
-            except Exception as exc:
-                log.warning(
-                    "filename_mapper_failed_fallback_to_glob",
-                    receiver=recv_name,
-                    error=str(exc),
-                )
-
-        # Fallback: naive glob (no naming config)
-        doy_dir = f"{year % 100:02d}{doy:03d}"
-        recv_dir = recv_base / doy_dir
-        if not recv_dir.exists():
-            log.warning("no_data_dir", receiver=recv_name, path=str(recv_dir))
-            return []
-
-        rnx_files = sorted(recv_dir.glob("*.25o"))
-        if not rnx_files:
-            log.warning("no_rinex_files", receiver=recv_name, path=str(recv_dir))
-            return []
-
-        log.info(
-            "files_discovered",
-            receiver=recv_name,
-            n_files=len(rnx_files),
-            method="glob_fallback",
-        )
-        return rnx_files
 
     @step
     def preprocess(self, agency: str = "COD") -> FluentWorkflow:

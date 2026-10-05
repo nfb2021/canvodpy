@@ -247,3 +247,26 @@ class TestStructuralInvariantsAllTypes:
         assert grid.grid_type == grid_type, (
             f"{grid_type}: grid_type attribute mismatch ({grid.grid_type})"
         )
+
+
+class TestRingGridCoverage:
+    """Ring grids end exactly at 90° - cutoff_theta."""
+
+    @pytest.mark.parametrize(
+        "grid_type", ["equal_area", "equal_angle", "equirectangular"]
+    )
+    @pytest.mark.parametrize("resolution", [2.0, 5.0, 10.0, 7.0])
+    def test_solid_angles_sum_to_the_hemisphere(
+        self, grid_type: str, resolution: float
+    ) -> None:
+        grid = create_hemigrid(grid_type, angular_resolution=resolution)
+        np.testing.assert_allclose(grid.get_solid_angles().sum(), 2 * np.pi)
+        assert grid.grid["theta_max"].max() == pytest.approx(np.pi / 2)
+
+    @pytest.mark.parametrize("grid_type", ["equal_angle", "equirectangular"])
+    def test_outer_edge_is_the_cutoff(self, grid_type: str) -> None:
+        grid = create_hemigrid(grid_type, angular_resolution=5.0, cutoff_theta=10)
+        assert grid.grid["theta_max"].max() == pytest.approx(np.deg2rad(80))
+        np.testing.assert_allclose(
+            grid.get_solid_angles().sum(), 2 * np.pi * (1 - np.cos(np.deg2rad(80)))
+        )

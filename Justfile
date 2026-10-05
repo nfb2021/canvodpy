@@ -11,6 +11,12 @@ GREEN := '\033[0;32m'
 BOLD := '\033[1m'
 NORMAL := '\033[0m'
 
+# Configuration directory for the canvodpy commands below, e.g.
+#   just config_dir=~/my_config config-check-data rosalia
+# Empty: $CANVOD_CONFIG_DIR, else config/, else ~/.config/canvodpy.
+config_dir := ""
+config_flag := if config_dir != "" { "--config-dir " + quote(config_dir) } else { "" }
+
 # Default command lists all available recipes
 _default:
     @just --list --unsorted
@@ -20,6 +26,35 @@ alias d := dist
 alias h := hooks
 alias q := check
 alias t := test
+
+# ============================================================================
+# Code graph (graphify): free and local, no LLM, no API key
+# ============================================================================
+
+# graphify builds a graph of the code from its syntax tree. Only commands that
+# never call an LLM are used here (`extract --code-only`, `affected`, `path`,
+# `explain`); LLM API keys are removed from their environment as well.
+# Never run `graphify label`, `graphify cluster-only` (its output suggests it),
+# a full `graphify extract`, or its assistant skill:
+# those call paid language-model APIs.
+graphify := "env -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL -u OPENAI_API_KEY -u OPENAI_BASE_URL -u GEMINI_API_KEY -u GOOGLE_API_KEY -u MOONSHOT_API_KEY -u DEEPSEEK_API_KEY -u AZURE_OPENAI_API_KEY -u OLLAMA_API_KEY GRAPHIFY_NO_TIPS=1 uvx -q --from graphifyy==0.9.75 graphify"
+graph_file := ".graphify/graphify-out/graph.json"
+
+# rebuild the code graph (.graphify/, git-ignored; git hooks run this after commits, merges and checkouts)
+graph:
+    @{{ graphify }} extract . --code-only --force --out .graphify
+
+# everything that calls, imports or subclasses NAME (impact of a change)
+graph-affected NAME:
+    @{{ graphify }} affected {{ quote(NAME) }} --graph {{ graph_file }}
+
+# how NAME_A reaches NAME_B (caller first), e.g. just graph-path VodComputer TauOmegaZerothOrder
+graph-path NAME_A NAME_B:
+    @{{ graphify }} path {{ quote(NAME_A) }} {{ quote(NAME_B) }} --graph {{ graph_file }}
+
+# a node and its neighbours in plain words
+graph-explain NAME:
+    @{{ graphify }} explain {{ quote(NAME) }} --graph {{ graph_file }}
 
 # ============================================================================
 # Code Quality (All Packages)
@@ -64,8 +99,12 @@ check-format-only:
 check-types:
     uv run ty check
 
-# lint, format and type-check (all packages)
-check: check-lint check-format check-types
+# check that AGENTS.md files and skills name only existing paths and recipes
+check-agent-docs:
+    uv run --no-sync python scripts/check_agent_docs.py
+
+# lint, format and type-check (all packages), check the agent docs
+check: check-lint check-format check-types check-agent-docs
 
 # ============================================================================
 # Testing (All Packages)
@@ -82,7 +121,7 @@ test-fast:
 
 # run tests for all supported Python versions
 testall:
-    uv run --python=3.13 pytest
+    uv run --python=3.14 pytest
 
 # run tests per package to avoid namespace collisions (for CI)
 test-all-packages:
@@ -104,7 +143,7 @@ test-coverage:
     uv run pytest
 
 # run all formatting, linting, and testing commands
-ci PYTHON="3.13":
+ci PYTHON="3.14":
     uv run --python={{ PYTHON }} ruff format .
     uv run --python={{ PYTHON }} ruff check . --fix
     uv run --python={{ PYTHON }} ty check .
@@ -114,54 +153,59 @@ ci PYTHON="3.13":
 # Configuration
 # ============================================================================
 
-# validate canvod-settings.yaml configuration
+# validate canvod-settings.yaml and the receiver data of all sites
 config-validate:
-    uv run canvodpy config validate
+    uv run canvodpy config validate {{ config_flag }}
 
-# validate data directories against naming convention (pre-flight check)
+# check one site's receiver data (alias of: canvodpy config validate --site SITE)
 config-check-data SITE:
-    uv run python -c "from canvodpy.workflows.tasks import validate_data_dirs; import json; print(json.dumps(validate_data_dirs('{{ SITE }}'), indent=2))"
+    uv run canvodpy config validate --site {{ SITE }} {{ config_flag }}
 
-# create a naming recipe from the template (for receivers with non-canonical filenames)
-naming-init NAME:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    template="config/recipes/_template.yaml.example"
-    dest="config/recipes/{{ NAME }}.yaml"
-    if [ ! -f "$template" ]; then
-        echo "Template not found: $template"
-        exit 1
-    fi
-    if [ -f "$dest" ]; then
-        echo "Already exists: $dest -- edit it directly, or delete it first to re-scaffold."
-        exit 1
-    fi
-    mkdir -p config/recipes
-    if [[ "{{ NAME }}" == *canopy* ]]; then recv_type="canopy"; else recv_type="reference"; fi
-    sed -e "s/name: CHANGEME/name: {{ NAME }}/" -e "s/receiver_type: reference/receiver_type: $recv_type/" "$template" > "$dest"
-    echo -e "{{ GREEN }}Created $dest{{ NORMAL }}"
-    echo "Next: edit it to match your actual filenames (see the worked examples"
-    echo "in the file), then test with: just config-check-data <site>"
+# process a site's GNSS data and compute VOD for days START to END (YYYYDOY)
+run SITE START END:
+    uv run canvodpy run --site {{ SITE }} --start {{ START }} --end {{ END }} {{ config_flag }}
+
+# create naming recipe NAME of SITE in <config dir>/recipes/SITE/ (non-canonical filenames)
+naming-init SITE NAME:
+    #!/usr/bin/env -S uv run python
+    import os
+    import sys
+
+    os.environ["CANVOD_CONFIG_DIR"] = {{ quote(config_dir) }}
+    from canvod.config.loader import get_default_config_dir
+    from canvodpy.orchestrator.discovery import FILEMAP_INSTALL_HINT
+
+    try:
+        from canvod.filemap import create_recipe
+    except ImportError:
+        sys.exit(f"Naming recipes need canvod-filemap. {FILEMAP_INSTALL_HINT}")
+    try:
+        path = create_recipe(get_default_config_dir(), {{ quote(SITE) }}, {{ quote(NAME) }})
+    except FileExistsError as exc:
+        sys.exit(f"{exc}. Edit it directly, or delete it first to start over.")
+    print(f"Created {path}")
+    print("Next: fill in the receiver identity and the fields of your file names,")
+    print("then check them with: just config-check-data {{ SITE }}")
 
 # show the current configuration
 config-show:
-    uv run canvodpy config show
+    uv run canvodpy config show {{ config_flag }}
 
 # initialize configuration from template
 config-init:
-    uv run canvodpy config init
+    uv run canvodpy config init {{ config_flag }}
 
 # initialize configuration via guided interactive wizard
 config-init-interactive:
-    uv run canvodpy config init --interactive
+    uv run canvodpy config init --interactive {{ config_flag }}
 
 # open canvod-settings.yaml in $EDITOR
 config-edit:
-    uv run canvodpy config edit
+    uv run canvodpy config edit {{ config_flag }}
 
 # report canvodpy's version, environment, and config resolution
 doctor:
-    uv run canvodpy doctor
+    uv run canvodpy doctor {{ config_flag }}
 
 # delete canvod-settings.yaml (destructive, requires typed confirmation)
 config-delete CONFIG_DIR="config":
@@ -187,23 +231,23 @@ config-delete CONFIG_DIR="config":
 
 # list every configured site's gnss/vod store paths and status
 store-list:
-    uv run canvodpy store list
+    uv run canvodpy store list {{ config_flag }}
 
 # show branches, groups, and stats for one site's store (STORE: gnss|vod)
 store-info SITE STORE="gnss":
-    uv run canvodpy store info {{ SITE }} --store {{ STORE }}
+    uv run canvodpy store info {{ SITE }} --store {{ STORE }} {{ config_flag }}
 
 # show a group's full dataset + metadata table for one site's store
 store-info-group SITE GROUP STORE="gnss":
-    uv run canvodpy store info {{ SITE }} --store {{ STORE }} --group {{ GROUP }}
+    uv run canvodpy store info {{ SITE }} --store {{ STORE }} --group {{ GROUP }} {{ config_flag }}
 
 # show commit history as a graph for one site's store (STORE: gnss|vod)
 store-log SITE STORE="gnss":
-    uv run canvodpy store log {{ SITE }} --store {{ STORE }}
+    uv run canvodpy store log {{ SITE }} --store {{ STORE }} {{ config_flag }}
 
 # show the ops audit trail for one site's store (STORE: gnss|vod)
 store-ops SITE STORE="gnss":
-    uv run canvodpy store log {{ SITE }} --store {{ STORE }} --ops
+    uv run canvodpy store log {{ SITE }} --store {{ STORE }} --ops {{ config_flag }}
 
 # ============================================================================
 # Store Metadata
@@ -251,14 +295,7 @@ check-dev-tools:
 
 # setup the pre-commit hooks
 hooks:
-    uvx pre-commit install
-    uvx pre-commit install --hook-type commit-msg
-
-# install bundled Claude Code skills to ~/.claude/skills/
-install-skills:
-    @mkdir -p ~/.claude/skills/icechunk
-    @cp .claude/skills/icechunk/SKILL.md ~/.claude/skills/icechunk/SKILL.md
-    @echo "Installed: icechunk"
+    uv run pre-commit install --hook-type pre-commit --hook-type commit-msg --hook-type pre-push --hook-type post-merge --hook-type post-commit --hook-type post-checkout
 
 # ============================================================================
 # uv venv and Dependency Management
@@ -394,7 +431,7 @@ clean-test:
 # install all packages in workspace and ensure all git hooks are active
 sync:
     uv sync
-    uv run pre-commit install --hook-type pre-commit --hook-type commit-msg --hook-type pre-push --hook-type post-merge
+    uv run pre-commit install --hook-type pre-commit --hook-type commit-msg --hook-type pre-push --hook-type post-merge --hook-type post-commit --hook-type post-checkout
 
 # update all git submodules (demo + test_data) to their latest remote commits and record the new pointers
 update-submodules:
@@ -440,17 +477,17 @@ dist:
 # Per-Package Commands
 # ============================================================================
 
-# run check for a specific package
+# run check for a specific package (canvodpy or canvod-*)
 check-package PACKAGE:
-    cd packages/{{PACKAGE}} && uv run ruff check . --fix && uv run ruff format . && uv run ty check
+    cd {{ if PACKAGE == "canvodpy" { "canvodpy" } else { "packages/" + PACKAGE } }} && uv run ruff check . --fix && uv run ruff format . && uv run ty check
 
-# run tests for a specific package
+# run tests for a specific package, e.g. canvod-readers (canvodpy: the umbrella package)
 test-package PACKAGE:
-    cd packages/{{PACKAGE}} && uv run pytest
+    cd {{ if PACKAGE == "canvodpy" { "canvodpy" } else { "packages/" + PACKAGE } }} && uv run pytest
 
 # build a specific package
 build-package PACKAGE:
-    cd packages/{{PACKAGE}} && uv build
+    cd {{ if PACKAGE == "canvodpy" { "canvodpy" } else { "packages/" + PACKAGE } }} && uv build
 
 # ============================================================================
 # Notebooks (marimo)

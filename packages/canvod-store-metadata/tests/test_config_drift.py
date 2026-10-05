@@ -60,7 +60,7 @@ def _simulate_repeat_ingest(store_path, branch, config):
     existing_meta = read_metadata(store_path, branch=branch)
     new_snapshot = collect_config_snapshot(config)
 
-    history_entries = [f"{now}: Ingested 1 files for canopy_01"]
+    history_entries = [f"{now}: Ingest canopy_01 2025001: written=1"]
     updates: dict[str, object] = {"temporal.updated": now}
 
     drifted = new_snapshot.config_hash != existing_meta.config.config_hash
@@ -92,7 +92,7 @@ class TestConfigDrift:
         meta = read_metadata(store_path, branch="main")
         assert meta.config.config_hash == initial_snapshot.config_hash
         assert len(meta.summaries.history) == 1
-        assert "Ingested" in meta.summaries.history[0]
+        assert "Ingest canopy_01" in meta.summaries.history[0]
 
     def test_changed_config_updates_snapshot_and_records_drift(self, tmp_path):
         store_path = _create_store(tmp_path / "store")

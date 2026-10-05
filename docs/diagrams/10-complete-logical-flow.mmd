@@ -15,8 +15,8 @@ flowchart TD
 
     %% ── Data Discovery ──
     subgraph DISCOVERY[Data Discovery per DOY]
-        MAPPER["FilenameMapper (virtual → canonical names)"]
-        VALIDATOR["DataDirectoryValidator (pre-flight gate)"]
+        MAPPER["File discovery (canonical names or naming recipe, any folder layout)"]
+        VALIDATOR["Receiver checks (one receiver per directory, no duplicates or overlaps)"]
         EXPAND["SCS Expansion Reference receivers expanded per canopy position"]
         SCHEDULE["Processing Schedule {date: {group: (dir, type, pos_dir)}}"]
     end
@@ -65,8 +65,8 @@ flowchart TD
     %% ── Grid Assignment ──
     subgraph GRID[Hemispheric Grid Assignment]
         BUILD_GRID["Construct Grid (equal-area, equal-angle, ...)"]
-        KDTREE["Build KDTree (cell centres in Cartesian coordinates)"]
-        ASSIGN["Spatial Query (O(n log m) per observation)"]
+        KDTREE["Cell lookup from the grid geometry"]
+        ASSIGN["Containing cell per observation"]
     end
 
     %% ── Output ──

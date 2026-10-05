@@ -1,10 +1,9 @@
 # ============================================================================
 # Claude Code — track project setup, ignore private state
 # ============================================================================
-# CLAUDE.md files are tracked (project + package instructions)
-# .claude/commands/ is tracked (slash commands ship with the repo)
+# AGENTS.md and CLAUDE.md files are tracked (agent instructions)
+# .claude/skills/ is tracked (task guides ship with the repo)
 .claude/*
-!.claude/commands/
 !.claude/skills/
 
 # ============================================================================
@@ -347,6 +346,8 @@ celerybeat.pid
 
 # User configuration files (NEVER commit!)
 config/*.yaml
+# Naming recipes are user data: <config dir>/recipes/<site>/<name>.yaml
+config/recipes/
 config/backup/processing.yaml
 config/backup/sites.yaml
 config/backup/sids.yaml
@@ -366,3 +367,6 @@ packages/*/config/
 .processing/
 .vscode/
 .icechunk_gridding_claude/
+
+# Code graph (just graph): built locally, never committed
+.graphify/

@@ -330,11 +330,12 @@ From inside the `canvodpy` directory, run:
 # Verify required tools are available
 just check-dev-tools
 
-# Install all Python dependencies into a virtual environment
-uv sync
+# Install all Python dependencies and the git hooks (code checks before
+# each commit, code graph rebuild after each commit)
+just sync
 
-# Install pre-commit hooks (automatic code checks before each commit)
-just hooks
+# First build of the code graph (free, local; see "Developing with coding agents")
+just graph
 ```
 
 ---
@@ -595,7 +596,7 @@ Push to your team branch or feature branch (see [Working in teams](#12b-working-
 
 ## 14. Pre-commit hooks and why your commit may be rejected
 
-When you ran `just hooks` in [step 9](#9-set-up-the-development-environment), a set of **pre-commit hooks** was installed into your local `.git/hooks/` directory. These hooks run automatically every time you execute `git commit`. If any hook fails, **the commit is aborted** — your changes remain staged but no commit is created.
+When you ran `just sync` in [step 9](#9-set-up-the-development-environment), a set of **pre-commit hooks** was installed into your local `.git/hooks/` directory. These hooks run automatically every time you execute `git commit`. If any hook fails, **the commit is aborted** — your changes remain staged but no commit is created.
 
 This is intentional: it prevents code that does not meet the project's quality standards from entering the Git history. The hooks are defined in `.pre-commit-config.yaml` at the repository root.
 
@@ -612,7 +613,15 @@ The following checks execute automatically in sequence. If any one fails, the co
 | **check-added-large-files** | `pre-commit`                               | Blocks files larger than the threshold from being committed                                                               | You are trying to commit a large binary, dataset, or log file           |
 | **detect-private-key**      | `pre-commit`                               | Scans for accidentally staged private keys (SSH, PGP)                                                                     | You are about to commit a secret — **do not override this**             |
 | **end-of-file-fixer**       | `pre-commit`                               | Ensures every file ends with exactly one newline                                                                          | A file is missing its final newline or has extra blank lines at the end |
+| **check-agent-docs**        | `pre-commit`                               | Every file path and `just` recipe named in `AGENTS.md` files and task guides exists                                       | You moved or renamed a file or recipe that an instruction file names    |
 | **commitizen**              | `commit-msg` (after you write the message) | Validates that your commit message follows the [Conventional Commits](https://www.conventionalcommits.org/) specification | Your message does not match the `type(scope): subject` format           |
+| **ty type check**           | `pre-push` (before `git push`)             | Type checking of the whole workspace with ty                                                                              | A type error; the push is aborted                                       |
+
+After a commit, merge or checkout, the **code graph** hook rebuilds the
+code graph in the background (`.graphify/`, log in `.graphify/build.log`).
+After a merge, the **update submodules** hook runs
+`just update-submodules`: it pulls the latest `demo` and test-data commits
+and commits the new submodule pointers.
 
 ### How to fix a rejected commit
 
@@ -718,10 +727,14 @@ Every push to a branch and every pull request triggers automated checks on GitHu
 
 | Workflow               | Trigger                    | What it does                                                                                                                           |
 | ---------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| **Code Quality**       | Every push                 | Checks lockfile consistency, runs ruff linting, checks formatting, runs type checking with ty                                          |
-| **Test with Coverage** | Push to `main` and all PRs | Runs `just test-coverage` (pytest with coverage measurement), uploads results to Coveralls, posts a coverage summary comment on the PR |
-| **Platform Tests**     | PRs                        | Runs the test suite across multiple operating systems and Python versions                                                              |
-| **Deploy Docs**        | Push to `main`             | Builds and deploys the documentation site                                                                                              |
+| **Code Quality**       | Every push and PR, weekly  | Checks lockfile consistency, runs ruff linting, checks formatting, runs type checking with ty, checks the agent instruction files       |
+| **Test with Coverage** | Push to `main`, all PRs, weekly | Runs `uv run pytest` (coverage is on by default in `pyproject.toml`), uploads results to Coveralls, posts a coverage summary comment on the PR |
+| **Platform Tests**     | Every push and PR, weekly  | Runs the test suite on Linux, macOS and Windows with Python 3.14                                                                       |
+| **Deploy Docs**        | A published release, or started by hand | Builds and deploys the documentation site                                                                                |
+
+The test runs in CI check out the test-data submodule
+(`packages/canvod-readers/tests/test_data`), so tests that need it run
+there too.
 
 ### Test coverage with Coveralls
 
@@ -750,12 +763,14 @@ just test-coverage
     | --------------------------------- | ---------------------------------------------- |
     | `just test`                       | Run all tests                                  |
     | `just check`                      | Lint, format, and type-check all code          |
-    | `just hooks`                      | Install pre-commit hooks                       |
+    | `just sync`                       | Install dependencies and git hooks             |
+    | `just hooks`                      | Install the git hooks only                     |
+    | `just graph`                      | Rebuild the code graph (free, local)           |
     | `just check-dev-tools`            | Verify uv, just, and python3 are installed     |
     | `just config-init`                | Scaffold `canvod-settings.yaml` from template           |
     | `just config-validate`            | Validate the current configuration             |
     | `just config-show`                | Show the resolved configuration                |
-    | `canvod-preflight validate <dir>` | Check data files against the naming convention |
+    | `just config-check-data <site>`   | Check a site's data files as a run reads them  |
     | `just docs`                       | Preview documentation locally                  |
     | `just test-coverage`              | Run tests with coverage report                 |
     | `just clean`                      | Remove build artifacts and caches              |

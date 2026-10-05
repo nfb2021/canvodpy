@@ -6,7 +6,8 @@
 # Based on NASA CDDIS vs ESA comparison (2026-01-14):
 # - NASA CDDIS: 25 products (FTPS required, needs CDDIS_MAIL)
 # - ESA: 18 products (FTP, no auth)
-# - Strategy: ESA primary for rapid/ultrarapid, NASA for final products
+# - Strategy: ESA primary with NASA CDDIS fallback wherever ESA hosts the
+#   product; products not on ESA (e.g. GFZ, JPL final) come from NASA only
 
 # ============================================================================
 # AGENCIES

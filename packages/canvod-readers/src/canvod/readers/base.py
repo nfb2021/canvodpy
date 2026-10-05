@@ -44,34 +44,17 @@ REQUIRED_ATTRS: Final = {"Created", "Software", "Institution", "File Hash"}
 
 DEFAULT_REQUIRED_VARS: Final = ["SNR"]
 
+#: Data variables of a VOD dataset (VOD calculator output, VOD store input).
+VOD_REQUIRED_VARS: Final = ("VOD", "phi", "theta")
+
 
 # ---------------------------------------------------------------------------
 # Standalone validation function
 # ---------------------------------------------------------------------------
 
 
-def validate_dataset(ds: xr.Dataset, required_vars: list[str] | None = None) -> None:
-    """Validate *ds* meets the GNSSDataReader output contract.
-
-    Collects **all** violations and raises a single ``ValueError`` listing
-    every problem, rather than stopping at the first failure.
-
-    Parameters
-    ----------
-    ds : xr.Dataset
-        Dataset to validate.
-    required_vars : list of str, optional
-        Data variables that must be present.  Defaults to
-        :data:`DEFAULT_REQUIRED_VARS` (``["SNR"]``).
-
-    Raises
-    ------
-    ValueError
-        If any contract violation is found.
-    """
-    if required_vars is None:
-        required_vars = list(DEFAULT_REQUIRED_VARS)
-
+def _structure_errors(ds: xr.Dataset, required_vars: list[str]) -> list[str]:
+    """Violations of the ``(epoch, sid)`` dimensions, coordinates and variables."""
     errors: list[str] = []
 
     # -- dimensions --
@@ -116,16 +99,68 @@ def validate_dataset(ds: xr.Dataset, required_vars: list[str] | None = None) -> 
                 f"Data variable {var} has wrong dimensions: "
                 f"expected {expected_var_dims}, got {ds[var].dims}"
             )
+    return errors
+
+
+def _raise_if(errors: list[str], what: str) -> None:
+    if errors:
+        raise ValueError(
+            f"{what} validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+        )
+
+
+def validate_dataset(ds: xr.Dataset, required_vars: list[str] | None = None) -> None:
+    """Validate *ds* meets the GNSSDataReader output contract.
+
+    Collects **all** violations and raises a single ``ValueError`` listing
+    every problem, rather than stopping at the first failure.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Dataset to validate.
+    required_vars : list of str, optional
+        Data variables that must be present.  Defaults to
+        :data:`DEFAULT_REQUIRED_VARS` (``["SNR"]``).
+
+    Raises
+    ------
+    ValueError
+        If any contract violation is found.
+    """
+    if required_vars is None:
+        required_vars = list(DEFAULT_REQUIRED_VARS)
+
+    errors = _structure_errors(ds, required_vars)
 
     # -- attributes --
     missing_attrs = REQUIRED_ATTRS - set(ds.attrs.keys())
     if missing_attrs:
         errors.append(f"Missing required attributes: {missing_attrs}")
 
-    if errors:
-        raise ValueError(
-            "Dataset validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
-        )
+    _raise_if(errors, "Dataset")
+
+
+def validate_vod_dataset(ds: xr.Dataset) -> None:
+    """Validate *ds* meets the VOD dataset contract.
+
+    The contract of VOD calculator output and of what the VOD store
+    accepts: the dimensions and coordinates of :func:`validate_dataset`,
+    the variables :data:`VOD_REQUIRED_VARS` (``theta`` and ``phi`` in
+    radians), every variable on ``(epoch, sid)``. Collects **all**
+    violations and raises a single ``ValueError``.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Dataset to validate.
+
+    Raises
+    ------
+    ValueError
+        If any contract violation is found.
+    """
+    _raise_if(_structure_errors(ds, list(VOD_REQUIRED_VARS)), "VOD dataset")
 
 
 # ---------------------------------------------------------------------------
@@ -494,8 +529,10 @@ __all__ = [
     "REQUIRED_ATTRS",
     "REQUIRED_COORDS",
     "REQUIRED_DIMS",
+    "VOD_REQUIRED_VARS",
     "DatasetStructureValidator",
     "GNSSDataReader",
     "SignalID",
     "validate_dataset",
+    "validate_vod_dataset",
 ]

@@ -1,10 +1,4 @@
-"""Diagnostic script for canvodpy - analogon to gnssvodpy.
-
-timing_diagnostics_script.py.
-
-This script processes RINEX data using the new canvodpy architecture.
-Compare results with gnssvodpy to verify correct implementation.
-"""
+"""Diagnostic script that times processing with the canvodpy pipeline."""
 
 import csv
 import gc
@@ -87,9 +81,6 @@ def diagnose_processing(
     end_at: str | None = None,
 ) -> None:
     """Run diagnostic processing with canvodpy pipeline.
-
-    This is the analogon to gnssvodpy's timing_diagnostics_script.py.
-    Use this to verify that the new implementation produces the same results.
 
     Parameters
     ----------

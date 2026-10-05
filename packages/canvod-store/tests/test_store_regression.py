@@ -354,7 +354,8 @@ class TestBugFixes:
         # After fix: logger must be assigned before it is used
         assert logger_assignment_pos < logger_usage_pos, (
             "B5: self._logger is used before it is assigned in __init__. "
-            "Move 'self._logger = get_logger(__name__)' to the top of __init__."
+            "Move 'self._logger = structlog.get_logger(__name__)' to the top of "
+            "__init__."
         )
 
 
@@ -468,6 +469,65 @@ class TestMetadataDatasets:
         ds_back = tmp_store.read_metadata_dataset(GROUP, "sbf_obs").compute()
         expected = xr.concat(parts, dim="epoch")
         assert ds_back.sizes["epoch"] == expected.sizes["epoch"]
+        np.testing.assert_array_almost_equal(
+            ds_back["pdop"].values, expected["pdop"].values, decimal=5
+        )
+
+    def test_append_metadata_datasets_keeps_earlier_days(self, tmp_store):
+        """A second call (next day) appends instead of replacing the first."""
+        ds = make_synthetic_dataset(slot=0)
+        tmp_store.write_initial_group(ds, group_name=GROUP)
+
+        day1 = [self._make_meta_ds(slot=i) for i in range(2)]
+        day2 = [self._make_meta_ds(slot=i) for i in range(2, 4)]
+        tmp_store.append_metadata_datasets(day1, group_name=GROUP, name="sbf_obs")
+        tmp_store.append_metadata_datasets(day2, group_name=GROUP, name="sbf_obs")
+
+        ds_back = tmp_store.read_metadata_dataset(GROUP, "sbf_obs").compute()
+        expected = xr.concat(day1 + day2, dim="epoch")
+        np.testing.assert_array_equal(ds_back["epoch"].values, expected["epoch"].values)
+
+    def test_metadata_parts_commit_with_observations(self, tmp_store):
+        """write_or_append_group puts data and metadata in one snapshot."""
+        ds = make_synthetic_dataset(slot=0)
+        meta = self._make_meta_ds(slot=0)
+        tmp_store.write_or_append_group(
+            ds, group_name=GROUP, metadata_datasets={"sbf_obs": meta}
+        )
+        snapshots = list(tmp_store.repo.ancestry(branch="main"))
+        tmp_store.write_or_append_group(
+            make_synthetic_dataset(slot=1),
+            group_name=GROUP,
+            metadata_datasets={"sbf_obs": self._make_meta_ds(slot=1)},
+        )
+        # One new snapshot per call, holding both data and metadata
+        assert len(list(tmp_store.repo.ancestry(branch="main"))) == len(snapshots) + 1
+        ds_back = tmp_store.read_metadata_dataset(GROUP, "sbf_obs").compute()
+        assert ds_back.sizes["epoch"] == 2 * meta.sizes["epoch"]
+
+    def test_replace_overlaps_after_group_rewrite(self, tmp_store):
+        """Overwrite strategy: mode="w" on the group deletes metadata/;
+        replace_overlaps rebuilds sbf_obs from the base snapshot, keeps the
+        other files' epochs and replaces the overlapping ones."""
+        from icechunk.xarray import to_icechunk
+
+        ds = make_synthetic_dataset(slot=0)
+        tmp_store.write_initial_group(ds, group_name=GROUP)
+        parts = [self._make_meta_ds(slot=i) for i in range(3)]
+        tmp_store.append_metadata_datasets(parts, group_name=GROUP, name="sbf_obs")
+
+        corrected = self._make_meta_ds(slot=1)
+        corrected["pdop"] = corrected["pdop"] * 0 + 9.0
+        with tmp_store.writable_session("main") as session:
+            to_icechunk(ds, session, group=GROUP, mode="w")
+            tmp_store.write_metadata_parts(
+                [corrected], GROUP, "sbf_obs", session, replace_overlaps=True
+            )
+            session.commit("overwrite")
+
+        ds_back = tmp_store.read_metadata_dataset(GROUP, "sbf_obs").compute()
+        expected = xr.concat([parts[0], corrected, parts[2]], dim="epoch")
+        np.testing.assert_array_equal(ds_back["epoch"].values, expected["epoch"].values)
         np.testing.assert_array_almost_equal(
             ds_back["pdop"].values, expected["pdop"].values, decimal=5
         )

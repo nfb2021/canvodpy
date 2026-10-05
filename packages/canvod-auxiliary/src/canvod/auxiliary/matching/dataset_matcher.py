@@ -2,8 +2,6 @@
 
 Aligns auxiliary datasets (ephemeris, clock) to reference RINEX datasets
 using appropriate interpolation strategies.
-
-Migrated from gnssvodpy.processor.matcher
 """
 
 import warnings

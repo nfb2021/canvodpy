@@ -1,6 +1,12 @@
 # Versioning Strategy
 
-canVODpy uses **unified semantic versioning** across all packages in the monorepo — one version number covers all eight packages, released together.
+canVODpy uses **unified semantic versioning** across all packages in the monorepo — one version number covers all twelve packages, released together.
+
+!!! info "Planned: a version per package"
+    Each package will get its own version, so that a package used on its own
+    (e.g. canvod-readers) changes its version only when its code changes. A
+    `canvodpy` version will then name the exact version of every package it
+    installs. Until then, all packages share one version.
 
 ---
 
@@ -67,22 +73,29 @@ just bump major       # 0.1.0 → 1.0.0
 
 ## Version Files
 
-All `pyproject.toml` files are kept in sync by commitizen:
+commitizen keeps every `pyproject.toml` in sync. For each package it updates
+the package's own `version` and its requirements on other canVODpy packages:
 
 ```toml
 [tool.commitizen]
-version = "0.1.0"
+version = "0.4.0"
 version_files = [
     "canvodpy/pyproject.toml:version",
+    "canvodpy/pyproject.toml:\"canvod-[a-z-]+[=>]=",
     "packages/canvod-readers/pyproject.toml:version",
-    "packages/canvod-auxiliary/pyproject.toml:version",
-    "packages/canvod-grids/pyproject.toml:version",
-    "packages/canvod-vod/pyproject.toml:version",
-    "packages/canvod-store/pyproject.toml:version",
-    "packages/canvod-viz/pyproject.toml:version",
-    "packages/canvod-utils/pyproject.toml:version",
+    "packages/canvod-readers/pyproject.toml:\"canvod-[a-z-]+[=>]=",
+    # ... the same two lines for every package
 ]
 ```
+
+- `canvodpy` requires each package at exactly the version released with it
+  (`canvod-store==0.4.0`), so `pip install canvodpy==0.4.0` always installs
+  the mix of packages that was tested together.
+- A package requires the other canVODpy packages at least at its own version
+  (`canvod-config>=0.4.0`), so it never runs with an older package that lacks
+  code it uses.
+- `__version__` of each package is read from the installed package
+  (`importlib.metadata`), never written into the code.
 
 Git tags follow `vMAJOR.MINOR.PATCH` — e.g. `v0.1.0`, `v1.0.0`, `v0.2.0-beta.1`.
 

@@ -1,8 +1,6 @@
 """Position representations for GNSS data processing.
 
 Provides classes for ECEF and geodetic position handling.
-
-Migrated and simplified from gnssvodpy.position
 """
 
 import math

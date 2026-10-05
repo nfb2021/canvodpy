@@ -16,7 +16,6 @@ Classes:
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import re
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -33,6 +32,7 @@ from canvod.readers.gnss_specs.metadata import (
     COORDS_METADATA,
     DTYPES,
     SNR_METADATA,
+    epoch_coord_attrs,
 )
 from canvod.readers.gnss_specs.signals import SignalIDMapper
 from canvod.readers.nmea.exceptions import (
@@ -40,6 +40,7 @@ from canvod.readers.nmea.exceptions import (
     NmeaInvalidSentenceError,
     NmeaMissingSentenceError,
 )
+from canvod.utils.tools import hashing
 
 # ---------------------------------------------------------------------------
 # NMEA checksum helpers
@@ -95,6 +96,17 @@ def _talker_id(msg_id: str) -> str:
 # ---------------------------------------------------------------------------
 # PRN → RINEX SV mapping
 # ---------------------------------------------------------------------------
+
+# The GSV SNR unit is not established: the bundled SiRF NMEA Reference
+# Manual (Rev 2.1, GSV) gives "SNR (C/N0) ... dBHz", gpsd documents dB.
+_NMEA_SNR_METADATA: Final[dict[str, Any]] = {
+    **SNR_METADATA,
+    "description": (
+        "SNR field of the NMEA GSV sentence (00-99, null when not tracking). "
+        "Its unit is not established (the SiRF NMEA Reference Manual Rev 2.1 "
+        "gives C/N0 in dBHz, other sources dB); dB is assumed."
+    ),
+}
 
 # Default band/code assigned to NMEA SNR (one band per system).
 # NMEA GSV reports SNR on the primary signal band for each constellation.
@@ -387,10 +399,7 @@ class NmeaObs(GNSSDataReader, BaseModel):
 
     @cached_property
     def _file_hash_value(self) -> str:
-        h = hashlib.sha256()
-        with self.fpath.open("rb") as f:
-            h.update(f.read())
-        return h.hexdigest()[:16]
+        return hashing.file_hash(self.fpath)
 
     # ---- ABC implementations ---- #
 
@@ -521,7 +530,7 @@ class NmeaObs(GNSSDataReader, BaseModel):
         )
 
         coords = {
-            "epoch": ("epoch", timestamps, COORDS_METADATA["epoch"]),
+            "epoch": ("epoch", timestamps, epoch_coord_attrs("UTC")),
             "sid": signal_id_coord,
             "sv": ("sid", sv_list, COORDS_METADATA["sv"]),
             "system": ("sid", system_list, COORDS_METADATA["system"]),
@@ -546,7 +555,7 @@ class NmeaObs(GNSSDataReader, BaseModel):
 
         ds = xr.Dataset(
             data_vars={
-                "SNR": (["epoch", "sid"], snr_data, SNR_METADATA),
+                "SNR": (["epoch", "sid"], snr_data, _NMEA_SNR_METADATA),
             },
             coords=coords,
             attrs={},

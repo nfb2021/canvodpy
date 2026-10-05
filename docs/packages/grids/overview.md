@@ -30,8 +30,8 @@ Seven implementations are available, all inheriting from `BaseGridBuilder`:
 
     ---
 
-    Simple rectangular latitude/longitude grid. Fast to compute;
-    strong area distortion at low elevations.
+    The same number of azimuth sectors in every θ band, no zenith cap.
+    Fast to compute; cells shrink strongly toward the zenith.
 
 -   :fontawesome-solid-dice-d20: &nbsp; **GeodesicBuilder**
 
@@ -44,17 +44,16 @@ Seven implementations are available, all inheriting from `BaseGridBuilder`:
 
     ---
 
-    Fibonacci-sphere sampling. Aesthetically uniform point
-    distribution; ideal for scatter-plot analyses.
-    Requires `scipy`.
+    Fibonacci-sphere sampling: nearly uniform points, each the center
+    of its Voronoi cell.
 
 -   :fontawesome-solid-globe: &nbsp; **HEALPixBuilder**
 
     ---
 
-    Hierarchical Equal Area isoLatitude Pixelization. Strictly
-    equal-area pixels, the gold standard for unbiased solid-angle
-    weighting.
+    Hierarchical Equal Area isoLatitude Pixelization. All pixels of the
+    full sphere have the same area; the hemisphere keeps the pixels
+    whose center lies at or above the outer edge.
     Requires the optional `healpy` dependency — not installed by
     default (see [Optional dependencies](#optional-dependencies)
     below).
@@ -68,7 +67,30 @@ Seven implementations are available, all inheriting from `BaseGridBuilder`:
 
 </div>
 
-All builders accept `angular_resolution` (degrees) and `cutoff_theta` (maximum polar angle) and return a `GridData` object.
+All builders accept `angular_resolution` (degrees), `cutoff_theta` and
+`phi_rotation` (degrees) and return a `GridData` object. `cutoff_theta`
+(default 0) leaves out the sky within that many degrees of the horizon.
+A run's grid assignment uses `cutoff_theta = 0`.
+
+Where a grid ends depends on its type:
+
+| Grid type | Outer edge | Observations near the horizon |
+|---|---|---|
+| `equal_area`, `equal_angle`, `equirectangular` | exactly θ = 90° − `cutoff_theta`; the last band is narrower when the band width does not divide the range (half a band for `equal_area` and `equal_angle` at a cutoff that is a multiple of the resolution) | all get a cell up to the outer edge, none beyond |
+| `htm`, `geodesic` | the triangles whose center lies above the outer edge; some extend below it | all get a cell above the horizon (with `cutoff_theta = 0`) |
+| `healpix` | the pixels whose center lies at or above the outer edge; some extend below it | all get a cell above the horizon (with `cutoff_theta = 0`) |
+| `fibonacci` | the Voronoi cells whose lattice point lies above the outer edge | some low observations get no cell: up to about 1°, 3° and 6° elevation at 2°, 5° and 10° resolution |
+
+So the solid angles of the ring grids add up to the hemisphere (2π sr
+with `cutoff_theta = 0`); those of the triangle and pixel grids add up to
+somewhat more (geodesic 1.01 to 1.05 × 2π, HEALPix 1.01 to 1.08 × 2π at
+2° to 10°).
+
+!!! bug "`EqualAreaBuilder` with `cutoff_theta > 0`"
+    `EqualAreaBuilder` currently applies `cutoff_theta` at the zenith as
+    well: with `cutoff_theta=10` it also leaves out the cells near the
+    zenith (θ < 7.5° at 5° resolution). Use `cutoff_theta=0` with this grid type
+    until this is fixed.
 
 ### Optional dependencies
 
@@ -105,8 +127,8 @@ All builders accept `angular_resolution` (degrees) and `cutoff_theta` (maximum p
     from canvod.grids import create_hemigrid
 
     grid = create_hemigrid("equal_area", angular_resolution=5.0)
-    print(grid.ncells)   # 216
-    print(grid.nbands)   # 18
+    print(grid.ncells)           # 1051
+    print(len(grid.theta_lims))  # 19 θ bands
     ```
 
 === "Builder pattern"
@@ -114,7 +136,7 @@ All builders accept `angular_resolution` (degrees) and `cutoff_theta` (maximum p
     ```python
     from canvod.grids import EqualAreaBuilder
 
-    builder = EqualAreaBuilder(angular_resolution=5.0, cutoff_theta=10.0)
+    builder = EqualAreaBuilder(angular_resolution=5.0)
     grid = builder.build()
     ```
 
@@ -136,10 +158,15 @@ The `GridData` object returned by all builders provides:
 
 | Attribute | Type | Description |
 | --------- | ---- | ----------- |
-| `grid` | `polars.DataFrame` | Cell geometry (boundaries, centres, solid angles) |
+| `grid` | `polars.DataFrame` | One row per cell: centre (`phi`, `theta`), bounds (`phi_min`, `phi_max`, `theta_min`, `theta_max`), `cell_id` |
 | `ncells` | `int` | Total number of grid cells |
-| `nbands` | `int` | Number of elevation bands |
-| `definition` | `str` | Human-readable grid description |
+| `grid_type` | `str` | Grid type, e.g. `"equal_area"` |
+| `theta_lims`, `phi_lims`, `cell_ids` | arrays | Band edges, azimuth edges and cell ids per θ band |
+| `get_solid_angles()` | `np.ndarray` | Solid angle of each cell (sr) |
+| `get_grid_stats()` | `dict` | Summary: cell count, solid-angle statistics |
+
+For the Fibonacci, geodesic, HEALPix and HTM grids the bounds are
+bounding boxes, not the true (curved or triangular) cell boundaries.
 
 ---
 
@@ -153,10 +180,16 @@ The `GridData` object returned by all builders provides:
 
     ---
 
-    `add_cell_ids_to_ds_fast` — KDTree-accelerated assignment of each
-    observation to a grid cell. O(n log m) for n observations, m cells.
-
-    `add_cell_ids_to_vod_fast` — Same for VOD datasets.
+    `add_cell_ids_to_ds_fast` — assigns each observation to the cell that
+    contains it, eagerly or lazily for dask arrays: by band and sector
+    edges for the ring grids, by spherical triangle for HTM and geodesic,
+    by pixel for HEALPix, by Voronoi cell for Fibonacci. Observations
+    outside the grid get NaN (see the table above). The nearest cell
+    center is not used: near a cell's corner it often belongs to a
+    neighboring cell. `canvodpy run` uses the same function when grid
+    assignment is set. The lookup needs the grid's full geometry, so use
+    a grid built with `create_hemigrid`; a grid read back with `load_grid`
+    works for the ring grids only.
 
 -   :fontawesome-solid-floppy-disk: &nbsp; **Grid Persistence**
 
@@ -171,13 +204,16 @@ The `GridData` object returned by all builders provides:
 
     ---
 
-    `aggregate_data_to_grid` — Assign and aggregate per cell.
+    In `canvod.grids.aggregation` (also importable from `canvod.grids`):
 
-    `compute_hemisphere_percell` — Per-cell statistics.
+    `aggregate_data_to_grid` — One statistic per cell.
 
-    `compute_zenith_percell` — Zenith-weighted statistics.
+    `compute_percell_timeseries` — Per-cell time series (cell × time).
 
-    `compute_percell_timeseries` — Per-cell time series.
+    `compute_hemisphere_percell` — Daily per-cell time series, full
+    hemisphere.
+
+    `compute_zenith_percell` — Daily per-cell time series, θ ≤ 30°.
 
 </div>
 
@@ -191,8 +227,6 @@ The `GridData` object returned by all builders provides:
 | ------ | ------- |
 | `filtering` | Global IQR, Z-score, SID pattern filters |
 | `per_cell_filtering` | Per-cell variants of the above |
-| `hampel_filtering` | Hampel (median-MAD) outlier detection |
-| `sigma_clip_filter` | Numba-accelerated sigma-clipping |
 | `masking` | Spatial and temporal mask construction |
 | `weighting` | Per-cell weight calculators |
 | `solar` | Solar geometry (elevation, azimuth) |
@@ -263,10 +297,12 @@ flowchart TD
     A --> B["`**Grid Assignment**
     add_cell_ids_to_ds_fast`"]
     B --> C["`**Gridded Dataset**
-    + cell_id coordinate`"]
-    C --> D["`**VOD per cell**
-    Tau-Omega inversion`"]
-    D --> E["`**Hemispherical Map**
+    + cell_id_* variable`"]
+    C --> D["`**VOD per observation**
+    tau-omega, carries cell_id_*`"]
+    D --> F["`**Per-cell statistics**
+    compute_hemisphere_percell`"]
+    F --> E["`**Hemispherical Map**
     canvod-viz`"]
 ```
 
@@ -275,5 +311,5 @@ flowchart TD
 !!! example "Try it"
     [06 — Hemispheric Grids](../../notebooks/_build/06_hemispheric_grids.html){target=_blank}
     ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/06_hemispheric_grids.py))
-    · [18 — Grid Exploration](../../notebooks/_build/18_grid_exploration.html){target=_blank}
-    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/18_grid_exploration.py))
+    · [19 — Grid Exploration](../../notebooks/_build/19_grid_exploration.html){target=_blank}
+    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/19_grid_exploration.py))

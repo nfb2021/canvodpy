@@ -2,7 +2,7 @@
 
 This guide walks you through building a new GNSS data format reader from scratch. It covers every aspect of the reader ecosystem: the abstract base class, Pydantic model configuration, signal identifiers, the DatasetBuilder, epoch iteration, file hashing, testing patterns, factory registration, and common pitfalls.
 
-By the end you will have a fully functional, validated reader that integrates seamlessly with canvod-store, canvod-auxiliary, canvod-vod, and the rest of the canvodpy pipeline.
+By the end you will have a validated reader whose datasets canvod-store, canvod-auxiliary and canvod-vod accept. To use it in `canvodpy run`, it must also be wired into the runs (see [Step 11](#step-11-package-structure)).
 
 ---
 
@@ -54,7 +54,7 @@ graph TD
 Your reader only needs to:
 
 1. **Inherit** from `GNSSDataReader` (one parent — no need for separate `BaseModel`)
-2. **Implement** abstract methods (`to_ds`, `iter_epochs`, `file_hash`, `start_time`, `end_time`, `systems`, `num_satellites`)
+2. **Implement** abstract methods (`to_ds`, `iter_epochs`, `file_hash`, `start_time`, `end_time`, `systems`, `num_satellites`) and override `source_format` (its default is `"rinex3"`)
 3. **Use `DatasetBuilder`** in your `to_ds()` method (recommended) — it handles all the tricky parts
 
 ---
@@ -73,7 +73,7 @@ from pydantic import ConfigDict
 
 from canvod.readers.base import GNSSDataReader
 from canvod.readers.builder import DatasetBuilder
-from canvod.readers.gnss_specs.utils import file_hash
+from canvod.utils.tools import file_hash
 
 
 class MyFormatReader(GNSSDataReader):
@@ -83,6 +83,10 @@ class MyFormatReader(GNSSDataReader):
     """
 
     model_config = ConfigDict(frozen=True)
+
+    @property
+    def source_format(self) -> str:
+        return "my_format"   # the default would say "rinex3"
 ```
 
 That's it for the class definition. Let's break down what you get for free:
@@ -96,7 +100,8 @@ Since `GNSSDataReader` inherits from `pydantic.BaseModel` and `abc.ABC`, your re
 | `fpath: Path` | `GNSSDataReader` | File path field — validated at construction |
 | `_validate_fpath()` | `GNSSDataReader` | Checks `fpath.is_file()` — raises `FileNotFoundError` if missing |
 | `model_config` | `GNSSDataReader` | `arbitrary_types_allowed=True` — needed for `pint.Quantity`, etc. |
-| `_build_attrs()` | `GNSSDataReader` | Builds standard global attributes (Created, Software, Institution, File Hash) |
+| `_build_attrs()` | `GNSSDataReader` | Builds standard global attributes (Created, Software, Institution, File Hash); author and institution come from the settings file |
+| `source_format` | `GNSSDataReader` | Returns `"rinex3"` unless you override it — always override it |
 | `to_ds_and_auxiliary()` | `GNSSDataReader` | Default: calls `to_ds()` + returns empty aux dict |
 | `num_epochs` | `GNSSDataReader` | Default: `sum(1 for _ in self.iter_epochs())` |
 | `__repr__()` | `GNSSDataReader` | Returns `"MyFormatReader(file='filename.myf')"` |
@@ -142,7 +147,7 @@ class MyFormatReader(GNSSDataReader):
     skip_header: bool = False   # optional flag
 
     # Private attributes (not part of the model schema)
-    _cache: dict = {}  # use PrivateAttr for mutable state
+    _cache: dict = PrivateAttr(default_factory=dict)  # from pydantic import PrivateAttr
 ```
 
 !!! warning "Do not redeclare `fpath`"
@@ -162,7 +167,7 @@ The `file_hash` property is used by `canvod-store` (MyIcechunkStore) to prevent 
 The simplest approach uses the provided `file_hash()` utility:
 
 ```python
-from canvod.readers.gnss_specs.utils import file_hash as compute_hash
+from canvod.utils.tools import file_hash as compute_hash
 
 class MyFormatReader(GNSSDataReader):
     ...
@@ -173,7 +178,7 @@ class MyFormatReader(GNSSDataReader):
         return compute_hash(self.fpath)
 ```
 
-The utility reads the file in 8 KB chunks and returns the first 16 characters of the SHA-256 hex digest. This is sufficient for deduplication in practice.
+The utility reads the file in 8 KB chunks and returns the first 16 characters of the SHA-256 hex digest. All built-in readers use it, so the same file gives the same hash whichever reader stores it. If your reader reads the whole file into memory anyway, `canvod.utils.tools.bytes_hash(data)` gives the same value without reading the file a second time.
 
 !!! note "Custom hashing"
 
@@ -373,7 +378,7 @@ class MyFormatReader(GNSSDataReader):
             Variables to include. If None, includes all.
             Common: ["SNR"], ["SNR", "Phase", "Pseudorange"]
         """
-        builder = DatasetBuilder(self)
+        builder = DatasetBuilder(self, time_system="GPS")
 
         for epoch in self.iter_epochs():
             ei = builder.add_epoch(epoch.timestamp)
@@ -401,7 +406,7 @@ class MyFormatReader(GNSSDataReader):
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `DatasetBuilder(reader)` | builder | Create a new builder |
+| `DatasetBuilder(reader, time_system=...)` | builder | Create a new builder; `time_system` is the time scale of the epochs you add (`"GPS"`, `"GAL"`, `"QZS"`, `"BDT"`, `"IRN"`, `"UTC"`, or RINEX `"GLO"`, recorded as UTC), recorded in the epoch coordinate |
 | `add_epoch(timestamp)` | `int` | Register an epoch, returns its index |
 | `add_signal(sv, band, code)` | `SignalID` | Register a signal (idempotent — same args = same ID) |
 | `set_value(ei, sig, var, value)` | `None` | Set a value for epoch index + signal + variable |
@@ -428,15 +433,20 @@ The builder knows the dtype and metadata for these variables:
 
 | Variable | Dtype | Description |
 |----------|-------|-------------|
-| `SNR` | `float32` | Signal-to-Noise Ratio (dB-Hz) |
+| `SNR` | `float32` | Signal-to-Noise Ratio (dB) |
 | `CN0` | `float32` | Carrier-to-Noise density (dB-Hz) |
 | `Pseudorange` | `float64` | Pseudorange measurement (meters) |
 | `Phase` | `float64` | Carrier phase measurement (cycles) |
-| `Doppler` | `float64` | Doppler shift (Hz) |
+| `Doppler` | `float32` | Doppler shift (Hz) |
 | `LLI` | `int8` | Loss of Lock Indicator |
 | `SSI` | `int8` | Signal Strength Indicator |
 
-You can use any of these names with `set_value()` and the builder will apply the correct dtype and metadata automatically.
+You can use any of these names with `set_value()` and the builder will apply the correct dtype and metadata automatically. Other names are stored as `float32` without metadata. Integer variables are filled with `-1` where no value was set, float variables with NaN.
+
+!!! warning "Unknown bands"
+    A band `SignalIDMapper` does not know gets NaN for `freq_center`,
+    `freq_min` and `freq_max`, without an error. Check the frequency
+    coordinates of your first dataset.
 
 ### GLONASS FDMA aggregation
 
@@ -445,11 +455,12 @@ The builder supports GLONASS FDMA channel aggregation via the `aggregate_glonass
 ```python
 builder = DatasetBuilder(
     reader,
+    time_system="GLO",
     aggregate_glonass_fdma=True,  # default
 )
 ```
 
-When enabled, GLONASS FDMA channels are aggregated into effective bands `G1*` and `G2*`, with:
+When enabled, GLONASS FDMA channels are aggregated into the effective bands `G1` and `G2` (without it: `G1_FDMA`, `G2_FDMA`), with:
 - Center frequencies being the mean of the respective FDMA sub-bands
 - Bandwidth stretching across all sub-bands including their respective bandwidths
 
@@ -469,7 +480,7 @@ def to_ds_and_auxiliary(
 
     This avoids reading the file twice.
     """
-    obs_builder = DatasetBuilder(self)
+    obs_builder = DatasetBuilder(self, time_system="GPS")
     meta_epochs = []
     meta_values = {}
 
@@ -559,7 +570,7 @@ Band names must match what `SignalIDMapper` recognises for frequency resolution.
 | BeiDou | `B1I`, `B1C`, `B2a`, `B2b`, `B3I` |
 | QZSS | `L1`, `L2`, `L5`, `L6` |
 
-Code names are tracking codes (e.g., `C`, `P`, `W`, `I`, `Q`, `X`). The builder does not validate code names — they are stored as-is.
+Code names are RINEX 3 tracking codes (e.g., `C`, `P`, `W`, `I`, `Q`, `X`). The builder does not validate code names — they are stored as-is. Never guess a code your format does not record: the lowercase markers `p`, `l`, `u` exist for exactly that case (see [RINEX v2.11 Parsing](rinex-v2-format.md#lowercase-tracking-code-markers)) and are the only codes `pad_to_global_sid()` keeps besides the real RINEX 3 attributes.
 
 ---
 
@@ -580,7 +591,7 @@ Every reader must produce a Dataset that passes `validate_dataset()`. Here is th
 
 | Coordinate | Dtype | Indexed by | Description |
 |------------|-------|------------|-------------|
-| `epoch` | `datetime64[ns]` | `epoch` | Observation timestamps |
+| `epoch` | `datetime64[ns]` | `epoch` | Observation timestamps; attribute `time_system` gives their time scale |
 | `sid` | `object` (string) | `sid` | Signal ID strings (`"G01\|L1\|C"`) |
 | `sv` | `object` (string) | `sid` | Satellite vehicle (`"G01"`) |
 | `system` | `object` (string) | `sid` | System letter (`"G"`) |
@@ -609,7 +620,7 @@ ds = reader.to_ds()                                       # all available
 |-----------|-------------|--------|
 | `Created` | ISO 8601 timestamp | `_build_attrs()` |
 | `Software` | Package name + version | `_build_attrs()` |
-| `Institution` | From config | `_build_attrs()` |
+| `Institution` | From the settings file | `_build_attrs()` |
 | `File Hash` | SHA-256 prefix | `_build_attrs()` |
 
 The `_build_attrs()` method (inherited from `GNSSDataReader`) sets all of these automatically. You can add format-specific attributes via `extra_attrs` in `builder.build()`.
@@ -800,7 +811,7 @@ def test_full_pipeline(real_test_file):
 ## Step 10 — Register with ReaderFactory
 
 The `canvodpy.ReaderFactory` provides name-based reader creation and
-optional auto-detection for RINEX files:
+detection of RINEX and NMEA files:
 
 ```python
 from canvodpy import ReaderFactory
@@ -813,17 +824,19 @@ reader = ReaderFactory.create("my_format", fpath="data.myf")
 ds = reader.to_ds()
 ```
 
-For RINEX files, `create_from_file()` auto-detects v2/v3 from the header:
+`create_from_file()` picks the reader from the file content:
 
 ```python
-reader = ReaderFactory.create_from_file("station.25o")  # auto-detects RINEX v3
+reader = ReaderFactory.create_from_file("station.25o")  # RINEX 3 -> Rnxv3Obs
 ```
 
 !!! note "Auto-detection scope"
 
-    `create_from_file()` currently auto-detects **RINEX v2/v3** only.
-    SBF and other binary formats should use the name-based API:
-    `ReaderFactory.create("sbf", fpath=path)`.
+    `create_from_file()` and `detect_reader()` recognize **RINEX 2 and 3**
+    by the version in the first header line and **NMEA** by its
+    sentences. SBF and other binary formats use the name-based API:
+    `ReaderFactory.create("sbf", fpath=path)`. Registering a reader does
+    not make it detectable.
 
 ---
 
@@ -849,6 +862,20 @@ packages/canvod-readers/
     └── test_data/
         └── sample.myf
 ```
+
+### Wire it into runs
+
+`canvodpy run` knows its formats by name. A new format needs all of these
+(they list the formats; keep them in step):
+
+| Where | What |
+|---|---|
+| `canvodpy/src/canvodpy/__init__.py` | register the reader in `_register_builtin_components` |
+| `canvodpy/src/canvodpy/factories.py` | `ReaderFactory._detect_format`, if `reader_format: auto` should find it |
+| `canvodpy/src/canvodpy/orchestrator/discovery.py` | `_READER_FILE_TYPES`, `_ALL_FILE_TYPES` |
+| `packages/canvod-preflight/src/canvod/preflight/convention.py` | `FileType`, if the file type is new |
+| `packages/canvod-config/src/canvod/config/models/sites.py` | the `reader_format` values and description; `_FILE_FORMAT` if the reader reads the files of another format (as `rinex3_stripped` reads RINEX 3), so a canopy and its reference count as the same format |
+| `packages/canvod-store/src/canvod/store/viewer.py` | `_FORMAT_LABELS` |
 
 Update `__init__.py` to export your reader:
 
@@ -880,7 +907,7 @@ from pydantic import ConfigDict
 
 from canvod.readers.base import GNSSDataReader
 from canvod.readers.builder import DatasetBuilder
-from canvod.readers.gnss_specs.utils import file_hash as compute_hash
+from canvod.utils.tools import file_hash as compute_hash
 
 
 class GnsdObservation(NamedTuple):
@@ -911,6 +938,10 @@ class GnsdReader(GNSSDataReader):
     """
 
     model_config = ConfigDict(frozen=True)
+
+    @property
+    def source_format(self) -> str:
+        return "gnsd"  # the default would say "rinex3"
 
     @property
     def file_hash(self) -> str:
@@ -956,7 +987,8 @@ class GnsdReader(GNSSDataReader):
         keep_data_vars: list[str] | None = None,
         **kwargs,
     ) -> xr.Dataset:
-        builder = DatasetBuilder(self)
+        # The file writes its epochs with "Z": UTC
+        builder = DatasetBuilder(self, time_system="UTC")
 
         for epoch in self.iter_epochs():
             ei = builder.add_epoch(epoch.timestamp)
@@ -1030,7 +1062,7 @@ def to_ds(self, **kwargs) -> xr.Dataset:
 
 # CORRECT — DatasetBuilder.build() validates automatically
 def to_ds(self, **kwargs) -> xr.Dataset:
-    builder = DatasetBuilder(self)
+    builder = DatasetBuilder(self, time_system="GPS")
     # ... populate ...
     return builder.build()  # ← validates before returning
 ```
@@ -1096,16 +1128,21 @@ assert ds.dims["epoch"] == 100
 assert ds.sizes["epoch"] == 100
 ```
 
-### 8. Non-UTC timestamps
+### 8. Epochs in another time scale than `time_system`
+
+The builder stores each epoch as given and drops any `tzinfo` without
+converting. The epochs must therefore already be in the time scale you
+pass as `time_system`:
 
 ```python
-# WRONG — naive or local time
-from datetime import datetime
-builder.add_epoch(datetime(2025, 1, 1))  # ← no timezone
+# WRONG — local time, labelled as UTC
+builder = DatasetBuilder(self, time_system="UTC")
+builder.add_epoch(datetime(2025, 1, 1, 1, 0, tzinfo=ZoneInfo("Europe/Vienna")))
 
-# CORRECT — always use UTC
-from datetime import UTC, datetime
-builder.add_epoch(datetime(2025, 1, 1, tzinfo=UTC))
+# CORRECT — convert first
+builder.add_epoch(local_ts.astimezone(UTC))
+# or: GPS time from the file, labelled as such
+builder = DatasetBuilder(self, time_system="GPS")
 ```
 
 ---
@@ -1141,7 +1178,7 @@ from canvodpy import ReaderFactory
 from canvod.readers.gnss_specs.signals import SignalIDMapper
 
 # File hashing
-from canvod.readers.gnss_specs.utils import file_hash
+from canvod.utils.tools import file_hash
 
 # Metadata templates
 from canvod.readers.gnss_specs.metadata import (
@@ -1165,6 +1202,6 @@ from canvod.readers.gnss_specs.constellations import (
 
 - [Reader Architecture](architecture.md) — layered architecture, design principles, component interactions
 - [Extending Readers](extending.md) — quick-reference checklist and validation requirements
-- [RINEX Format](rinex-format.md) — RINEX v3.04 specifics
+- [RINEX Format](rinex-format.md) — RINEX 3 specifics
 - [SBF Reader](sbf.md) — Septentrio Binary Format specifics
 - [API Reference](../../api/canvod-readers.md) — full API documentation

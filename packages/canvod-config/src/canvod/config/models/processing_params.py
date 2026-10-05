@@ -46,6 +46,20 @@ class ProcessingParams(_StrictModel):
         default_factory=lambda: ["SNR"],
         description="GNSS observables to keep (SNR, Pseudorange, Phase, Doppler)",
     )
+    rinex_v3_parser: Literal["validated", "unvalidated_fast"] = Field(
+        "validated",
+        description=(
+            "How RINEX v3 observation files are parsed. 'validated': every "
+            "epoch is checked (epoch line, satellite IDs, satellite count, "
+            "observation fields); epochs that fail are dropped and logged. "
+            "'unvalidated_fast': DANGEROUS. Parses by fixed columns without "
+            "any check, so corrupted records can enter the store as partial "
+            "or wrong values. On valid files both give the same dataset. "
+            "canVODpy takes no responsibility for results of the unvalidated "
+            "parser; checking the input files is entirely the user's "
+            "responsibility. Every use emits an UnvalidatedParserWarning."
+        ),
+    )
     aggregate_glonass_fdma: bool = Field(
         True,
         description=(
@@ -152,6 +166,18 @@ class ProcessingParams(_StrictModel):
             "Pseudorange_raw (before Hatch + multipath filters), and "
             "Phase_raw (before carrier multipath correction). "
             "Set to False to reduce dataset size when raw quantities are not needed."
+        ),
+    )
+    store_sbf_metadata: bool = Field(
+        True,
+        description=(
+            "When reading SBF files, store the per-file SBF metadata dataset "
+            "(sbf_obs: SatVisibility geometry and its almanac/ephemeris source, "
+            "MeasExtra, PVT, DOP, receiver status and quality indicators) under "
+            "{group}/metadata/sbf_obs, in the same commit as the observations. "
+            "Set to False to save space; broadcast geometry "
+            "(ephemeris_source='broadcast') still works, since it uses sbf_obs "
+            "in memory."
         ),
     )
 

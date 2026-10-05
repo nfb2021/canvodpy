@@ -19,16 +19,17 @@ classifiers = [
 
 # Core dependencies - sub-packages from workspace
 dependencies = [
-    "canvod-readers",
-    "canvod-auxiliary",
-    "canvod-grids",
-    "canvod-store",
-    "canvod-store-metadata",
-    "canvod-utils",
-    "canvod-config",
-    "canvod-viz",
-    "canvod-vod",
-    "canvod-ops",
+    "canvod-readers==0.4.0",
+    "canvod-auxiliary==0.4.0",
+    "canvod-grids==0.4.0",
+    "canvod-store==0.4.0",
+    "canvod-store-metadata==0.4.0",
+    "canvod-utils==0.4.0",
+    "canvod-config==0.4.0",
+    "canvod-viz==0.4.0",
+    "canvod-vod==0.4.0",
+    "canvod-ops==0.4.0",
+    "canvod-preflight==0.4.0",
     "matplotlib>=3.8.0",
     "pint>=0.20",
     "structlog>=23.0",
@@ -49,12 +50,6 @@ dependencies = [
     "rich>=13.0",
     "marimo>=0.23.13",
 ]
-
-# Optional slot-in extensions (github.com/nfb2021/canvodpy-extensions).
-# canvodpy works without these — file discovery falls back to canonical
-# canVOD-only glob patterns (*.rnx, *.sbf) when absent.
-[project.optional-dependencies]
-filemap = ["canvod-filemap"]
 
 [dependency-groups]
 dev = [
@@ -90,6 +85,7 @@ canvod-config = { workspace = true }
 canvod-viz = { workspace = true }
 canvod-vod = { workspace = true }
 canvod-ops = { workspace = true }
+canvod-preflight = { workspace = true }
 
 [tool.ty.src]
 exclude = [

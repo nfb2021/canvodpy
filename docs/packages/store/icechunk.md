@@ -22,8 +22,8 @@ Icechunk is a cloud-native transactional storage format for multidimensional arr
 
     ---
 
-    Local filesystem for development; S3, MinIO, or Cloudflare R2 for
-    production. Zero code change to switch backends.
+    The Icechunk format works on object stores (S3, MinIO, Cloudflare R2) too.
+    canvodpy currently opens stores on a local or network file system only.
 
 -   :fontawesome-solid-gauge-high: &nbsp; **Zarr v3 Chunks**
 
@@ -232,9 +232,10 @@ processing:
 
 ### Migrating to S3
 
-The storage backend (bucket, credentials, endpoint) is passed separately to
-`icechunk.Repository.open(storage=...)` and is not part of `IcechunkConfig`.
-Once the backend is wired up, tune these knobs in order of impact:
+canvodpy does not open object stores yet: `MyIcechunkStore` always uses
+`icechunk.local_filesystem_storage`. The storage backend (bucket, credentials,
+endpoint) would be passed to `icechunk.Repository.open(storage=...)`, separately
+from `IcechunkConfig`. Once that is wired up, tune these knobs in order of impact:
 
 | Knob | Local default | Recommended S3 starting point |
 |---|---|---|
@@ -245,7 +246,7 @@ Once the backend is wired up, tune these knobs in order of impact:
 | `manifest_preload_enabled` | `false` | `true` |
 | `manifest_preload_pattern` | `^(epoch\|sid)$` | `^(obs\|snr\|epoch\|sid)$` |
 | `manifest_preload_max_refs` | `10_000` | `50_000` |
-| `chunk_strategies.rinex_store.epoch` | `17280` | profile before changing |
+| `chunk_strategies.gnss_store.epoch` | `17280` | profile before changing |
 | `compression_level` | `3` | `3` (no change) |
 | `inline_chunk_threshold_bytes` | `512` | `512` (no change) |
 | `manifest_splitting_enabled` | `true` | `true` (no change) |
@@ -254,136 +255,76 @@ Once the backend is wired up, tune these knobs in order of impact:
 
 ## Usage
 
-=== "Initialize / Open"
+=== "Open a site's stores"
 
     ```python
-    from canvod.store import MyIcechunkStore
-
-    # Open or create (filesystem)
-    store = MyIcechunkStore("/data/stores/examplesite/rinex")
-
-    # Open existing (read-only)
-    store = MyIcechunkStore("/data/stores/examplesite/rinex", read_only=True)
-    ```
-
-=== "Write with Versioning"
-
-    ```python
-    from canvod.site import Site
+    from canvodpy import Site
 
     site = Site("ExampleSite")
+    site.gnss_store      # observations: <stores_root_dir>/ExampleSite/rinex
+    site.vod_store       # VOD:          <stores_root_dir>/ExampleSite/vod
 
-    # Append one day of observations → creates snapshot
-    snapshot_id = site.rinex_store.append_dataset(
-        ds,
-        receiver_name="canopy_01",
-    )
-    print(f"Snapshot: {snapshot_id[:8]}")
+    # Or open a store directly
+    from canvod.store import create_gnss_store
+    store = create_gnss_store("/data/stores/ExampleSite/rinex")
     ```
+
+    Runs write to the stores (`canvodpy run`); in your own code, read.
 
 === "Version History"
 
     ```python
-    # List all commits on main branch
-    history = site.rinex_store.get_history()
-    for entry in history:
+    store = site.gnss_store
+
+    # Commits on main, newest first
+    for entry in store.get_history(limit=20):
         print(entry["snapshot_id"][:8], entry["written_at"], entry["commit_msg"])
+    store.print_history(limit=20)
 
-    # Pretty-print — same output, one liner
-    site.rinex_store.print_history(limit=20)
+    # Commit graph (SVG in notebooks, coloured text in a terminal)
+    store.plot_commit_graph()
 
-    # Open a specific historical snapshot
-    ds_old = site.rinex_store.read(
-        receiver_name="canopy_01",
-        time_range=("2024-01-01", "2024-01-31"),
-        snapshot=history[-1]["snapshot_id"],
+    # Repo-wide operations log (commits, branch operations, expiry, GC, ...)
+    store.print_ops_log(limit=30)
+
+    # Details of one snapshot, or the difference between two
+    store.get_snapshot_info(snapshot_id)
+    store.compare_snapshots(snapshot_id_1, snapshot_id_2)
+    ```
+
+=== "Read data"
+
+    ```python
+    # One receiver group, lazily loaded
+    ds = store.read_group("canopy_01")
+
+    # One day, or a time slice
+    ds_day = store.read_group("canopy_01", date="2025001")
+    ds_range = store.read_group(
+        "canopy_01", time_slice=slice("2025-01-01", "2025-06-30")
     )
-
-    # Visualise the commit DAG (SVG in notebooks, coloured text in terminal)
-    site.rinex_store.ancestry_graph()
-
-    # Repo-wide operations audit trail (commits, branch ops, GC, …)
-    site.rinex_store.print_ops_log(limit=30)
     ```
 
-=== "Query Time Range"
-
-    ```python
-    ds = site.rinex_store.read(
-        receiver_name="canopy_01",
-        time_range=("2024-01-01", "2024-06-30"),
-    )
-
-    # Lazily loaded — only reads chunks covering the range
-    print(ds.epoch.values[[0, -1]])
-    ```
-
----
-
-## Cloud Deployment
-
-=== "AWS S3"
-
-    ```python
-    # No code change — set the store path to an S3 URI
-    store = MyIcechunkStore("s3://my-bucket/examplesite/rinex")
-    ```
-
-    Configure credentials via environment variables or instance roles:
-
-    ```bash
-    export AWS_DEFAULT_REGION=eu-central-1
-    export AWS_ACCESS_KEY_ID=...
-    export AWS_SECRET_ACCESS_KEY=...
-    ```
-
-=== "MinIO / S3-Compatible"
-
-    ```python
-    import os
-    os.environ["AWS_ENDPOINT_URL"] = "https://minio.example.com"
-    os.environ["AWS_ACCESS_KEY_ID"] = "minioadmin"
-    os.environ["AWS_SECRET_ACCESS_KEY"] = "minioadmin"
-
-    store = MyIcechunkStore("s3://canvod-data/examplesite/rinex")
-    ```
-
-=== "Cloudflare R2"
-
-    ```python
-    os.environ["AWS_ENDPOINT_URL"] = "https://<account_id>.r2.cloudflarestorage.com"
-    os.environ["AWS_ACCESS_KEY_ID"] = "<r2_access_key>"
-    os.environ["AWS_SECRET_ACCESS_KEY"] = "<r2_secret_key>"
-
-    store = MyIcechunkStore("s3://canvod-data/examplesite/rinex")
-    ```
-
-!!! tip "Local → Cloud"
-    Switch from filesystem to S3 by changing the `store_path` string —
-    no other code changes required.
+    An earlier state of the store is read through a branch created at that
+    snapshot (`store.create_branch(...)`, then `read_group(..., branch=...)`).
 
 ---
 
 ## Deduplication
 
-canvod-store uses SHA-256 file hashes to skip re-ingesting the same file:
-
-```python
-# In MyIcechunkStore.append_dataset()
-if self._file_already_ingested(ds.attrs["File Hash"]):
-    log.info("file_skipped", hash=ds.attrs["File Hash"][:8])
-    return None
-
-# Otherwise write + record hash
-snapshot = self._write_and_commit(ds, ...)
-self._record_ingested_hash(ds.attrs["File Hash"])
-return snapshot
-```
+Each group keeps a log of the files it holds (`{group}/metadata/table`: file
+hash, start, end, file name, the dataset attributes as JSON and the
+preprocessing record, see
+[Preprocessing during a run](../ops/overview.md#the-preprocessing-record)).
+Every value in the log is text, JSON or a time. Before a run writes a file, the orchestrator checks
+the file's hash and time span against that log and against the other files of the
+batch; `append_to_group()` checks hash and overlap again at the write. A file that
+is already stored is not written with the default write strategy (`skip`); see
+[Storage Strategies](storage-strategies.md).
 
 !!! info "Hash source"
-    The `"File Hash"` attribute is set by the reader (`SbfReader.file_hash` /
-    `Rnxv3Obs.file_hash`) — a 16-character SHA-256 prefix of the raw file.
-    Duplicate ingestion is impossible even if the same file is submitted twice.
+    The `"File Hash"` attribute is set from the reader's `file_hash` (every
+    reader has one) — the first 16 characters of the SHA-256 of the raw file.
 
 ---
 

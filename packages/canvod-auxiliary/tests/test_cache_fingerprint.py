@@ -69,3 +69,15 @@ def test_missing_source_file_treated_as_none(tmp_path: Path) -> None:
     a = _fp(source_file_paths={"ephemerides": missing})
     b = _fp(source_file_paths={"ephemerides": None})
     assert a == b
+
+
+def test_sensitive_to_format_version(monkeypatch) -> None:
+    from canvod.auxiliary import cache_fingerprint
+
+    before = _fp()
+    monkeypatch.setattr(
+        cache_fingerprint,
+        "AUX_CACHE_FORMAT_VERSION",
+        cache_fingerprint.AUX_CACHE_FORMAT_VERSION + 1,
+    )
+    assert _fp() != before

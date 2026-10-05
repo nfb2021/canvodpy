@@ -9,36 +9,33 @@ canVODpy distributes that work and how to configure resource limits for your mac
 
 ## The parallelism model
 
-canVODpy uses Python's standard `concurrent.futures.ThreadPoolExecutor` at the outer
-level and a **persistent [loky](https://loky.readthedocs.io/) process pool** at the
-inner level — no external scheduler required. The pipeline applies two levels of
-parallelism:
+canVODpy reads files in a **persistent [loky](https://loky.readthedocs.io/)
+process pool** — no external scheduler required — and writes from a single
+process:
 
 ```
-┌─────────────────────────────────────────┐
-│  ThreadPoolExecutor (Wave A / Wave B)   │  ← receivers processed concurrently
-│  ┌──────────────┐  ┌──────────────┐     │
-│  │  Receiver A  │  │  Receiver B  │     │
-│  │ ─────────── │  │ ─────────── │     │
-│  │  loky pool  │  │  loky pool  │     │
-│  │(file parse) │  │(file parse) │     │
-│  └──────────────┘  └──────────────┘     │
-└─────────────────────────────────────────┘
-           │
-           ▼  (sequential)
-   Icechunk store  ←  one commit per receiver-day
+ days of one batch (days_per_batch)
+ ┌───────────────────────────────────────────────┐
+ │ files of all receivers, in date order,        │
+ │ round-robin across receivers                  │
+ └───────────────────────┬───────────────────────┘
+                         ▼
+        loky process pool (one task per file)       ← parallel reading
+                         │
+                         ▼  as soon as all files of a receiver-day are read
+        one writer: dedup checks, Icechunk write     ← serial writing
 ```
 
-**Wave A/B**: the outer `ThreadPoolExecutor` runs two groups of receivers
-concurrently. Within each receiver, a persistent loky pool parses individual GNSS
-files in parallel using **flat LPT scheduling** — all tasks are submitted upfront
-and workers pick them up in Longest Processing Time order, which keeps CPU utilisation
-high across unevenly-sized files.
+**Reading**: all files of a batch of days are submitted to the shared pool, one
+task per file, in date order and round-robin across receivers, so every receiver
+makes progress and results of one day arrive together.
 
-**Sequential writes**: Icechunk on a local filesystem cannot accept concurrent
-commits. Every write is performed sequentially after parsing completes, with one
-commit per receiver-day. This is a hard constraint of the local storage model
-and ensures data integrity through Icechunk's snapshot mechanism.
+**Writing**: a receiver-day is written as soon as all its files are read. One
+process writes: Icechunk on a local or network file system cannot detect two
+commits at the same time. With the default write strategy (`skip`) the receivers
+of a day are written into forks of one session and committed once; with
+`overwrite`, one commit per receiver. This is a hard constraint of the local
+storage model and keeps the deduplication checks consistent.
 
 ### Why loky instead of standard ProcessPoolExecutor?
 
@@ -98,7 +95,7 @@ Resource limits are set under `processing.params` in your `canvod-settings.yaml`
         max_memory_gb: 16         # soft RAM limit across all workers
         cpu_affinity: [0, 1, 2, 3]  # pin to specific CPU cores (Linux only)
         nice_priority: 10         # lower process priority (0=normal, 19=lowest)
-        days_per_batch: 1         # days processed per commit
+        days_per_batch: 1         # days whose files are read together
     ```
 
 ### Configuration reference
@@ -108,7 +105,7 @@ Resource limits are set under `processing.params` in your `canvod-settings.yaml`
 | `resource_mode` | `auto` | `auto` (detect cores/memory) or `manual` (hard caps) |
 | `n_max_threads` | — | Worker process count. Required when `resource_mode=manual` |
 | `max_memory_gb` | — | Soft RAM limit in GB. Manual mode only |
-| `days_per_batch` | `1` | Days of data per processing batch and Icechunk commit |
+| `days_per_batch` | `1` | Days whose files are submitted to the worker pool together (1–30) |
 | `cpu_affinity` | — | CPU core IDs to pin workers to (Linux only) |
 | `nice_priority` | `0` | Process priority: 0 = normal, 19 = lowest |
 
@@ -130,12 +127,13 @@ can be inspected to diagnose out-of-memory failures on constrained machines.
 
 ## Write granularity and data integrity
 
-Each receiver-day produces one Icechunk commit. This maps directly to the three-layer
-deduplication guard built into `canvod-store`:
+Writes are per day (see above). Before every write, the three-layer deduplication
+guard runs:
 
 1. **Hash match** — identical file content is never written twice
-2. **Temporal overlap** — a new batch that overlaps existing epochs is rejected
-3. **Intra-batch overlap** — duplicate epochs within a single batch are caught before writing
+2. **Temporal overlap** — a file overlapping already-stored epochs is not written
+   (default `skip`) or replaces them (`overwrite`)
+3. **Intra-batch overlap** — two files of one batch covering the same time are caught before writing
 
 These checks run before every write, regardless of parallelism settings. A failed
 write leaves the store unchanged — Icechunk's snapshot model means partial writes
@@ -144,5 +142,5 @@ are never committed.
 ---
 
 !!! example "Try it"
-    [16 — Batch Processing](../notebooks/_build/16_batch_processing.html){target=_blank}
-    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/16_batch_processing.py)
+    [17 — Batch Processing](../notebooks/_build/17_workflow_batch_processing.html){target=_blank}
+    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/17_workflow_batch_processing.py)

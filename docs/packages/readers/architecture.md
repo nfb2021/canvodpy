@@ -43,6 +43,11 @@ class GNSSDataReader(BaseModel, ABC):
         return v
 
     @property
+    def source_format(self) -> str:
+        """Format identifier, e.g. "rinex3", "sbf". Override it."""
+        return "rinex3"
+
+    @property
     @abstractmethod
     def file_hash(self) -> str:
         """SHA256 hash of file for deduplication."""
@@ -109,7 +114,12 @@ Any implementation of `GNSSDataReader` guarantees the following:
 3. **Dataset Conversion**: `to_ds()` returns a validated xarray.Dataset with `(epoch, sid)` dimensions.
 4. **Iteration**: `iter_epochs()` yields epoch-by-epoch data for memory-bounded streaming.
 5. **Metadata**: Properties provide time range, systems, and satellite counts.
-6. **Validation**: Output passes `validate_dataset()` — checked automatically by `DatasetBuilder`.
+6. **Validation**: Output passes `validate_dataset()`. Every built-in reader calls it at the end of `to_ds()`; `DatasetBuilder.build()` calls it for readers built on the builder.
+
+!!! warning "Override `source_format`"
+    `source_format` is not abstract: a reader that does not override it
+    reports `"rinex3"`. Every built-in reader overrides it (`rinex3`,
+    `rinex3_stripped`, `rinex2`, `sbf`, `nmea`); a new reader must too.
 
 ## `SignalID` — Validated Signal Identifiers
 
@@ -135,12 +145,12 @@ SignalID(sv="X01", band="L1", code="C")  # raises ValueError
 
 ## `DatasetBuilder` — Guided Dataset Construction
 
-The `DatasetBuilder` helper eliminates the ~30 lines of manual numpy/xarray coordinate assembly that every reader previously needed:
+The `DatasetBuilder` helper does the numpy/xarray coordinate assembly for a new reader. The built-in readers (RINEX 2 and 3, SBF, NMEA) predate it: each assembles its dataset itself and calls `validate_dataset()`. A new reader can use the builder:
 
 ```python
 from canvod.readers.builder import DatasetBuilder
 
-builder = DatasetBuilder(reader)
+builder = DatasetBuilder(reader, time_system="GPS")
 for epoch in reader.iter_epochs():
     ei = builder.add_epoch(epoch.timestamp)
     for obs in epoch.observations:
@@ -178,9 +188,11 @@ graph TB
     end
 
     subgraph "Implementation Layer"
-        D[Rnxv3Obs]
+        D[Rnxv3Obs, Rnxv3StrippedObs]
         D2[SbfReader]
-        E[Future: Rnxv2Obs]
+        E[Rnxv2Obs]
+        E2[NmeaObs]
+        NEW[New reader]
     end
 
     subgraph "Support Layer"
@@ -197,9 +209,14 @@ graph TB
     D -.implements.-> B
     D2 -.implements.-> B
     E -.implements.-> B
+    E2 -.implements.-> B
+    NEW -.implements.-> B
 
-    D --> BLD
-    D2 --> BLD
+    D --> C
+    D2 --> C
+    E --> C
+    E2 --> C
+    NEW --> BLD
     BLD --> B2
     BLD --> H
     BLD --> I
@@ -217,9 +234,9 @@ graph TB
 
 **Interface Layer (BaseModel + ABC)** -- Defines required methods, enforces contracts via Pydantic validation, provides `SignalID` for type-safe signal identifiers, and offers `validate_dataset()` for output validation.
 
-**Builder Layer** -- `DatasetBuilder` handles coordinate assembly, frequency resolution, dtype enforcement, and validation. Readers delegate Dataset construction to the builder instead of assembling arrays manually.
+**Builder Layer** -- `DatasetBuilder` handles coordinate assembly, frequency resolution, dtype enforcement, and validation for new readers. The built-in readers assemble their datasets themselves.
 
-**Implementation Layer (Concrete Readers)** -- Parses specific formats, implements abstract methods, and handles format-specific details. `Rnxv3Obs` reads RINEX v3.04 text; `SbfReader` reads Septentrio Binary Format with embedded satellite geometry.
+**Implementation Layer (Concrete Readers)** -- Parses specific formats, implements abstract methods, and handles format-specific details. `Rnxv3Obs` reads RINEX 3 observation files, `Rnxv3StrippedObs` RINEX 3 files that contain signal strengths only, `Rnxv2Obs` RINEX 2.11, `SbfReader` Septentrio Binary Format (with the receiver's own satellite geometry), `NmeaObs` NMEA 0183 v4.00.
 
 **Support Layer** -- Provides constellation specifications (GPS, Galileo, etc.), Signal ID mapping, and metadata templates.
 
@@ -229,17 +246,20 @@ graph TB
 
 ### Parsing Flow (with DatasetBuilder)
 
+The flow of a new reader built on `DatasetBuilder` (the built-in readers
+parse and assemble without it):
+
 ```mermaid
 sequenceDiagram
     participant User
-    participant Reader as Rnxv3Obs<br/>(GNSSDataReader)
-    participant Header as Rnxv3Header<br/>(Pydantic)
+    participant Reader as MyReader<br/>(GNSSDataReader)
+    participant Header as Header model<br/>(Pydantic)
     participant Builder as DatasetBuilder
     participant SigID as SignalID
     participant Mapper as SignalIDMapper
     participant Validator
 
-    User->>Reader: Rnxv3Obs(fpath=path)
+    User->>Reader: MyReader(fpath=path)
     activate Reader
     Note right of Reader: fpath validated by<br/>BaseModel field_validator
     Reader->>Header: Parse header section
@@ -248,7 +268,7 @@ sequenceDiagram
 
     User->>Reader: to_ds()
     activate Reader
-    Reader->>Builder: DatasetBuilder(reader)
+    Reader->>Builder: DatasetBuilder(reader, time_system)
 
     loop For each epoch
         Reader->>Builder: add_epoch(timestamp)
@@ -302,7 +322,7 @@ Key interactions in this flow:
 
     Readers like `Rnxv3Obs` are `frozen=True` Pydantic models. Once constructed,
     `reader.fpath` cannot be reassigned — predictable, thread-safe, cacheable.
-    `SbfReader` uses `frozen=False` with `@cached_property` for lazy computation.
+    `SbfReader` and `NmeaObs` are not frozen; `SbfReader` uses `@cached_property` for lazy computation.
 
 -   :fontawesome-solid-puzzle-piece: &nbsp; **Separation of Concerns**
 
@@ -371,21 +391,26 @@ Immutability ensures predictable behavior, thread safety, and cacheable results.
 !!! note "Frozen is optional"
 
     The base class does **not** set `frozen=True` — subclasses choose.
-    `Rnxv3Obs` uses `frozen=True` (fully immutable), while `SbfReader`
-    uses `frozen=False` (allows `@cached_property` for lazy computation).
+    `Rnxv3Obs` and `Rnxv2Obs` use `frozen=True` (fully immutable), while
+    `SbfReader` and `NmeaObs` are not frozen (`SbfReader` uses
+    `@cached_property` for lazy computation).
 
 ### Separation of Format and Processing
 
 Format-specific code is contained within the reader:
 
 ```python
-# In Rnxv3Obs — format-specific fast parsing
-def _parse_obs_fast(slice_text: str) -> tuple[float | None, int | None, int | None]:
-    """Inline RINEX v3 observation extraction (no Pydantic overhead)."""
+# In Rnxv3Obs — format-specific parsing, two parsers on shared helpers
+def _create_dataset_validated(self, keep_data_vars) -> xr.Dataset:
+    """Default: epochs from iter_epochs() (Pydantic-validated) -> arrays."""
     ...
 
-def _create_dataset_single_pass(self) -> xr.Dataset:
-    """Single-pass: header-derived SIDs → pre-allocated arrays → one file scan."""
+def _create_dataset_unvalidated_fast(self, keep_data_vars) -> xr.Dataset:
+    """Opt-in, DANGEROUS: fixed-column slicing without any validation."""
+    ...
+
+def _assemble_dataset(self, timestamps, arrays, sorted_sids, sid_properties):
+    """Shared: coordinates, attributes and variable order for both parsers."""
     ...
 ```
 
@@ -468,7 +493,8 @@ from canvodpy import ReaderFactory
 reader = ReaderFactory.create("rinex3", fpath="station.25o")
 reader = ReaderFactory.create("sbf", fpath="station.25_")
 
-# Auto-detect RINEX v2/v3 from file header
+# Detect the reader from the file content
+ReaderFactory.detect_reader("station.25o")          # "rinex3"
 reader = ReaderFactory.create_from_file("station.25o")
 
 # Register a custom reader
@@ -478,9 +504,14 @@ reader = ReaderFactory.create("my_format", fpath="data.myf")
 
 !!! note "Auto-detection scope"
 
-    `create_from_file()` auto-detects **RINEX v2/v3** from the first 9
-    characters of the file header.  SBF and other binary formats should
-    use the name-based API: `ReaderFactory.create("sbf", fpath=path)`.
+    `detect_reader()` and `create_from_file()` recognize **RINEX 2 and 3**
+    by the version in the first header line and **NMEA** by its
+    sentences; a file they cannot place raises `ValueError`. A stripped
+    RINEX 3 file is detected as `rinex3`, so name `rinex3_stripped`
+    yourself. SBF and other binary formats use the name-based API:
+    `ReaderFactory.create("sbf", fpath=path)`. Runs with
+    `reader_format: auto` tell SBF and NMEA files by their file type and
+    RINEX 2 from RINEX 3 with `detect_reader()`.
 
 ## Summary
 
@@ -488,8 +519,8 @@ The canvod-readers architecture is characterized by:
 
 1. **Unified inheritance** — `GNSSDataReader(BaseModel, ABC)` provides file validation, `fpath`, and `model_config` out of the box. New readers only need one parent class.
 2. **Validated signal identifiers** — `SignalID` catches invalid SVs and malformed signal IDs at creation time, not during analysis.
-3. **Guided Dataset construction** — `DatasetBuilder` handles coordinate arrays, frequency resolution, dtype enforcement, and validation automatically.
+3. **Guided Dataset construction** — `DatasetBuilder` handles coordinate arrays, frequency resolution, dtype enforcement, and validation for new readers.
 4. **Contract enforcement** through the ABC, ensuring consistent behavior across all readers.
 5. **Type safety** via Pydantic, catching errors during parsing.
 6. **Structural validation** through `validate_dataset()`, ensuring downstream compatibility.
-7. **Extensibility** — new formats can be added in ~30 lines without modifying existing code. See [:octicons-arrow-right-24: Building a Reader](building-a-reader.md) for a step-by-step guide.
+7. **Extensibility** — new formats can be added without modifying existing code. See [:octicons-arrow-right-24: Building a Reader](building-a-reader.md) for a step-by-step guide.

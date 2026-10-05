@@ -12,6 +12,11 @@ from canvod.preflight import (
     SiteNamingConfig,
 )
 
+# Tests of the deprecated mapping and validation API, see test_deprecations.py.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:.*left over from development:FutureWarning"
+)
+
 
 @pytest.fixture
 def site_naming() -> SiteNamingConfig:

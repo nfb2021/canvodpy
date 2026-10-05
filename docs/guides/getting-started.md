@@ -338,11 +338,12 @@ From inside the `canvodpy` directory, run:
 # Verify required tools are available
 just check-dev-tools
 
-# Install all Python dependencies into a virtual environment
-uv sync
+# Install all Python dependencies into a virtual environment,
+# and the git hooks (automatic checks before each commit)
+just sync
 
-# Install pre-commit hooks (automatic code checks before each commit)
-just hooks
+# Optional: build the code graph (free, local; see Developing with coding agents)
+just graph
 ```
 
 ---
@@ -609,7 +610,7 @@ Push to your team branch or feature branch (see [Working in teams](#12b-working-
 
 ## 14. Pre-commit hooks and why your commit may be rejected
 
-When you ran `just hooks` in [step 9](#9-set-up-the-development-environment), a set of **pre-commit hooks** was installed into your local `.git/hooks/` directory. These hooks run automatically every time you execute `git commit`. If any hook fails, **the commit is aborted** — your changes remain staged but no commit is created.
+When you ran `just sync` in [step 9](#9-set-up-the-development-environment), a set of **pre-commit hooks** was installed into your local `.git/hooks/` directory. These hooks run automatically every time you execute `git commit`. If any hook fails, **the commit is aborted** — your changes remain staged but no commit is created.
 
 This is intentional: it prevents code that does not meet the project's quality standards from entering the Git history. The hooks are defined in `.pre-commit-config.yaml` at the repository root.
 
@@ -621,12 +622,18 @@ The following checks execute automatically in sequence. If any one fails, the co
 | --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | **ruff check**              | `pre-commit` (before commit is created)    | Python linting — unused imports, undefined names, style violations, type annotation issues                                | You have an unused import or a linting rule violation                   |
 | **ruff format**             | `pre-commit`                               | Python formatting — consistent code style (indentation, line length, quote style, trailing commas)                        | Your code is not formatted according to the project style               |
-| **uv-lock**                 | `pre-commit`                               | Lockfile consistency — verifies `uv.lock` matches `pyproject.toml`                                                        | You changed a dependency in `pyproject.toml` but did not run `uv sync`  |
+| **uv-lock**                 | `pre-commit`                               | Lockfile consistency — updates `uv.lock` to match `pyproject.toml`                                                        | You changed a dependency in `pyproject.toml`; stage the updated `uv.lock` |
 | **trailing-whitespace**     | `pre-commit`                               | Removes trailing whitespace from all files                                                                                | A line ends with invisible spaces or tabs                               |
 | **check-added-large-files** | `pre-commit`                               | Blocks files larger than the threshold from being committed                                                               | You are trying to commit a large binary, dataset, or log file           |
 | **detect-private-key**      | `pre-commit`                               | Scans for accidentally staged private keys (SSH, PGP)                                                                     | You are about to commit a secret — **do not override this**             |
 | **end-of-file-fixer**       | `pre-commit`                               | Ensures every file ends with exactly one newline                                                                          | A file is missing its final newline or has extra blank lines at the end |
+| **agent docs**              | `pre-commit`                               | Every file path and `just` recipe named in the `AGENTS.md` files and task guides exists                                   | You renamed or moved a file that an `AGENTS.md` or guide names          |
 | **commitizen**              | `commit-msg` (after you write the message) | Validates that your commit message follows the [Conventional Commits](https://www.conventionalcommits.org/) specification | Your message does not match the `type(scope): subject` format           |
+| **ty**                      | `pre-push` (before `git push`)             | Type checking                                                                                                             | A type error in your changes                                            |
+
+After a commit, merge or checkout, two more hooks run without blocking anything:
+the code graph is rebuilt in the background (`just graph`), and after a merge the
+submodules are updated.
 
 ### How to fix a rejected commit
 
@@ -732,9 +739,9 @@ Every push to a branch and every pull request triggers automated checks on GitHu
 
 | Workflow               | Trigger                    | What it does                                                                                                                           |
 | ---------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| **Code Quality**       | Every push                 | Checks lockfile consistency, runs ruff linting, checks formatting, runs type checking with ty                                          |
+| **Code Quality**       | Every push                 | Checks lockfile consistency, runs ruff linting, checks formatting, runs type checking with ty, checks the agent docs                   |
 | **Test with Coverage** | Push to `main` and all PRs | Runs `just test-coverage` (pytest with coverage measurement), uploads results to Coveralls, posts a coverage summary comment on the PR |
-| **Platform Tests**     | PRs                        | Runs the test suite across multiple operating systems and Python versions                                                              |
+| **Platform Tests**     | Every push and PR          | Runs the test suite with Python 3.14 on Linux, macOS and Windows                                                                       |
 | **Deploy Docs**        | Push to `main`             | Builds and deploys the documentation site                                                                                              |
 
 ### Test coverage with Coveralls
@@ -751,7 +758,7 @@ To measure coverage locally before pushing:
 
 ```bash
 just test-coverage
-# Opens an HTML report in your browser showing line-by-line coverage
+# Prints a coverage table and writes coverage.lcov (not committed)
 ```
 
 ---
@@ -769,7 +776,7 @@ just test-coverage
     | `just config-init`                | Scaffold `canvod-settings.yaml` from template           |
     | `just config-validate`            | Validate the current configuration             |
     | `just config-show`                | Show the resolved configuration                |
-    | `canvod-preflight validate <dir>` | Check data files against the naming convention |
+    | `just config-check-data <site>`   | Check a site's data files as a run reads them  |
     | `just docs`                       | Preview documentation locally                  |
     | `just test-coverage`              | Run tests with coverage report                 |
     | `just clean`                      | Remove build artifacts and caches              |
@@ -787,6 +794,9 @@ just test-coverage
 
     **`uv sync` fails with a Python version error**
     :   canVODpy requires Python 3.14. Install a supported version with `uv python install 3.14` and try again.
+
+    **`uv sync` tries to build `llvmlite` on a Mac**
+    :   On macOS, canVODpy runs on Apple silicon only. Its `numba` and `llvmlite` dependencies publish no Python 3.14 wheels for Intel Macs.
 
     **Pre-commit hook fails on commit**
     :   Run `just check` — it will auto-fix most linting and formatting issues. Stage the fixed files and commit again.

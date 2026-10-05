@@ -3,8 +3,6 @@ Research site manager that coordinates RINEX and VOD Icechunk stores.
 
 This module provides the GnssResearchSite class that manages both stores
 for a research site and provides high-level operations across them.
-
-Module: src/gnssvodpy/icechunk_manager/manager.py
 """
 
 from __future__ import annotations
@@ -21,9 +19,11 @@ import zarr
 if TYPE_CHECKING:
     from canvod.vod import VODCalculator
 
+import structlog
 from canvod.config.models import VodAnalysisConfig
-from canvodpy.logging import get_logger
+from canvod.utils.tools import deprecated
 
+from canvod.store.prepare import prepare_write
 from canvod.store.store import (
     VodWriteItem,
     VodWriteResult,
@@ -83,7 +83,7 @@ class GnssResearchSite:
 
         self.site_name = site_name
         self._site_config = sites[site_name]
-        self._logger = get_logger(__name__).bind(site=site_name)
+        self._logger = structlog.get_logger(__name__).bind(site=site_name)
 
         gnss_store_path = config.processing.storage.get_gnss_store_path(site_name)
         vod_store_path = config.processing.storage.get_vod_store_path(site_name)
@@ -225,7 +225,7 @@ class GnssResearchSite:
             analysis_name = f"{canopy_name}_vs_{ref_name}"
             analyses[analysis_name] = VodAnalysisConfig(
                 canopy_receiver=canopy_name,
-                reference_receiver=f"{ref_name}_{canopy_name}",
+                reference_receiver=ref_name,
                 description=f"VOD analysis {canopy_name} vs {ref_name}",
             )
         return analyses
@@ -244,12 +244,10 @@ class GnssResearchSite:
         ValueError
             If configuration is invalid.
         """
-        # Check that all VOD analyses reference valid receivers
-        # Build set of valid reference store groups (e.g. reference_01_canopy_01)
-        valid_ref_groups = {
-            f"{ref}_{canopy}" for ref, canopy in self.get_reference_canopy_pairs()
-        }
-
+        # Check that all VOD analyses reference valid receivers.
+        # reference_receiver is always a bare receiver name (never a store
+        # group name) -- see VodAnalysisConfig.reference_store_group for the
+        # derived paired name used to look up data in the store.
         for analysis_name, analysis_config in self.vod_analyses.items():
             canopy_rx = analysis_config.canopy_receiver
             ref_rx = analysis_config.reference_receiver
@@ -259,11 +257,10 @@ class GnssResearchSite:
                     f"VOD analysis '{analysis_name}' references "
                     f"unknown canopy receiver: {canopy_rx}"
                 )
-            # ref_rx can be either a raw receiver name or a store group name
-            if ref_rx not in self.receivers and ref_rx not in valid_ref_groups:
+            if ref_rx not in self.receivers:
                 raise ValueError(
                     f"VOD analysis '{analysis_name}' references "
-                    f"unknown reference receiver/group: {ref_rx}"
+                    f"unknown reference receiver: {ref_rx}"
                 )
 
             # Check canopy type
@@ -272,14 +269,12 @@ class GnssResearchSite:
                 raise ValueError(
                     f"Receiver '{canopy_rx}' used as canopy but type is '{canopy_type}'"
                 )
-            # Check reference type (only if it's a raw receiver name)
-            if ref_rx in self.receivers:
-                ref_type = self.receivers[ref_rx]["type"]
-                if ref_type != "reference":
-                    raise ValueError(
-                        f"Receiver '{ref_rx}' used as reference"
-                        f" but type is '{ref_type}'"
-                    )
+            # Check reference type
+            ref_type = self.receivers[ref_rx]["type"]
+            if ref_type != "reference":
+                raise ValueError(
+                    f"Receiver '{ref_rx}' used as reference but type is '{ref_type}'"
+                )
 
         self._logger.debug("Site configuration validation passed")
         return True
@@ -374,6 +369,36 @@ class GnssResearchSite:
         )
 
         self._logger.info(f"Successfully ingested data for receiver '{receiver_name}'")
+
+    def source_file_hashes_for(self, group_name: str, ds: xr.Dataset) -> str:
+        """Comma-joined hashes of the GNSS files behind ``ds``.
+
+        ``ds`` is data read from GNSS store group ``group_name``. The hashes
+        come from that group's log book, for every ingested file overlapping
+        ``ds``'s epoch range (see ``MyIcechunkStore.source_file_hashes``), so a
+        daily dataset built from many files lists all of them. Falls back to
+        ``ds.attrs["File Hash"]`` when the log book has no matching rows.
+        """
+        if ds.sizes.get("epoch", 0):
+            hashes = self.gnss_store.source_file_hashes(
+                group_name, ds.epoch.min().values, ds.epoch.max().values
+            )
+            if hashes:
+                return ",".join(hashes)
+        return str(ds.attrs.get("File Hash", "unknown"))
+
+    def preprocessing_records_for(self, group_name: str, ds: xr.Dataset) -> list[str]:
+        """Preprocessing records of the GNSS data behind ``ds``.
+
+        ``ds`` is data read from GNSS store group ``group_name``; the records
+        come from that group's log book, for the files overlapping ``ds``'s
+        epoch range (as :meth:`source_file_hashes_for`).
+        """
+        if not ds.sizes.get("epoch", 0):
+            return []
+        return self.gnss_store.preprocessing_records(
+            group_name, ds.epoch.min().values, ds.epoch.max().values
+        )
 
     def read_receiver_data(
         self, receiver_name: str, time_range: tuple[datetime, datetime] | None = None
@@ -640,15 +665,16 @@ class GnssResearchSite:
 
         analysis_config = self.vod_analyses[analysis_name]
         canopy_receiver = analysis_config.canopy_receiver
-        reference_receiver = analysis_config.reference_receiver
+        reference_group = analysis_config.reference_store_group
 
         self._logger.info(
-            f"Preparing VOD input data: {canopy_receiver} vs {reference_receiver}"
+            f"Preparing VOD input data: {canopy_receiver} vs {reference_group}"
         )
 
-        # Read data from both receivers
+        # Read data from both receivers. Reference data is always stored
+        # under the paired group name, never the bare receiver name.
         canopy_data = self.read_receiver_data(canopy_receiver, time_range)
-        reference_data = self.read_receiver_data(reference_receiver, time_range)
+        reference_data = self.read_receiver_data(reference_group, time_range)
 
         self._logger.info(
             f"Loaded data - Canopy: {dict(canopy_data.dims)}, "
@@ -657,6 +683,12 @@ class GnssResearchSite:
 
         return canopy_data, reference_data
 
+    @deprecated(
+        "GnssResearchSite.calculate_vod() is left over from development and "
+        "will be removed with the next major version. Use "
+        "canvodpy.Site(<site>).vod.compute_bulk(<analysis>, start=..., "
+        "end=..., write=False) instead."
+    )
     def calculate_vod(
         self,
         analysis_name: str,
@@ -708,9 +740,7 @@ class GnssResearchSite:
         )
 
         # Use the calculator's class method for calculation (alignment already done)
-        vod_ds = calculator_class.from_datasets(
-            canopy_aligned, reference_aligned, align=False
-        )
+        vod_ds = calculator_class.from_datasets(canopy_aligned, reference_aligned)
 
         # Apply config-gated derived quantities
         if processing_params is None:
@@ -743,14 +773,25 @@ class GnssResearchSite:
         vod_ds.attrs["canopy_receiver"] = analysis_config.canopy_receiver
         vod_ds.attrs["reference_receiver"] = analysis_config.reference_receiver
         vod_ds.attrs["calculator"] = calculator_class.__name__
-        vod_ds.attrs["canopy_hash"] = canopy_ds.attrs.get("File Hash", "unknown")
-        vod_ds.attrs["reference_hash"] = reference_ds.attrs.get("File Hash", "unknown")
+        vod_ds.attrs["canopy_hash"] = self.source_file_hashes_for(
+            analysis_config.canopy_receiver, canopy_ds
+        )
+        vod_ds.attrs["reference_hash"] = self.source_file_hashes_for(
+            analysis_config.reference_store_group, reference_ds
+        )
 
         self._logger.info(
             f"VOD calculated for {analysis_name} using {calculator_class.__name__}"
         )
         return vod_ds
 
+    @deprecated(
+        "GnssResearchSite.store_vod() is left over from development and will "
+        "be removed with the next major version. Use "
+        "canvodpy.Site(<site>).vod.compute_bulk(<analysis>) or "
+        "GnssResearchSite.store_vod_analysis() instead, which deduplicate and "
+        "record the source files in the VOD log book."
+    )
     def store_vod(
         self,
         vod_ds: xr.Dataset,
@@ -783,13 +824,23 @@ class GnssResearchSite:
             groups = self.vod_store.list_groups() or []
 
             if analysis_name not in groups:
-                to_icechunk(vod_ds, session, group=analysis_name, mode="w")
+                to_icechunk(
+                    prepare_write(vod_ds, session.store, analysis_name),
+                    session,
+                    group=analysis_name,
+                    mode="w",
+                )
                 action = "write"
             else:
-                to_icechunk(vod_ds, session, group=analysis_name, append_dim="epoch")
+                to_icechunk(
+                    prepare_write(vod_ds, session.store, analysis_name),
+                    session,
+                    group=analysis_name,
+                    append_dim="epoch",
+                )
                 action = "append"
 
-            version = importlib.metadata.version("canvodpy")
+            version = importlib.metadata.version("canvod-store")
             commit_msg = f"[v{version}] VOD for {analysis_name}"
             snapshot_id = session.commit(commit_msg)
 
