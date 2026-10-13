@@ -1,12 +1,13 @@
 # canvod-preflight
 
-`canvod-preflight` enforces the canVOD filename convention at the pipeline boundary.
-Before any data is read, it validates that every file in a receiver directory can be
-unambiguously identified and that no two files cover the same time window.
+`canvod-preflight` defines the canVOD filename convention: `CanVODFilename` parses and
+builds canonical names, and `find_overlaps` finds files whose named time spans overlap.
+Runs from the command line and from Python use both to decide which files they
+process.
 
 ---
 
-## The CanVODFilename Convention
+## The canVOD filename convention
 
 Every canVOD-compatible GNSS file follows this naming format:
 
@@ -21,18 +22,18 @@ Every canVOD-compatible GNSS file follows this naming format:
 | Field | Width | Description | Example |
 |-------|-------|-------------|---------|
 | `SIT` | 3 | Site ID, uppercase | `ROS`, `HAI` |
-| `T` | 1 | Receiver type: **R** = reference, **A** = active (below-canopy) | `R`, `A` |
+| `T` | 1 | Receiver type: **R** = reference, **A** = active (below the canopy) | `R`, `A` |
 | `NN` | 2 | Receiver number, zero-padded | `01`, `35` |
 | `AGC` | 3 | Data provider / agency ID | `TUW`, `GFZ` |
-| `_R` | 2 | Literal separator | `_R` |
+| `_R` | 2 | RINEX data-source field, always `R` (receiver-generated) | `_R` |
 | `YYYY` | 4 | Year | `2025` |
 | `DOY` | 3 | Day of year (001--366) | `001` |
 | `HHMM` | 4 | Start time (hours + minutes) | `0000` |
 | `PERIOD` | 3 | Batch duration: value + unit | `01D`, `15M` |
 | `SAMPLING` | 3 | Data frequency: value + unit | `05S`, `01S` |
 | `CONTENT` | 2 | User-defined content code | `AA` |
-| `TYPE` | 2--4 | File format, lowercase | `rnx`, `sbf` |
-| `COMPRESSION` | -- | Optional compression extension | `zip`, `gz` |
+| `TYPE` | 2--8 | File format, lowercase; runs read `rnx`, `sbf` and `nmea`, and the type of each installed [reader plugin](../../guides/plugins.md) | `rnx`, `sbf`, `nmea`, `ubx` |
+| `COMPRESSION` | -- | Optional compression extension; runs do not read compressed files (warning `compressed_files_not_processed`), decompress them first | `zip`, `gz` |
 
 ### Duration codes
 
@@ -49,114 +50,78 @@ Every canVOD-compatible GNSS file follows this naming format:
 ROSR01TUW_R_20250010000_01D_05S_AA.rnx
 ```
 
-| Part | Value | Meaning |
+| Part | Field | Meaning |
 |------|-------|---------|
-| `ROS` | Site | ExampleSite |
-| `R` | Type | Reference (above-canopy) |
+| `ROS` | Site | Site ID `ROS` |
+| `R` | Type | Reference receiver |
 | `01` | Number | Receiver 01 |
 | `TUW` | Agency | TU Wien |
-| `2025001` | Date | 2025, DOY 001 |
-| `0000` | Start | 00:00 UTC |
+| `2025001` | Date | 2025, day of year 001 |
+| `0000` | Start | 00:00 GPS time |
 | `01D` | Period | 1-day file |
 | `05S` | Sampling | 5-second intervals |
 | `AA` | Content | Default |
 | `rnx` | Type | RINEX observation |
 
+As in the RINEX 3 long names, the start time is in the time scale of the
+observations, which for canVODpy is GPS time.
+
+!!! example "Try it in a notebook"
+
+    Open [Naming convention](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/04_naming_convention.py?mode=edit) in molab, the online notebook service of marimo.
+
 ---
 
-## Pre-pipeline validation
+## Which files a run processes
 
-`canvod-preflight` is a **mandatory hard gate** that runs before any data is read.
-It checks two things for each receiver directory:
+A run scans each receiver's `directory` recursively, in any folder layout (all
+files in one folder, one folder per day, or deeper nesting). A file's day comes from the
+date in its name, not from its folder. Without a naming recipe, only files that follow
+the convention are processed. A run stops before reading any data if
 
-1. **Every file can be identified** — each filename matches a known naming pattern.
-   Unrecognised files block processing with a diagnostic listing the problem files.
-2. **No temporal overlaps** — no two files cover the same time window.
-   Overlapping files are ambiguous; they block processing until resolved.
+1. a directory holds files of more than one receiver,
+2. two files map to the same canonical name, or
+3. two files cover the same time, for example a daily file next to the 15-minute files
+   of the same day.
+
+With `reader_format: auto`, the reader is detected per day: SBF and NMEA by file type, and
+RINEX 2 or 3 by the file header. A day whose files need different readers stops the
+run; set `reader_format`, or keep each format in its own directory.
+
+Files a run does not process (names that neither the recipe nor the convention
+recognizes, or a file type the receiver's `reader_format` does not read) do not stop it.
+The run processes the other files and logs one warning per receiver,
+`files_not_processed`, with the number of such files per file type and an example.
+
+Compressed files are never processed, with or without a recipe: general compression
+and archives (`.gz`, `.Z`, `.zip`, `.bz2`, `.xz`, `.zst`, `.7z`, `.tgz`, `.tar`, and `.rar`) and Hatanaka-compressed RINEX (`.crx`,
+RINEX 2 `.yyd`). They get a warning of their own, `compressed_files_not_processed`.
+Decompress them first (for Hatanaka, `crx2rnx`). A receiver directory holding only
+compressed files fails the check below.
+
+Check a site before processing it; the check finds the files exactly as a run does and
+also lists the files a run would pass over:
 
 ```bash
-# CLI — validate a single receiver directory
-canvod-preflight validate /data/my_site/01_reference \
-    --site ROS --agency TUW --receiver 1 --role reference
-
-# Shortcut for a site configured in canvod-settings.yaml
-just config-check-data <site>
+canvodpy config validate --site <site>
 ```
-
-Validation is also triggered automatically by `just config-validate` (which calls
-`uv run canvodpy config validate`).
 
 ---
 
 ## Files that don't follow the convention
 
-If your GNSS receiver outputs files in a proprietary or legacy format (RINEX v2
-short names, Septentrio binary, etc.), the optional
-[`canvod-filemap`](https://github.com/nfb2021/canvodpy-extensions) package provides
-a **recipe-based mapping layer** that virtualises physical filenames to canonical names
-without renaming anything on disk.
-
-Install it separately from the [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions)
-repo (see [Optional Extensions](../../guides/extensions.md) for details and alternatives):
-
-```bash
-uv add "canvod-filemap @ git+https://github.com/nfb2021/canvodpy-extensions.git@v0.1.0#subdirectory=packages/canvod-filemap"
-```
-
-Then reference a recipe from `canvod-settings.yaml`:
+A run processes only files with canonical names. For files with other names,
+for example RINEX v2 short names or the names a receiver's firmware gives its
+SBF files, set a naming recipe on the receiver:
 
 ```yaml
 sites:
   my_site:
     receivers:
       reference_01:
-        recipe: my_site_reference   # → config/recipes/my_site_reference.yaml
+        recipe: my_site_reference
 ```
 
-### NamingRecipe YAML format
-
-A recipe tells the mapper how to extract canonical fields from a physical filename:
-
-```yaml
-name: examplesite_reference
-description: Septentrio RINEX v2 files from ExampleSite reference receiver
-site: ROS
-agency: TUW
-receiver_number: 1
-receiver_type: reference
-sampling: "05S"
-period: "15M"
-file_type: rnx
-layout: yyddd_subdirs   # or yyyyddd_subdirs, flat
-glob: "*.??o"
-fields:
-  - skip: 4          # "rref"
-  - doy: 3           # "001"
-  - hour_letter: 1   # "a"
-  - minute: 2        # "15"
-  - skip: 1          # "."
-  - yy: 2            # "25"
-  - skip: 1          # "o"
-```
-
-| Field key | Description |
-|-----------|-------------|
-| `year` | 4-digit year |
-| `yy` | 2-digit year (80--99 = 19xx, 00--79 = 20xx) |
-| `doy` | Day of year |
-| `month` / `day` | Month + day of month (converted to DOY) |
-| `hour` | Hour (0--23) |
-| `hour_letter` | RINEX v2 hour letter (a--x = 0--23) |
-| `minute` | Minute (0--59) |
-| `skip` | Ignore N characters |
-
-`uv run canvodpy config init` copies recipe templates to `config/recipes/`
-alongside `canvod-settings.yaml`. See the
-[canvod-filemap documentation](https://github.com/nfb2021/canvodpy-extensions)
-for the full API (`FilenameMapper`, `VirtualFile`, `FilenameCatalog`).
-
----
-
-!!! example "Try it"
-    [04 · Naming Convention](../../notebooks/_build/04_naming_convention.html){target=_blank}
-    · [view source on molab](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/04_naming_convention.py)
+The recipe gives each file a canonical name without renaming it on disk.
+Naming recipes need an optional extension; see
+[Optional extensions](../../guides/extensions.md).

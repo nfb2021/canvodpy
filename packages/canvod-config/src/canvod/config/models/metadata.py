@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import EmailStr, Field, field_validator
+from pydantic import EmailStr, Field, field_validator, model_validator
 
 from .base import _StrictModel
 
@@ -18,14 +18,14 @@ class MetadataConfig(_StrictModel):
     author: str = Field(
         ...,
         description=(
-            "Your full name — used in dataset metadata and FAIR attribution "
+            "Your full name, used in dataset metadata and FAIR attribution "
             "(e.g. 'Jane Forester'). Wizard prompt: 'Who is running this pipeline?'"
         ),
     )
     email: EmailStr = Field(
         ...,
         description=(
-            "Your contact email — included in DataCite and ACDD metadata records "
+            "Your contact email, included in DataCite and ACDD metadata records "
             "(e.g. 'jane@boku.ac.at'). Wizard prompt: 'Contact email address?'"
         ),
     )
@@ -39,7 +39,7 @@ class MetadataConfig(_StrictModel):
             "Your Name Here",
         }:
             raise ValueError(
-                f"author is set to placeholder {v!r} — "
+                f"author is set to placeholder {v!r}: "
                 "fill in your real name in canvod-settings.yaml"
             )
         return v
@@ -53,7 +53,7 @@ class MetadataConfig(_StrictModel):
             "your.email@example.com",
         }:
             raise ValueError(
-                f"email is set to placeholder {v!r} — "
+                f"email is set to placeholder {v!r}: "
                 "fill in your real email in canvod-settings.yaml"
             )
         return v
@@ -62,7 +62,7 @@ class MetadataConfig(_StrictModel):
     institution: str = Field(
         ...,
         description=(
-            "Your institution or organisation name "
+            "Your institution or organization name "
             "(e.g. 'University of Natural Resources and Life Sciences Vienna'). "
             "Wizard prompt: 'Which institution do you belong to?'"
         ),
@@ -77,17 +77,61 @@ class MetadataConfig(_StrictModel):
         None,
         description="Institution/group website",
     )
-    license: str | None = Field(None, description="SPDX license identifier")
-    publisher: str | None = Field(None, description="Publisher name")
+    license: str | None = Field(
+        None,
+        description=(
+            "SPDX license identifier (e.g. 'CC-BY-4.0'), or 'other' for a "
+            "license outside SPDX (then license_uri is required). Required "
+            "when a store is created."
+        ),
+    )
+    license_uri: str | None = Field(
+        None,
+        description="URI of the license text; required when license is 'other'",
+    )
+    publisher: str | None = Field(
+        None, description="Publisher name. Required when a store is created."
+    )
     publisher_url: str | None = Field(None, description="Publisher URL")
-    naming_authority: str | None = Field(None, description="Naming authority URI")
+    naming_authority: str | None = Field(
+        None,
+        description=(
+            "Your institution's domain in reverse order, lowercase "
+            "(e.g. 'at.ac.tuwien'). Required when a store is created: with "
+            "the store id it gives the store's id in the STAC catalog."
+        ),
+    )
     store_description: str | None = Field(
         None,
         description=(
-            "Human-readable description of the store itself (not the site) -- "
-            "written to StoreIdentity.description."
+            "Deprecated: one description for the stores of every site. Use "
+            "sites.<name>.store_description instead."
         ),
     )
+    initials: str | None = Field(
+        None,
+        description=(
+            "How a store's metadata records who changed it (e.g. 'NFB'). "
+            "Required to amend or migrate a store's metadata."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_store_description(cls, data: object) -> object:
+        if isinstance(data, dict) and data.get("store_description") is not None:
+            import warnings
+
+            warnings.warn(
+                "The setting 'processing.metadata.store_description' is left "
+                "over from development and will be removed with the next major "
+                "version: it gives the stores of every site the same "
+                "description. Set 'store_description' on each site instead "
+                "(sites.<name>.store_description).",
+                FutureWarning,
+                stacklevel=2,
+            )
+        return data
 
     def to_attrs_dict(self) -> dict[str, str]:
         """Convert to a dictionary for xarray attributes.

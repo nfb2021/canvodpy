@@ -16,6 +16,10 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 brew install uv
 ```
 
+The repository needs uv 0.13 (`required-version` in `pyproject.toml`), so
+every machine writes `uv.lock` the same way. Install a 0.13 release if uv
+refuses to start.
+
 [uv documentation](https://docs.astral.sh/uv/)
 
 ### just (Command Runner)
@@ -67,6 +71,7 @@ File feature proposals at https://github.com/nfb2021/canvodpy/issues. Keep the s
    just check-dev-tools
    uv sync
    just hooks
+   just agent-skills   # if you develop with Claude Code: the shared agent workflow
    ```
 
 4. Create a feature branch:
@@ -119,12 +124,15 @@ just test-coverage             # With coverage report
 just test-package canvod-grids # Specific package
 just check                     # Lint + format + type-check
 just docs                      # Preview documentation
+just docs-lint                 # Language check of the docs (Vale)
+just docs-lint-changed         # Vale on the pages changed since origin/main
+just docs-links                # Link check of the built docs (lychee)
 ```
 
 ## Pull Request Guidelines
 
-1. Include tests for new functionality — new code must not reduce test coverage.
-2. Update the Zensical documentation in `docs/` if adding or changing public API, behaviour, or configuration.
+1. Include tests for new functionality: new code must not reduce test coverage.
+2. Update the Zensical documentation in `docs/` with every change of behavior (new logic, new code, changed code), public API, or configuration. A pull request without docs to match is declined. The changed pages must pass Vale (`just docs-lint-changed`) and the built site the link check (`just docs-links`); CI runs both.
 3. Ensure compatibility with Python 3.14+.
 4. Add yourself to `CONTRIBUTORS.md` if this is your first contribution.
 
@@ -141,16 +149,20 @@ all source files. Per-file license headers are not required.
 - **ty** for type checking
 - **pytest** for testing with coverage
 
-Run `just check` before committing.
+Run `just check` before committing. Every change follows `CODING_STANDARDS.md`
+(rules and per-change checklist); the reasons are in `docs/adr/`.
 
 ## Deploying
 
 For maintainers:
 
 ```bash
-just bump minor
-git push
-git push --tags
+just release-status                              # commits per package since its last tag
+just release canvod-store=1.1.0 canvodpy=1.1.0   # tests, versions, release commit on release/v1.1.0
 ```
 
-GitHub Actions publishes to PyPI when a new tag is pushed.
+Each package has its own version; the maintainer chooses them, and canvodpy
+is part of every release. Then open a pull request for the release branch;
+after it is merged, a maintainer runs `just tag-release` on `main`, pushes
+the tags and starts the PyPI publish. The full
+steps are in `docs/RELEASING.md`.

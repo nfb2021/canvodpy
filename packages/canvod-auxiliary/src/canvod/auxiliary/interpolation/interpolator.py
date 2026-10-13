@@ -3,8 +3,6 @@
 Provides specialized interpolation for:
 - SP3 ephemeris: Hermite cubic splines using satellite velocities
 - CLK clock: Piecewise linear with discontinuity detection
-
-Migrated from gnssvodpy.processor.interpolator
 """
 
 from abc import ABC, abstractmethod
@@ -24,6 +22,75 @@ class InterpolatorConfig:
     def to_dict(self) -> dict[str, Any]:
         """Convert config to dictionary for attrs storage."""
         return dict(vars(self))
+
+
+def _detect_jumps(data: np.ndarray, window_size: int, threshold: float) -> np.ndarray:
+    """Detect clock-jump discontinuities via a windowed before/after comparison.
+
+    For each candidate boundary, compares the mean of up to ``window_size``
+    samples immediately before it to the mean of up to ``window_size``
+    samples immediately after it. This is more robust to single-sample noise
+    than a raw two-point ``np.diff``: a noisy outlier gets smoothed out by
+    averaging with its neighbors on both sides, whereas a genuine clock reset
+    keeps the two windows separated regardless of window size.
+
+    ``window_size <= 1`` degenerates to the raw two-point diff.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Clock data for one satellite, already restricted to valid (non-NaN)
+        samples.
+    window_size : int
+        Number of samples on each side of a candidate boundary to average.
+    threshold : float
+        Jump threshold for discontinuity detection.
+
+    Returns
+    -------
+    np.ndarray
+        Indices ``i`` such that a jump lies between ``data[i]`` and
+        ``data[i + 1]`` — the same convention as
+        ``np.where(np.abs(np.diff(data)) > threshold)[0]``.
+    """
+    n = len(data)
+    if n < 2:
+        return np.array([], dtype=int)
+    if window_size <= 1:
+        return np.where(np.abs(np.diff(data)) > threshold)[0]
+
+    idx = np.arange(1, n)
+    lo = np.maximum(0, idx - window_size)
+    hi = np.minimum(n, idx + window_size)
+    cumsum = np.concatenate(([0.0], np.cumsum(data)))
+    before_mean = (cumsum[idx] - cumsum[lo]) / (idx - lo)
+    after_mean = (cumsum[hi] - cumsum[idx]) / (hi - idx)
+    score = np.abs(after_mean - before_mean)
+
+    flagged = score > threshold
+    if not np.any(flagged):
+        return np.array([], dtype=int)
+
+    # A genuine step elevates the score for every candidate boundary whose
+    # window still spans it, not just the true edge — collapse each
+    # contiguous flagged run to its single highest-scoring boundary.
+    edges = np.diff(flagged.astype(np.int8))
+    run_starts = np.where(edges == 1)[0] + 1
+    run_ends = np.where(edges == -1)[0] + 1
+    if flagged[0]:
+        run_starts = np.concatenate(([0], run_starts))
+    if flagged[-1]:
+        run_ends = np.concatenate((run_ends, [len(flagged)]))
+
+    # idx[j] is the sample starting the "after" side; the diff convention
+    # callers expect wants the sample ending the "before" side (idx[j] - 1).
+    return np.array(
+        [
+            idx[start + int(np.argmax(score[start:end]))] - 1
+            for start, end in zip(run_starts, run_ends, strict=True)
+        ],
+        dtype=int,
+    )
 
 
 @dataclass
@@ -227,23 +294,35 @@ class Sp3InterpolationStrategy(Interpolator):
         vels : dict[str, np.ndarray]
             Output velocity arrays to fill.
         """
+        step = float(np.median(np.diff(t_source))) if len(t_source) > 1 else 0.0
         for coord, vel in [("X", "Vx"), ("Y", "Vy"), ("Z", "Vz")]:
             # Select by satellite dimension name
             pos = ds[coord].sel({sat_dim: sat}).values
             vel_data = ds[vel].sel({sat_dim: sat}).values
-
-            # Skip if data is all NaN
-            if not np.isfinite(pos).any() or not np.isfinite(vel_data).any():
-                coords[coord][:, idx] = np.nan
-                if vels is not None:
-                    vels[vel][:, idx] = np.nan
-                continue
-
-            # Hermite cubic spline interpolation
-            interpolator = CubicHermiteSpline(t_source, pos, vel_data)
-            coords[coord][:, idx] = interpolator(t_target)
+            coords[coord][:, idx] = np.nan
             if vels is not None:
-                vels[vel][:, idx] = interpolator.derivative()(t_target)
+                vels[vel][:, idx] = np.nan
+
+            # The spline is fitted on the epochs with data only (a satellite
+            # can be missing from part of a file, or from one of the joined
+            # days, see AuxFile.join_days)
+            ok = np.isfinite(pos) & np.isfinite(vel_data)
+            if ok.sum() < 2:
+                continue
+            t_ok = t_source[ok]
+
+            # Hermite cubic spline interpolation; no value where the
+            # satellite has no data around the target: outside its epochs
+            # (no extrapolation) or in a gap wider than 1.5 steps
+            interpolator = CubicHermiteSpline(t_ok, pos[ok], vel_data[ok])
+            right = np.clip(np.searchsorted(t_ok, t_target), 1, len(t_ok) - 1)
+            bracket = t_ok[right] - t_ok[right - 1]
+            covered = (
+                (t_target >= t_ok[0]) & (t_target <= t_ok[-1]) & (bracket <= 1.5 * step)
+            )
+            coords[coord][covered, idx] = interpolator(t_target[covered])
+            if vels is not None:
+                vels[vel][covered, idx] = interpolator.derivative()(t_target[covered])
 
     def _interpolate_positions_only(
         self, ds: xr.Dataset, target_epochs: np.ndarray
@@ -324,6 +403,7 @@ class ClockInterpolationStrategy(Interpolator):
                             t_source,
                             t_target,
                             self.config.jump_threshold,
+                            self.config.window_size,
                         )
                     )
 
@@ -343,6 +423,7 @@ class ClockInterpolationStrategy(Interpolator):
         t_source: np.ndarray,
         t_target: np.ndarray,
         threshold: float,
+        window_size: int,
     ) -> np.ndarray:
         """Interpolate clock data for a single satellite.
 
@@ -358,6 +439,8 @@ class ClockInterpolationStrategy(Interpolator):
             Target epochs in seconds from start.
         threshold : float
             Jump threshold for discontinuity detection.
+        window_size : int
+            Window size for discontinuity detection — see :func:`_detect_jumps`.
 
         Returns
         -------
@@ -379,7 +462,7 @@ class ClockInterpolationStrategy(Interpolator):
         valid_time = t_source[valid_mask]
 
         # Detect discontinuities (clock jumps)
-        jumps = np.where(np.abs(np.diff(valid_data)) > threshold)[0]
+        jumps = _detect_jumps(valid_data, window_size, threshold)
         segments = np.split(np.arange(len(valid_time)), jumps + 1)
 
         # Interpolate each continuous segment

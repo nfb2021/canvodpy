@@ -18,13 +18,13 @@ Four API levels are available to match your workflow:
 | **L1** | Convenience | `process_date()`, `Site` | Quick exploration, notebooks |
 | **L2** | Fluent | `FluentWorkflow().read().augment().grid().vod()` | Scripted pipelines |
 | **L3** | Low-level | Direct subpackage access | Full control, custom integrations |
-| **L4** | Functional | `read_rinex()`, `augment_with_ephemeris()`, ... | Airflow / orchestrators |
+| **L4** | Functional (deprecated) | `read_rinex()`, `augment_with_ephemeris()`, ... | No longer maintained; gives different results than `canvodpy run` |
 
 ## Installation
 
 ```bash
 # Installs canvodpy + all 11 sub-packages
-uv pip install canvodpy
+uv add canvodpy
 ```
 
 ## Quick Start
@@ -57,21 +57,17 @@ result = (
 
 ```python
 from canvod.readers import Rnxv3Obs
-from canvod.auxiliary import AuxDataAugmenter
+from canvod.auxiliary import add_spherical_coords_to_dataset
 from canvod.grids import create_hemigrid
 from canvod.vod import TauOmegaZerothOrder
 from canvod.store import GnssResearchSite
 ```
 
-### L4: Functional API (Airflow-compatible)
+### L4: Functional API (deprecated)
 
-```python
-from canvodpy import read_rinex, augment_with_ephemeris, assign_grid_cells
-
-ds = read_rinex("path/to/ROSA01TUW_R_20250010000_01D_01S_AA.rnx")
-ds = augment_with_ephemeris(ds, agency="COD")
-ds = assign_grid_cells(ds, grid_type="equal_area", resolution=2.0)
-```
+The single-step functions of `canvodpy.functional` are left over from
+development and will be removed with the next major version. They are no
+longer maintained and give different results than `canvodpy run`.
 
 ## Included Packages
 
@@ -83,40 +79,44 @@ Installing `canvodpy` provides access to all 10 sub-packages:
 | `canvod-auxiliary` | `canvod.auxiliary` | Ephemeris augmentation (SP3/CLK and broadcast) |
 | `canvod-grids` | `canvod.grids` | Equal-area hemisphere grid operations |
 | `canvod-store` | `canvod.store` | Icechunk/Zarr versioned storage layer |
-| `canvod-store-metadata` | `canvod.store_metadata` | FAIR/DataCite/ACDD/STAC metadata lifecycle |
+| `canvod-store-metadata` | `canvod.store_metadata` | FAIR/DataCite/ACDD metadata of a store; the STAC catalog and releases of all stores |
 | `canvod-vod` | `canvod.vod` | Tau-Omega VOD retrieval algorithms |
 | `canvod-viz` | `canvod.viz` | 2D polar and 3D interactive visualization |
 | `canvod-config` | `canvod.config` | Configuration management: YAML loading, Pydantic validation |
 | `canvod-utils` | `canvod.utils` | Date/time utilities, processing diagnostics |
 | `canvod-ops` | `canvod.ops` | Composable preprocessing operations pipeline |
 
-`canvod-filemap` (virtual renaming for non-canonical receiver filenames) is
-an optional extra (`pip install "canvodpy[filemap]"`), published separately
-in [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions).
+`canvod-filemap` (naming recipes for non-canonical receiver filenames) is
+optional and released on GitHub only, in
+[canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions); see
+its documentation for the install command.
 
 ## Platform Support
 
 | Platform | Status | Notes |
 |---|---|---|
 | Linux | Full support | Recommended for production |
-| macOS | Full support | Fully tested |
-| Windows | WSL only | Native not supported (reserved `aux` name) |
+| macOS (Apple silicon) | Full support | Fully tested; Intel Macs not supported (no Python 3.14 `numba`/`llvmlite` wheels) |
+| Windows | Full support | Fully tested; HEALPix grids unavailable (`healpy` publishes no Windows wheels) |
 
 ## Configuration
 
-Site and processing configuration lives in YAML files (not committed):
+Site and processing configuration lives in one YAML file (not committed),
+`config/canvod-settings.yaml`, with the sections `processing:`, `sites:` and
+`sids:`:
 
 ```bash
-just config-init      # create config/processing.yaml + sites.yaml + sids.yaml
+just config-init      # create config/canvod-settings.yaml from the template
 just config-validate  # validate against Pydantic models
 ```
 
 Optional NASA CDDIS access (for SP3/CLK ephemeris downloads):
 
-```bash
-# config/processing.yaml
-credentials:
-  nasa_earthdata_acc_mail: your.email@example.com
+```yaml
+# config/canvod-settings.yaml
+processing:
+  credentials:
+    nasa_earthdata_acc_mail: your.email@example.com
 ```
 
 Without credentials, canvodpy uses ESA GSSC (no authentication required).

@@ -3,7 +3,7 @@ import marimo
 __generated_with = "0.23.13"
 app = marimo.App(
     width="medium",
-    app_title="canvodpy — Performance Dashboard",
+    app_title="canvodpy: Performance Dashboard",
     css_file="canvod_nordic.css",
 )
 
@@ -27,9 +27,11 @@ Not full telemetry — this is a lightweight, always-on, file-based
 view of how a pipeline run spent its time. Works while a run is
 still in progress (partial data) or after it's finished.
 
-**Site** is parsed from `run_id` (`{site}-{YYYYMMDD-HHMMSS}`, see
-`cli/run.py`'s per-site loop) — multiple sites' logs in the same
-directory show up as separate rows and can be filtered below.
+**Site** is parsed from `run_id` (`{site}-{YYYYMMDD-HHMMSS}`, set by
+`canvodpy run` and by `site.pipeline()`): multiple sites' logs in the
+same directory show up as separate rows and can be filtered below.
+Events logged outside a run carry no `run_id` and show up as
+"(no run ID)".
 **VOD model** comes from the `calculator` field emitted on
 `vod_calc`/`vod_store` events — different `--vod-calculator` runs
 are distinguishable the same way.
@@ -44,15 +46,13 @@ def _(mo):
     from pathlib import Path
 
     def _default_log_dir() -> Path:
+        # `canvodpy dashboard` and `canvodpy run --dashboard` always set it.
         env_dir = os.environ.get("CANVODPY_PERF_LOG_DIR")
         if env_dir:
             return Path(env_dir).expanduser()
-        try:
-            from canvod.config import load_config
+        from canvod.config import load_config
 
-            return load_config().processing.logging.get_log_dir()
-        except Exception:
-            return Path.cwd() / ".logs"
+        return load_config().processing.logging.get_log_dir()
 
     log_dir = _default_log_dir()
     machine_dir = log_dir / "machine"
@@ -67,7 +67,7 @@ def _(mo):
     # on the chosen interval, so the dashboard tracks a live run without
     # a manual click. The widget also exposes a manual refresh action.
     # Long options (30m-24h) matter for the "runs may take days or run
-    # forever" case (dev/todo_later.md §37) -- a dashboard left open
+    # forever" case -- a dashboard left open
     # against an unattended multi-day backfill shouldn't have to poll
     # every few seconds to eventually catch up.
     refresh = mo.ui.refresh(
@@ -155,6 +155,7 @@ def _(machine_dir, mo, refresh):
         pl.col("run_id")
         .str.extract(r"^(.*)-\d{8}-\d{6}$", 1)
         .fill_null(pl.col("run_id"))
+        .fill_null("(no run ID)")
         .alias("site"),
         pl.coalesce([pl.col("receiver"), pl.col("analysis")]).alias("unit"),
     )
@@ -191,7 +192,7 @@ def _(events, mo):
     model_filter = mo.ui.multiselect(
         options=_models,
         value=_models,
-        label="VOD model(s) — n/a rows (RINEX stages) always included",
+        label="VOD model(s): n/a rows (RINEX stages) always included",
         full_width=False,
     )
     mo.hstack([site_filter, model_filter], justify="start", gap=2)
@@ -309,7 +310,7 @@ def _(filtered, mo, pl):
 
 @app.cell
 def _(filtered, mo, pl):
-    mo.md("## Exact figures — duration (s) per site × stage × receiver/analysis")
+    mo.md("## Exact figures: duration (s) per site × stage × receiver/analysis")
 
     if filtered.is_empty():
         stats_table = mo.md("_No data yet._")

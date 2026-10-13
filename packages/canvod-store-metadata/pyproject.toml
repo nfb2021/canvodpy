@@ -23,13 +23,21 @@ dependencies = [
     "pydantic>=2.0",
     "icechunk>=2.0.0",
     "zarr>=3.1.2",
+    "numpy>=1.24.0",
     "polars>=1.0.0",
-    "canvod-config>=0.1.0",
+    "canvod-config>=0.4.0,<2",
+    "filelock>=3.15",
+    "structlog>=24.1.0",
+    "zarr-cm>=0.5.0",
+    "canvod-utils>=0.4.0,<2",
+    "pystac>=1.15",
 ]
 
 [dependency-groups]
 dev = [
+    "compliance-checker>=6.1.0",
     "pytest>=8.0",
+    "stac-valid>=4.6",
     "pytest-cov>=5.0",
     "ruff>=0.14",
     "ty>=0.0.9",
@@ -37,6 +45,7 @@ dev = [
 
 [tool.uv.sources]
 canvod-config = { workspace = true }
+canvod-utils = { workspace = true }
 
 [project.urls]
 Homepage = "https://github.com/nfb2021/canvodpy"
@@ -45,7 +54,7 @@ Repository = "https://github.com/nfb2021/canvodpy"
 Issues = "https://github.com/nfb2021/canvodpy/issues"
 
 [build-system]
-requires = ["uv_build>=0.9.17,<0.10.0"]
+requires = ["uv_build>=0.13.0,<0.14.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]

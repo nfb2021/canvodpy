@@ -1,13 +1,14 @@
 """High-level public API for canvodpy.
 
-This module provides the user-friendly API that wraps proven gnssvodpy logic.
+This module provides the user-friendly API.
 
 Recommended surfaces:
 - Run the pipeline via the ``canvodpy`` CLI (production runs, resumable).
 - Script a configured pipeline run in Python via ``Site.pipeline()``
   (``Pipeline`` class) — this is what the CLI wraps internally.
-- Component-level scripting/analysis (custom readers, ephemeris source,
-  grid, VOD calculator) via ``canvodpy.functional``.
+
+``canvodpy.functional`` is deprecated: it is no longer maintained and gives
+different results than ``canvodpy run``.
 
 ``process_date()``, ``calculate_vod()``, and ``preview_processing()`` below
 are deprecated convenience wrappers around ``Pipeline`` — use
@@ -32,12 +33,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canvodpy._deprecation import deprecated
+from canvod.utils.tools import deprecated
+from canvodpy.orchestrator.resources import deprecate_no_effect_arguments
 
 # Lazy imports to avoid circular dependencies
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
+    from pathlib import Path
 
     import xarray as xr
 
@@ -127,6 +130,17 @@ class Site:
         """Access VOD results store."""
         return self._site.vod_store
 
+    @property
+    def gnss_store_path(self) -> Path:
+        """Where the site's GNSS store is, from the settings; read-only."""
+        return self._site.gnss_store_path
+
+    @property
+    def vod_store_path(self) -> Path:
+        """Where the site's VOD store is, from the settings; read-only."""
+        return self._site.vod_store_path
+
+    @deprecate_no_effect_arguments
     def pipeline(
         self,
         keep_vars: list[str] | None = None,
@@ -146,7 +160,8 @@ class Site:
         Explicit values override the config.
 
         Reader format is configured per-receiver via ``reader_format`` in
-        ``sites.yaml`` (default: ``"auto"``).
+        the ``sites:`` section of ``config/canvod-settings.yaml`` (default:
+        ``"auto"``).
 
         Parameters
         ----------
@@ -161,13 +176,6 @@ class Site:
             If True, simulate processing without execution.
         days_per_batch : int, optional
             Number of DOYs per loky wave. Default: from config.
-        max_memory_gb : float, optional
-            Total RAM budget across all workers. Default: from config.
-        cpu_affinity : list[int], optional
-            Pin workers to specific CPU core IDs (Linux only).
-            Default: from config.
-        nice_priority : int, optional
-            Process nice value (0=normal, 19=lowest). Default: from config.
         threads_per_worker : int, optional
             Threads per worker process. Default: from config.
         on_group_written : Callable[[str], None], optional
@@ -184,7 +192,7 @@ class Site:
         Examples
         --------
         >>> site = Site("ExampleSite")
-        >>> pipeline = site.pipeline(n_workers=8, max_memory_gb=16)
+        >>> pipeline = site.pipeline(n_workers=8)
         >>> data = pipeline.process_date("2025001")
 
         """
@@ -195,9 +203,6 @@ class Site:
             n_workers=n_workers,
             dry_run=dry_run,
             days_per_batch=days_per_batch,
-            max_memory_gb=max_memory_gb,
-            cpu_affinity=cpu_affinity,
-            nice_priority=nice_priority,
             threads_per_worker=threads_per_worker,
             on_group_written=on_group_written,
         )
@@ -217,11 +222,12 @@ class Pipeline:
     Provides a clean API for processing workflows while using
     proven orchestrator logic internally.
 
-    All parameters default to ``None``, which means "read from
-    ``config/processing.yaml``". Explicit values override the config.
+    All parameters default to ``None``, which means "read from the
+    ``processing:`` section of ``config/canvod-settings.yaml``". Explicit
+    values override the config.
 
-    Reader format is configured per-receiver via ``reader_format`` in
-    ``sites.yaml`` (default: ``"auto"``).
+    Reader format is configured per-receiver via ``reader_format`` in the
+    ``sites:`` section (default: ``"auto"``).
 
     Parameters
     ----------
@@ -238,12 +244,6 @@ class Pipeline:
         If True, simulate without execution.
     days_per_batch : int, optional
         Calendar days to pool per processing wave. Default: from config.
-    max_memory_gb : float, optional
-        Total RAM budget across all workers. Default: from config.
-    cpu_affinity : list[int], optional
-        Pin workers to specific CPU core IDs. Default: from config.
-    nice_priority : int, optional
-        Process nice value (0=normal, 19=lowest). Default: from config.
     threads_per_worker : int, optional
         Threads per loky worker process. Default: from config.
     on_group_written : Callable[[str], None], optional
@@ -269,6 +269,7 @@ class Pipeline:
 
     """
 
+    @deprecate_no_effect_arguments
     def __init__(
         self,
         site: Site | str,
@@ -306,24 +307,12 @@ class Pipeline:
         # otherwise use resolve_resources() which respects resource_mode.
         if n_workers is not None:
             # Caller explicitly set n_workers → manual-like behavior
-            if max_memory_gb is None:
-                max_memory_gb = proc.max_memory_gb
-            if cpu_affinity is None:
-                cpu_affinity = proc.cpu_affinity
-            if nice_priority is None:
-                nice_priority = proc.nice_priority
             if threads_per_worker is None:
                 threads_per_worker = proc.threads_per_worker
         else:
             # No explicit n_workers → use resource_mode from config
             resources = proc.resolve_resources()
             n_workers = resources["n_workers"]
-            if max_memory_gb is None:
-                max_memory_gb = resources["max_memory_gb"]
-            if cpu_affinity is None:
-                cpu_affinity = resources["cpu_affinity"]
-            if nice_priority is None:
-                nice_priority = resources["nice_priority"]
             if threads_per_worker is None:
                 threads_per_worker = resources["threads_per_worker"]
 
@@ -334,9 +323,9 @@ class Pipeline:
         self.days_per_batch = days_per_batch
 
         # Setup logging
-        from canvodpy.logging import get_logger
+        import structlog
 
-        self.log = get_logger(__name__).bind(
+        self.log = structlog.get_logger(__name__).bind(
             site=site.name,
             component="pipeline",
         )
@@ -350,11 +339,9 @@ class Pipeline:
             n_max_workers=n_workers,
             dry_run=dry_run,
             days_per_batch=days_per_batch,
-            max_memory_gb=max_memory_gb,
-            cpu_affinity=cpu_affinity,
-            nice_priority=nice_priority,
             threads_per_worker=threads_per_worker,
             on_group_written=on_group_written,
+            config=config,
         )
 
         self.log.info(
@@ -364,8 +351,6 @@ class Pipeline:
             keep_vars=len(self.keep_vars),
             dry_run=dry_run,
             days_per_batch=days_per_batch,
-            max_memory_gb=max_memory_gb,
-            nice_priority=nice_priority,
             threads_per_worker=threads_per_worker,
         )
 
@@ -461,6 +446,12 @@ class Pipeline:
         ):
             yield date_key, datasets
 
+    @deprecated(
+        "Pipeline.calculate_vod() is left over from development and will be "
+        "removed with the next major version. Use "
+        "canvodpy.Site(<site>).vod.compute_bulk(<analysis>, start=..., end=...) "
+        "instead."
+    )
     def calculate_vod(
         self,
         canopy: str,
@@ -468,7 +459,10 @@ class Pipeline:
         date: str,
         write_to_store: bool = True,
     ) -> xr.Dataset:
-        """Calculate VOD for a receiver pair.
+        """Calculate VOD for a receiver pair on one day.
+
+        Delegates to ``Site.vod.compute_bulk()`` for the configured analysis
+        of this canopy/reference pair, restricted to the given day.
 
         Parameters
         ----------
@@ -478,77 +472,16 @@ class Pipeline:
             Reference receiver name (e.g., "reference_01")
         date : str
             Date in YYYYDOY format
+        write_to_store : bool, default True
+            If True, write the result to the VOD store.
 
         Returns
         -------
         xr.Dataset
             VOD analysis results
 
-        Examples
-        --------
-        >>> pipeline = Pipeline("ExampleSite")
-        >>> vod = pipeline.calculate_vod("canopy_01", "reference_01", "2025001")
-        >>> print(vod.vod.mean().values)
-        0.42
-
         """
-        log = self.log.bind(date=date, canopy=canopy, reference=reference)
-        log.info("vod_calculation_started")
-
-        try:
-            # Convert YYYYDOY string to a one-day time_slice for read_group
-            import datetime
-
-            from canvod.utils.tools.date_utils import YYYYDOY
-
-            _d = YYYYDOY.from_str(date).date
-            if _d is None:
-                raise ValueError(f"Could not parse date from {date!r}")
-            _time_slice = slice(str(_d), str(_d + datetime.timedelta(days=1)))
-            # Load processed data from stores
-            # canopy_data = self.site.gnss_store.read_group(canopy, date=date)
-            # ref_data = self.site.gnss_store.read_group(reference, date=date)
-            canopy_data = self.site.gnss_store.read_group(
-                canopy, time_slice=_time_slice
-            )
-            try:
-                ref_data = self.site.gnss_store.read_group(
-                    reference, time_slice=_time_slice
-                )
-            except Exception:
-                paired_name = f"{reference}_{canopy}"
-                log.info("group_fallback", original=reference, paired=paired_name)
-                ref_data = self.site.gnss_store.read_group(
-                    paired_name, time_slice=_time_slice
-                )
-
-            # Lazy import to avoid circular dependency
-            from canvod.vod import TauOmegaZerothOrder
-
-            # Use proven VOD calculator
-            calculator = TauOmegaZerothOrder(canopy_ds=canopy_data, sky_ds=ref_data)
-            vod_results = calculator.calculate_vod()
-
-            # Store results
-            analysis_name = f"{canopy}_vs_{reference}"
-            if write_to_store:
-                self.site.vod_store.write_or_append_group(vod_results, analysis_name)
-
-            log.info(
-                "vod_calculation_complete",
-                analysis=analysis_name,
-                vod_mean=float(vod_results.vod.mean().values)
-                if "vod" in vod_results
-                else None,
-            )
-            return vod_results
-        except Exception as e:
-            log.error(
-                "vod_calculation_failed",
-                error=str(e),
-                exception=type(e).__name__,
-            )
-            raise
+        return _vod_for_day(self.site, canopy, reference, date, write_to_store)
 
     def preview(
         self,
@@ -589,14 +522,54 @@ class Pipeline:
         )
 
 
+def _vod_for_day(
+    site: Site,
+    canopy: str,
+    reference: str,
+    date: str,
+    write: bool,
+) -> xr.Dataset:
+    """Compute one day of VOD for a canopy/reference pair via ``site.vod``.
+
+    Backs the deprecated ``Pipeline.calculate_vod()`` and
+    ``canvodpy.calculate_vod()``.
+    """
+    import datetime
+
+    from canvod.utils.tools.date_utils import YYYYDOY
+
+    analysis_name = next(
+        (
+            name
+            for name, cfg in site.vod_analyses.items()
+            if cfg.canopy_receiver == canopy and cfg.reference_receiver == reference
+        ),
+        None,
+    )
+    if analysis_name is None:
+        raise ValueError(
+            f"No VOD analysis configured for canopy {canopy!r} and reference "
+            f"{reference!r}. Configured analyses: {list(site.vod_analyses)}"
+        )
+
+    day = YYYYDOY.from_str(date).date
+    if day is None:
+        raise ValueError(f"Could not parse date from {date!r}")
+    start = datetime.datetime.combine(day, datetime.time())
+    end = start + datetime.timedelta(days=1) - datetime.timedelta(microseconds=1)
+
+    return site.vod.compute_bulk(analysis_name, start=start, end=end, write=write)
+
+
 # ============================================================================
 # Deprecated convenience functions — use Site.pipeline() instead
 # ============================================================================
 
 
 @deprecated(
-    "process_date() is deprecated. Use Site(site).pipeline().process_date(date) "
-    "instead, or run the pipeline via the `canvodpy` CLI."
+    "canvodpy.process_date() is left over from development and will be removed with the next major version. "
+    "Use canvodpy.Site(<site>).pipeline().process_date(<date>) or the "
+    "terminal command `canvodpy run` instead."
 )
 def process_date(
     site: str,
@@ -609,7 +582,8 @@ def process_date(
 
     This is the simplest way to process GNSS data - just provide
     the site name and date. All optional parameters default to
-    values from ``config/processing.yaml``.
+    values from the ``processing:`` section of
+    ``config/canvod-settings.yaml``.
 
     Parameters
     ----------
@@ -655,9 +629,11 @@ def process_date(
 
 
 @deprecated(
-    "calculate_vod() is deprecated. Use "
-    "Site(site).pipeline().calculate_vod(canopy, reference, date) instead, "
-    "or run the pipeline via the `canvodpy` CLI."
+    "canvodpy.calculate_vod() is left over from development and will be removed with the next major version. "
+    "Use the terminal command `canvodpy run` instead, or process the day "
+    "with canvodpy.Site(<site>).pipeline().process_date(<date>) and compute "
+    "VOD with canvodpy.Site(<site>).vod.compute_bulk(<analysis>, "
+    "start=..., end=...)."
 )
 def calculate_vod(
     site: str,
@@ -668,11 +644,11 @@ def calculate_vod(
     aux_agency: str | None = None,
     write_to_store: bool = True,
 ) -> xr.Dataset:
-    """Calculate VOD for a receiver pair (convenience function).
+    """Calculate VOD for a receiver pair on one day (convenience function).
 
-    This is the simplest way to calculate VOD - just provide
-    site, receivers, and date. All optional parameters default to
-    values from ``config/processing.yaml``.
+    Computes VOD from the site's GNSS store via ``Site.vod.compute_bulk()``
+    for the configured analysis of this canopy/reference pair. The day must
+    already be processed into the GNSS store.
 
     Parameters
     ----------
@@ -685,9 +661,11 @@ def calculate_vod(
     date : str
         Date in YYYYDOY format
     keep_vars : list[str], optional
-        RINEX variables to keep. Default: from config.
+        Unused. VOD is computed from the stored data.
     aux_agency : str, optional
-        Analysis center. Default: from config.
+        Unused. VOD is computed from the stored data.
+    write_to_store : bool, default True
+        If True, write the result to the VOD store.
 
     Returns
     -------
@@ -707,19 +685,12 @@ def calculate_vod(
     0.42
 
     """
-    with Pipeline(
-        site=site,
-        keep_vars=keep_vars,
-        aux_agency=aux_agency,
-    ) as pipeline:
-        return pipeline.calculate_vod(
-            canopy, reference, date, write_to_store=write_to_store
-        )
+    return _vod_for_day(Site(site), canopy, reference, date, write_to_store)
 
 
 @deprecated(
-    "preview_processing() is deprecated. Use "
-    "Site(site).pipeline(dry_run=True).preview() instead."
+    "canvodpy.preview_processing() is left over from development and will be removed with the next major version. "
+    "Use canvodpy.Site(<site>).pipeline(dry_run=True).preview() instead."
 )
 def preview_processing(site: str) -> dict:
     """Preview processing plan for a site (convenience function).

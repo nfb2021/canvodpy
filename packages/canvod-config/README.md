@@ -12,7 +12,7 @@ Configuration models and YAML loading for canvodpy.
 ## Installation
 
 ```bash
-uv pip install -e packages/canvod-config
+uv add canvod-config
 ```
 
 ## Quick Start
@@ -77,14 +77,14 @@ processing:
     author: Your Name
     email: your.email@example.com
     license: CC-BY-4.0
-    # ... DataCite/ACDD provenance fields, written as Zarr store metadata
+    # ... DataCite/ACDD fields, written into the repository metadata of new stores
 
   credentials:
     nasa_earthdata_acc_mail: null  # optional; prefer the env var override below
 
   aux_data:
     agency: COD              # Analysis center: COD, GFZ, IGS, ESA, etc.
-    product_type: final      # final, rapid, ultra-rapid
+    product_type: final      # final or rapid
 
   storage:
     stores_root_dir: /path/to/stores
@@ -150,8 +150,8 @@ just config-edit
 
 ## Resolving the settings file location
 
-Outside a canvodpy monorepo checkout (e.g. a standalone `pip install
-canvod-config`), there's no `.git` to find, so `load_config()` falls back to
+Outside a canvodpy monorepo checkout (for example, canvod-config
+installed on its own), there's no `.git` to find, so `load_config()` falls back to
 XDG: `$XDG_CONFIG_HOME/canvodpy`, or `~/.config/canvodpy` if that isn't set.
 Two environment variables override this:
 
@@ -167,6 +167,7 @@ Same Pydantic models work for both local files and future API:
 ```python
 # Local development (YAML file)
 config = load_config()
+
 
 # Future API usage (same models!)
 @app.post("/process")

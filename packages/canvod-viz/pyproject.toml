@@ -21,8 +21,12 @@ dependencies = [
     "matplotlib>=3.8.0",
     "plotly>=5.18.0",
     "numpy>=1.26.0",
-    "canvod-grids>=0.1.0",
+    "canvod-grids>=0.4.0,<2",
 ]
+
+[project.optional-dependencies]
+# Interactive hemisphere selectors (canvod.viz.widgets)
+widgets = ["anywidget>=0.11.0"]
 
 [tool.uv.sources]
 canvod-grids = { workspace = true }
@@ -34,7 +38,7 @@ Repository = "https://github.com/nfb2021/canvodpy"
 Issues = "https://github.com/nfb2021/canvodpy/issues"
 
 [build-system]
-requires = ["uv_build>=0.9.17,<0.10.0"]
+requires = ["uv_build>=0.13.0,<0.14.0"]
 build-backend = "uv_build"
 
 [tool.ty.src]

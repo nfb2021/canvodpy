@@ -8,18 +8,18 @@ Part of the [canVODpy](https://github.com/nfb2021/canvodpy) ecosystem.
 
 This package provides versioned storage for GNSS data using Icechunk, managing:
 
-- **RINEX Store (Level 1)**: Augmented observations per receiver
+- **GNSS Store (Level 1)**: Augmented observations per receiver
 - **VOD Store (Level 2)**: Analysis products comparing receiver pairs
 
 ## Installation
 
 ```bash
-uv pip install canvod-store
+uv add canvod-store
 ```
 
 ## Configuration (optional)
 
-`MyIcechunkStore`, `GnssResearchSite`, and `IcechunkDataReader` read
+`MyIcechunkStore` and `GnssResearchSite` read
 compression/chunking/resource settings from `canvod-config`'s
 `load_config()`. In a standalone install outside a canvodpy monorepo
 checkout, point it at a settings file with:
@@ -30,11 +30,11 @@ checkout, point it at a settings file with:
 ## Quick Start
 
 ```python
-from canvod.store import create_rinex_store, GnssResearchSite
+from canvod.store import open_gnss_store, GnssResearchSite
 from pathlib import Path
 
-# Create stores
-rinex_store = create_rinex_store(Path("./rinex_store"))
+# Open a store; a run creates it when it first writes data
+gnss_store = open_gnss_store(Path("./gnss_store"))
 
 # Or use site manager
 site = GnssResearchSite(site_name="ExampleSite")
@@ -42,7 +42,7 @@ site = GnssResearchSite(site_name="ExampleSite")
 
 ## Features
 
-- Automatic repository creation/connection
+- Opening a store never creates one, so a mistyped path fails
 - Group management with validation
 - Session management with context managers
 - Integrated logging and metadata tracking

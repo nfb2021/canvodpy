@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from canvod.config.models import (
     AuxDataConfig,
     CanvodConfig,
+    ChunkStrategies,
     ChunkStrategy,
     CompressionConfig,
     CredentialsConfig,
@@ -29,7 +30,10 @@ from canvod.config.models import (
     SiteConfig,
     SitesConfig,
     StorageConfig,
+    VodAnalysisConfig,
+    reference_store_group,
 )
+from canvod.utils import testing
 
 # ===================================================================
 # MetadataConfig
@@ -53,13 +57,14 @@ class TestMetadataConfig:
         )
         assert m.store_description is None
 
-    def test_store_description_accepts_value(self):
-        m = MetadataConfig(
-            author="Test User",
-            email="test@example.com",
-            institution="Test Uni",
-            store_description="A reference store for TestSite.",
-        )
+    def test_store_description_is_deprecated_but_still_read(self):
+        with pytest.warns(FutureWarning, match=r"sites\.<name>\.store_description"):
+            m = MetadataConfig(
+                author="Test User",
+                email="test@example.com",
+                institution="Test Uni",
+                store_description="A reference store for TestSite.",
+            )
         assert m.store_description == "A reference store for TestSite."
 
     def test_invalid_email_raises(self):
@@ -124,15 +129,15 @@ class TestReferencesConfig:
 
     def test_accepts_software_repository_and_documentation(self):
         r = ReferencesConfig(
-            software_repository="https://github.com/nfb2021/canvodpy",
-            documentation="https://github.com/nfb2021/canvodpy/tree/main/docs",
+            software_repository=testing.REPOSITORY,
+            documentation=testing.DOCUMENTATION,
             access_url="https://example.org/store",
-            related_stores=["rosalia_v3_04/vod_store"],
+            related_stores=["fangorn/vod_store"],
         )
-        assert r.software_repository == "https://github.com/nfb2021/canvodpy"
-        assert r.documentation == "https://github.com/nfb2021/canvodpy/tree/main/docs"
+        assert r.software_repository == testing.REPOSITORY
+        assert r.documentation == testing.DOCUMENTATION
         assert r.access_url == "https://example.org/store"
-        assert r.related_stores == ["rosalia_v3_04/vod_store"]
+        assert r.related_stores == ["fangorn/vod_store"]
 
     def test_accepts_funding(self):
         r = ReferencesConfig(
@@ -211,13 +216,22 @@ class TestProcessingParams:
         p = ProcessingParams(
             resource_mode="manual",
             n_max_threads=8,
-            max_memory_gb=32.0,
             nice_priority=10,
         )
         r = p.resolve_resources()
         assert r["n_workers"] == 8
-        assert r["max_memory_gb"] == 32.0
         assert r["nice_priority"] == 10
+
+    def test_max_memory_gb_deprecated(self):
+        with pytest.warns(FutureWarning, match="'max_memory_gb' is left over"):
+            ProcessingParams(max_memory_gb=32.0)
+
+    def test_max_memory_gb_unset_no_warning(self):
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            ProcessingParams()
 
     def test_default_keep_gnss_observables(self):
         p = ProcessingParams()
@@ -270,6 +284,16 @@ class TestReceiverConfig:
         rc = ReceiverConfig(type="canopy", directory="can/raw")
         assert rc.paired_canopies is None
 
+    def test_reader_format_accepts_every_reader(self):
+        for fmt in ("auto", "rinex3", "rinex3_stripped", "rinex2", "sbf", "nmea"):
+            rc = ReceiverConfig(type="canopy", directory="can/raw", reader_format=fmt)
+            assert rc.reader_format == fmt
+
+    def test_unknown_reader_format_raises(self):
+        """A typo fails when the settings load, not later in a run."""
+        with pytest.raises(ValidationError, match="reader_format"):
+            ReceiverConfig(type="canopy", directory="can/raw", reader_format="rinex")
+
     def test_canopy_with_paired_canopies_raises(self):
         with pytest.raises(ValidationError, match="must not be set for canopy"):
             ReceiverConfig(type="canopy", directory="can/raw", paired_canopies="all")
@@ -298,29 +322,29 @@ class TestReceiverConfig:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             rc = ReceiverConfig(type="reference", directory="ref/raw", scs_from="all")
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert any(issubclass(x.category, FutureWarning) for x in w)
         assert rc.paired_canopies == "all"
 
-    def test_recipe_and_naming_both_set_raises(self):
-        with pytest.raises(ValidationError, match="mutually exclusive"):
-            ReceiverConfig(
-                type="canopy",
-                directory="can/raw",
-                recipe="rosalia_canopy",
-                naming={"source_pattern": "auto"},
-            )
-
     def test_recipe_only_is_valid(self):
-        rc = ReceiverConfig(type="canopy", directory="can/raw", recipe="rosalia_canopy")
-        assert rc.recipe == "rosalia_canopy"
+        rc = ReceiverConfig(type="canopy", directory="can/raw", recipe="fangorn_canopy")
+        assert rc.recipe == "fangorn_canopy"
         assert rc.naming is None
 
-    def test_naming_only_is_valid(self):
-        rc = ReceiverConfig(
-            type="canopy", directory="can/raw", naming={"source_pattern": "auto"}
-        )
+    def test_naming_is_deprecated(self):
+        with pytest.warns(FutureWarning, match="receiver setting 'naming'.*recipe"):
+            rc = ReceiverConfig(
+                type="canopy", directory="can/raw", naming={"source_pattern": "auto"}
+            )
         assert rc.naming == {"source_pattern": "auto"}
         assert rc.recipe is None
+
+    def test_site_naming_is_deprecated(self):
+        with pytest.warns(FutureWarning, match="site setting 'naming'.*recipe"):
+            SiteConfig(
+                gnss_site_data_root="/data",
+                receivers={"canopy_01": {"type": "canopy", "directory": "c"}},
+                naming={"site_id": testing.SITE_ID, "agency": testing.AGENCY},
+            )
 
 
 # ===================================================================
@@ -329,6 +353,10 @@ class TestReceiverConfig:
 
 
 class TestSiteConfig:
+    def test_store_description_per_site(self):
+        site = self._make_site(store_description=testing.SITE_DESCRIPTION)
+        assert site.store_description == testing.SITE_DESCRIPTION
+
     def _make_site(self, **overrides):
         defaults = {
             "gnss_site_data_root": "/data/site",
@@ -380,7 +408,7 @@ class TestSiteConfig:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             result = site.resolve_scs_from("reference_01")
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert any(issubclass(x.category, FutureWarning) for x in w)
         assert result == ["canopy_01"]
 
     def test_paired_canopies_references_nonexistent_canopy_raises(self):
@@ -411,6 +439,90 @@ class TestSiteConfig:
         pairs = site.get_reference_canopy_pairs()
         assert ("r1", "c1") in pairs
         assert ("r1", "c2") in pairs
+
+    def test_auto_derive_vod_analyses_uses_bare_reference_name(self):
+        """See GH #66: reference_receiver must stay the bare receiver name
+        (matches a 'receivers' key, used for directory lookups) -- never
+        the paired store group name.
+        """
+        site = self._make_site()
+        assert site.vod_analyses is not None
+        cfg = site.vod_analyses["canopy_01_vs_reference_01"]
+        assert cfg.reference_receiver == "reference_01"
+        assert cfg.canopy_receiver == "canopy_01"
+
+    def test_explicit_vod_analyses_not_overridden(self):
+        site = self._make_site(
+            vod_analyses={
+                "custom": VodAnalysisConfig(
+                    canopy_receiver="canopy_01", reference_receiver="reference_01"
+                )
+            }
+        )
+        assert list(site.vod_analyses) == ["custom"]
+
+    @pytest.mark.parametrize(
+        ("canopy", "reference"),
+        [("sbf", "sbf"), ("rinex3", "rinex3_stripped"), ("auto", "sbf")],
+    )
+    def test_same_file_format_accepted(self, canopy, reference):
+        """rinex3_stripped reads RINEX 3; auto is checked once detected."""
+        self._make_site(
+            receivers={
+                "canopy_01": ReceiverConfig(
+                    type="canopy", directory="c", reader_format=canopy
+                ),
+                "reference_01": ReceiverConfig(
+                    type="reference",
+                    directory="r",
+                    paired_canopies="all",
+                    reader_format=reference,
+                ),
+            }
+        )
+
+    def test_mixed_file_formats_raise(self):
+        with pytest.raises(ValidationError, match="same file format"):
+            self._make_site(
+                receivers={
+                    "canopy_01": ReceiverConfig(
+                        type="canopy", directory="c", reader_format="sbf"
+                    ),
+                    "reference_01": ReceiverConfig(
+                        type="reference",
+                        directory="r",
+                        paired_canopies="all",
+                        reader_format="rinex3",
+                    ),
+                }
+            )
+
+
+# ===================================================================
+# VodAnalysisConfig.reference_store_group
+# ===================================================================
+
+
+class TestReferenceStoreGroup:
+    def test_function_formats_paired_name(self):
+        assert reference_store_group("reference_01", "canopy_01") == (
+            "reference_01_canopy_01"
+        )
+
+    def test_vod_analysis_config_property_matches_function(self):
+        cfg = VodAnalysisConfig(
+            canopy_receiver="canopy_01", reference_receiver="reference_01"
+        )
+        assert cfg.reference_store_group == "reference_01_canopy_01"
+        assert cfg.reference_store_group == reference_store_group(
+            cfg.reference_receiver, cfg.canopy_receiver
+        )
+
+    def test_property_stays_distinct_from_bare_receiver(self):
+        cfg = VodAnalysisConfig(
+            canopy_receiver="canopy_01", reference_receiver="reference_01"
+        )
+        assert cfg.reference_store_group != cfg.reference_receiver
 
 
 # ===================================================================
@@ -452,12 +564,12 @@ class TestSidsConfig:
 class TestStorageConfig:
     def test_store_paths(self, tmp_path):
         sc = StorageConfig(stores_root_dir=tmp_path)
-        gnss = sc.get_gnss_store_path("rosalia")
-        vod = sc.get_vod_store_path("rosalia")
-        rollup = sc.get_rollup_store_path("rosalia")
-        assert gnss == tmp_path / "rosalia" / "rinex"
-        assert vod == tmp_path / "rosalia" / "vod"
-        assert rollup == tmp_path / "rosalia" / "rollup"
+        gnss = sc.get_gnss_store_path("fangorn")
+        vod = sc.get_vod_store_path("fangorn")
+        rollup = sc.get_rollup_store_path("fangorn")
+        assert gnss == tmp_path / "fangorn" / "rinex"
+        assert vod == tmp_path / "fangorn" / "vod"
+        assert rollup == tmp_path / "fangorn" / "rollup"
 
     def test_deprecated_get_rinex_store_path(self, tmp_path):
         import warnings
@@ -465,9 +577,39 @@ class TestStorageConfig:
         sc = StorageConfig(stores_root_dir=tmp_path)
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            result = sc.get_rinex_store_path("rosalia")
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
-        assert result == tmp_path / "rosalia" / "rinex"
+            result = sc.get_rinex_store_path("fangorn")
+        assert any(issubclass(x.category, FutureWarning) for x in w)
+        assert result == tmp_path / "fangorn" / "rinex"
+
+    def test_vod_store_strategy_deprecated(self, tmp_path):
+        with pytest.warns(FutureWarning, match="'vod_store_strategy' is left over"):
+            StorageConfig(stores_root_dir=tmp_path, vod_store_strategy="overwrite")
+
+    def test_vod_store_strategy_unset_no_warning(self, tmp_path):
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            sc = StorageConfig(stores_root_dir=tmp_path)
+        assert sc.vod_store_strategy is None
+
+    @pytest.mark.parametrize(
+        "url", ["s3://fangorn/stores", "S3://fangorn/stores", "gs://fangorn/stores"]
+    )
+    def test_a_url_as_stores_root_dir_is_refused(self, url):
+        """Processing writes stores to local directories only (#240)."""
+        with pytest.raises(ValueError, match="local directory") as error:
+            StorageConfig(stores_root_dir=url)
+        assert url in str(error.value)
+        assert "S3" in str(error.value)
+
+    def test_a_string_path_is_expanded(self):
+        sc = StorageConfig(stores_root_dir="~/fangorn")
+        assert sc.stores_root_dir == Path.home() / "fangorn"
+
+    def test_the_placeholder_is_refused(self):
+        with pytest.raises(ValueError, match="placeholder"):
+            StorageConfig(stores_root_dir="/path/to/stores")
 
     def test_placeholder_path_not_validated(self):
         """Placeholder paths starting with /path/ skip existence check."""
@@ -573,11 +715,86 @@ class TestCompressionConfig:
             CompressionConfig(complevel=10)
 
 
+class TestAuxDataProductType:
+    @pytest.mark.parametrize("value", ["ultra-rapid", "ultrarapid"])
+    def test_ultra_rapid_refused_with_reason(self, value):
+        with pytest.raises(ValidationError, match="Ultra-rapid products are not"):
+            AuxDataConfig(product_type=value)
+
+    def test_rapid_accepted(self):
+        assert AuxDataConfig(product_type="rapid").product_type == "rapid"
+
+
+class TestChunkStrategies:
+    def test_defaults_for_both_stores(self):
+        ic = IcechunkConfig()
+        assert ic.chunk_strategies.gnss_store == ChunkStrategy(epoch=180, sid=-1)
+        assert ic.chunk_strategies.vod_store == ChunkStrategy(epoch=17280, sid=-1)
+
+    def test_one_store_set_keeps_the_other_default(self):
+        ic = IcechunkConfig(chunk_strategies={"gnss_store": {"epoch": 720}})
+        assert ic.chunk_strategies.gnss_store.epoch == 720
+        assert ic.chunk_strategies.vod_store.epoch == 17280
+
+    def test_shipped_defaults_match_the_model(self):
+        import yaml
+
+        import canvod.config
+
+        defaults_yaml = (
+            Path(canvod.config.__file__).parent / "defaults" / "processing.yaml"
+        )
+        shipped = yaml.safe_load(defaults_yaml.read_text())["icechunk"]
+        assert (
+            ChunkStrategies(**shipped["chunk_strategies"])
+            == IcechunkConfig().chunk_strategies
+        )
+
+    def test_misspelled_store_rejected_with_suggestion(self):
+        with pytest.raises(ValidationError) as exc:
+            IcechunkConfig(chunk_strategies={"vod_stores": {"epoch": 720}})
+        msg = str(exc.value)
+        assert "chunk_strategies.vod_stores" in msg
+        assert "Did you mean 'vod_store'?" in msg
+        assert "Allowed keys: gnss_store, vod_store" in msg
+
+
+class TestUnknownKeySuggestion:
+    """Every settings model names the closest allowed key for a typo."""
+
+    def test_nested_typo_names_location_and_match(self):
+        with pytest.raises(ValidationError) as exc:
+            IcechunkConfig(chunk_strategies={"gnss_store": {"epok": 720}})
+        missing, err = exc.value.errors()
+        assert missing["loc"] == ("chunk_strategies", "gnss_store", "epoch")
+        assert missing["type"] == "missing"
+        assert err["loc"] == ("chunk_strategies", "gnss_store", "epok")
+        assert err["type"] == "extra_forbidden"
+        assert "Did you mean 'epoch'?" in err["msg"]
+
+    def test_no_close_match_lists_allowed_keys_only(self):
+        with pytest.raises(ValidationError) as exc:
+            ChunkStrategy(epoch=180, xyz=1)
+        msg = exc.value.errors()[0]["msg"]
+        assert "Did you mean" not in msg
+        assert "Allowed keys: epoch, sid" in msg
+
+    def test_other_errors_reported_alongside(self):
+        with pytest.raises(ValidationError) as exc:
+            IcechunkConfig(compression_level=99, compresion_level=3)
+        types = {e["type"] for e in exc.value.errors()}
+        assert types == {"less_than_equal", "extra_forbidden"}
+
+    def test_typo_not_corrected(self):
+        with pytest.raises(ValidationError):
+            ChunkStrategy(epochs=720)
+
+
 class TestChunkStrategy:
-    def test_defaults(self):
-        cs = ChunkStrategy()
-        assert cs.epoch == 17280
-        assert cs.sid == -1
+    def test_epoch_required_sid_defaults_to_unchunked(self):
+        with pytest.raises(ValidationError):
+            ChunkStrategy()
+        assert ChunkStrategy(epoch=180).sid == -1
 
     def test_epoch_must_be_positive(self):
         with pytest.raises(ValidationError):
@@ -602,8 +819,8 @@ class TestSitesConfig:
     def test_valid_site(self):
         sites = SitesConfig(
             sites={
-                "rosalia": SiteConfig(
-                    gnss_site_data_root="/data/rosalia",
+                "fangorn": SiteConfig(
+                    gnss_site_data_root="/data/fangorn",
                     receivers={
                         "c1": ReceiverConfig(type="canopy", directory="c1"),
                         "r1": ReceiverConfig(
@@ -613,7 +830,7 @@ class TestSitesConfig:
                 )
             }
         )
-        assert "rosalia" in sites.sites
+        assert "fangorn" in sites.sites
 
 
 # ===================================================================

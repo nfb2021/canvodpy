@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import xarray as xr
-from _helpers import GROUP, make_synthetic_dataset
+from _helpers import GROUP, make_synthetic_dataset, new_gnss_store
 from build_day0_store import build_store
 
 from canvod.store import MyIcechunkStore
@@ -55,7 +55,7 @@ class TestStructureMatchesDay0:
 
     def test_groups_present(self, day0_store_path, tmp_path):
         store = MyIcechunkStore(day0_store_path)
-        fresh_store = MyIcechunkStore(tmp_path / "s")
+        fresh_store = new_gnss_store(tmp_path / "s")
         # write one dataset so the group exists
         ds = make_synthetic_dataset(slot=0)
         fresh_store.write_initial_group(ds, group_name=GROUP)
@@ -354,7 +354,8 @@ class TestBugFixes:
         # After fix: logger must be assigned before it is used
         assert logger_assignment_pos < logger_usage_pos, (
             "B5: self._logger is used before it is assigned in __init__. "
-            "Move 'self._logger = get_logger(__name__)' to the top of __init__."
+            "Move 'self._logger = structlog.get_logger(__name__)' to the top of "
+            "__init__."
         )
 
 
@@ -440,7 +441,7 @@ class TestMetadataDatasets:
                     rng.uniform(1.0, 4.0, n_ep).astype(np.float32), dims=["epoch"]
                 )
             },
-            coords={"epoch": epochs},
+            coords={"epoch": ("epoch", epochs, {"time_system": "GPS"})},
         )
 
     def test_write_and_read_metadata_dataset(self, tmp_store):
@@ -471,3 +472,77 @@ class TestMetadataDatasets:
         np.testing.assert_array_almost_equal(
             ds_back["pdop"].values, expected["pdop"].values, decimal=5
         )
+
+    def test_append_metadata_datasets_keeps_earlier_days(self, tmp_store):
+        """A second call (next day) appends instead of replacing the first."""
+        ds = make_synthetic_dataset(slot=0)
+        tmp_store.write_initial_group(ds, group_name=GROUP)
+
+        day1 = [self._make_meta_ds(slot=i) for i in range(2)]
+        day2 = [self._make_meta_ds(slot=i) for i in range(2, 4)]
+        tmp_store.append_metadata_datasets(day1, group_name=GROUP, name="sbf_obs")
+        tmp_store.append_metadata_datasets(day2, group_name=GROUP, name="sbf_obs")
+
+        ds_back = tmp_store.read_metadata_dataset(GROUP, "sbf_obs").compute()
+        expected = xr.concat(day1 + day2, dim="epoch")
+        np.testing.assert_array_equal(ds_back["epoch"].values, expected["epoch"].values)
+
+    def test_metadata_parts_commit_with_observations(self, tmp_store):
+        """write_or_append_group puts data and metadata in one snapshot."""
+        ds = make_synthetic_dataset(slot=0)
+        meta = self._make_meta_ds(slot=0)
+        tmp_store.write_or_append_group(
+            ds, group_name=GROUP, metadata_datasets={"sbf_obs": meta}
+        )
+        snapshots = list(tmp_store.repo.ancestry(branch="main"))
+        tmp_store.write_or_append_group(
+            make_synthetic_dataset(slot=1),
+            group_name=GROUP,
+            metadata_datasets={"sbf_obs": self._make_meta_ds(slot=1)},
+        )
+        # One new snapshot per call, holding both data and metadata
+        assert len(list(tmp_store.repo.ancestry(branch="main"))) == len(snapshots) + 1
+        ds_back = tmp_store.read_metadata_dataset(GROUP, "sbf_obs").compute()
+        assert ds_back.sizes["epoch"] == 2 * meta.sizes["epoch"]
+
+    def test_rewrite_group_keeps_metadata(self, tmp_store):
+        """Overwrite strategy: rewriting the group keeps the log book, and
+        sbf_obs keeps the other files' epochs and gets the new part for the
+        replaced range."""
+        ds = make_synthetic_dataset(slot=0)
+        tmp_store.write_initial_group(ds, group_name=GROUP)
+        parts = [self._make_meta_ds(slot=i) for i in range(3)]
+        tmp_store.append_metadata_datasets(parts, group_name=GROUP, name="sbf_obs")
+        rows = tmp_store.metadata_row_count(GROUP)
+
+        corrected = self._make_meta_ds(slot=1)
+        corrected["pdop"] = corrected["pdop"] * 0 + 9.0
+        replaced = (corrected["epoch"].values.min(), corrected["epoch"].values.max())
+        with tmp_store.writable_session("main") as session:
+            tmp_store.rewrite_group(
+                session, GROUP, ds, [replaced], {"sbf_obs": [corrected]}
+            )
+            session.commit("overwrite")
+
+        assert tmp_store.metadata_row_count(GROUP) == rows
+        ds_back = tmp_store.read_metadata_dataset(GROUP, "sbf_obs").compute()
+        expected = xr.concat([parts[0], corrected, parts[2]], dim="epoch")
+        np.testing.assert_array_equal(ds_back["epoch"].values, expected["epoch"].values)
+        np.testing.assert_array_almost_equal(
+            ds_back["pdop"].values, expected["pdop"].values, decimal=5
+        )
+
+    def test_rewrite_group_drops_replaced_range_without_new_part(self, tmp_store):
+        ds = make_synthetic_dataset(slot=0)
+        tmp_store.write_initial_group(ds, group_name=GROUP)
+        parts = [self._make_meta_ds(slot=i) for i in range(3)]
+        tmp_store.append_metadata_datasets(parts, group_name=GROUP, name="sbf_obs")
+
+        replaced = (parts[1]["epoch"].values.min(), parts[1]["epoch"].values.max())
+        with tmp_store.writable_session("main") as session:
+            tmp_store.rewrite_group(session, GROUP, ds, [replaced])
+            session.commit("overwrite")
+
+        ds_back = tmp_store.read_metadata_dataset(GROUP, "sbf_obs").compute()
+        expected = xr.concat([parts[0], parts[2]], dim="epoch")
+        np.testing.assert_array_equal(ds_back["epoch"].values, expected["epoch"].values)

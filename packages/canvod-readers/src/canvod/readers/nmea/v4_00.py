@@ -5,7 +5,8 @@ with ``(epoch, sid)`` dimensions compatible with the canvodpy pipeline.
 
 Supports:
 - GPS ($GP), GLONASS ($GL), Galileo ($GA), BeiDou ($GB) GSV sentences
-- RMC and GGA sentences for epoch timestamps
+- RMC and GGA sentences for epoch timestamps (UTC, converted to GPS time
+  with the leap seconds of the date, see ``gnss_specs.leap_seconds``)
 - PRN-to-RINEX SV mapping per NMEA v4 PRN numbering scheme
 - Checksum validation
 
@@ -16,23 +17,27 @@ Classes:
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import re
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, ClassVar, Final
 
 import numpy as np
 import xarray as xr
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from canvod.readers.base import GNSSDataReader, validate_dataset
+from canvod.readers.base import (
+    GNSSDataReader,
+    validate_dataset,
+)
+from canvod.readers.gnss_specs.leap_seconds import utc_to_gps
 from canvod.readers.gnss_specs.metadata import (
     COORDS_METADATA,
     DTYPES,
     SNR_METADATA,
+    epoch_coord_attrs,
 )
 from canvod.readers.gnss_specs.signals import SignalIDMapper
 from canvod.readers.nmea.exceptions import (
@@ -40,6 +45,7 @@ from canvod.readers.nmea.exceptions import (
     NmeaInvalidSentenceError,
     NmeaMissingSentenceError,
 )
+from canvod.utils.tools import hashing
 
 # ---------------------------------------------------------------------------
 # NMEA checksum helpers
@@ -95,6 +101,17 @@ def _talker_id(msg_id: str) -> str:
 # ---------------------------------------------------------------------------
 # PRN → RINEX SV mapping
 # ---------------------------------------------------------------------------
+
+# The GSV SNR unit is not established: the bundled SiRF NMEA Reference
+# Manual (Rev 2.1, GSV) gives "SNR (C/N0) ... dBHz", gpsd documents dB.
+_NMEA_SNR_METADATA: Final[dict[str, Any]] = {
+    **SNR_METADATA,
+    "description": (
+        "SNR field of the NMEA GSV sentence (00-99, null when not tracking). "
+        "Its unit is not established (the SiRF NMEA Reference Manual Rev 2.1 "
+        "gives C/N0 in dBHz, other sources dB); dB is assumed."
+    ),
+}
 
 # Default band/code assigned to NMEA SNR (one band per system).
 # NMEA GSV reports SNR on the primary signal band for each constellation.
@@ -360,13 +377,23 @@ class NmeaObs(GNSSDataReader, BaseModel):
     for satellite SNR values.  Produces an ``xarray.Dataset`` compatible
     with the canvodpy pipeline.
 
+    NMEA times are UTC. The epochs (and ``start_time``, ``end_time``) are
+    GPS time: the UTC times plus the leap seconds of the date (18 s since
+    2017). A time after the leap seconds known to canVODpy raises
+    ``ValueError``.
+
     Parameters
     ----------
     fpath : Path
         Path to the NMEA file.
+    aggregate_glonass_fdma : bool, default True
+        Must be ``True``: GLONASS FDMA signals are always given as
+        aggregated G1/G2 bands; ``False`` is refused.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True, frozen=False)
+
+    file_type: ClassVar[str] = "nmea"
 
     fpath: Path
 
@@ -387,10 +414,7 @@ class NmeaObs(GNSSDataReader, BaseModel):
 
     @cached_property
     def _file_hash_value(self) -> str:
-        h = hashlib.sha256()
-        with self.fpath.open("rb") as f:
-            h.update(f.read())
-        return h.hexdigest()[:16]
+        return hashing.file_hash(self.fpath)
 
     # ---- ABC implementations ---- #
 
@@ -521,7 +545,7 @@ class NmeaObs(GNSSDataReader, BaseModel):
         )
 
         coords = {
-            "epoch": ("epoch", timestamps, COORDS_METADATA["epoch"]),
+            "epoch": ("epoch", timestamps, epoch_coord_attrs("GPS")),
             "sid": signal_id_coord,
             "sv": ("sid", sv_list, COORDS_METADATA["sv"]),
             "system": ("sid", system_list, COORDS_METADATA["system"]),
@@ -546,7 +570,7 @@ class NmeaObs(GNSSDataReader, BaseModel):
 
         ds = xr.Dataset(
             data_vars={
-                "SNR": (["epoch", "sid"], snr_data, SNR_METADATA),
+                "SNR": (["epoch", "sid"], snr_data, _NMEA_SNR_METADATA),
             },
             coords=coords,
             attrs={},
@@ -555,7 +579,7 @@ class NmeaObs(GNSSDataReader, BaseModel):
         # Standard attributes (includes "File Hash")
         ds.attrs.update(self._build_attrs())
 
-        # Normalise string dtypes for Icechunk / Zarr V3 compatibility
+        # Normalize string dtypes for Icechunk / Zarr V3 compatibility
         for name in list(ds.coords) + list(ds.data_vars):
             if ds[name].dtype.kind in ("U", "T"):
                 ds[name] = ds[name].astype(object)
@@ -618,7 +642,8 @@ class NmeaObs(GNSSDataReader, BaseModel):
             if current_dt is not None and current_sats:
                 epochs.append(
                     _ParsedEpoch(
-                        timestamp=current_dt,
+                        # NMEA times are UTC; every stored epoch is GPS time
+                        timestamp=utc_to_gps(current_dt),
                         satellites=dict(current_sats),
                     )
                 )
@@ -672,7 +697,7 @@ class NmeaObs(GNSSDataReader, BaseModel):
             for line in relevant_lines
         )
         if not has_gsv:
-            msg = "No GSV sentences found in file — cannot extract SNR data"
+            msg = "No GSV sentences found in file: cannot extract SNR data"
             raise NmeaMissingSentenceError(msg)
 
         return epochs

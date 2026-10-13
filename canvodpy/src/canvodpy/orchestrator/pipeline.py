@@ -5,6 +5,7 @@ from __future__ import annotations
 import gc
 import os
 import time as _time
+import warnings
 from collections import defaultdict
 from collections.abc import Callable, Generator, Sequence
 from concurrent.futures import (
@@ -22,58 +23,44 @@ from pathlib import Path
 from typing import TypeVar
 
 import pint
+import structlog
 import xarray as xr
+from loky import get_reusable_executor as _loky_reusable
 
-from canvod.config import load_config
-from canvod.readers import MatchedDirs, PairDataDirMatcher
+from canvod.config import CanvodConfig, load_config
+from canvod.config.models import mixed_format_error, reference_store_group
+from canvod.ops import planned_settings, preprocess_files
+from canvod.readers import MatchedDirs
 from canvod.readers.gnss_specs.constants import UREG
 from canvod.store import GnssResearchSite
-from canvod.utils.tools import YYYYDOY
-
-try:
-    from loky import get_reusable_executor as _loky_reusable
-
-    _HAS_LOKY = True
-except ImportError:
-    _HAS_LOKY = False
-    _loky_reusable = None
-
-from canvodpy._deprecation import deprecated
-from canvodpy.logging import get_logger
-from canvodpy.logging.run_context import get_run_id
+from canvod.store_metadata import store_exists
+from canvod.utils.logging import get_run_id, new_run_id, reset_run_id, set_run_id
+from canvod.utils.tools import YYYYDOY, deprecated
+from canvodpy.logging.logging_config import active_log_dir, ensure_file_logging
+from canvodpy.orchestrator.discovery import (
+    ReceiverDay,
+    check_receivers,
+    clear_discovery_cache,
+    detect_reader_format,
+    discover_files,
+    is_compressed,
+    receiver_days,
+    recipe_file,
+    unprocessed_files,
+)
 from canvodpy.orchestrator.processor import (
     RinexDataProcessor,
     _processing_progress,
+    _warn_if_epoch_count_differs_from_name,
     _worker_init_with_run_id,
     preprocess_reference_with_hermite_aux_fanout,
     preprocess_with_hermite_aux,
 )
-from canvodpy.orchestrator.resources import MemoryMonitor
+from canvodpy.orchestrator.resources import (
+    MemoryMonitor,
+    deprecate_no_effect_arguments,
+)
 from canvodpy.orchestrator.store_retry import STORE_ERROR_TYPES, call_with_store_retries
-
-
-def _check_recipe_receivers_have_filemap(receivers: dict[str, dict]) -> None:
-    """Fail fast if any receiver configures a naming recipe but canvod-filemap
-    isn't installed.
-
-    Recipes are meaningless without canvod-filemap to resolve them — letting
-    this surface only as a silent canonical-glob fallback deep inside a run
-    (a confusing "no files found" warning per receiver-day) hides the actual
-    cause. Raise once, at pipeline construction, before any processing starts.
-    """
-    recipe_receivers = [name for name, cfg in receivers.items() if cfg.get("recipe")]
-    if not recipe_receivers:
-        return
-    try:
-        import canvod.filemap  # noqa: F401
-    except ImportError as exc:
-        names = ", ".join(recipe_receivers)
-        raise ImportError(
-            f"Receiver(s) {names} configure a naming recipe, which requires "
-            f"canvod-filemap, but it is not installed. Install with: "
-            f"uv sync --extra filemap"
-        ) from exc
-
 
 # Old-style TypeVar (not PEP 695 `def f[T](...)`): CodeQL's Python analysis
 # doesn't yet understand the newer generic syntax and flags T as a
@@ -92,13 +79,11 @@ def _windowed_completions(  # noqa: UP047 -- see TypeVar comment above
     whole batch upfront and draining via ``as_completed()``, this bounds
     how many workers can be concurrently active while a caller is busy
     handling a completed result (e.g. writing to Icechunk) -- a full-batch
-    submission let the write path race a still-fully-loaded worker pool
-    (dev/perf_degradation_findings_2026_07_15.md, Problem A).
+    submission let the write path race a still-fully-loaded worker pool.
 
     Never calls ``future.result()`` itself -- the caller owns exception
     handling. Each future is popped from the in-flight mapping before being
-    yielded, so a consumed future's retained result isn't held here
-    (dev/perf_degradation_findings_2026_07_15.md, Problem C).
+    yielded, so a consumed future's retained result isn't held here.
 
     If ``submit`` itself raises ``BrokenProcessPool`` (e.g. a worker was
     OOM-killed), that used to only ever surface via a pre-submitted
@@ -151,7 +136,7 @@ def _interleave_by_receiver(task_descriptors: list[tuple]) -> list[tuple]:
     15-min cadence) typically exceeds ``window``, so the window stays
     saturated on one receiver until its group nearly drains before the next
     receiver's tasks even enter it -- groups then complete in near-strict
-    submission order instead of interleaved (dev/todo_later.md §42).
+    submission order instead of interleaved.
     Round-robining here means the window always spans multiple receivers'
     groups regardless of group size; uneven group sizes just mean the
     shorter receiver's tail drops out of rotation first, not an error.
@@ -177,8 +162,8 @@ def _build_ordered_tasks(
     ``as_completed()``, whose order is completion order, not submission
     order -- inserting straight into the flat task list from there let
     whichever date's prep happened to finish first jump ahead of
-    chronologically-earlier dates, scrambling the write/dashboard order
-    (dev/todo_later.md §42 addendum). Iterating ``ordered_date_keys``
+    chronologically-earlier dates, scrambling the write/dashboard order.
+    Iterating ``ordered_date_keys``
     (the original, already-chronological batch list) instead restores
     that order regardless of prep completion order. Each date's own
     tasks are further round-robined across receivers via
@@ -213,15 +198,12 @@ class PipelineOrchestrator:
         If True, only simulate processing without executing
     days_per_batch : int
         Number of DOYs pooled per loky wave (default: 1)
-    max_memory_gb : float | None
-        Soft RAM limit in GB (None = no limit)
-    cpu_affinity : list[int] | None
-        Pin workers to specific CPU core IDs (None = no restriction)
-    nice_priority : int
-        Process nice value (0=normal, 19=lowest)
     threads_per_worker : int | None
         Threads per worker process (used to cap BLAS thread env vars).
         None defaults to 1.
+    config : CanvodConfig
+        The settings of this run, for example from
+        ``canvod.config.load_config()``.
     on_group_written : Callable[[str], None] | None
         Called with the receiver-group name (e.g. ``"canopy_01"``,
         ``"reference_01_canopy_02"``) each time a group's data for one day
@@ -234,6 +216,7 @@ class PipelineOrchestrator:
 
     """
 
+    @deprecate_no_effect_arguments
     def __init__(
         self,
         site: GnssResearchSite,
@@ -242,11 +225,33 @@ class PipelineOrchestrator:
         days_per_batch: int = 1,
         max_memory_gb: float | None = None,
         cpu_affinity: list[int] | None = None,
-        nice_priority: int = 0,
+        nice_priority: int | None = None,
         threads_per_worker: int | None = None,
         on_group_written: Callable[[str], None] | None = None,
+        config: CanvodConfig | None = None,
     ) -> None:
-        _check_recipe_receivers_have_filemap(site.receivers)
+        if config is None:
+            warnings.warn(
+                "Creating PipelineOrchestrator without config= is left over "
+                "from development and will be removed with the next major "
+                "version. Pass config=canvod.config.load_config() instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            config = load_config()
+        self._config = config
+        # The log location comes from the configuration of this run.
+        ensure_file_logging()
+        # A new run sees files added since the previous one.
+        clear_discovery_cache()
+        check_receivers(
+            site.receivers, site._site_config.get_base_path(), site.site_name
+        )
+        # A run started from Python gets a run_id like one of `canvodpy run`
+        # (which sets its own first); close() removes it again.
+        self._run_id_token = (
+            set_run_id(new_run_id(site.site_name)) if get_run_id() is None else None
+        )
 
         self.site = site
         self.n_max_workers = n_max_workers
@@ -254,12 +259,9 @@ class PipelineOrchestrator:
         self.days_per_batch = days_per_batch
         self._on_group_written = on_group_written
         self._batch_duration: pint.Quantity = days_per_batch * 24 * UREG.hour
-        self._max_memory_gb = max_memory_gb
-        self._cpu_affinity = cpu_affinity
-        self._nice_priority = nice_priority
         self._threads_per_worker = threads_per_worker
-        self._memory_monitor = MemoryMonitor(max_memory_gb=max_memory_gb)
-        self._logger = get_logger(__name__).bind(site=site.site_name)
+        self._memory_monitor = MemoryMonitor()
+        self._logger = structlog.get_logger(__name__).bind(site=site.site_name)
 
         if n_max_workers is not None:
             effective_workers: int | None = min(
@@ -268,9 +270,6 @@ class PipelineOrchestrator:
             self._logger.info(
                 "resource_mode_manual",
                 n_workers=effective_workers,
-                max_memory_gb=max_memory_gb,
-                cpu_affinity=cpu_affinity,
-                nice_priority=nice_priority,
                 threads_per_worker=threads_per_worker,
             )
         else:
@@ -280,15 +279,6 @@ class PipelineOrchestrator:
                 detected_cores=os.cpu_count(),
                 threads_per_worker=threads_per_worker,
             )
-
-        self.pair_matcher = PairDataDirMatcher(
-            base_dir=site.site_config["gnss_site_data_root"],
-            receivers=site.receivers,
-            analysis_pairs={
-                name: cfg.model_dump() if hasattr(cfg, "model_dump") else cfg
-                for name, cfg in site.vod_analyses.items()
-            },
-        )
 
         self._logger.info(
             "pipeline_initialized",
@@ -300,8 +290,14 @@ class PipelineOrchestrator:
         )
 
     def close(self) -> None:
-        """Release orchestrator resources (loky's reusable executor is shared and left running)."""
+        """End the pipeline and remove the run_id it set, if any.
+
+        loky's reusable executor is shared and left running.
+        """
         self._logger.info("pipeline_orchestrator_closed")
+        if self._run_id_token is not None:
+            reset_run_id(self._run_id_token)
+            self._run_id_token = None
 
     def __enter__(self) -> PipelineOrchestrator:
         return self
@@ -309,125 +305,161 @@ class PipelineOrchestrator:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
-    @staticmethod
-    def _detect_reader_format(data_dir: Path) -> str:
-        """Detect reader format from files in a directory.
+    def _receiver_days(self, receiver_name: str) -> dict[str, ReceiverDay]:
+        """Days with files to process for one receiver, keyed by ``YYYYDOY``.
 
-        Parameters
-        ----------
-        data_dir : Path
-            Directory containing GNSS data files.
+        Uses the run's file discovery (recipe, otherwise canonical names), so
+        a day is scheduled only if files would actually be read for it.
+        Files the run never reads are reported in one warning per receiver,
+        and the run continues with the others.
+        """
+        site_config = self.site._site_config
+        cfg = site_config.receivers[receiver_name]
+        reader_format = None if cfg.reader_format == "auto" else cfg.reader_format
+        directory = site_config.get_base_path() / cfg.directory
+        recipe = recipe_file(self.site.site_name, cfg.recipe)
+        days = receiver_days(receiver_name, directory, reader_format, recipe)
+        skipped = unprocessed_files(directory, reader_format, recipe)
+        from canvodpy.orchestrator.data_check import group_by_file_type
+
+        compressed = [p for p in skipped if is_compressed(p)]
+        skipped = [p for p in skipped if not is_compressed(p)]
+        if compressed:
+            self._logger.warning(
+                "compressed_files_not_processed",
+                receiver=receiver_name,
+                directory=str(directory),
+                n_files=len(compressed),
+                by_file_type={
+                    kind: f"{count} (e.g. {example.name})"
+                    for kind, count, example in group_by_file_type(compressed)
+                },
+                hint=(
+                    "canVODpy does not decompress yet. Decompress these files "
+                    "first (gzip/zip, and crx2rnx for Hatanaka-compressed "
+                    "RINEX)."
+                ),
+            )
+        if skipped:
+            self._logger.warning(
+                "files_not_processed",
+                receiver=receiver_name,
+                directory=str(directory),
+                n_files=len(skipped),
+                by_file_type={
+                    kind: f"{count} (e.g. {example.name})"
+                    for kind, count, example in group_by_file_type(skipped)
+                },
+                hint=(
+                    "Neither the naming recipe nor the canVOD naming convention "
+                    "recognizes these files, or the receiver's reader_format "
+                    "does not read them. Run 'canvodpy config validate' for "
+                    "details."
+                ),
+            )
+        return {day.yyyydoy: day for day in days}
+
+    @staticmethod
+    def _detect_reader_format(day: ReceiverDay) -> str:
+        """Detect the reader format of a receiver configured as ``auto``.
 
         Returns
         -------
         str
-            Detected format name (e.g. ``"rinex3"``, ``"sbf"``).
-            Falls back to ``"rinex3"`` if nothing matches.
-
-        Notes
-        -----
-        Uses ``canvod-filemap``'s richer pattern set when that optional
-        package is installed. Without it, falls back to a canonical
-        canVOD-only glob check (``*.sbf``/``*.SBF`` vs. ``*.rnx``/``*.RNX``).
-        Non-canonical filenames require ``canvod-filemap`` + a recipe.
-
+            ``"sbf"`` if all files a run would process for ``day`` are SBF,
+            otherwise ``"rinex3"``.
         """
-        try:
-            from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
-
-            # Map source pattern names to reader format names
-            _PATTERN_TO_READER = {
-                "septentrio_sbf": "sbf",
-                "rinex_v2_short": "rinex3",
-                "rinex_v3_long": "rinex3",
-                "canvod": "rinex3",
-            }
-            for name in auto_match_order():
-                pat = BUILTIN_PATTERNS[name]
-                if any(
-                    f
-                    for glob in pat.file_globs
-                    for f in data_dir.glob(glob)
-                    if f.is_file()
-                ):
-                    return _PATTERN_TO_READER.get(name, "rinex3")
-            return "rinex3"
-        except ImportError:
-            has_rnx = any(data_dir.glob(g) for g in ("*.rnx", "*.RNX"))
-            has_sbf = any(data_dir.glob(g) for g in ("*.sbf", "*.SBF"))
-            if has_sbf and not has_rnx:
-                return "sbf"
-            return "rinex3"
+        return detect_reader_format(discover_files(day))
 
     def _group_by_date_and_receiver(
         self,
-    ) -> dict[str, dict[str, tuple[Path, str, Path | None, str]]]:
-        """Group receivers by date, expanding references per canopy via scs_from.
+    ) -> dict[str, dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]]]:
+        """Group receivers by date, expanding references per paired canopy.
 
-        Canopy receivers are deduplicated (processed once with own position).
-        Reference receivers are expanded: one entry per canopy in scs_from,
-        stored as ``{ref_name}_{canopy_name}`` with position_data_dir pointing
-        to the canopy's RINEX directory.
+        A date is scheduled for an analysis when both its canopy and its
+        reference receiver have files for that day (see
+        :mod:`canvodpy.orchestrator.discovery`). Canopy receivers are
+        deduplicated (processed once with own position). Reference receivers
+        are expanded: one entry per paired canopy, stored as
+        ``{ref_name}_{canopy_name}``, with the canopy's day as position
+        source.
 
         Returns
         -------
-        dict[str, dict[str, tuple[Path, str, Path | None, str]]]
-            {date: {store_group_name: (data_dir, receiver_type, position_data_dir, reader_format)}}
+        dict[str, dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]]]
+            {date: {store_group_name: (day, receiver_type, position_day, reader_format)}}
 
         """
-        grouped: dict[str, dict[str, tuple[Path, str, Path | None, str]]] = defaultdict(
-            dict
-        )
+        grouped: dict[
+            str, dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]]
+        ] = defaultdict(dict)
         site_config = self.site._site_config
 
-        for pair_dirs in self.pair_matcher:
-            date_key = pair_dirs.yyyydoy.to_str()
+        analyses = [
+            cfg.model_dump() if hasattr(cfg, "model_dump") else cfg
+            for cfg in self.site.vod_analyses.values()
+        ]
+        days_of: dict[str, dict[str, ReceiverDay]] = {}
+        for analysis in analyses:
+            for name in (analysis["canopy_receiver"], analysis["reference_receiver"]):
+                if name not in days_of:
+                    days_of[name] = self._receiver_days(name)
 
-            # Add canopy receiver if not already present (uses own position)
-            if pair_dirs.canopy_receiver not in grouped[date_key]:
-                canopy_cfg = site_config.receivers.get(pair_dirs.canopy_receiver)
-                canopy_fmt = canopy_cfg.reader_format if canopy_cfg else "auto"
-                if canopy_fmt == "auto":
-                    canopy_fmt = self._detect_reader_format(pair_dirs.canopy_data_dir)
-                grouped[date_key][pair_dirs.canopy_receiver] = (
-                    pair_dirs.canopy_data_dir,
-                    "canopy",
-                    None,
-                    canopy_fmt,
-                )
+        for analysis in analyses:
+            canopy_rx = analysis["canopy_receiver"]
+            ref_name = analysis["reference_receiver"]
+            common = sorted(set(days_of[canopy_rx]) & set(days_of[ref_name]))
+            for date_key in common:
+                canopy_day = days_of[canopy_rx][date_key]
+                reference_day = days_of[ref_name][date_key]
 
-            # Expand reference receiver per canopy in scs_from
-            ref_name = pair_dirs.reference_receiver
-            ref_cfg = site_config.receivers.get(ref_name)
-            if ref_cfg and ref_cfg.type == "reference":
+                # Add canopy receiver if not already present (uses own position)
+                if canopy_rx not in grouped[date_key]:
+                    canopy_cfg = site_config.receivers.get(canopy_rx)
+                    canopy_fmt = canopy_cfg.reader_format if canopy_cfg else "auto"
+                    if canopy_fmt == "auto":
+                        canopy_fmt = self._detect_reader_format(canopy_day)
+                    grouped[date_key][canopy_rx] = (
+                        canopy_day,
+                        "canopy",
+                        None,
+                        canopy_fmt,
+                    )
+
+                # Expand reference receiver per paired canopy
+                ref_cfg = site_config.receivers.get(ref_name)
+                if not (ref_cfg and ref_cfg.type == "reference"):
+                    continue
                 ref_fmt = ref_cfg.reader_format
                 if ref_fmt == "auto":
-                    ref_fmt = self._detect_reader_format(pair_dirs.reference_data_dir)
-                canopy_names = site_config.resolve_paired_canopies(ref_name)
-                for canopy_name in canopy_names:
-                    store_group = f"{ref_name}_{canopy_name}"
-                    if store_group not in grouped[date_key]:
-                        # Get canopy data dir for position computation
-                        canopy_cfg = site_config.receivers.get(canopy_name)
-                        if canopy_cfg:
-                            _yydoy = pair_dirs.yyyydoy.yydoy
-                            canopy_position_dir = (
-                                (
-                                    site_config.get_base_path()
-                                    / canopy_cfg.directory
-                                    / _yydoy
-                                )
-                                if _yydoy is not None
-                                else None
-                            )
-                        else:
-                            canopy_position_dir = None
-                        grouped[date_key][store_group] = (
-                            pair_dirs.reference_data_dir,
-                            "reference",
-                            canopy_position_dir,
-                            ref_fmt,
+                    ref_fmt = self._detect_reader_format(reference_day)
+                mixed = mixed_format_error(
+                    canopy_rx, grouped[date_key][canopy_rx][3], ref_name, ref_fmt
+                )
+                if mixed:
+                    raise ValueError(f"{date_key}: {mixed}")
+                for canopy_name in site_config.resolve_paired_canopies(ref_name):
+                    store_group = reference_store_group(ref_name, canopy_name)
+                    if store_group in grouped[date_key]:
+                        continue
+                    # The canopy's files of the same day give the position
+                    canopy_cfg = site_config.receivers.get(canopy_name)
+                    canopy_position_day = (
+                        ReceiverDay(
+                            canopy_name,
+                            site_config.get_base_path() / canopy_cfg.directory,
+                            date_key,
+                            recipe_file(self.site.site_name, canopy_cfg.recipe),
                         )
+                        if canopy_cfg
+                        else None
+                    )
+                    grouped[date_key][store_group] = (
+                        reference_day,
+                        "reference",
+                        canopy_position_day,
+                        ref_fmt,
+                    )
 
         return grouped
 
@@ -466,16 +498,17 @@ class PipelineOrchestrator:
         for date_key, receivers in dates:
             date_info = {"date": date_key, "receivers": []}
 
-            for receiver_name, (data_dir, receiver_type, _pos_dir, _fmt) in sorted(
+            for receiver_name, (day, receiver_type, _pos_day, fmt) in sorted(
                 receivers.items()
             ):
-                files = list(data_dir.glob("*.2*o"))
+                # Same selection as the real run (processor._get_rinex_files).
+                files = discover_files(day, fmt)
 
                 receiver_info = {
                     "name": receiver_name,
                     "type": receiver_type,
                     "files": len(files),
-                    "dir": str(data_dir),
+                    "dir": str(day.directory),
                 }
 
                 date_info["receivers"].append(receiver_info)
@@ -513,10 +546,10 @@ class PipelineOrchestrator:
 
     def _filter_dates(
         self,
-        grouped: dict[str, dict[str, tuple[Path, str, Path | None, str]]],
+        grouped: dict[str, dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]]],
         start_from: str | None,
         end_at: str | None,
-    ) -> list[tuple[str, dict[str, tuple[Path, str, Path | None, str]]]]:
+    ) -> list[tuple[str, dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]]]]:
         """Filter and sort dates within the requested range.
 
         Parameters
@@ -535,13 +568,17 @@ class PipelineOrchestrator:
 
         """
         filtered = []
+        before = [d for d in sorted(grouped) if start_from and d < start_from]
+        if before:
+            self._logger.info(
+                "dates_skipped_before_range",
+                n_dates=len(before),
+                first=before[0],
+                last=before[-1],
+                start_from=start_from,
+            )
         for date_key, receivers in sorted(grouped.items()):
             if start_from and date_key < start_from:
-                self._logger.info(
-                    "date_skipped_before_range",
-                    date=date_key,
-                    start_from=start_from,
-                )
                 continue
             if end_at and date_key > end_at:
                 self._logger.info(
@@ -553,125 +590,10 @@ class PipelineOrchestrator:
             filtered.append((date_key, receivers))
         return filtered
 
-    def _process_single_date(
-        self,
-        date_key: str,
-        receivers: dict[str, tuple[Path, str, Path | None, str]],
-        keep_vars: list[str] | None,
-    ) -> tuple[str, dict[str, xr.Dataset], dict[str, float]] | None:
-        """Process all receivers for a single date (one DOY).
-
-        Parameters
-        ----------
-        date_key : str
-            YYYYDOY string.
-        receivers : dict
-            ``{store_group: (data_dir, receiver_type, position_data_dir, reader_format)}``.
-        keep_vars : list[str] | None
-            Variables to keep in datasets.
-
-        Returns
-        -------
-        tuple or None
-            ``(date_key, datasets, timings)`` or None if processing failed.
-
-        """
-        date_start = _time.monotonic()
-
-        self._logger.info(
-            "date_processing_started",
-            date=date_key,
-            receivers=len(receivers),
-            receiver_names=sorted(receivers.keys()),
-        )
-
-        receiver_configs = [
-            (receiver_name, receiver_type, data_dir, position_data_dir, reader_format)
-            for receiver_name, (
-                data_dir,
-                receiver_type,
-                position_data_dir,
-                reader_format,
-            ) in sorted(receivers.items())
-        ]
-
-        first_data_dir = receiver_configs[0][2]
-        matched_dirs = MatchedDirs(
-            canopy_data_dir=first_data_dir,
-            reference_data_dir=first_data_dir,
-            yyyydoy=YYYYDOY.from_str(date_key),
-        )
-
-        t_init_start = _time.perf_counter()
-        try:
-            processor = RinexDataProcessor(
-                matched_data_dirs=matched_dirs,
-                site=self.site,
-                n_max_workers=self.n_max_workers,
-            )
-        except RuntimeError as e:
-            if "Failed to download" in str(e):
-                self._logger.warning(
-                    "auxiliary_download_failed",
-                    date=date_key,
-                    error=str(e),
-                    exception=type(e).__name__,
-                    elapsed_seconds=round(_time.monotonic() - date_start, 2),
-                )
-                return None
-            raise
-        t_init_end = _time.perf_counter()
-        self._logger.info(
-            "processor_init_complete",
-            date=date_key,
-            init_seconds=round(t_init_end - t_init_start, 2),
-        )
-
-        datasets: dict[str, xr.Dataset] = {}
-        timings: dict[str, float] = {}
-        t_gen_start = _time.perf_counter()
-        try:
-            for receiver_name, ds, proc_time in processor.parsed_rinex_data_gen(
-                keep_vars=keep_vars, receiver_configs=receiver_configs
-            ):
-                datasets[receiver_name] = ds
-                timings[receiver_name] = proc_time
-                self._logger.debug(
-                    "receiver_result_collected",
-                    date=date_key,
-                    receiver=receiver_name,
-                    dataset_dims=dict(ds.sizes) if hasattr(ds, "sizes") else {},
-                    proc_time_seconds=round(proc_time, 2),
-                )
-        except (OSError, RuntimeError, ValueError) as e:
-            self._logger.error(
-                "rinex_processing_failed",
-                date=date_key,
-                error=str(e),
-                exception=type(e).__name__,
-                elapsed_seconds=round(_time.monotonic() - date_start, 2),
-            )
-            return None
-
-        t_gen_end = _time.perf_counter()
-        date_elapsed = _time.monotonic() - date_start
-        self._logger.info(
-            "date_processing_complete",
-            date=date_key,
-            receivers_processed=len(datasets),
-            receiver_names=sorted(datasets.keys()),
-            total_seconds=round(date_elapsed, 2),
-            init_seconds=round(t_init_end - t_init_start, 2),
-            gen_seconds=round(t_gen_end - t_gen_start, 2),
-            per_receiver_seconds={k: round(v, 2) for k, v in timings.items()},
-        )
-
-        return date_key, datasets, timings
-
     @staticmethod
     def _build_receiver_configs(
-        receivers: dict[str, tuple[Path, str, Path | None, str]],
-    ) -> list[tuple[str, str, Path, Path | None, str]]:
+        receivers: dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]],
+    ) -> list[tuple[str, str, ReceiverDay, ReceiverDay | None, str]]:
         """Build sorted receiver config tuples from the receivers dict.
 
         Parameters
@@ -681,7 +603,7 @@ class PipelineOrchestrator:
 
         Returns
         -------
-        list[tuple[str, str, Path, Path | None, str]]
+        list[tuple[str, str, ReceiverDay, ReceiverDay | None, str]]
             ``(receiver_name, receiver_type, data_dir, position_data_dir, reader_format)`` tuples.
 
         """
@@ -693,7 +615,7 @@ class PipelineOrchestrator:
     def _create_processor_for_date(
         self,
         date_key: str,
-        receivers: dict[str, tuple[Path, str, Path | None, str]],
+        receivers: dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]],
     ) -> RinexDataProcessor:
         """Create a RinexDataProcessor for a single DOY.
 
@@ -712,20 +634,21 @@ class PipelineOrchestrator:
         receiver_configs = self._build_receiver_configs(receivers)
         first_data_dir = receiver_configs[0][2]
         matched_dirs = MatchedDirs(
-            canopy_data_dir=first_data_dir,
-            reference_data_dir=first_data_dir,
+            canopy_data_dir=first_data_dir.directory,
+            reference_data_dir=first_data_dir.directory,
             yyyydoy=YYYYDOY.from_str(date_key),
         )
         return RinexDataProcessor(
             matched_data_dirs=matched_dirs,
             site=self.site,
             n_max_workers=self.n_max_workers,
+            config=self._config,
         )
 
     def _prepare_single_date(
         self,
         date_key: str,
-        receivers: dict[str, tuple[Path, str, Path | None, str]],
+        receivers: dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]],
         keep_vars: list[str] | None,
     ) -> tuple[RinexDataProcessor, list[tuple], list[tuple[str, list[Path]]]] | None:
         """Prepare one DOY for flat loky submission (Phase 1 helper).
@@ -757,19 +680,26 @@ class PipelineOrchestrator:
 
     def _process_multi_day_batches(
         self,
-        filtered_dates: list[tuple[str, dict[str, tuple[Path, str, Path | None, str]]]],
+        filtered_dates: list[
+            tuple[str, dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]]]
+        ],
         keep_vars: list[str] | None,
     ) -> Generator[tuple[str, dict[str, xr.Dataset], dict[str, float]]]:
-        """Process dates in multi-day batches (days_per_batch > 1).
+        """Process dates in batches of ``days_per_batch`` days (1 or more).
 
-        When ``days_per_batch > 1`` and loky is available, RINEX files from
-        ALL DOYs in a batch are submitted to loky's reusable executor as
-        one flat pool (Phase 2). Auxiliary data and receiver positions are
-        prepared sequentially per DOY first (Phase 1), and Icechunk writes
-        happen sequentially afterwards (Phase 3).
+        Each batch runs in three phases:
 
-        When ``days_per_batch == 1`` or loky is not installed, falls back
-        to sequential ``_process_single_date()`` calls.
+        1. Prepare, one thread per date: auxiliary data (SP3/CLK
+           interpolation or cache), receiver positions, one task per file.
+        2. Process the files of all dates of the batch in loky's reusable
+           process pool, at most twice the worker count in flight.
+        3. Write, in this process, as soon as all files of a receiver-day
+           are back: ``processing.preprocessing`` (if set), then
+           ``_append_to_icechunk`` (one commit for the data, one for the
+           store metadata). The pool keeps working meanwhile.
+
+        Dates are yielded after the batch is written; the caller computes
+        VOD before the next batch starts.
 
         Parameters
         ----------
@@ -786,16 +716,11 @@ class PipelineOrchestrator:
         """
         days_per_batch = self.days_per_batch
         total_batches = (len(filtered_dates) + days_per_batch - 1) // days_per_batch
-        # Use loky flat-LPT (S2) when loky is installed. Persistent pool
-        # eliminates per-receiver-day spawn overhead (~17s/call on macOS).
-        use_flat_loky = _HAS_LOKY
-
         self._logger.info(
             "multi_day_batch_strategy",
             days_per_batch=days_per_batch,
             total_dates=len(filtered_dates),
             total_batches=total_batches,
-            flat_loky=use_flat_loky,
         )
 
         # Partition dates into batches
@@ -817,30 +742,6 @@ class PipelineOrchestrator:
             self._memory_monitor.log_memory_stats(
                 context=f"before_batch_{batch_idx + 1}"
             )
-
-            if not use_flat_loky:
-                # Fallback: sequential _process_single_date (loky not installed)
-                doys_succeeded = 0
-                doys_failed = 0
-                for date_key, receivers in batch:
-                    result = self._process_single_date(date_key, receivers, keep_vars)
-                    if result is not None:
-                        doys_succeeded += 1
-                        yield result
-                    else:
-                        doys_failed += 1
-
-                batch_elapsed = _time.monotonic() - batch_start_time
-                self._logger.info(
-                    "batch_complete",
-                    batch_index=batch_idx + 1,
-                    total_batches=total_batches,
-                    batch_dates=batch_date_keys,
-                    doys_succeeded=doys_succeeded,
-                    doys_failed=doys_failed,
-                    batch_seconds=round(batch_elapsed, 2),
-                )
-                continue
 
             # ── Phase 1: Prepare (concurrent across dates) ────────────
             t_phase1_start = _time.monotonic()
@@ -961,10 +862,9 @@ class PipelineOrchestrator:
                 if _var not in os.environ:
                     os.environ[_var] = _thread_str
 
-            assert _loky_reusable is not None
             t_submit_start = _time.monotonic()
             n_wrk = self.n_max_workers or os.cpu_count() or 4
-            _res = load_config().processing.params.resolve_resources()
+            _res = self._config.processing.params.resolve_resources()
             _pool = _loky_reusable(
                 max_workers=n_wrk,
                 # loky's own default idle timeout is 10s -- Phase 1 date-prep
@@ -975,12 +875,17 @@ class PipelineOrchestrator:
                 # down between separate cron invocations.
                 timeout=900,
                 initializer=_worker_init_with_run_id,
-                initargs=(_res["nice_priority"], _res["cpu_affinity"], get_run_id()),
+                initargs=(
+                    _res["nice_priority"],
+                    _res["cpu_affinity"],
+                    get_run_id(),
+                    active_log_dir(),
+                ),
             )
 
             def _submit_task(task: tuple[str, tuple], *, _pool=_pool) -> Future:
                 task_args = task[1]
-                # Trailing element marks a §47 reference fan-out task (dict
+                # Trailing element marks a reference fan-out task (dict
                 # result, one canopy_positions arg instead of a single
                 # receiver_position/receiver_name pair) vs. the normal
                 # one-file-one-receiver shape -- see prepare_batch_tasks.
@@ -993,8 +898,7 @@ class PipelineOrchestrator:
             # Windowed submission (~2x worker count in flight), not the whole
             # batch upfront: submitting all ~n_days*n_receivers*n_files tasks
             # before draining left the write path racing a fully-loaded pool
-            # for the earliest-completing groups (dev/perf_degradation_
-            # findings_2026_07_15.md, Problem A). Streaming-write behavior
+            # for the earliest-completing groups. Streaming-write behavior
             # (write the moment a group completes) is unchanged.
             window = max(1, 2 * n_wrk)
             t_setup_end = _time.monotonic()
@@ -1047,7 +951,7 @@ class PipelineOrchestrator:
                     date_key, task_args = task
                     is_fanout = bool(task_args[-1])
                     lane_key = task_args[4]
-                    # A §47 fan-out task's pairing names are known from its
+                    # A reference fan-out task's pairing names are known from its
                     # submitted args (canopy_positions' keys), independent of
                     # whether the call below succeeds or fails.
                     pairing_names = (
@@ -1117,8 +1021,20 @@ class PipelineOrchestrator:
                             )
                             continue
 
-                        augmented = sorted(group_results, key=lambda x: x[0].name)
                         processor = doy_contexts[date_key][0]
+                        for fname, ds in group_results:
+                            _warn_if_epoch_count_differs_from_name(
+                                processor._logger,
+                                fname,
+                                processor._canonical_name(fname),
+                                ds,
+                            )
+                        # processing.preprocessing (if set) on the whole
+                        # receiver-day, so time bins can span two files
+                        augmented = preprocess_files(
+                            sorted(group_results, key=lambda x: x[0].name),
+                            processor._config.processing.preprocessing,
+                        )
                         rinex_files = receiver_files_lookup[group_key]
                         group_aux = pending_aux.pop(group_key, None)
                         group_fmt = reader_format_lookup.get(group_key)
@@ -1269,8 +1185,7 @@ class PipelineOrchestrator:
             # an explicit gc.collect() bounds any reference-cycle garbage
             # (xarray/Dask objects are known to form cycles refcounting
             # alone can't clear) that would otherwise accumulate for the
-            # rest of the run (dev/perf_degradation_findings_2026_07_15.md,
-            # Problem C).
+            # rest of the run.
             pending_results.clear()
             pending_aux.clear()
             completed_counts.clear()
@@ -1281,6 +1196,30 @@ class PipelineOrchestrator:
             expected_counts.clear()
             gc.collect()
 
+    def _check_preprocessing_before_run(
+        self,
+        dates: list[
+            tuple[str, dict[str, tuple[ReceiverDay, str, ReceiverDay | None, str]]]
+        ],
+    ) -> None:
+        """Refuse the run before processing if a group holds other preprocessing.
+
+        Compares ``processing.preprocessing`` with the log books of every
+        GNSS store group the run writes. The same comparison runs again on
+        each dataset at write time; this one stops a run before it spends
+        time on data that would be refused.
+
+        Raises
+        ------
+        PreprocessingMismatchError
+            If a group holds data preprocessed differently.
+        """
+        if not store_exists(self.site.gnss_store_path):
+            return  # a first run: the store holds nothing to compare with
+        settings = planned_settings(self._config.processing.preprocessing)
+        for group in sorted({group for _, receivers in dates for group in receivers}):
+            self.site.gnss_store.check_settings_match(group, settings)
+
     def process_by_date(
         self,
         keep_vars: list[str] | None = None,
@@ -1290,8 +1229,8 @@ class PipelineOrchestrator:
         """Process all receivers grouped by date.
 
         Each unique receiver is processed once per day with its actual name
-        as the Icechunk group name. Dispatches to multi-day or sub-day batch
-        strategies based on ``days_per_batch``.
+        as the Icechunk group name. Dates are processed in batches of
+        ``days_per_batch`` days (``_process_multi_day_batches``).
 
         Parameters
         ----------
@@ -1324,6 +1263,8 @@ class PipelineOrchestrator:
             )
             return
 
+        self._check_preprocessing_before_run(filtered_dates)
+
         self._logger.info(
             "process_by_date_started",
             total_dates=len(filtered_dates),
@@ -1346,9 +1287,9 @@ class PipelineOrchestrator:
 
 
 @deprecated(
-    "SingleReceiverProcessor is never instantiated by the live pipeline and its "
-    "process() calls a RinexDataProcessor method that no longer exists (would "
-    "raise AttributeError if invoked). Use PipelineOrchestrator instead."
+    "SingleReceiverProcessor is left over from development and will be removed with the next major version. "
+    "Its process() method raises NotImplementedError. Use "
+    "canvodpy.Site(<site>).pipeline().process_date(<YYYYDOY>) instead."
 )
 class SingleReceiverProcessor:
     """Process a single receiver for one day.
@@ -1387,92 +1328,51 @@ class SingleReceiverProcessor:
         self.site = site
         self.n_max_workers = n_max_workers
         self.reader_name = reader_name
-        self._logger = get_logger(__name__).bind(
+        self._logger = structlog.get_logger(__name__).bind(
             receiver=receiver_name,
             date=yyyydoy.to_str(),
         )
 
     def _get_rinex_files(self) -> list[Path]:
-        """Get sorted list of GNSS data files using BUILTIN_PATTERNS globs.
+        """Get sorted list of GNSS data files, as the run selects them.
 
-        Uses ``canvod-filemap``'s pattern registry when that optional
-        package is installed. Without it, falls back to canonical
-        canVOD-only names (``*.rnx``/``*.RNX``, ``*.sbf``/``*.SBF``)
-        selected by ``self.reader_name``.
+        Delegates to :func:`canvodpy.orchestrator.discovery.discover_files`.
         """
-        try:
-            from canvod.filemap.patterns import BUILTIN_PATTERNS, auto_match_order
-
-            globs: set[str] = set()
-            for name in auto_match_order():
-                globs.update(BUILTIN_PATTERNS[name].file_globs)
-        except ImportError:
-            if self.reader_name == "sbf":
-                globs = {"*.sbf", "*.SBF"}
-            else:
-                globs = {"*.rnx", "*.RNX"}
-
-        files: list[Path] = []
-        seen: set[Path] = set()
-        for g in sorted(globs):
-            for path in self.data_dir.glob(g):
-                if path.is_file() and path not in seen:
-                    seen.add(path)
-                    files.append(path)
-        return sorted(files)
+        receiver_cfg = self.site._site_config.receivers.get(self.receiver_name)
+        day = ReceiverDay(
+            self.receiver_name,
+            self.data_dir,
+            self.yyyydoy.to_str(),
+            recipe_file(self.site.site_name, receiver_cfg.recipe)
+            if receiver_cfg
+            else None,
+        )
+        return [found.path for found in discover_files(day, self.reader_name)]
 
     def process(self, keep_vars: list[str] | None = None) -> xr.Dataset:
-        """Process all RINEX files for this receiver and write to Icechunk.
+        """Refuse: this class can no longer process a receiver.
+
+        Use ``canvodpy.Site(<site>).pipeline().process_date(<YYYYDOY>)``,
+        which returns the dataset of every receiver of the site for that
+        day, keyed by receiver name.
 
         Parameters
         ----------
         keep_vars : list[str], optional
-            Variables to keep in datasets
+            Ignored.
 
-        Returns
-        -------
-        xr.Dataset
-            Final daily dataset for this receiver
-
+        Raises
+        ------
+        NotImplementedError
+            Always.
         """
-        rinex_files = self._get_rinex_files()
-
-        if not rinex_files:
-            self._logger.error(
-                "no_rinex_files_found",
-                data_dir=str(self.data_dir),
-            )
-            msg = f"No RINEX files found in {self.data_dir}"
-            raise ValueError(msg)
-
-        self._logger.info(
-            "receiver_processing_started",
-            rinex_files=len(rinex_files),
+        msg = (
+            "SingleReceiverProcessor.process() no longer works: it relied on "
+            "a processor method that has been removed. Use "
+            f"canvodpy.Site({self.site.site_name!r}).pipeline().process_date("
+            f"{self.yyyydoy.to_str()!r})[{self.receiver_name!r}] instead."
         )
-
-        # Create matched dirs for aux data (using first available dir as dummy)
-        matched_dirs = MatchedDirs(
-            canopy_data_dir=self.data_dir,
-            reference_data_dir=self.data_dir,  # Dummy, aux data is date-based
-            yyyydoy=self.yyyydoy,
-        )
-
-        # Initialize processor with receiver name override
-        processor = RinexDataProcessor(
-            matched_data_dirs=matched_dirs,
-            site=self.site,
-            n_max_workers=self.n_max_workers,
-            reader_name=self.reader_name,
-        )
-
-        # Process with actual receiver name (NOT type)
-        # This requires modifying RinexDataProcessor to accept receiver_name parameter
-        return processor._process_receiver(  # ty: ignore[unresolved-attribute]
-            rinex_files=rinex_files,
-            receiver_name=self.receiver_name,  # Use actual name as group
-            receiver_type=self.receiver_type,
-            keep_vars=keep_vars,
-        )
+        raise NotImplementedError(msg)
 
 
 if __name__ == "__main__":
@@ -1491,9 +1391,7 @@ if __name__ == "__main__":
         dry_run=False,
         n_max_workers=resources["n_workers"],
         days_per_batch=proc.days_per_batch,
-        max_memory_gb=resources["max_memory_gb"],
-        cpu_affinity=resources["cpu_affinity"],
-        nice_priority=resources["nice_priority"],
+        config=cfg,
     ) as orchestrator:
         for date_key, datasets, _timings in orchestrator.process_by_date(
             keep_vars=keep_vars

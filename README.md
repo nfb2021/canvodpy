@@ -6,7 +6,7 @@
 <!-- Python, Platforms & Package Manager -->
 [![PyPI](https://img.shields.io/pypi/v/canvodpy.svg)](https://pypi.org/project/canvodpy/)
 [![Python](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/)
-[![Platforms](https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20Windows-lightgrey)](https://github.com/nfb2021/canvodpy/actions/workflows/test_platforms.yml)
+[![Platforms](https://img.shields.io/badge/platform-Linux%20|%20macOS%20(Apple%20silicon)%20|%20Windows-lightgrey)](https://github.com/nfb2021/canvodpy/actions/workflows/test_platforms.yml)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 
 <!-- Identity -->
@@ -84,7 +84,7 @@ graph TB
 
     subgraph InfraPkg[Infrastructure Packages]
         Ops["⚙️ canvod-ops<br/>Preprocessing Pipeline"]
-        Preflight["🚦 canvod-preflight<br/>Naming Convention & Validation"]
+        Preflight["🚦 canvod-preflight<br/>Naming Convention"]
     end
 
     subgraph ExtPkg["Optional Extensions (canvodpy-extensions repo)"]
@@ -198,6 +198,8 @@ uv add canvodpy
 uv add canvod-readers canvod-grids
 ```
 
+canVODpy requires Python 3.14. On macOS, the tests run on Apple silicon.
+
 ## Quick Start
 
 ```bash
@@ -218,7 +220,7 @@ with site.pipeline(n_workers=8) as pipeline:
         site.vod.compute_day(datasets, "canopy_01_vs_reference_01")
 ```
 
-Two supported Python surfaces, plus the CLI on top of one of them:
+One supported Python surface, plus the CLI on top of it:
 
 ```mermaid
 flowchart TD
@@ -233,16 +235,8 @@ flowchart TD
         L3A --> L3E["site.vod.compute_bulk(...)"]
     end
 
-    subgraph L4["canvodpy.functional — stateless components"]
-        L4A["read_rinex('file.rnx')"]
-        L4A --> L4B["augment_with_ephemeris(ds)"]
-        L4B --> L4G["assign_grid_cells(ds)"]
-        L4G --> L4C["calculate_vod(canopy, ref)"]
-        L4C --> L4H["write_to_store(ds, group)"]
-    end
-
     subgraph Shared["Shared Components"]
-        FM["FilenameMapper"]
+        FM["File discovery"]
         EP["EphemerisProvider"]
         READER["GNSSDataReader"]
         STORE["Icechunk Store"]
@@ -256,17 +250,14 @@ flowchart TD
     L3C --> READER
     L3C --> STORE
     L3E --> VOD
-
-    L4A --> READER
-    L4B --> EP
-    L4H --> STORE
 ```
 
 The optional `canvod-airflow` extension builds its DAGs on
 `canvodpy.workflows.tasks`, a dedicated set of Airflow-compatible task
-functions — not `canvodpy.functional` directly. `FluentWorkflow`, the flat `process_date()` /
-`calculate_vod()` / `preview_processing()` functions, and `VODWorkflow` are
-deprecated (`DeprecationWarning` on use) — kept working, no longer taught;
+functions. `FluentWorkflow`, the flat `process_date()` /
+`calculate_vod()` / `preview_processing()` functions, `VODWorkflow`, and the
+single-step functions of `canvodpy.functional` are deprecated (`FutureWarning`
+on use) — kept working until the next major version, no longer taught;
 `VODWorkflow` additionally has a broken augmentation step and shouldn't be
 used regardless. See the
 [API Levels guide](https://canvodpy.eu/guides/api-levels/) for details.
@@ -308,9 +299,10 @@ Full documentation is available at **[canvodpy.eu](https://canvodpy.eu/)**.
 
 Key pages:
 
-- [Getting Started](https://canvodpy.eu/guides/getting-started/)
-- [Architecture & Design Patterns](https://canvodpy.eu/guides/architecture-design/)
-- [API Levels](https://canvodpy.eu/guides/api-levels/)
+- [Contributor Setup](https://canvodpy.eu/guides/contributor-setup/)
+- [Architecture](https://canvodpy.eu/architecture/)
+- [Your Own Readers and VOD Calculators](https://canvodpy.eu/guides/plugins/)
+- [Command line and Python](https://canvodpy.eu/guides/api-levels/)
 - [Configuration Guide](https://canvodpy.eu/guides/configuration/)
 - [Contributing](CONTRIBUTING.md)
 
@@ -328,11 +320,11 @@ canvodpy/                       # Monorepo root
 │   ├── canvod-vod/             #   VOD retrieval algorithms
 │   ├── canvod-store/           #   Icechunk versioned storage
 │   ├── canvod-store-metadata/  #   Store provenance & compliance
-│   ├── canvod-viz/             #   Visualisation
+│   ├── canvod-viz/             #   Visualization
 │   ├── canvod-ops/             #   Preprocessing pipeline
 │   ├── canvod-config/          #   Configuration management
 │   ├── canvod-utils/           #   Date/time utilities & diagnostics
-│   └── canvod-preflight/       #   Naming convention & pre-flight validation
+│   └── canvod-preflight/       #   Naming convention
 ├── canvodpy/                   # Umbrella package + orchestrator
 ├── demo/                       # marimo notebooks (submodule)
 ├── config/                     # YAML configuration files
@@ -343,12 +335,13 @@ canvodpy/                       # Monorepo root
 └── LICENSE                     # Apache License 2.0
 ```
 
-Two optional packages — `canvod-filemap` (non-canonical filename mapping)
-and `canvod-airflow` (Airflow DAG definitions) — are developed separately in
+Optional packages — `canvod-filemap` (naming recipes for non-canonical
+filenames), `canvod-airflow` (Airflow DAGs) and `canvod-adapters` (data
+exchange with gnssvod) — are developed in
 [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions), not
-in this repo's `packages/`. `canvod-filemap` installs as an extra
-(`uv sync --extra filemap`); `canvod-airflow` is GitHub-only today (not yet
-published to PyPI).
+in this repo's `packages/`, and are released on GitHub only. In this
+repository, `canvod-filemap` installs as a dependency group
+(`uv sync --group filemap`), pinned to a release tag.
 
 </details>
 

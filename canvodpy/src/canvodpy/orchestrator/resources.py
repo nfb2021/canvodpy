@@ -5,14 +5,48 @@ from __future__ import annotations
 import os
 import threading
 import time
+import types
+from collections.abc import Callable
 from pathlib import Path
 
 import psutil
+import structlog
 
-from canvodpy.logging import get_logger
-from canvodpy.logging.run_context import get_run_id, set_run_id
+from canvod.utils.logging import get_run_id, set_run_id
+from canvod.utils.tools import deprecated_argument
 
-logger = get_logger(__name__)
+logger = structlog.get_logger(__name__)
+
+_NO_EFFECT_ARGUMENTS = {
+    "max_memory_gb": (
+        "It has no effect: canVODpy does not limit memory. "
+        "To lower memory use, use fewer workers or a smaller days_per_batch."
+    ),
+    "cpu_affinity": (
+        "It has no effect: the worker processes take their CPU cores from "
+        "processing.params.cpu_affinity in canvod-settings.yaml. Set it there."
+    ),
+    "nice_priority": (
+        "It has no effect: the worker processes take their priority from "
+        "processing.params.nice_priority in canvod-settings.yaml. Set it there."
+    ),
+}
+
+
+def deprecate_no_effect_arguments[F: Callable[..., object]](func: F) -> F:
+    """Deprecate the resource arguments that have no effect on *func*."""
+    if not isinstance(func, types.FunctionType):
+        msg = f"deprecate_no_effect_arguments decorates functions, not {func!r}"
+        raise TypeError(msg)
+    caller = func.__qualname__.removesuffix(".__init__")
+    for name, reason in _NO_EFFECT_ARGUMENTS.items():
+        func = deprecated_argument(
+            name,
+            f"The {name!r} argument of {caller}() is left over "
+            "from development and will be removed with the next major "
+            f"version. {reason} Remove the argument.",
+        )(func)
+    return func
 
 
 class MemoryMonitor:
@@ -66,8 +100,7 @@ class ResourceSampler:
     ``interval_seconds`` for the whole run (including time spent outside
     batch boundaries, e.g. aux data fetch/interpolation), so a wall-clock
     slowdown seen in stage_timing events can be correlated against actual
-    resource pressure instead of assumed (dev/todo_later.md
-    perf-degradation investigation, 2026-07-14).
+    resource pressure instead of assumed.
 
     Parameters
     ----------

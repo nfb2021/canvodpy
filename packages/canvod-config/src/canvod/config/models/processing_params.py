@@ -22,7 +22,8 @@ class ProcessingParams(_StrictModel):
         "auto",
         description=(
             "'auto': OS auto-detects workers and memory (local machines). "
-            "'manual': hard caps via n_max_threads, max_memory_gb, etc. (shared servers)."
+            "'manual': hard caps via n_max_threads, cpu_affinity and nice_priority "
+            "(shared servers)."
         ),
     )
     n_max_threads: int | None = Field(
@@ -46,13 +47,29 @@ class ProcessingParams(_StrictModel):
         default_factory=lambda: ["SNR"],
         description="GNSS observables to keep (SNR, Pseudorange, Phase, Doppler)",
     )
+    rinex_v3_parser: Literal["validated", "unvalidated_fast"] = Field(
+        "validated",
+        description=(
+            "How RINEX v3 observation files are parsed. 'validated': every "
+            "epoch is checked (epoch line, satellite IDs, satellite count, "
+            "observation fields); epochs that fail are dropped and logged. "
+            "'unvalidated_fast': DANGEROUS. Parses by fixed columns without "
+            "any check, so corrupted records can enter the store as partial "
+            "or wrong values. On valid files both give the same dataset. "
+            "canVODpy takes no responsibility for results of the unvalidated "
+            "parser; checking the input files is entirely the user's "
+            "responsibility. Every use emits an UnvalidatedParserWarning."
+        ),
+    )
     aggregate_glonass_fdma: bool = Field(
         True,
         description=(
-            "Aggregate GLONASS FDMA sub-bands into effective G1*/G2* bands. "
-            "When False, each satellite keeps its precise frequency — increases "
-            "SID count and changes the store SID axis. Do not change on an "
-            "existing store without understanding append-compatibility implications."
+            "Aggregate GLONASS FDMA sub-bands into effective G1/G2 bands. "
+            "When False, the GLONASS signal IDs name the FDMA bands "
+            "(G1_FDMA, G2_FDMA), for the observations and the orbit data "
+            "alike. RINEX only: the SBF and NMEA readers refuse False. "
+            "It changes the GLONASS signal IDs, so an existing store refuses "
+            "data written with the other value."
         ),
     )
     store_radial_distance: bool = Field(
@@ -104,7 +121,10 @@ class ProcessingParams(_StrictModel):
     max_memory_gb: float | None = Field(
         None,
         gt=0,
-        description="Soft RAM limit for processing (None = no limit)",
+        description=(
+            "Left over from development; has no effect, canVODpy does not "
+            "limit memory. Removed with the next major version."
+        ),
     )
     cpu_affinity: list[int] | None = Field(
         None,
@@ -154,6 +174,33 @@ class ProcessingParams(_StrictModel):
             "Set to False to reduce dataset size when raw quantities are not needed."
         ),
     )
+    store_sbf_metadata: bool = Field(
+        True,
+        description=(
+            "When reading SBF files, store the per-file SBF metadata dataset "
+            "(sbf_obs: SatVisibility geometry and its almanac/ephemeris source, "
+            "MeasExtra, PVT, DOP, receiver status and quality indicators) under "
+            "{group}/metadata/sbf_obs, in the same commit as the observations. "
+            "Set to False to save space; broadcast geometry "
+            "(ephemeris_source='broadcast') still works, since it uses sbf_obs "
+            "in memory."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_max_memory_gb(cls, data: object) -> object:
+        if isinstance(data, dict) and data.get("max_memory_gb") is not None:
+            import warnings
+
+            warnings.warn(
+                "The processing setting 'max_memory_gb' is left over from development and will be removed with the next major version. "
+                "It has no effect: canVODpy does not limit memory. "
+                "Remove it from your settings; to lower memory use, set fewer workers (n_max_threads) or a smaller days_per_batch.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        return data
 
     @model_validator(mode="after")
     def validate_resource_mode(self) -> ProcessingParams:

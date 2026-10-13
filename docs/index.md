@@ -1,6 +1,9 @@
 ---
 title: canVODpy
 description: An Open Python Ecosystem for GNSS-Transmissometry Canopy VOD Retrievals
+hide:
+  - navigation
+  - toc
 ---
 
 <div class="hero" markdown>
@@ -12,9 +15,11 @@ description: An Open Python Ecosystem for GNSS-Transmissometry Canopy VOD Retrie
 
 **An Open Python Ecosystem for GNSS-Transmissometry Canopy VOD Retrievals**
 
-canVODpy aims to be the central community-driven software suite for deriving
-and analyzing canopy [Vegetation Optical Depth](https://gsics.nesdis.noaa.gov/wiki/Development/ReferenceDocuments){:target="_blank"} (VOD) from [GNSS](https://gssc.esa.int/navipedia/index.php/GNSS){:target="_blank"}
-signal-to-noise ratio observations.
+canVODpy aims to be the central community-driven software suite for
+deriving canopy Vegetation Optical Depth (VOD) from the signal-to-noise
+ratio of the same [GNSS](https://gssc.esa.int/navipedia/index.php/GNSS){:target="_blank"}
+signal, received at the same time by one receiver below the canopy and one
+with an unobstructed view of the sky.
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19445061.svg)](https://doi.org/10.5281/zenodo.19445061)
 [![PyPI](https://img.shields.io/pypi/v/canvodpy)](https://pypi.org/project/canvodpy/)
@@ -24,8 +29,8 @@ signal-to-noise ratio observations.
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nfb2021/canvodpy/badge)](https://securityscorecards.dev/viewer/?uri=github.com/nfb2021/canvodpy)
 [![VODnet](https://img.shields.io/badge/-VODnet-2d6a4f?labelColor=555555&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAAXNSR0IArs4c6QAAAHhlWElmTU0AKgAAAAgABAEaAAUAAAABAAAAPgEbAAUAAAABAAAARgEoAAMAAAABAAIAAIdpAAQAAAABAAAATgAAAAAAAABIAAAAAQAAAEgAAAABAAOgAQADAAAAAQABAACgAgAEAAAAAQAAAA6gAwAEAAAAAQAAAA4AAAAAjn8NzQAAAAlwSFlzAAALEwAACxMBAJqcGAAAAflJREFUKBWtUEtoE1EUPe+9SczHiam/aixtqi1E7aai4kK0CAVBDFZwrQs3xp2KIriYtiKuav3QRVxYKIjFVihWrCBIaaWioKidQBsxi3SwYmMmkxidYWaemYEEKUgRPHDhXu4575x3gf+NKfVD3UQ2u/Zv7wrLF8mPfV2ZH1ZCNIM7xUCAHHjyfN6wQ8mZo3vvE4Av57tzOjfd/WZpivfJSW5wkzvomnzFe2SFTyyU+iFJtCpk1eaRfOIw84TuRsN7kEkVMDzyEjPvUtga2YiDTRFM5+m+F8XYHMZuzDqaWlQf8yVMpmJ0/DUu9g6hVNQAy8au3W04NHAV85oFRulZS+LDkIjtWmcyHT6vQHYoXwrouTWKkv4LLOAHE4N4K6dxZ2AISl4DpawVDVrYcXSFZtTPGSV8IatjUVErJ+Cwbdstx3Vw8CG+pmQIHg+HUVlWo7aSp/qz9Kn3W5p5S/x4DJ8/lfGt4kAow7bmBpQ9fuQ3RUFtM4Uz61Qk/vijbpLbgtc61n05zjQ1hCvXHmB9fT3OnT8NOWfi+uxP0IJxE4S4jrXzxrffm1xlb75Aud/cEFmD9vYW6KaNUoUmCpS3BblUPNk45sR0UBM6Qzx2qd9LVnfqujGS+64puaX8olEuj4uMHHnc2dTrcFZGtCOMxv11KxP/kfEbTTzNcyb5ar0AAAAASUVORK5CYII=&logoColor=white)](https://www.gfz.de/en/section/remote-sensing-and-geoinformatics/projects/vodnet)
 
-[Get started retrieving VOD :fontawesome-solid-arrow-right:](users/index.md){ .md-button .md-button--primary }
-[Get started contributing to the ecosystem :fontawesome-solid-arrow-right:](CONTRIBUTING.md){ .md-button }
+[Retrieve VOD from your GNSS data :fontawesome-solid-arrow-right:](users/index.md){ .md-button .md-button--primary }
+[Contribute to canVODpy :fontawesome-solid-arrow-right:](CONTRIBUTING.md){ .md-button }
 [See canVODpy at work in molab :fontawesome-solid-arrow-up-right-from-square:](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/03_convenience_speedrun.py){ .md-button target=_blank }
 
 </div>
@@ -36,143 +41,85 @@ signal-to-noise ratio observations.
 
 <div class="grid cards" markdown>
 
--   :fontawesome-solid-stamp: &nbsp; **Multi-reader support with unified, validated output**
+-   :fontawesome-solid-stamp: &nbsp; **One output for every file format**
 
     ---
 
-    Supports RINEX v2.11, RINEX v3.04, Stripped RINEX v3.05, NMEA v4 and Septentrio SBF. Every supported GNSS reader produces a structurally identical, run-time-validated xarray Dataset. Downstream code is reader-agnostic.
+    Reads RINEX v2.11, RINEX v3.04, stripped RINEX v3.05, NMEA v4.00 and
+    Septentrio SBF. Every reader returns the same validated xarray Dataset,
+    so the rest of canVODpy never depends on the file format.
 
-    [:octicons-arrow-right-24: Reader Architecture](packages/readers/architecture.md)
+    [:octicons-arrow-right-24: Reading GNSS files](packages/readers/overview.md)
 
--   :fontawesome-solid-database: &nbsp; **Versioned, performant storage, ready for the cloud**
-
-    ---
-
-    Icechunk let's you manage xarray Datasets of your entire network like a database and gives every write a git-like commit snapshot. Scroll through your commit history, branch off into development branches and create immutable tags for releases. Local filesystem storage today, with cloud object-store support on the roadmap.
-
-    [:octicons-arrow-right-24: Storage Engine](packages/store/overview.md)
-
--   :fontawesome-solid-globe: &nbsp; **Hemispheric grid system**
+-   :fontawesome-solid-database: &nbsp; **Versioned storage**
 
     ---
 
-    Hemispheric tessellations (equal-area and equal-angle verified; others experimental) defined in 3D, enabling full spatial analyses. KDTree-backed cell assignment and interactive data exploration.
+    Observations and VOD go into Icechunk stores. Every write is a commit
+    that you can list, branch from and tag, like in git.
 
-    [:octicons-arrow-right-24: canvod-grids](packages/grids/overview.md)
+    [:octicons-arrow-right-24: Storage](packages/store/overview.md)
 
--   :fontawesome-solid-rotate: &nbsp; **Fully parallel processing**
-
-    ---
-
-    By default, all file reading and processing is natively parallelized.
-
-    [:octicons-arrow-right-24: Architecture](architecture.md)
-
--   :fontawesome-solid-shield-halved: &nbsp; **Reliable by design**
+-   :fontawesome-solid-shield-halved: &nbsp; **No duplicates, no overlaps**
 
     ---
 
-    Field data gets corrupted — power outages, partial writes, stray files. The store actively guards against it: hash- and time-overlap checks block corrupting appends before they happen, and it's the authoritative last line of defense for ingest, not just a passive write target.
+    Before it appends, canVODpy skips each file that's already in the
+    store, by its SHA-256 hash, and each file whose time span overlaps data
+    already stored.
 
-    [:octicons-arrow-right-24: Storage Engine](packages/store/overview.md)
+    [:octicons-arrow-right-24: Storage](packages/store/overview.md)
 
--   :fontawesome-solid-fingerprint: &nbsp; **Traceability, top to bottom**
+-   :fontawesome-solid-globe: &nbsp; **Hemispheric grids**
 
     ---
 
-    FAIR-compliant, OpenSSF-vetted, DOI-versioned releases at the software layer. SHA-256 file hashing and DataCite/ACDD/STAC-aligned provenance metadata at the data layer. Every citable release and every stored dataset is independently traceable.
+    Seven grids divide the sky seen from the receiver into cells, among them
+    equal-area, equal-angle, HEALPix, and geodesic grids. Each observation
+    goes to the cell that contains it.
 
-    [:octicons-arrow-right-24: Store Metadata](packages/store-metadata/overview.md)
+    [:octicons-arrow-right-24: Hemispheric grids](packages/grids/overview.md)
+
+-   :fontawesome-solid-rotate: &nbsp; **Parallel by default**
+
+    ---
+
+    canVODpy reads and processes files in parallel worker processes, and
+    sizes the workers to the machine, or to the limits you set.
+
+    [:octicons-arrow-right-24: Parallel processing](guides/parallel-processing.md)
+
+-   :fontawesome-solid-fingerprint: &nbsp; **Traceable**
+
+    ---
+
+    Each release has a DOI. Each store records where its data came from,
+    in metadata that follows DataCite and ACDD, and a STAC catalog
+    describes all stores.
+
+    [:octicons-arrow-right-24: Store metadata](packages/store-metadata/overview.md)
 
 </div>
 
 ---
 
-<div class="hero" markdown>
-
-[Browse interactive notebooks :fontawesome-solid-play:](notebooks/index.md){ .md-button .md-button--primary }
-
-</div>
-
----
-
-## Supported receiver formats
-
-<div class="grid" markdown>
-
-!!! success "RINEX v3.04"
-
-    Text-based standard format from all manufacturers.
-    Satellite geometry computed from precise [SP3](https://gssc.esa.int/navipedia/index.php/SP3){:target="_blank"} [ephemerides](https://gssc.esa.int/navipedia/index.php/Precise_GNSS_Orbits){:target="_blank"} (CLK clock corrections fetched too, by default — optional).
-
-    **Reader:** `Rnxv3Obs` — all GNSS constellations, all bands
-
-!!! success "Septentrio Binary Format (SBF)"
-
-    Binary format from [Septentrio](https://www.septentrio.com){:target="_blank"} receivers. Includes [broadcast ephemerides](https://gssc.esa.int/navipedia/index.php/Broadcast_Orbits){:target="_blank"}
-    (SatVisibility blocks) for standalone satellite geometry — no SP3/CLK
-    download required.
-
-    **Reader:** `SbfReader` — all GNSS constellations, PVT + DOP metadata
-
-</div>
-
----
-
-## Quick Start
-
-```bash
-pip install canvodpy
-```
-
-=== "CLI — running the pipeline"
-
-    Recommended for production runs; resumes automatically:
-
-    ```bash
-    canvodpy run --site ExampleSite --start 2025001 --end 2025007
-    ```
-
-=== "Site.pipeline() — Python-native"
-
-    Same thing, scripted from Python:
-
-    ```python
-    from canvodpy import Site
-
-    site = Site("ExampleSite")
-    with site.pipeline() as pipeline:
-        data = pipeline.process_date("2025001")
-        vod = pipeline.calculate_vod("canopy_01", "reference_01", "2025001")
-    ```
-
-=== "Functional — component-level"
-
-    Stateless functions for custom pipelines, Airflow, and analysis:
-
-    ```python
-    from canvodpy.functional import read_rinex, augment_with_ephemeris, calculate_vod
-
-    ds = read_rinex("ROSA01TUW_R_20250010000_15M_05S_AA.rnx")
-    ds = augment_with_ephemeris(ds, rx_pos, source="final", date="2025001", site_config=cfg)
-    vod = calculate_vod(canopy_ds, reference_ds)
-    ```
-
----
-
-## Processing Pipeline
+## Processing pipeline
 
 ```mermaid
-flowchart TD
-    RINEX["RINEX 3.04"] --> PARSE["Parse + SP3 interpolation"]
-    SBF["Septentrio SBF"] --> PARSE2["Parse (geometry embedded)"]
-    SP3["SP3 (+ CLK, optional)"] --> PARSE
-    PARSE --> STORE["Icechunk store"]
-    PARSE2 --> STORE
-    STORE --> VOD["Tau-Omega VOD retrieval"]
-    VOD --> GRID["Hemispheric grid assignment"]
-    GRID --> VIZ["Visualisation"]
+flowchart LR
+    FILES["RINEX, SBF or NMEA files"] --> READ["Read"]
+    READ --> ANGLES["Satellite angles"]
+    ORBITS["SP3 orbits"] --> ANGLES
+    ANGLES --> GSTORE["GNSS store"]
+    GSTORE --> VOD["VOD retrieval"]
+    VOD --> VSTORE["VOD store"]
+    VSTORE --> PLOT["Hemispheric grids and plots"]
 ```
+
+For SBF files, the satellite angles can also come from the files
+themselves (`processing.params.ephemeris_source: broadcast`). For every
+step of a run, see
+[What a run does](architecture.md#what-a-run-does).
 
 ---
 
@@ -180,104 +127,81 @@ flowchart TD
 
 <div class="grid cards" markdown>
 
--   :fontawesome-solid-book-open: &nbsp; **canvod-readers**
+-   :fontawesome-solid-book-open: &nbsp; **`canvod-readers`**
 
     ---
 
-    RINEX v3.04 parsing with signal ID mapping.
-    Unified `(epoch × sid)` output with full validation.
+    Readers for the GNSS file formats, one output structure.
 
--   :fontawesome-solid-cloud-arrow-down: &nbsp; **canvod-auxiliary**
-
-    ---
-
-    SP3 ephemeris (and optional CLK clock) retrieval.
-    Hermite spline interpolation, FTP fallback chain.
-
--   :fontawesome-solid-border-all: &nbsp; **canvod-grids**
+-   :fontawesome-solid-cloud-arrow-down: &nbsp; **`canvod-auxiliary`**
 
     ---
 
-    7 hemispheric grid types — equal-area, geodesic, HTM and more.
-    KDTree-backed O(n log m) cell assignment.
+    Downloads SP3 orbits and CLK clocks and interpolates them to the
+    epochs of the observations.
 
--   :fontawesome-solid-leaf: &nbsp; **canvod-vod**
-
-    ---
-
-    VOD estimation via zeroth-order tau-omega model.
-    Extensible `VODCalculator` ABC.
-
--   :fontawesome-solid-database: &nbsp; **canvod-store**
+-   :fontawesome-solid-border-all: &nbsp; **`canvod-grids`**
 
     ---
 
-    Icechunk versioned storage with per-file hash deduplication.
-    S3-compatible backends, ACID commits.
+    Hemispheric grids and the assignment of observations to their cells.
 
--   :fontawesome-solid-chart-line: &nbsp; **canvod-viz**
-
-    ---
-
-    2D polar hemisphere plots and 3D interactive Plotly surfaces.
-
--   :fontawesome-solid-sliders: &nbsp; **canvod-config**
+-   :fontawesome-solid-leaf: &nbsp; **`canvod-vod`**
 
     ---
 
-    YAML configuration loading with Pydantic validation, XDG-aware
-    defaults, and bundled templates.
+    VOD from the zeroth-order tau-omega model, and the base class for
+    other VOD calculators.
 
--   :fontawesome-solid-gear: &nbsp; **canvod-utils**
-
-    ---
-
-    YYYYDOY date utilities, processing diagnostics, shared tooling.
-
--   :fontawesome-solid-circle-check: &nbsp; **canvod-preflight**
+-   :fontawesome-solid-database: &nbsp; **`canvod-store`**
 
     ---
 
-    Pre-flight validation of data directories against the canVOD
-    naming convention. Hard gate before ingestion.
+    The Icechunk stores for observations and VOD.
 
--   :fontawesome-solid-tag: &nbsp; **canvod-filemap** *(optional)*
-
-    ---
-
-    Virtual renaming engine for non-standard receiver filenames
-    (Septentrio SBF, RINEX v2 short names). Lives in the separate
-    [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions)
-    repo — see [Optional Extensions](guides/extensions.md).
-
--   :fontawesome-solid-wind: &nbsp; **canvod-airflow** *(optional)*
+-   :fontawesome-solid-chart-line: &nbsp; **`canvod-viz`**
 
     ---
 
-    Airflow DAG definitions (daily SBF/RINEX/SBF-agency + backfill) for
-    canvodpy pipelines. Also lives in
-    [canvodpy-extensions](https://github.com/nfb2021/canvodpy-extensions) —
-    see [Optional Extensions](guides/extensions.md).
+    2D polar plots and interactive 3D Plotly plots of the hemisphere.
 
--   :fontawesome-solid-wand-magic-sparkles: &nbsp; **canvod-ops**
+-   :fontawesome-solid-sliders: &nbsp; **`canvod-config`**
 
     ---
 
-    Configurable preprocessing pipeline: temporal aggregation,
-    grid assignment, extensible Op chain.
+    Reads and validates `canvod-settings.yaml`.
 
--   :fontawesome-solid-stamp: &nbsp; **canvod-store-metadata**
-
-    ---
-
-    Store-level provenance (DataCite, ACDD, STAC), compliance validation,
-    inventory builder, STAC catalog export.
-
--   :fontawesome-solid-circle-nodes: &nbsp; **canvodpy**
+-   :fontawesome-solid-gear: &nbsp; **`canvod-utils`**
 
     ---
 
-    Umbrella package — CLI, `Site.pipeline()`, functional API, factory system.
+    Date utilities, diagnostics, and tools the other packages share.
+
+-   :fontawesome-solid-circle-check: &nbsp; **`canvod-preflight`**
+
+    ---
+
+    The canVOD file name convention: parses and builds canonical
+    names, finds files whose time spans overlap.
+
+-   :fontawesome-solid-wand-magic-sparkles: &nbsp; **`canvod-ops`**
+
+    ---
+
+    Preprocessing steps applied before VOD, such as temporal aggregation.
+
+-   :fontawesome-solid-stamp: &nbsp; **`canvod-store-metadata`**
+
+    ---
+
+    Writes, validates and exports the provenance metadata of a store.
+
+-   :fontawesome-solid-circle-nodes: &nbsp; **`canvodpy`**
+
+    ---
+
+    The command line interface, `Site.pipeline()`, and the factories for
+    readers, grids, and VOD calculators.
 
 </div>
 
@@ -293,7 +217,7 @@ flowchart TD
 
 !!! abstract "Storage"
 
-    `Icechunk` · `Zarr` · S3-compatible
+    `Icechunk` · `Zarr`
 
 !!! abstract "Code quality"
 
@@ -301,11 +225,11 @@ flowchart TD
 
 !!! abstract "Documentation"
 
-    `Zensical` · `beautiful-mermaid` · `marimo` notebooks
+    `Zensical` · `mkdocstrings` · `Mermaid`
 
 !!! abstract "AI-assisted development"
 
-    [`Claude Code`](guides/ai-development.md) · 15+ domain skills · persistent memory · `CLAUDE.md`
+    [`Claude Code`](guides/ai-development.md) · project skills · `AGENTS.md`
 
 </div>
 

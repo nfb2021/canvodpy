@@ -1,4 +1,4 @@
-"""``canvodpy dashboard`` — launch the marimo performance dashboard.
+"""``canvodpy dashboard``: launch the marimo performance dashboard.
 
 Reads `stage_timing` events (see `canvodpy.logging.stage_timer`) from
 `machine/performance*.json` and displays a per-iteration stage breakdown
@@ -25,8 +25,8 @@ def dashboard(
         typer.Option(
             "--logs-dir",
             help=(
-                "Directory containing the machine/performance*.json files "
-                "(default: from canvod-settings.yaml, or ./.logs)."
+                "Log folder of the runs to show. Default: "
+                "processing.logging.log_dir in canvod-settings.yaml."
             ),
         ),
     ] = None,
@@ -39,19 +39,31 @@ def dashboard(
     ] = False,
     host: Annotated[
         str | None,
-        typer.Option("--host", help="Host to attach to (default: marimo's 127.0.0.1)."),
+        typer.Option(
+            "--host", help="Host to bind to. Default: the marimo default, 127.0.0.1."
+        ),
     ] = None,
     port: Annotated[
         int | None,
         typer.Option(
-            "--port", "-p", help="Port to attach to (default: marimo picks one)."
+            "--port", "-p", help="Port to bind to. Default: a port that marimo picks."
         ),
     ] = None,
 ) -> None:
     """Launch the marimo performance dashboard for the pipeline's logs."""
     env = os.environ.copy()
     if logs_dir is not None:
-        env["CANVODPY_PERF_LOG_DIR"] = str(Path(logs_dir).expanduser())
+        log_dir = Path(logs_dir).expanduser()
+    else:
+        from canvod.config import load_config
+        from canvod.config.models.logging import LogDirNotSetError
+
+        try:
+            log_dir = load_config().processing.logging.get_log_dir()
+        except LogDirNotSetError as e:
+            typer.echo(f"Error: {e}\n\nOr pass the folder with --logs-dir.", err=True)
+            raise typer.Exit(code=1) from None
+    env["CANVODPY_PERF_LOG_DIR"] = str(log_dir)
 
     marimo_subcommand = "edit" if edit else "run"
     cmd = [sys.executable, "-m", "marimo", marimo_subcommand, str(_NOTEBOOK_PATH)]

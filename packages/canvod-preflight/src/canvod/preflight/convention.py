@@ -15,7 +15,8 @@ Convention::
     PERIOD      Batch size: 2-digit value + unit      (e.g. 01D, 15M, 01H)
     SAMPLING    Data frequency: 2-digit value + unit  (e.g. 01S, 05S, 05M)
     CONTENT     2-char user field, default 'AA'
-    TYPE        File type, lowercase                  (rnx, sbf, ubx, nmea)
+    TYPE        File type, lowercase                  (rnx, sbf, ubx, nmea, or
+                the type of an installed reader plugin)
     COMPRESSION Optional compression extension        (zip, gz, bz2, zst, ...)
 
 Examples::
@@ -28,7 +29,8 @@ Examples::
 from __future__ import annotations
 
 import re
-from datetime import timedelta
+from collections.abc import Callable, Sequence
+from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Annotated, Self
 
@@ -68,12 +70,48 @@ class ReceiverType(StrEnum):
 
 
 class FileType(StrEnum):
-    """File format / observation type."""
+    """Built-in file types; reader plugins can add more (:func:`known_file_types`)."""
 
     RNX = "rnx"
     SBF = "sbf"
     UBX = "ubx"
     NMEA = "nmea"
+
+
+_FILE_TYPE_RE = re.compile(r"^[a-z][a-z0-9]{1,7}$")
+
+
+def known_file_types() -> frozenset[str]:
+    """File types a canVOD file name may have.
+
+    The built-in types plus the ``file_type`` of every installed reader
+    plugin (entry point group ``canvodpy.readers``).
+
+    Raises
+    ------
+    canvod.utils.plugins.PluginError
+        If a reader plugin cannot be imported or sets no valid
+        ``file_type`` (2 to 8 lowercase letters and digits).
+    """
+    from canvod.utils.plugins import (
+        READER_GROUP,
+        PluginError,
+        load_plugins,
+        plugin_package,
+    )
+
+    types = {t.value for t in FileType}
+    for name, cls in load_plugins(READER_GROUP).items():
+        file_type = getattr(cls, "file_type", None)
+        if not isinstance(file_type, str) or not _FILE_TYPE_RE.match(file_type):
+            raise PluginError(
+                f"The reader plugin '{name}' of the package "
+                f"{plugin_package(READER_GROUP, name)} sets no valid file_type "
+                f"(got {file_type!r}); it must be 2 to 8 lowercase letters and "
+                "digits, the TYPE field of its files' canVOD names."
+            )
+        types.add(file_type)
+    return frozenset(types)
 
 
 # -- Helpers ------------------------------------------------------------------
@@ -90,7 +128,7 @@ _FILENAME_RE = re.compile(
     r"_(?P<period>\d{2}[SMHD])"
     r"_(?P<sampling>\d{2}[SMHD])"
     r"_(?P<content>[A-Z0-9]{2})"
-    r"\.(?P<file_type>rnx|sbf|ubx|nmea)"
+    r"\.(?P<file_type>[a-z][a-z0-9]{1,7})"
     r"(?:\.(?P<compression>[a-z0-9]+))?$"
 )
 
@@ -124,10 +162,21 @@ class CanVODFilename:
     period: Duration = "01D"
     sampling: Duration = "05S"
     content: ContentCode = "AA"
-    file_type: FileType = FileType.RNX
+    file_type: str = FileType.RNX.value
     compression: str | None = None
 
     # -- Validators -----------------------------------------------------------
+
+    @field_validator("file_type", mode="before")
+    @classmethod
+    def _validate_file_type(cls, v: object) -> str:
+        value = v.value if isinstance(v, FileType) else v
+        known = known_file_types()
+        if value not in known:
+            raise ValueError(
+                f"Unknown file type {value!r}; known: {', '.join(sorted(known))}"
+            )
+        return str(value)
 
     @field_validator("compression")
     @classmethod
@@ -151,6 +200,18 @@ class CanVODFilename:
         return _duration_to_timedelta(self.period)
 
     @property
+    def start(self) -> datetime:
+        """Start of the time span the file covers, from its name."""
+        return datetime(self.year, 1, 1) + timedelta(
+            days=self.doy - 1, hours=self.hour, minutes=self.minute
+        )
+
+    @property
+    def end(self) -> datetime:
+        """End of the time span the file covers (exclusive), from its name."""
+        return self.start + self.batch_duration
+
+    @property
     def name(self) -> str:
         """Full filename including optional compression extension."""
         stem = (
@@ -162,7 +223,7 @@ class CanVODFilename:
             f"_{self.period}"
             f"_{self.sampling}"
             f"_{self.content}"
-            f".{self.file_type.value}"
+            f".{self.file_type}"
         )
         if self.compression:
             return f"{stem}.{self.compression}"
@@ -208,9 +269,60 @@ class CanVODFilename:
             period=m.group("period"),
             sampling=m.group("sampling"),
             content=m.group("content"),
-            file_type=FileType(m.group("file_type")),
+            file_type=m.group("file_type"),
             compression=m.group("compression"),
         )
 
     def __str__(self) -> str:
         return self.name
+
+
+# -- Overlaps -----------------------------------------------------------------
+
+
+def find_overlaps[T](
+    items: Sequence[T],
+    key: Callable[[T], CanVODFilename] | None = None,
+) -> list[tuple[T, T]]:
+    """Find pairs of files whose named time spans overlap.
+
+    Each file covers ``[start, start + period)`` according to its canonical
+    name, so a daily file next to sub-daily files of the same day overlaps
+    each of them, and adjacent files (00:00-01:00, 01:00-02:00) do not.
+    Spans are compared as absolute times, so a file running past midnight
+    overlaps files of the next day. Only files of the same receiver identity
+    and file type are compared; an SBF file and the RINEX file converted
+    from it do not overlap.
+
+    Parameters
+    ----------
+    items : Sequence
+        Files to check.
+    key : Callable | None
+        Returns the :class:`CanVODFilename` of an item. ``None``: the items
+        are :class:`CanVODFilename` instances.
+
+    Returns
+    -------
+    list[tuple]
+        Overlapping pairs, earlier-starting file first, sorted by start.
+    """
+    groups: dict[tuple[str, str], list[tuple[CanVODFilename, int, T]]] = {}
+    for i, item in enumerate(items):
+        cn = key(item) if key is not None else item
+        assert isinstance(cn, CanVODFilename)
+        identity = (
+            f"{cn.site}{cn.receiver_type.value}{cn.receiver_number:02d}{cn.agency}"
+        )
+        groups.setdefault((identity, cn.file_type), []).append((cn, i, item))
+
+    overlaps: list[tuple[datetime, int, int, T, T]] = []
+    for group in groups.values():
+        group.sort(key=lambda entry: (entry[0].start, entry[0].end, entry[1]))
+        active: list[tuple[CanVODFilename, int, T]] = []
+        for cn, i, item in group:
+            active = [a for a in active if a[0].end > cn.start]
+            overlaps.extend((a[0].start, a[1], i, a[2], item) for a in active)
+            active.append((cn, i, item))
+    overlaps.sort(key=lambda o: o[:3])
+    return [(a, b) for _, _, _, a, b in overlaps]

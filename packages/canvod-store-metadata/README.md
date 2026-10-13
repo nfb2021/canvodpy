@@ -1,8 +1,9 @@
 # canvod-store-metadata
 
-Rich metadata lifecycle for canvod Icechunk stores. Defines, collects, writes, reads,
-validates, and catalogs metadata aligned with **DataCite 4.5**, **ACDD 1.3**, and
-**STAC 1.1**.
+Rich metadata lifecycle for canvod Icechunk stores. Defines, collects, writes, reads
+and validates metadata aligned with **DataCite 4.5**, **ACDD 1.3**, and
+**STAC 1.1**, and writes the STAC catalog and the releases of all stores
+under a data root.
 
 ## Installation
 
@@ -27,7 +28,7 @@ canvod has two distinct concepts that both involve "metadata":
 
 | Concept | Package | Location in store | What it tracks |
 | --- | --- | --- | --- |
-| **Store metadata** | `canvod-store-metadata` (this package) | Zarr root attrs (`canvod_metadata` key) | *Who/what/when/how* — identity, creator, provenance, environment, compliance |
+| **Store metadata** | `canvod-store-metadata` (this package) | Icechunk's repository metadata, a copy in the root attributes of every snapshot | *Who/what/when/how* — identity, creator, provenance, environment, compliance |
 | **File registry** | `canvod-store` (`MyIcechunkStore`) | `{group}/metadata/table` Zarr arrays | *Which files* went in — per-file hash, temporal range, filename, path |
 
 In short: **store metadata** describes the store as a whole (for catalogs, reproducibility,
@@ -39,11 +40,16 @@ individual source files for deduplication and auditing.
 ```python
 from pathlib import Path
 from canvod.store_metadata import (
-    write_metadata, read_metadata, format_metadata, validate_all,
-    extract_env, write_stac_collection, scan_stores,
+    write_metadata,
+    read_metadata,
+    format_metadata,
+    validate_all,
+    extract_env,
+    write_catalog,
+    scan_stores,
 )
 
-# Write metadata to an existing Icechunk store
+# Write a new store's metadata (build it with collect_metadata)
 write_metadata(store_path, metadata)
 
 # Read it back
@@ -55,11 +61,11 @@ print(format_metadata(meta))
 # Query a single section
 print(format_metadata(meta, section="env"))
 
-# Validate against DataCite/ACDD/STAC
-issues = validate_all(meta)
+# Validate against the zarr conventions, ACDD, DataCite, STAC, FAIR
+issues = validate_all(meta, store_path=store_path)
 
-# Export STAC Collection JSON
-write_stac_collection(store_path)
+# Write the STAC catalog of every store under the data root
+write_catalog(data_root)
 
 # Reproduce the exact Python environment
 extract_env(store_path, Path("repro_env/"))
@@ -78,10 +84,20 @@ python -m canvod.store_metadata.show /path/to/store toml         # raw pyproject
 
 ---
 
-## What we track (11 sections, ~90 fields)
+## What we track (14 sections)
 
-All metadata is stored as a single JSON blob in the Zarr root attributes under the
-key `canvod_metadata`. Each section is described below.
+The metadata has three parts (ADR 0014). The **repository metadata**, in
+Icechunk's repository metadata, describes the store as a whole: identity,
+creator, publisher, site, receivers, references. Its fixed fields never
+change; the others change only by amendment (`canvodpy store amend`, or
+`amend_metadata`), with a reason. Every commit writes the **snapshot
+summary** (coverage, counts, per-receiver position) into the root
+attributes, with a copy of the repository metadata in standard form, and
+records the **commit metadata** (software, environment, settings).
+`read_metadata()` combines the three for one snapshot. Stores written
+before keep their metadata in the root attribute `canvod_metadata`;
+`canvodpy store migrate-metadata` moves them. Each section is described
+below.
 
 ### 1. Identity & Discovery
 
@@ -89,14 +105,16 @@ Identifies the store and enables discovery in catalogs.
 
 | Field | Type | Description | Standard |
 |---|---|---|---|
-| `id` | str | Unique store identifier, e.g. `ExampleSite/rinex_store` | DataCite, STAC |
+| `id` | str | Store id `{site}-{gnss\|vod}` from the lowercase site name, e.g. `examplesite-gnss`; fixed | DataCite, STAC |
+| `uuid` | str | Random UUID generated when the store is created; fixed | DataCite |
 | `title` | str | Human-readable title | DataCite, ACDD, STAC |
 | `description` | str? | Free-text description | ACDD, STAC |
-| `store_type` | str | `rinex_store`, `vod_store`, etc. | DataCite (resourceType) |
+| `store_type` | str | `gnss_store`, `vod_store`, etc. | DataCite (resourceType) |
 | `source_format` | str | `rinex3`, `rinex2`, `sbf` | — |
 | `keywords` | list[str] | Discovery keywords | ACDD, STAC |
 | `conventions` | str | Metadata conventions followed (default `ACDD-1.3`) | ACDD |
-| `naming_authority` | str? | Naming authority URI, e.g. `at.ac.tuwien` | ACDD |
+| `naming_authority` | str | Your domain in reverse order, e.g. `at.ac.tuwien`; required when the store is created; fixed | ACDD |
+| `stac_link` | str | Link from the store to its item in the STAC catalog, relative; fixed | STAC |
 | `persistent_identifier` | str? | DOI or other persistent identifier | FAIR F1, DataCite |
 | `standard_name_vocabulary` | str? | Vocabulary for standard_name attributes | ACDD |
 
@@ -184,6 +202,7 @@ GNSS equipment and per-receiver ingestion stats.
 | `sids` | int? | Number of satellite IDs observed |
 | `variables` | list[str]? | Variable names in the store group |
 | `temporal_range` | list[str]? | `[start, end]` ISO timestamps |
+| `cadences` | list[dict]? | Time ranges at one cadence, in time order: `start`, `end` (ISO), `cadence_s` |
 | `metadata` | dict? | Freeform receiver metadata |
 
 ### 7. Software Provenance
@@ -195,7 +214,7 @@ Exact software stack used to create the store.
 | `software` | dict[str, str] | Package name → version | W3C PROV |
 | `python` | str? | Python version + implementation | W3C PROV |
 | `uv_version` | str? | `uv` package manager version | — |
-| `level` | str | Processing level: `L1` (obs store) or `L2` (VOD store) | — |
+| `level` | str | Processing level: `L1` (GNSS store) or `L2` (VOD store) | — |
 | `lineage` | str? | Processing lineage description | W3C PROV |
 | `facility` | str? | Hostname of the processing machine | W3C PROV |
 | `datetime` | str? | Processing timestamp | W3C PROV |
@@ -271,10 +290,46 @@ Aggregate statistics about the store contents.
 | `total_sids` | int? | Total satellite IDs across all constellations |
 | `constellations` | list[str]? | GNSS constellations present (G, R, E, C, ...) |
 | `variables` | list[str]? | Data variable names |
-| `temporal_resolution_s` | float? | Temporal resolution in seconds |
+| `temporal_resolution_s` | float? | The finest cadence of any day, in seconds |
 | `file_count` | int? | Number of source files ingested |
 | `store_size_mb` | float? | Store size on disk in MB |
-| `history` | list[str] | Timestamped processing log entries |
+| `history` | list[str] | Deprecated: only in snapshots from before the migration; the history of a store is its commit log |
+
+### 12. VOD Analyses
+
+The VOD analyses of a VOD store, by name; empty for a GNSS store.
+
+| Field | Type | Description |
+|---|---|---|
+| `canopy_receiver` | str | Canopy receiver of the analysis |
+| `reference_receiver` | str | Reference receiver of the analysis |
+
+### 13. Amendments
+
+One entry per changed amendable field.
+
+| Field | Type | Description |
+|---|---|---|
+| `field` | str | The changed field, e.g. `creator.email` |
+| `old` | any | Value before the amendment |
+| `new` | any | Value after the amendment |
+| `reason` | str | Why the field changed |
+| `who` | str | Who changed it |
+| `when` | str | When it changed (ISO 8601) |
+
+### 14. Migration
+
+Set only for a store written before the repository metadata and moved
+with `canvodpy store migrate-metadata`.
+
+| Field | Type | Description |
+|---|---|---|
+| `old_id` | str | The store id before the migration |
+| `old_metadata_version` | str | Schema version of the old metadata |
+| `who` | str | Who migrated the store |
+| `when` | str | When it was migrated (ISO 8601) |
+| `fields_given` | list[str] | Fields given at migration time |
+| `variables_replaced` | list[str] | Arrays whose attributes the migration replaced |
 
 ---
 
@@ -287,13 +342,13 @@ sub-principle to the fields and features that satisfy it:
 | Principle | Requirement | How we satisfy it |
 |---|---|---|
 | **F1** | Globally unique persistent identifier | `identity.id` (local) + `identity.persistent_identifier` (DOI) |
-| **F2** | Rich metadata | 11 sections, ~90 fields |
-| **F3** | Metadata includes data identifier | `identity.id` is part of the metadata blob |
-| **F4** | Registered in searchable resource | `scan_stores()`, STAC catalog export |
+| **F2** | Rich metadata | 14 sections |
+| **F3** | Metadata includes data identifier | `identity.id` and `identity.uuid` are in the repository metadata and in the root copy of every snapshot |
+| **F4** | Registered in searchable resource | `scan_stores()`, the STAC catalog (`write_catalog()`) |
 | **A1** | Retrievable by standard protocol | Zarr/Icechunk (local, S3, HTTP); `references.access_url` |
 | **A1.1** | Protocol is open and free | Zarr v3 + Icechunk — open specifications |
 | **A1.2** | Protocol allows authentication | Icechunk supports S3/GCS credentials |
-| **A2** | Metadata accessible if data gone | Metadata in root attrs (coupled); STAC JSON is independent |
+| **A2** | Metadata accessible if data gone | Repository metadata outlives every snapshot; the STAC catalog is plain JSON beside the stores |
 | **I1** | Formal knowledge representation | JSON with Pydantic v2 schema |
 | **I2** | FAIR-compliant vocabularies | ACDD conventions, SPDX licenses |
 | **I3** | Qualified cross-references | `references.related_stores`, `references.publications` |
@@ -303,63 +358,76 @@ sub-principle to the fields and features that satisfy it:
 
 ## Standards compliance
 
-Metadata is validated against four standards:
+`validate_all(meta)` checks the metadata against these standards:
 
 | Standard | What it checks |
 |---|---|
-| **FAIR** | All sub-principles: persistent ID, rich metadata, license, provenance, access URL, cross-references |
-| **DataCite 4.5** | Mandatory fields for TU Wien Repositum deposits: id, title, creator name/institution, publication date, resource type, publisher |
-| **ACDD 1.3** | Highly recommended (title, id, conventions, creator, date) + recommended (keywords, description, geospatial) |
-| **STAC 1.1** | Collection required fields: id, title, description, bbox, temporal interval, license |
+| **zarr conventions** | The `proj`, `license` and `stac` attributes of the root group, with `zarr-cm` |
+| **ACDD 1.3** | The global attributes of the root group: highly recommended ones are failures, recommended ones are listed as `[recommended]` |
+| **DataCite** | Identifier, title, creator name and institution, creation date, store type, publisher |
+| **STAC 1.1** | Collection fields: id, title, bbox, temporal interval, license; description is recommended |
+| **FAIR** | Advice only: persistent ID, rich metadata, license, provenance, access URL, cross-references |
 
 ```python
-results = validate_all(meta)
-for standard, issues in results.items():
+failures = validate_all(meta, recommended=False)  # a new store has none
+for standard, issues in validate_all(meta).items():
     print(f"{standard}: {'PASS' if not issues else f'{len(issues)} issues'}")
 ```
 
-## STAC JSON export
+## STAC catalog
 
-Each store can be exported as a standalone STAC Collection JSON file:
+One STAC catalog at the data root describes every store under it (ADR
+0015): one collection per product, one item per store.
 
 ```python
-from canvod.store_metadata import write_stac_collection, write_stac_catalog
+from canvod.store_metadata import build_catalog, store_item, write_catalog
 
-# Single store → collection.json
-write_stac_collection(store_path)                # writes store_path/collection.json
-write_stac_collection(store_path, Path("out.json"))  # custom path
-
-# Scan directory → catalog.json + per-store collection.json files
-write_stac_catalog(root_dir)
+item = store_item(store_path)  # one store's item (pystac.Item), in memory
+catalog = build_catalog(data_root)  # the whole catalog (pystac.Catalog)
+write_catalog(data_root)  # writes data_root/catalog.json and the rest
 ```
 
-The catalog output is a valid STAC Catalog with child links pointing to each
-store's `collection.json`.
+From the command line: `canvodpy stac write`. A store that can't be
+described stops the write, and one error lists every such store. A new
+store's catalog link has no item file until the first catalog write;
+`validate_all(meta, store_path=store_path)` shows that as a warning, not a
+failure.
+
+A release is a named, fixed state of all stores: `create_release(data_root,
+tag)` (or `canvodpy stac release TAG`) tags every store and writes the
+catalog of that tag under `releases/<tag>/`, each store pinned to its
+snapshot. A release catalog is never changed afterwards.
 
 ## Store inventory
 
-Scan a directory tree for all Icechunk stores and build a Polars DataFrame catalog:
+Scan a directory tree for all Icechunk stores and list them in a Polars DataFrame:
 
 ```python
+from pathlib import Path
+
 from canvod.store_metadata import scan_stores
 
-df = scan_stores(Path("/Volumes/ExtremePro/stores/ExampleSite/"))
+df = scan_stores(Path("/data/stores/"))
 print(df)
-# ┌─────────────────────┬───────────────┬─────────┬─────────────┐
-# │ id                  ┆ store_type    ┆ site    ┆ total_epochs│
-# ╞═════════════════════╪═══════════════╪═════════╪═════════════╡
-# │ ExampleSite/rinex_store ┆ rinex_store   ┆ ExampleSite ┆ 86400       │
-# │ ExampleSite/sbf_store   ┆ sbf_store     ┆ ExampleSite ┆ 86400       │
-# └─────────────────────┴───────────────┴─────────┴─────────────┘
+# ┌────────────────────────┬────────────┬─────────────┬──────────────┐
+# │ id                     ┆ store_type ┆ site        ┆ total_epochs │
+# ╞════════════════════════╪════════════╪═════════════╪══════════════╡
+# │ examplesite-gnss       ┆ gnss_store ┆ ExampleSite ┆ 86400        │
+# │ examplesite-vod        ┆ vod_store  ┆ ExampleSite ┆ 86400        │
+# └────────────────────────┴────────────┴─────────────┴──────────────┘
 ```
 
 ## Modules
 
 | Module | Purpose |
 |---|---|
-| `schema.py` | Pydantic v2 models for all 11 sections |
+| `schema.py` | Pydantic v2 models for all 14 sections |
 | `collectors.py` | Pure functions that gather runtime info |
-| `io.py` | Write/read/update metadata to Icechunk root attrs |
+| `io.py` | Write a new store's metadata, read a snapshot's; `commit_with_rebase`, the one commit function |
+| `snapshot.py` | What every commit writes: root copy, snapshot summary, commit metadata |
+| `amend.py` | Amendments of amendable fields |
+| `migration.py` | Moving stores from before ADR 0014 |
 | `validate.py` | Compliance checking (DataCite, ACDD, STAC) |
-| `inventory.py` | Directory scanning, catalog building, STAC export |
+| `inventory.py` | Directory scanning (`scan_stores`) |
+| `catalog.py` | The STAC catalog at the data root |
 | `show.py` | Human-readable formatting, env extraction, CLI |

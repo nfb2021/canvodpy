@@ -1,4 +1,4 @@
-# PyPI Publishing Setup
+# PyPI publishing setup
 
 This monorepo publishes **8 separate packages** to PyPI:
 
@@ -12,37 +12,37 @@ This monorepo publishes **8 separate packages** to PyPI:
 7. `canvod-vod` - VOD calculation
 
 **Umbrella package:**
-8. `canvodpy` - Depends on all 7 above
+8. `canvodpy` - Depends on the 7 packages listed first
 
 **User experience:**
 ```bash
-pip install canvodpy  # Gets all 8 packages automatically
+uv add canvodpy  # Gets all packages automatically
 ```
 
 <div class="grid cards" markdown>
 
--   :fontawesome-solid-flask: &nbsp; **Phase 1 — TestPyPI** *(Done)*
+-   :fontawesome-solid-flask: &nbsp; **Phase 1, TestPyPI** *(Done)*
 
     ---
 
     Account created · First manual upload · OIDC trusted publishers configured.
     Beta/alpha releases publish here automatically.
 
--   :fontawesome-solid-box-open: &nbsp; **Phase 2 — Real PyPI** *(Active)*
+-   :fontawesome-solid-box-open: &nbsp; **Phase 2, real PyPI** *(Active)*
 
     ---
 
     Production account · Environment protection · Stable releases only.
-    `pip install canvodpy` serves users from here.
+    `uv add canvodpy` serves users from here.
 
 </div>
 
 ---
 
-## Quick Commands
+## Quick commands
 
 ```bash
-# Build all 8 packages locally
+# Build all packages locally
 just build-all
 
 # Manual publish to TestPyPI (requires credentials)
@@ -51,22 +51,23 @@ just publish-testpypi
 # Manual publish to PyPI (requires credentials)
 just publish-pypi
 
-# Automated publish (beta) - triggers workflow
-git tag v0.1.0-beta.1 && git push --tags
+# Automated publish (canvodpy pre-release tag) - triggers publish_testpypi.yml
+# for the packages whose release tag points at that commit
+just tag-release && git push origin v1.1.0rc1 canvod-store-v1.1.0rc1
 
-# Automated publish (production) - triggers workflow
-git tag v0.1.0 && git push --tags
+# Production publish - started by hand on the canvodpy tag, never by a tag push
+gh workflow run publish_pypi.yml --ref v1.1.0
 ```
 
 ---
 
-## Phase 1: TestPyPI Setup (Completed)
+## Phase 1, TestPyPI setup (completed)
 
-### Step 1: Create TestPyPI Account (Done)
+### Step 1. Create a TestPyPI account (done)
 
-Already done! Account created at https://test.pypi.org
+Already done. Account created at https://test.pypi.org
 
-### Step 2: Manual First Publish (Done)
+### Step 2. Publish once by hand (done)
 
 Already completed with `twine upload --repository testpypi dist/*`
 
@@ -80,16 +81,16 @@ All 8 packages published:
 - https://test.pypi.org/project/canvod-vod/
 - https://test.pypi.org/project/canvodpy/
 
-### Step 3: Set Up OIDC Automation (Done)
+### Step 3. Set up OIDC publishing (done)
 
-**3.1: Create GitHub Environment**
+**3.1. Create the GitHub environment**
 
 1. Go to: https://github.com/nfb2021/canvodpy/settings/environments
 2. Click "New environment"
 3. Name: `testpypi`
 4. Save
 
-**3.2: Register Trusted Publishers (FOR EACH OF 8 PACKAGES)**
+**3.2. Register trusted publishers (for each of the 8 packages)**
 
 For each package, go to its publishing settings:
 - https://test.pypi.org/manage/project/canvod-readers/settings/publishing/
@@ -111,11 +112,11 @@ On each page:
    - Environment: `testpypi`
 4. Click "Add"
 
-**3.3: Test OIDC Publishing**
+**3.3. Test OIDC publishing**
 
 ```bash
-git tag v0.1.0-beta.1 -m "Test OIDC"
-git push --tags
+git tag -a v0.1.0b1 -m "Test OIDC"
+git push origin v0.1.0b1
 cd /path/to/canvodpy
 uv build
 ```
@@ -140,7 +141,7 @@ Uploading canvodpy-0.1.0-py3-none-any.whl
 **Verify it's there:**
 - Go to: https://test.pypi.org/project/canvodpy/
 
-### Step 3: Configure OIDC on TestPyPI
+### Step 3. Configure OIDC on TestPyPI
 
 1. **Go to project settings:**
    - https://test.pypi.org/manage/project/canvodpy/settings/publishing/
@@ -170,24 +171,24 @@ Uploading canvodpy-0.1.0-py3-none-any.whl
    - Environment: test-release
    ```
 
-### Step 4: Create GitHub Environment
+### Step 4. Create the GitHub environment
 
-1. **Go to your repo:**
+1. **Go to your repository:**
    - https://github.com/nfb2021/canvodpy
 
-2. **Settings → Environments**
+2. **Settings $\rightarrow$ Environments**
 
 3. **New environment:**
    - Name: `test-release`
    - Click "Configure environment"
 
 4. **Add protection rules (optional):**
-   - Required reviewers: Add yourself
+   - Required reviewers: yourself
    - Wait timer: 0 minutes (it's just testing)
 
 5. **Save**
 
-### Step 5: Create TestPyPI Workflow
+### Step 5. Create the TestPyPI workflow
 
 Create: `.github/workflows/publish_testpypi.yml`
 
@@ -236,18 +237,18 @@ jobs:
           print-hash: true
 ```
 
-### Step 6: Test the Workflow
+### Step 6. Test the workflow
 
 **Create a beta release:**
 ```bash
-just release 0.1.0-beta.1
-git push origin main
-git push origin --tags
+just release canvodpy=0.1.0b1   # release commit on release/v0.1.0b1: open a PR, merge it
+# then, on the merged main:
+just tag-release && git push origin v0.1.0b1
 ```
 
 **Publish the draft release:**
 1. Go to: https://github.com/nfb2021/canvodpy/releases
-2. Find draft for `v0.1.0-beta.1`
+2. Find draft for `v0.1.0b1`
 3. Click "Publish release"
 
 **Watch the workflow:**
@@ -262,15 +263,11 @@ git push origin --tags
 
 **Test installation:**
 ```bash
-# Create test environment
-uv venv test-env
-source test-env/bin/activate  # or test-env\Scripts\activate on Windows
-
-# Install from TestPyPI
-pip install --index-url https://test.pypi.org/simple/ canvodpy
-
-# Test it works
-python -c "import canvodpy; print(canvodpy.__version__)"
+# Install from TestPyPI into a throwaway environment and print the version
+# (dependencies come from PyPI)
+uv run --isolated --no-project --with canvodpy \
+  --index https://test.pypi.org/simple/ --index-strategy unsafe-best-match \
+  python -c "import canvodpy; print(canvodpy.__version__)"
 # Should print: 0.1.0b1
 
 # Clean up
@@ -282,16 +279,16 @@ rm -rf test-env
 
 ---
 
-## Phase 2: Real PyPI Setup
+## Phase 2, PyPI setup
 
-### Step 7: Create Real PyPI Account
+### Step 7. Create a PyPI account
 
 1. Go to: https://pypi.org/account/register/
 2. Fill in details (can use same email as TestPyPI)
 3. Verify email
 4. **Enable 2FA** (PyPI requires it for trusted publishers!)
 
-### Step 8: Reserve Package Name on PyPI
+### Step 8. Reserve the package name on PyPI
 
 !!! warning "Package names are permanent"
     Once a package is uploaded to PyPI, the name is reserved forever.
@@ -316,7 +313,7 @@ password: your_pypi_password
 **Verify:**
 - https://pypi.org/project/canvodpy/
 
-### Step 9: Configure OIDC on Real PyPI
+### Step 9. Configure OIDC on PyPI
 
 **Exactly same as TestPyPI:**
 
@@ -334,19 +331,19 @@ password: your_pypi_password
 
 3. **Click "Add"**
 
-### Step 10: Create Production GitHub Environment
+### Step 10. Create the production GitHub environment
 
 !!! tip "Enable 2FA first"
     PyPI requires 2FA to add trusted publishers. Enable it at [pypi.org/manage/account/](https://pypi.org/manage/account/) before proceeding.
 
-1. **Settings → Environments → New**
+1. **Settings $\rightarrow$ Environments $\rightarrow$ New**
 2. **Name:** `release`
 3. **Protection rules (IMPORTANT!):**
-   - Required reviewers: Add all maintainers
+   - Required reviewers: all maintainers
    - Wait timer: 5 minutes (think before publishing)
 4. **Save**
 
-### Step 11: Create Production Workflow
+### Step 11. Create the production workflow
 
 Create: `.github/workflows/publish_pypi.yml`
 
@@ -396,31 +393,31 @@ jobs:
           print-hash: true
 ```
 
-### Step 12: First Production Release
+### Step 12. First production release
 
 **When ready for v0.1.0:**
 
 ```bash
-# Create release
-just release 0.1.0
-git push origin main
-git push origin --tags
+# Create release (all packages at once for the first release)
+just release canvodpy=0.1.0 canvod-readers=0.1.0 ...   # open a PR, merge it
+# then, on the merged main:
+just tag-release && git push origin v0.1.0 canvod-readers-v0.1.0 ...
 ```
 
 **Publish:**
 1. Go to releases
 2. Find draft v0.1.0
-3. **Review carefully!**
+3. **Review carefully.**
 4. Click "Publish release"
-5. Approve the workflow when prompted
-6. Wait 5 minutes (your wait timer)
-7. Workflow runs
-8. Package published to PyPI!
+5. Start the PyPI workflow: `gh workflow run publish_pypi.yml --ref v0.1.0`
+6. Approve the workflow when prompted
+7. Wait 5 minutes (your wait timer)
+8. The packages tagged at that commit are published to PyPI.
 
 **Verify:**
 ```bash
-pip install canvodpy
-python -c "import canvodpy; print(canvodpy.__version__)"
+uv run --isolated --no-project --with canvodpy \
+  python -c "import canvodpy; print(canvodpy.__version__)"
 # Should print: 0.1.0
 ```
 
@@ -433,33 +430,34 @@ python -c "import canvodpy; print(canvodpy.__version__)"
 === "Beta / test releases"
 
     ```bash
-    just release 0.2.0-beta.1
-    git push --tags
-    # → publishes to TestPyPI automatically
+    just release canvod-store=1.1.0rc1 canvodpy=1.1.0rc1   # then PR, merge, and on main:
+    just tag-release && git push origin v1.1.0rc1 canvod-store-v1.1.0rc1
+    # → publishes the tagged packages to TestPyPI automatically
     ```
 
 === "Stable releases"
 
     ```bash
-    just release 0.2.0
-    git push --tags
-    # → publishes to real PyPI (after environment approval)
+    just release canvod-store=1.1.0 canvodpy=1.1.0   # then PR, merge, and on main:
+    just tag-release && git push origin v1.1.0 canvod-store-v1.1.0
+    gh workflow run publish_pypi.yml --ref v1.1.0
+    # → publishes the tagged packages to real PyPI (after environment approval)
     ```
 
 === "User installation"
 
     ```bash
-    pip install canvodpy          # latest stable
-    pip install canvodpy==0.2.0   # specific version
+    uv add canvodpy          # latest stable
+    uv add canvodpy==0.2.0   # specific version
     ```
 
 ---
 
-## Best Practices
+## Good practice
 
 !!! tip "Test on TestPyPI first"
     Use `-beta.X` or `-alpha.X` version suffixes to publish to TestPyPI.
-    Verify `pip install --index-url https://test.pypi.org/simple/ canvodpy` works
+    Verify that the TestPyPI install works (see Test installation)
     before creating a stable release.
 
 !!! warning "Version numbers are permanent"
@@ -467,7 +465,7 @@ python -c "import canvodpy; print(canvodpy.__version__)"
     Bump the version and re-release if you need to fix a bad upload.
 
 !!! info "Environment protection"
-    The `release` environment has required reviewers and a 5-minute wait timer —
+    The `release` environment has required reviewers and a 5-minute wait timer:
     this prevents accidental production releases.
 
 ---
@@ -475,16 +473,14 @@ python -c "import canvodpy; print(canvodpy.__version__)"
 ## Troubleshooting
 
 ??? failure "`Publisher not configured` OIDC error"
-    1. Verify environment name in workflow matches PyPI config exactly
+    1. Verify environment name in workflow matches the PyPI settings exactly
     2. Verify workflow filename matches exactly
     3. Verify repository owner/name are correct
     4. Confirm 2FA is enabled on your PyPI account
 
 ??? failure "`Package already exists`"
-    Cannot upload the same version twice. Bump and retry:
-    ```bash
-    just bump patch   # 0.1.0 → 0.1.1
-    ```
+    Cannot upload the same version twice. Release the next patch version
+    of that package (`just release <package>=X.Y.Z canvodpy=X.Y.Z`).
 
 ??? failure "`Build failed`"
     Test locally first:
@@ -496,11 +492,11 @@ python -c "import canvodpy; print(canvodpy.__version__)"
 
 ??? failure "Environment approval stuck"
     Check the `release` environment's protection rules at
-    Settings → Environments → release. Approve pending deployments manually.
+    Settings $\rightarrow$ Environments $\rightarrow$ release. Approve pending deployments manually.
 
 ---
 
-## Next Steps
+## Next steps
 
 - [ ] Test with beta release on TestPyPI
 - [ ] First production release v0.1.0

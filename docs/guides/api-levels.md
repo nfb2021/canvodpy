@@ -1,430 +1,253 @@
 ---
-title: API Levels
-description: Running the pipeline via CLI or Site.pipeline(), and scripting/analysis via the functional API
+title: Command line and Python
+description: Every option of canvodpy run, and the Site and Pipeline objects that do the same from Python
 ---
 
-# API Levels
+# Command line and Python
 
-**Two supported surfaces, plus the CLI on top of one of them.**
+canVODpy runs from Python or from the command line. Both run the same
+code: `canvodpy run` creates a `Site` and processes the days with
+`Site.pipeline()`, so the stores hold the same data either way. Use
+Python to script runs, for example in a notebook, or in a loop over
+sites; use the command line for scheduled runs.
 
-- **CLI** (`canvodpy run ...`) — recommended way to run the pipeline. Wraps `Site.pipeline()`.
-- **`Site.pipeline()`** (L3) — the same thing from Python, when you need to script a
-  run rather than shell out (e.g. looping over sites, embedding in a notebook).
-- **`canvodpy.functional`** (L4) — stateless, component-level functions for
-  custom pipelines, testing, and analysis. Also what Airflow calls directly.
-
-All three produce the same `(epoch, sid)` xarray Dataset format.
-
-!!! warning "Deprecated surfaces"
-
-    `FluentWorkflow` (L2), the flat convenience functions `process_date()` /
-    `calculate_vod()` / `preview_processing()` (L1), and `VODWorkflow` are all
-    deprecated (`DeprecationWarning` on use) — kept working, no longer taught.
-    `VODWorkflow` in particular has a broken augmentation step (`_augment_data`
-    is a no-op stub) and should not be used regardless. See the sections at the
-    bottom of this page if you're migrating code that still uses them.
+This page lists the options of both. For a first run, start with
+[Retrieve VOD](../users/index.md).
 
 ---
 
-## Quick Comparison
+## Process a period
 
-| | CLI | L3: `Site.pipeline()` | L4: Functional |
-|---|---|---|---|
-| **Pattern** | `canvodpy run --site ... --start ... --end ...` | `site.pipeline().process_date(...)` | `read_rinex(path)` |
-| **Ephemeris** | Automatic (from config) | Automatic (from config) | `augment_with_ephemeris(ds, pos, ...)` |
-| **Store writes** | Automatic (Icechunk) | Automatic (Icechunk) | None (NetCDF / pickle files) |
-| **File discovery** | `canvod-filemap` `BUILTIN_PATTERNS` if installed, else canonical globs (`*.rnx`/`*.sbf`) | Same as CLI | Caller provides paths |
-| **Parallel workers** | Yes | Yes | No |
-| **Deduplication** | 3-layer | 3-layer | None |
-| **Best for** | Daily cron jobs, production runs | Multi-day batch runs from Python | Airflow / custom pipelines / analysis |
-
----
-
-## CLI: Running the Pipeline
-
-The recommended way to run the pipeline — production runs, cron jobs, resumable.
-`run` is a registered subcommand of the installed `canvodpy` console script
-(alongside `config`, `doctor`, `stats`, and `store` — see
-[Configuration](configuration.md)):
-
-```bash
-# Process a specific range
-canvodpy run --site ExampleSite --start 2025001 --end 2025007
-
-# Process new data only — start omitted means "resume from the last
-# processed date in the store", end omitted means "today"
-canvodpy run --site ExampleSite
-
-# Cron: run daily, picks up new data automatically
-# 0 3 * * * cd /path/to/canvodpy && uv run canvodpy run --site ExampleSite
-
-# Observation ingestion only, no VOD
-canvodpy run --site ExampleSite --no-vod
-
-# Preview what would be processed, without executing
-canvodpy run --site ExampleSite --dry-run
-
-# Multiple sites — repeat --site, processed sequentially
-canvodpy run --site ExampleSite --site OtherSite
-```
-
-| Flag | Meaning |
-|---|---|
-| `--site` | Site name from `canvod-settings.yaml` (required). Repeat the flag for multiple sites. |
-| `--start` / `--end` | `YYYYDOY`. Omit `--start` to resume from the store; omit `--end` for "up to today" |
-| `--no-vod` | Ingest observations only, skip VOD |
-| `--dry-run` | Preview the processing plan without executing |
-| `--workers` | Override worker count (default: from config) |
-| `--days-per-batch` | Override batch size (default: from config) |
-| `--config` | Overlay YAML applied on top of `canvod-settings.yaml` |
-| `--ephemeris-source` | Override the configured ephemeris source: `final` (agency SP3/CLK) or `broadcast` (SBF SatVisibility) |
-| `--vod-calculator` | VOD calculator to use (currently only `tau_omega`) |
-
-Internally the CLI builds a `Site` and calls `.pipeline(...)` — see the next
-section for the exact same thing from Python.
-
----
-
-## Deprecated: `FluentWorkflow` and flat convenience functions
-
-`FluentWorkflow` (`canvodpy.workflow("ExampleSite").read(...).augment(...)...`) and
-the flat `process_date()` / `calculate_vod()` / `preview_processing()` functions
-are deprecated (`DeprecationWarning` on use). Both are thin wrappers around the
-same `Pipeline` class the CLI and `Site.pipeline()` use — they added a second and
-third syntax for identical capability without adding flexibility, so they're no
-longer taught. Use the CLI or `Site.pipeline()` (next section) instead.
-
----
-
-## Site and Pipeline Objects
-
-Object-oriented API for batch processing. A `Pipeline` keeps its pool of
-parallel worker processes alive across calls, so processing many days in one
-run avoids repeated setup and teardown.
-
-```python
-from canvodpy import Site
-
-site = Site("ExampleSite")
-
-with site.pipeline(n_workers=8) as pipeline:
-    for date_key, datasets in pipeline.process_range("2025001", "2025007"):
-        print(f"{date_key}: {sum(ds.sizes['epoch'] for ds in datasets.values())} epochs")
-
-        # Optional: compute VOD inline for a configured analysis pair
-        site.vod.compute_day(datasets, "canopy_01_vs_reference_01")
-```
-
-This is the same code path the CLI runs — `Site.pipeline()` is what
-`canvodpy.cli.run` builds internally. Use this form when you need Python-native
-control: looping over sites in a script, embedding a run in a notebook, or
-anything the CLI's flags don't expose yet.
-
-`Site` exposes:
-
-| Attribute / method | What it gives you |
-|---|---|
-| `site.receivers` / `site.active_receivers` | Configured receivers |
-| `site.vod_analyses` | Configured VOD analysis pairs |
-| `site.rinex_store` / `site.vod_store` | The Icechunk stores |
-| `site.vod` | `VodComputer` helper (see [VOD Computation](#vod-computation)) |
-| `site.pipeline(...)` | Create a `Pipeline` |
-
-`Pipeline` exposes `process_date(date)`, `process_range(start, end)` (a
-generator yielding `(date_key, datasets)`), `calculate_vod(canopy, reference,
-date)`, `preview()`, and `close()`; it is also a context manager, as shown
-above.
-
-!!! warning "Deprecated: `VODWorkflow`"
-
-    `VODWorkflow` was a factory-based alternative to `Site` + `Pipeline`. It is
-    deprecated — its augmentation step (`_augment_data`) is a no-op stub that
-    never applies ephemeris augmentation, so VOD computed through it uses
-    un-augmented angles. Use `Site.pipeline()` above, or `canvodpy.functional`
-    below for component-level control (reader, grid, VOD calculator all as
-    direct keyword arguments).
-
----
-
-## Functional API
-
-*Functional* here means stateless: each function takes explicit inputs and
-returns explicit outputs, with no hidden objects holding state between calls.
-That makes the functions easy to test, easy to reason about, and safe to
-compose into your own pipeline (or an Airflow DAG). The caller provides file
-paths and manages all orchestration.
-
-```python
-from canvodpy.functional import read_rinex, augment_with_ephemeris, calculate_vod
-from canvod.auxiliary.position.position import ECEFPosition
-from canvod.config import load_config
-
-# Read a single file
-ds = read_rinex("ROSA01TUW_R_20250010000_15M_05S_AA.rnx")
-
-# Receiver position comes from the RINEX header, not from config
-rx_pos = ECEFPosition.from_ds_metadata(ds)
-
-# Add satellite geometry (downloads and caches SP3/CLK for that day)
-site_cfg = load_config().sites.sites["ExampleSite"]
-ds = augment_with_ephemeris(
-    ds,
-    rx_pos,
-    source="final",       # or "rapid"; "broadcast" for SBF-derived geometry
-    agency="COD",
-    date="2025001",
-    site_config=site_cfg,
-)
-
-# Compute VOD from two augmented datasets
-vod_ds = calculate_vod(canopy_ds, reference_ds)
-```
-
-!!! warning "Two functions named `calculate_vod`"
-
-    `from canvodpy import calculate_vod` gives you the **deprecated** flat
-    function (`site, canopy, reference, date` — reads from the store, writes
-    to the store; use `Site(site).pipeline().calculate_vod(...)` instead).
-    `from canvodpy.functional import calculate_vod` gives you the
-    **functional API** version (`canopy_ds, sky_ds` — pure, in-memory). Import
-    from the module that matches your intent.
-
-=== "Grid assignment"
+=== "Python"
 
     ```python
-    from canvodpy.functional import create_grid, assign_grid_cells
+    from canvodpy import Site
 
-    grid = create_grid("equal_area", angular_resolution=5.0)
-    ds_with_cells = assign_grid_cells(ds, grid)
-    ```
-
-=== "Airflow-ready variants"
-
-    Every function has a `*_to_file` twin that reads/writes files and returns
-    a path string, which Airflow can serialize in XCom:
-
-    ```python
-    from canvodpy.functional import (
-        read_rinex_to_file,
-        create_grid_to_file,
-        assign_grid_cells_to_file,
-        calculate_vod_to_file,
-    )
-
-    canopy = read_rinex_to_file("canopy.rnx", "/tmp/canopy.nc")
-    sky = read_rinex_to_file("sky.rnx", "/tmp/sky.nc")
-    vod_path = calculate_vod_to_file(canopy, sky, "/tmp/vod.nc")
-    ```
-
-    Datasets are stored as NetCDF; grids are stored as pickle
-    (`create_grid_to_file` / `assign_grid_cells_to_file`).
-
-With the functional API, file discovery is the caller's job — pass explicit
-paths (e.g. from your own `Path.glob`, a workflow scheduler, or the optional
-`canvod.filemap.FilenameMapper` if your site uses non-canonical filenames —
-see [Optional Extensions](extensions.md)).
-
----
-
-## Ephemeris Sources
-
-Computing the satellite angles theta and phi requires satellite positions,
-which come from an ephemeris source.
-
-### Source comparison
-
-| Source | What it is | Internet | Provider class |
-|--------|------------|----------|----------------|
-| **Agency products** (`"final"`, `"rapid"`) | Post-processed SP3 orbit files from an analysis centre (COD, ESA, ...), downloaded and Hermite-interpolated; CLK clock files too, by default (`aux_data.fetch_clock`, unused by VOD, can be disabled) | Required (results cached locally) | `AgencyEphemerisProvider` |
-| **SBF broadcast** (`"broadcast"`) | Satellite geometry the receiver itself recorded (SBF `SatVisibility` block) | None — embedded in the SBF file | `SbfBroadcastProvider` |
-
-A provider for RINEX navigation files (`RinexNavProvider`) is planned but not
-yet implemented.
-
-### How each source works
-
-```mermaid
-flowchart LR
-    subgraph Agency["Agency products (SP3/CLK)"]
-        A1["Download SP3 (+ CLK, optional)"] --> A2[Hermite interpolation]
-        A2 --> A3["ECEF → θ, φ, r"]
-    end
-
-    subgraph SBF["SBF Broadcast"]
-        B1["SBF file scan"] --> B2["SatVisibility block"]
-        B2 --> B3["θ, φ from receiver-recorded geometry"]
-    end
-
-    Agency --> DS["ds with theta, phi"]
-    SBF --> DS
-```
-
-### Usage across levels
-
-```python
-# CLI / Site.pipeline(): config-driven (canvod-settings.yaml)
-# processing.params.ephemeris_source: "final" | "broadcast"
-# Not yet a CLI flag — see the note in the CLI section above.
-
-# canvodpy.functional: explicit function (all sources)
-augment_with_ephemeris(ds, rx_pos, source="final", date="2025001", site_config=cfg)
-augment_with_ephemeris(ds, rx_pos, source="broadcast")   # SBF only
-```
-
-### EphemerisProvider architecture
-
-All sources implement the same abstract interface:
-
-```python
-class EphemerisProvider(ABC):
-    @abstractmethod
-    def augment_dataset(self, ds, receiver_position) -> xr.Dataset:
-        """Add theta and phi (and optionally r) to the observation dataset."""
-
-    @abstractmethod
-    def preprocess_day(self, date, site_config) -> Path | None:
-        """Download/prepare ephemeris for a day. Returns cache path or None."""
-```
-
-| Provider | `preprocess_day()` | `augment_dataset()` |
-|----------|-------------------|---------------------|
-| `AgencyEphemerisProvider` | Downloads SP3 (+ CLK, unless `fetch_clock=False`), Hermite interpolation → Zarr cache | Opens cache, selects epochs, computes spherical coordinates |
-| `SbfBroadcastProvider` | No-op (geometry embedded in file) | Extracts theta/phi from the SBF `sbf_obs` auxiliary dataset |
-
----
-
-## Data Flow Diagram
-
-```mermaid
-flowchart TD
-    subgraph Input["Data Ingestion"]
-        FILES["GNSS Files<br/>(RINEX / SBF)"]
-        EPHEM["Ephemeris Source<br/>(SP3/CLK / SBF)"]
-    end
-
-    subgraph Discovery["File Discovery"]
-        FM["BUILTIN_PATTERNS globs<br/>canvod-filemap if installed, else canonical fallback"]
-    end
-
-    subgraph Reading["Parsing"]
-        READER["GNSSDataReader<br/>Rnxv3Obs / SbfReader"]
-    end
-
-    subgraph Augmentation["Geometry Augmentation"]
-        EP["EphemerisProvider<br/>Agency / SBF"]
-        SCS["θ, φ, r coordinates"]
-    end
-
-    subgraph Storage["Versioned Storage"]
-        ICE["Icechunk Store<br/>(epoch × sid)"]
-        DEDUP["3-Layer Dedup<br/>hash + temporal + intra-batch"]
-    end
-
-    subgraph Analysis["VOD Analysis"]
-        VOD["VodComputer<br/>tau-omega model"]
-        GRID["Grid Assignment<br/>equal-area hemigrid"]
-    end
-
-    FILES --> FM --> READER
-    EPHEM --> EP --> SCS
-    READER --> SCS
-    SCS --> DEDUP --> ICE
-    ICE --> VOD --> GRID
-
-    style Input fill:#fff3e0,stroke:#e65100
-    style Discovery fill:#e3f2fd,stroke:#1565c0
-    style Reading fill:#ffecb3,stroke:#f57c00
-    style Augmentation fill:#e1f5fe,stroke:#0277bd
-    style Storage fill:#f3e5f5,stroke:#4a148c
-    style Analysis fill:#e8f5e9,stroke:#2e7d32
-```
-
-### What each surface handles
-
-| Step | CLI | `Site.pipeline()` | Functional |
-|------|:--:|:--:|:--:|
-| File discovery | :fontawesome-solid-check: | :fontawesome-solid-check: | caller |
-| Reading | :fontawesome-solid-check: | :fontawesome-solid-check: | :fontawesome-solid-check: |
-| Ephemeris augmentation | auto | auto | `augment_with_ephemeris()` |
-| Deduplication | :fontawesome-solid-check: | :fontawesome-solid-check: | — |
-| Store write | auto | auto | — |
-| VOD computation | `pipeline.calculate_vod()` | `pipeline.calculate_vod()` / `site.vod` | `functional.calculate_vod()` |
-| Parallel workers | :fontawesome-solid-check: | :fontawesome-solid-check: | — |
-
----
-
-## VOD Computation
-
-VOD is computed via `VodComputer` (available as `site.vod`), which offers two
-strategies:
-
-=== "Daily (inline)"
-
-    ```python
-    # Compute VOD immediately after processing, from the in-memory datasets
+    site = Site("ExampleSite")
     with site.pipeline() as pipeline:
-        for date_key, datasets in pipeline.process_range("2025001", "2025007"):
-            site.vod.compute_day(datasets, "canopy_01_vs_reference_01")
+        for date, data in pipeline.process_range("2025001", "2025007"):
+            vod = site.vod.compute_day_all(data)
     ```
 
-=== "Bulk (from store)"
+=== "Command line"
+
+    ```bash
+    canvodpy run --site ExampleSite --start 2025001 --end 2025007
+    ```
+
+Dates are `YYYYDDD`: the year and the day of year, for example
+`2025032` for February 1, 2025.
+
+| Command line | Python | Meaning |
+|---|---|---|
+| `--site ExampleSite` | `Site("ExampleSite")` | Site name under `sites:` in `canvod-settings.yaml`. Repeat `--site` to process several sites, one after the other. |
+| `--start`, `--end` | `process_range(start, end)`, `process_date(date)` | First and last day, both included; see [Which days a run processes](#which-days-a-run-processes). |
+| `--no-vod` | Leave out `site.vod` | Write the observations to the GNSS store and compute no VOD. |
+| `--dry-run` | `pipeline.preview(start, end)` | List the days, receivers and files a run would process, without processing them. |
+| `--write-catalog` | `write_catalog(stores_root_dir)` after the run | After a successful run, write the [STAC catalog](../packages/store-metadata/overview.md#write-the-stac-catalog) of every store under the data root. Without it, a run writes no catalog. |
+| `--workers` | `site.pipeline(n_workers=...)` | Number of worker processes. |
+| `--days-per-batch` | `site.pipeline(days_per_batch=...)` | Number of days the workers process together. |
+| `--config-dir`, `-c` | `CANVOD_CONFIG_DIR` | Folder that holds `canvod-settings.yaml` and `recipes/`; see [Where canVODpy finds the settings](configuration.md#where-canvodpy-finds-the-settings). |
+| `--config` | `CANVOD_CONFIG_FILE` | [Overlay file](configuration.md#overlay-file) applied on top of `canvod-settings.yaml`. |
+| `--ephemeris-source` | `processing.params.ephemeris_source` in the settings | `final` (orbit and clock products of an analysis center) or `broadcast` (the satellite angles an SBF file holds); see [Ephemeris sources](../packages/readers/ephemeris-sources.md). |
+| `--vod-calculator` | `VodComputer(site, calculator=...)` | VOD calculator; `tau_omega` unless a [plugin](plugins.md) adds others. |
+| `--dashboard` | None; run `canvodpy dashboard` | Start the performance dashboard for the run's logs. `--dashboard-host` and `--dashboard-port` set its address. |
+
+Options you leave out take their values from the settings file. In
+Python, set `CANVOD_CONFIG_DIR` and `CANVOD_CONFIG_FILE` before you
+create the `Site`:
+
+```python
+import os
+
+os.environ["CANVOD_CONFIG_DIR"] = "/path/to/config"
+```
+
+`canvodpy run --help` lists every option.
+
+!!! example "Try it in a notebook"
+
+    Open [Site pipeline](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/18_site_pipeline.py?mode=edit), [Running the pipeline from the command line](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/01_cli_pipeline.py?mode=edit) in molab, the online notebook service of marimo.
+
+---
+
+## Which days a run processes
+
+In Python, you name the days: `process_date` processes one,
+`process_range` the days from `start` to `end`.
+
+On the command line, `--start` and `--end` are optional:
+
+- Without `--end`, the run ends today.
+- Without `--start`, the run starts at the last day in the site's GNSS
+  store and processes that day again, in case it was incomplete. If the
+  store is empty, the run processes every day it finds data for.
+
+So `canvodpy run --site ExampleSite` picks up wherever the last run
+stopped. With the default `gnss_store_strategy: skip`, files that are
+already in the store are skipped, so running a day twice doesn't
+duplicate data.
+
+---
+
+## The `Site` object
+
+`Site("ExampleSite")` reads the settings of one site.
+
+| Attribute | What it gives you |
+|---|---|
+| `site.receivers` | All receivers of the site, from the settings |
+| `site.active_receivers` | The receivers a run processes: those not set to `active: false` |
+| `site.vod_analyses` | The receiver pairs under `vod_analyses` |
+| `site.gnss_store` | The GNSS store: observations and satellite angles |
+| `site.vod_store` | The VOD store |
+| `site.gnss_store_path`, `site.vod_store_path` | Where the stores are, from the settings; read-only |
+| `site.vod` | Computes VOD; see [Compute VOD](#compute-vod) |
+| `site.pipeline()` | Creates a `Pipeline` for this site |
+
+Both stores are [Icechunk](https://icechunk.io/) repositories; see
+[Storage](../packages/store/overview.md).
+
+A run creates a site's stores when it first writes data. Before that,
+`site.gnss_store` and `site.vod_store` raise a `FileNotFoundError`; the
+paths tell you where a run puts them.
+
+---
+
+## The `Pipeline` object
+
+A `Pipeline` reads the files, adds the satellite angles, and writes the
+GNSS store. Use it in a `with` block, which closes it at the end.
+
+| Method | What it does |
+|---|---|
+| `process_date(date)` | Processes one day. Returns one dataset per receiver. |
+| `process_range(start, end)` | Processes the days from `start` to `end`. Yields `(date, datasets)` for one day at a time. |
+| `preview(start=None, end=None)` | Returns the days, receivers and files a run would process. Without dates, it covers every day it finds data for. |
+| `close()` | Ends the pipeline. The `with` block calls it for you. The worker processes stay for reuse; see [Parallel processing](parallel-processing.md#the-worker-processes). |
+
+The datasets are [xarray](https://docs.xarray.dev/) Datasets, keyed by
+store group: `canopy_01` for a canopy receiver, and
+`reference_01_canopy_01` for the data of a reference receiver paired with
+that canopy receiver.
+
+The arguments of `site.pipeline()` override the matching settings under
+`processing.params` for this pipeline. Setting `n_workers` turns off the
+automatic choice of `resource_mode: auto`:
+
+| Argument | Meaning |
+|---|---|
+| `n_workers` | Number of worker processes |
+| `days_per_batch` | Number of days the workers process together |
+| `threads_per_worker` | Threads that numerical libraries use in each worker |
+| `keep_vars` | Observation variables to keep, such as `["SNR"]` |
+
+The workers' CPU cores and priority come from the settings file;
+[Parallel processing](parallel-processing.md#settings) explains them.
+
+---
+
+## Compute VOD
+
+`site.vod` computes VOD for the receiver pairs under `vod_analyses` and
+writes it to the site's VOD store. Pass `write=False` to get the result
+without writing it.
+
+From the datasets of one day, right after processing them:
+
+```python
+with site.pipeline() as pipeline:
+    for date, data in pipeline.process_range("2025001", "2025007"):
+        vod = site.vod.compute_day_all(data)  # every pair
+        # or one pair:
+        # vod = site.vod.compute_day(data, "canopy_01_vs_reference_01")
+```
+
+From observations already in the GNSS store, for example after you
+change the VOD settings:
+
+=== "Python"
 
     ```python
     from datetime import datetime
 
-    # Recompute VOD for an entire time range from the RINEX store
-    site.vod.compute_bulk(
+    vod = site.vod.compute_bulk(
         "canopy_01_vs_reference_01",
         start=datetime(2025, 1, 1),
-        end=datetime(2025, 1, 31),
+        end=datetime(2025, 1, 31, 23, 59, 59),
     )
     ```
 
-Both strategies share the same core: the canopy/reference pair is passed to
-`VODFactory.create()`, the calculator's `calculate_vod()` runs the tau-omega
-retrieval, and the result is written to the site's VOD store (pass
-`write=False` to skip the store write).
+    `start` and `end` are times, both included: `datetime(2025, 1, 31)`
+    alone would end at midnight at the start of January 31.
+    `site.vod.compute_bulk_all` computes every pair.
+
+=== "Command line"
+
+    ```bash
+    canvodpy vod --site ExampleSite --analysis canopy_01_vs_reference_01 \
+        --start 2025001 --end 2025031
+    ```
+
+    The command line covers whole days: from the start of `--start` to
+    the end of `--end`.
+
+A day can end up in the GNSS store but not in the VOD store, for example
+when writing the VOD failed. `canvodpy run` warns about such days. To
+list them and compute their VOD:
+
+```bash
+canvodpy vod-reconcile --site ExampleSite --analysis canopy_01_vs_reference_01
+canvodpy vod-reconcile --site ExampleSite --analysis canopy_01_vs_reference_01 --execute
+```
+
+The [VOD package page](../packages/vod/overview.md) describes the VOD
+model and its output.
+
+!!! example "Try it in a notebook"
+
+    Open [VOD retrieval](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/10_vod_retrieval.py?mode=edit) in molab, the online notebook service of marimo.
 
 ---
 
-## Choosing the Right Surface
+## What only the command line does
 
-??? question "I want to process data daily as a cron job"
+`canvodpy run` adds a few steps around `Site.pipeline()`:
 
-    **CLI**: `canvodpy run --site ExampleSite`. Omit `--start`
-    and it resumes from the last processed date in the store automatically.
-
-??? question "I want to script a multi-day batch run from Python"
-
-    **`Site.pipeline()`**: `site.pipeline(n_workers=8)`, then
-    `pipeline.process_range(start, end)`. Reuses the worker pool across days,
-    gives direct access to the stores.
-
-??? question "I want to explore data or do custom analysis in a notebook"
-
-    **Functional API**: `read_rinex()`, `augment_with_ephemeris()`,
-    `create_grid()`, `calculate_vod()` — stateless, in-memory, no side effects.
-
-??? question "I want to integrate with Airflow"
-
-    **Functional API**. Use `*_to_file` variants that return path strings
-    for XCom serialization. Each function is stateless.
-
-??? question "I want to read a single file quickly"
-
-    **Functional API**: `read_rinex("file.rnx")` or use the reader directly:
-    `SbfReader(fpath="file.sbf").to_ds()`.
+- It chooses the days when you leave out `--start` or `--end`; see
+  [Which days a run processes](#which-days-a-run-processes).
+- Before processing, it stops if a VOD store group holds VOD computed
+  from data with other [preprocessing settings](configuration.md).
+  In Python, `site.vod` makes the same check when it writes.
+- It warns about days that are in the GNSS store but not in the VOD
+  store.
+- If the VOD of one receiver pair fails, it logs the error and continues
+  with the other pairs. In Python, `compute_day_all` raises the error.
+- It shows the progress per site and receiver.
 
 ---
 
-**Next in the trail:** [Users guide](../users/index.md) · [Architecture](../architecture.md) · [AI Development](ai-development.md)
+## Scheduled runs
+
+To process new data every day, schedule `canvodpy run` without
+`--start` and `--end`, for example with cron at 03:00:
+
+```bash
+0 3 * * * /path/to/canvodpy run --site ExampleSite --config-dir /path/to/config
+```
+
+Cron runs with a minimal environment, so give the full path to
+`canvodpy` (`which canvodpy` prints it) and to the settings folder.
+
+For [Apache Airflow](https://airflow.apache.org/), `check_day` and
+`process_day` in `canvodpy.workflows.tasks` run the code of
+`canvodpy run` for one site and day. Ready-made Airflow DAGs are an
+optional extension; see [Optional extensions](extensions.md).
+
+!!! example "Try it in a notebook"
+
+    Open [API overview](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/17_api_overview.py?mode=edit) in molab, the online notebook service of marimo.
 
 ---
 
-!!! example "Try it"
-    [17 · API Overview](../notebooks/_build/17_api_overview.html){target=_blank}
-    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/17_api_overview.py))
-    · [18 · Site Pipeline](../notebooks/_build/18_site_pipeline.html){target=_blank}
-    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/18_site_pipeline.py))
-    · [19 · Single-Day Workflow](../notebooks/_build/19_workflow_single_day.html){target=_blank}
-    ([source](https://molab.marimo.io/github/nfb2021/canvodpy-demo/blob/main/19_workflow_single_day.py))
+**Next in the trail:** [configuration](configuration.md) · [parallel processing](parallel-processing.md) · [architecture](../architecture.md)

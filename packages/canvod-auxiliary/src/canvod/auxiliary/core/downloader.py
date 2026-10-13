@@ -11,6 +11,7 @@ from urllib import error as urlerror
 from urllib import request
 from urllib.parse import urlparse
 
+import structlog
 from rich.progress import (
     BarColumn,
     DownloadColumn,
@@ -20,9 +21,7 @@ from rich.progress import (
     TransferSpeedColumn,
 )
 
-from canvod.auxiliary._internal import get_logger
-
-log = get_logger(__name__)
+log = structlog.get_logger(__name__)
 
 
 def _download_progress() -> Progress:
@@ -100,7 +99,8 @@ class FtpDownloader(FileDownloader):
                 self.alt_servers = []
                 print("ℹ Using ESA FTP exclusively")
                 print(
-                    "  To enable NASA CDDIS fallback, set "
+                    "  To download from NASA CDDIS first, with ESA as the "
+                    "fallback, set "
                     "CANVOD__PROCESSING__CREDENTIALS__NASA_EARTHDATA_ACC_MAIL "
                     "in config/.env or as an environment variable"
                 )

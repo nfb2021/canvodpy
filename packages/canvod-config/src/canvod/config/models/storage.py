@@ -5,7 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
+
+from canvod.utils.tools import deprecated
 
 from .base import _StrictModel
 
@@ -13,13 +15,11 @@ from .base import _StrictModel
 class MaintenanceConfig(_StrictModel):
     """Scheduled Icechunk maintenance (expiration + garbage collection).
 
-    Completes the retention scheme from dev/perf_degradation_findings_
-    2026_07_15.md (Problem B): expire_old_snapshots()/garbage_collect()
-    already exist on MyIcechunkStore and work correctly, but nothing has
-    ever triggered them automatically -- this is the config surface for
-    `canvodpy store maintain-due`, a non-interactive, cron-safe entry
-    point (the existing `canvodpy store maintain` command requires an
-    interactive typer.confirm, so it cannot itself run unattended).
+    Settings for `canvodpy store maintain-due`, which expires old
+    snapshots, collects garbage and compacts manifests when they are due.
+    It asks nothing, so a scheduled job (for example cron) can run it.
+    `canvodpy store maintain` does the same work but asks for confirmation
+    before it deletes anything, so it can't run unattended.
 
     Notes
     -----
@@ -30,11 +30,8 @@ class MaintenanceConfig(_StrictModel):
         False,
         description=(
             "Master switch for `canvodpy store maintain-due`. Off by "
-            "default -- mirrors keeper_tags' precedent of shipping inert "
-            "until validated against a real store (see "
-            "dev/perf_degradation_findings_2026_07_15.md, open question 4: "
-            "garbage_collect(dry_run=True) should be checked against the "
-            "real store before this is ever enabled for real)."
+            "default. Before you turn it on, run garbage_collect(dry_run="
+            "True) against your store and check what it would delete."
         ),
     )
     dry_run_until_confirmed: bool = Field(
@@ -152,7 +149,7 @@ class StorageConfig(_StrictModel):
         None,
         description=(
             "Network-wide, fingerprint-keyed aux (SP3/CLK Hermite) cache "
-            "root (dev/todo_later.md §44). None (default) = disabled, falls "
+            "root. None (default) = disabled, falls "
             "back to per-site aux_data_dir/aux_{date}.zarr, rebuilt every "
             "run. Ephemeris products are satellite-based, not site-based, "
             "so pointing multiple sites at the same path lets them share "
@@ -182,8 +179,7 @@ class StorageConfig(_StrictModel):
             "compute_bulk() unconditionally deduplicates every read via "
             "_dedup_sort() regardless of strategy -- but MyIcechunkStore."
             "read_group() itself (the low-level API used directly by "
-            "custom scripts/notebooks, and by the deprecated L1 "
-            "Pipeline.calculate_vod()) has no such guard: `.sel()` on a "
+            "custom scripts and notebooks) has no such guard: `.sel()` on a "
             "duplicated label can raise or return multiple matches, and "
             "aligning two duplicated datasets (e.g. canopy vs. reference) "
             "produces a cartesian product at the duplicated epochs. The "
@@ -194,34 +190,66 @@ class StorageConfig(_StrictModel):
             "guarded ones above is unprotected."
         ),
     )
-    vod_store_strategy: Literal["skip", "overwrite", "unsafe_append"] = "overwrite"
+    vod_store_strategy: Literal["skip", "overwrite", "unsafe_append"] | None = Field(
+        None,
+        description=(
+            "Deprecated, has no effect. VOD writes always skip a result "
+            "whose source files or epoch range are already in the VOD "
+            "store. To recompute VOD for days already stored, write to a "
+            "new VOD store (set another vod_store_name)."
+        ),
+    )
     keeper_tags: bool = Field(
         False,
         description=(
             "Tag every (receiver, date) Icechunk commit as "
             "keep/{receiver}/{yyyydoy} so a future retention job can expire "
-            "everything else. Default off until create_tag() cost at scale "
-            "is confirmed (dev/perf_degradation_findings_2026_07_15.md, "
-            "open question 8)."
+            "everything else. Off by default: the cost of create_tag() "
+            "on large stores hasn't been measured yet."
         ),
     )
     maintenance: MaintenanceConfig = Field(default_factory=MaintenanceConfig)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_vod_store_strategy(cls, data: object) -> object:
+        if isinstance(data, dict) and data.get("vod_store_strategy") is not None:
+            import warnings
+
+            warnings.warn(
+                "The storage setting 'vod_store_strategy' is left over from development and will be removed with the next major version. "
+                "It has no effect: VOD writes always skip results already in the store. "
+                "Remove it from your settings; to recompute VOD, set another 'vod_store_name'.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        return data
+
     @field_validator("stores_root_dir", mode="before")
     @classmethod
     def validate_stores_dir(cls, v: object) -> object:
-        """Expand ~ and reject placeholder values in stores_root_dir."""
+        """Expand ~ and reject placeholder values and URLs in stores_root_dir.
+
+        Checked before the value becomes a ``Path``, which would turn
+        ``s3://bucket/prefix`` into the local path ``s3:/bucket/prefix``.
+        """
         if isinstance(v, str):
+            if "://" in v:
+                raise ValueError(
+                    f"stores_root_dir is set to {v!r}: processing writes "
+                    "stores to a local directory only; writing stores to S3 "
+                    "comes later. Set a local directory in canvod-settings.yaml."
+                )
             if v.strip() in {"/path/to/stores", "/path/to/your/stores"}:
                 raise ValueError(
-                    f"stores_root_dir is set to placeholder {v!r} — "
+                    f"stores_root_dir is set to placeholder {v!r}: "
                     "set a real directory path in canvod-settings.yaml"
                 )
             return Path(v).expanduser()
         return v
 
     def get_gnss_store_path(self, site_name: str) -> Path:
-        """Get the GNSS observation store path for a site.
+        """Get the GNSS store path for a site.
 
         Parameters
         ----------
@@ -231,19 +259,16 @@ class StorageConfig(_StrictModel):
         Returns
         -------
         Path
-            Path to the site's GNSS observation store.
+            Path to the site's GNSS store.
         """
         return self.stores_root_dir / site_name / self.gnss_store_name
 
+    @deprecated(
+        "StorageConfig.get_rinex_store_path() is left over from development and will be removed with the next major version. "
+        "Use StorageConfig.get_gnss_store_path() instead."
+    )
     def get_rinex_store_path(self, site_name: str) -> Path:
         """Deprecated: use get_gnss_store_path instead."""
-        import warnings
-
-        warnings.warn(
-            "StorageConfig.get_rinex_store_path is deprecated; use get_gnss_store_path",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         return self.get_gnss_store_path(site_name)
 
     def get_vod_store_path(self, site_name: str) -> Path:

@@ -33,7 +33,7 @@ class ChunkStrategy(_StrictModel):
     """
 
     epoch: int = Field(
-        17280,
+        ...,
         ge=1,
         description="Chunk size for epoch dimension",
     )
@@ -41,6 +41,30 @@ class ChunkStrategy(_StrictModel):
         -1,
         ge=-1,
         description="Chunk size for sid (-1 = don't chunk)",
+    )
+
+
+class ChunkStrategies(_StrictModel):
+    """Chunking strategy per store type.
+
+    Notes
+    -----
+    This is a Pydantic model for configuration validation. A fixed field per
+    store type, so a misspelled store type fails validation instead of
+    leaving that store unchunked.
+    """
+
+    # gnss_store: a run appends one file at a time, and an append that ends
+    # inside a chunk rewrites that whole chunk. 180 = one 15-minute file at
+    # a 5 s sampling interval, so each append fills its own chunks.
+    # vod_store: a run appends one day at a time; 17280 = one day at 5 s.
+    gnss_store: ChunkStrategy = Field(
+        default_factory=lambda: ChunkStrategy(epoch=180, sid=-1),
+        description="Chunking of the GNSS store",
+    )
+    vod_store: ChunkStrategy = Field(
+        default_factory=lambda: ChunkStrategy(epoch=17280, sid=-1),
+        description="Chunking of the VOD store",
     )
 
 
@@ -84,16 +108,7 @@ class IcechunkConfig(_StrictModel):
         ge=0,
         description="Maximum bytes of chunk data to cache in memory (None = icechunk default)",
     )
-    chunk_strategies: dict[str, ChunkStrategy] = Field(
-        default_factory=lambda: {
-            # 34560 accidentally represented 2 days of epochs — append_to_group()
-            # commits once per day, so chunks should match one day exactly.
-            # 17280 = 86400 s/day / 5 s sampling interval (the reference site's
-            # actual cadence). Sites sampling at a different rate must override.
-            "gnss_store": ChunkStrategy(epoch=17280, sid=-1),
-            "vod_store": ChunkStrategy(epoch=17280, sid=-1),
-        },
-    )
+    chunk_strategies: ChunkStrategies = Field(default_factory=ChunkStrategies)
     manifest_preload_enabled: bool = Field(
         False,
         description="Enable manifest preloading for faster chunk access",
@@ -120,8 +135,9 @@ class IcechunkConfig(_StrictModel):
         17280,
         ge=1,
         description=(
-            "Split arrays along the epoch dimension every N indices. "
-            "Set to match your epoch chunk size (e.g. 17280 for 24 h at 5 s)."
+            "Epoch chunks per manifest: Icechunk starts a new manifest of an "
+            "array every N chunks along the epoch dimension (N chunks, not N "
+            "epochs)."
         ),
     )
     num_updates_per_repo_info_file: int | None = Field(

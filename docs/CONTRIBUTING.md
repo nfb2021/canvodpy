@@ -1,10 +1,10 @@
 # Contributing
 
-Contributions of all kinds are welcome — bug reports, feature implementations, documentation improvements, and feedback.
+Contributions of all kinds are welcome: bug reports, feature implementations, documentation improvements, and feedback.
 
 ---
 
-## Ways to Contribute
+## Ways to contribute
 
 <div class="grid cards" markdown>
 
@@ -19,15 +19,15 @@ Contributions of all kinds are welcome — bug reports, feature implementations,
 
     ---
 
-    Issues labelled **"bug"** and **"help wanted"** are open for PRs.
+    Issues labeled **"bug"** and **"help wanted"** are open for PRs.
     Comment on the issue first so nobody duplicates work.
 
 -   :fontawesome-solid-star: &nbsp; **Implement Features**
 
     ---
 
-    Issues labelled **"enhancement"** and **"help wanted"** are open.
-    Keep scope narrow — one feature per PR.
+    Issues labeled **"enhancement"** and **"help wanted"** are open.
+    Keep scope narrow: one feature per PR.
 
 -   :fontawesome-solid-book: &nbsp; **Improve Documentation**
 
@@ -40,7 +40,7 @@ Contributions of all kinds are welcome — bug reports, feature implementations,
 
 ---
 
-## Required Tools
+## Required tools
 
 Two tools must be installed before `uv sync` (not managed by it):
 
@@ -76,7 +76,7 @@ just check-dev-tools
 
 ---
 
-## Contribution Workflow
+## Contribution workflow
 
 ```bash
 # 1. Fork on GitHub, then clone your fork
@@ -87,6 +87,7 @@ cd canvodpy
 git submodule update --init --recursive
 uv sync
 just hooks
+just agent-skills   # if you develop with Claude Code: the shared agent workflow
 
 # 3. Create a feature branch
 git checkout -b feature/my-feature
@@ -108,7 +109,7 @@ git push origin feature/my-feature
 
 ---
 
-## Commit Message Format
+## Commit message format
 
 ```
 <type>(<scope>): <subject>
@@ -129,9 +130,9 @@ See [Conventional Commits](https://www.conventionalcommits.org/) for the full sp
 
 ---
 
-## Pre-Commit Hooks
+## Pre-commit hooks
 
-When you run `just hooks`, Git hooks are installed that execute automatically on every `git commit`. These hooks enforce code quality and commit message standards. **If a hook fails, the commit is rejected** — your files stay staged, but no commit object is created.
+When you run `just hooks`, Git hooks are installed that execute automatically on every `git commit`. These hooks enforce code quality and commit message standards. **If a hook fails, the commit is rejected**: your files stay staged, but no commit object is created.
 
 ### Hooks and what they check
 
@@ -141,7 +142,7 @@ When you run `just hooks`, Git hooks are installed that execute automatically on
 | **ruff format** | Before commit | Formats Python code (indentation, line length, quotes) |
 | **uv-lock** | Before commit | Verifies `uv.lock` matches all `pyproject.toml` files |
 | **trailing-whitespace** | Before commit | Strips trailing whitespace |
-| **check-added-large-files** | Before commit | Blocks files above the size threshold |
+| **check-added-large-files** | Before commit | Blocks files larger than the size threshold |
 | **detect-private-key** | Before commit | Prevents accidental commit of SSH/PGP keys |
 | **end-of-file-fixer** | Before commit | Ensures files end with exactly one newline |
 | **commitizen** | After writing message | Validates `type(scope): subject` format |
@@ -181,36 +182,37 @@ When you run `just hooks`, Git hooks are installed that execute automatically on
 
 ---
 
-## Continuous Integration and Coverage
+## Continuous integration and coverage
 
 Every push and pull request triggers automated CI on GitHub Actions:
 
-- **Code Quality** — ruff linting, formatting, ty type-checking, lockfile consistency
-- **Test with Coverage** — pytest with coverage measurement, results uploaded to [Coveralls](https://coveralls.io/github/nfb2021/canvodpy) and posted as a PR comment
-- **Platform Tests** — test suite across multiple OS and Python versions
+- **Code Quality**: ruff linting, formatting, ty type-checking, lockfile consistency
+- **Test with Coverage**: pytest with coverage measurement, results uploaded to [Coveralls](https://coveralls.io/github/nfb2021/canvodpy), and posted as a PR comment
+- **Platform Tests**: test suite across multiple OS and Python versions
 
-The CI runs the **same checks as the pre-commit hooks**, so fixing hook failures locally means your PR will pass CI.
+The CI runs the **same checks as the pre-commit hooks**, so fixing hook failures locally means your PR passes CI.
 
 ---
 
-## Pull Request Guidelines
+## Pull request guidelines
 
 !!! tip "Before opening a PR"
     1. `just test && just check` must pass with no errors.
-    2. Include tests for all new functionality.
+    1. The change follows `CODING_STANDARDS.md` (rules and per-change checklist); the reasons are in the [decisions](adr/index.md).
+    2. Include tests for every new feature.
     3. New code must not reduce test coverage. Aim to increase it.
-    4. Update the Zensical documentation in `docs/` if adding or changing public API, behaviour, or configuration.
+    4. Update the Zensical documentation in `docs/` if adding or changing public API, behavior, or configuration.
     5. Target Python 3.14+.
     6. Add yourself to `CONTRIBUTORS.md` if this is your first contribution.
 ### Test coverage requirement
 
-Every pull request that adds new functionality **must include tests**. The CI
+Every pull request that adds a feature **must include tests**. The CI
 pipeline measures line coverage and posts a report on the PR. While there is no
-hard minimum percentage, reviewers will check that:
+hard minimum percentage, reviewers check that:
 
 - All new public functions and methods have at least one test
 - Edge cases and error paths are covered (empty inputs, invalid parameters)
-- Coverage does not decrease compared to the base branch
+- Coverage doesn't decrease compared to the base branch
 
 Run `just test-coverage` locally to inspect which lines are covered before pushing.
 
@@ -219,7 +221,7 @@ Run `just test-coverage` locally to inspect which lines are covered before pushi
 canVODpy is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 By submitting a pull request, you agree that your contribution is licensed under
 the same terms. The `LICENSE` and `NOTICE` files at the repository root apply to
-all source files. Per-file license headers are not required.
+all source files. Per-file license headers aren't required.
 
 ---
 
@@ -238,10 +240,15 @@ just check          # lint + format + type-check (run before committing)
 
 ---
 
-## Deploying (Maintainers)
+## Deploying (maintainers)
 
 ```bash
-just bump minor     # bump version in all pyproject.toml files
-git push
-git push --tags     # triggers GitHub Actions → publish to PyPI
+just release-status                              # commits per package since its last tag
+just release canvod-store=1.1.0 canvodpy=1.1.0   # tests, versions, release commit on release/v1.1.0
 ```
+
+Each package has its own version; the maintainer chooses them, and canvodpy
+is part of every release. Then open a pull request for the release branch;
+after it's merged, a maintainer runs `just tag-release` on `main`, pushes
+the tags and starts the PyPI publish. The full
+steps are in `docs/RELEASING.md`.

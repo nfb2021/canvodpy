@@ -20,9 +20,9 @@ classifiers = [
 ]
 
 dependencies = [
-    "canvod-readers>=0.1.0",
-    "canvod-utils>=0.1.0",
-    "canvod-config>=0.1.0",
+    "canvod-readers>=0.4.0,<2",
+    "canvod-utils>=0.4.0,<2",
+    "canvod-config>=0.4.0,<2",
     "scipy>=1.15.0",
     "numpy>=1.24.0",
     "xarray>=2023.12.0",
@@ -30,6 +30,7 @@ dependencies = [
     "requests>=2.31.0",
     "pint>=0.23",
     "pymap3d>=3.0.0",
+    "rich>=13.0",
     "structlog>=24.1.0",
     "tqdm>=4.67.1",
 ]
@@ -57,7 +58,7 @@ Repository = "https://github.com/nfb2021/canvodpy"
 Issues = "https://github.com/nfb2021/canvodpy/issues"
 
 [build-system]
-requires = ["uv_build>=0.9.17,<0.10.0"]
+requires = ["uv_build>=0.13.0,<0.14.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
